@@ -20,6 +20,8 @@
     "check": "bun run doctor && bun run typecheck && bun run test && bun run test:cpp-codec",
     "web": "expo start --web",
     "demo:dynamic": "EXPO_PUBLIC_RUSTRA_DEMO=dynamic expo start",
+    "demo:functions": "EXPO_PUBLIC_RUSTRA_DEMO=functions expo start --dev-client",
+    "ios:functions": "bun run build:fingerprint && bun run rust:ios && EXPO_PUBLIC_RUSTRA_DEMO=functions expo run:ios --configuration Release",
     "demo:reload": "EXPO_PUBLIC_RUSTRA_DEMO=reload expo start --dev-client",
     "demo:hot-core": "EXPO_PUBLIC_RUSTRA_DEMO=hot-core expo start --dev-client",
     "test:reload:ios": "bun scripts/reload-stress.mjs",
@@ -41,7 +43,8 @@
     "typecheck": "tsc --noEmit",
     "bench:parity:ios": "bun scripts/run-nitro-parity.ts",
     "demo:nitro-parity": "EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity expo start --dev-client",
-    "test:parity": "bun test src/nitro-parity"
+    "test:parity": "bun test src/nitro-parity",
+    "verify:functions:ios": "bun scripts/verify-function-simulator.mjs"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",

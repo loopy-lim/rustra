@@ -2,6 +2,8 @@
 
 # rustra 시작하기
 
+여러 인자와 일반 반환값을 사용하는 API는 [일반 함수 등록](./function-registration.ko.md)을 참고하세요.
+
 > **Frame 마이그레이션:** 이 문서는 Rust 0.10.2, 공통 패키지 0.10.0 및 아래 어댑터 버전을
 > 대상으로 한다. 0.9.0에는 Frame 이름 전환이 포함되지 않는다. 네이티브 라이브러리·
 > JS 패키지·생성물을 함께 갱신한다. 버전과 절차는
@@ -328,6 +330,10 @@ export type ParityTree = {
  */
 export type ResourceHandle = number;
 
+export type Tuple_of_int32_and_int32 = [number, number];
+
+export type int32 = number;
+
 export type AddNumbersInput = {
   a: number | bigint;
   b: number | bigint;
@@ -460,6 +466,10 @@ export type GreetOutput = {
   message: string;
 };
 
+export type Tuple_of_String = [string];
+
+export type String = string;
+
 export type IsEvenInput = {
   n: number | bigint;
 };
@@ -526,6 +536,8 @@ export type ProcessItemOutput = {
   item: Item;
 };
 
+export type Tuple_of_int32 = [number];
+
 export type ResourceCloseInput = {
   handle: ResourceHandle;
 };
@@ -571,6 +583,10 @@ export type RegistryDemoOutput = {
   frozen: boolean;
   message: string;
 };
+
+export type Tuple_of_double_and_double = [number, number];
+
+export type double = number;
 
 export type ScoreTotalInput = {
   scores: Record<string, number | bigint>;
@@ -680,7 +696,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf';
+export const GENERATED_CONTRACT_HASH = 'e70c24c62944ff78fb6ca58b5658d85bb5cff49af4acc96b3a78bedcbdfb0a58';
 export const SCHEMA_VERSION = 1;
 ```
 

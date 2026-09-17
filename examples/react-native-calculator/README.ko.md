@@ -31,6 +31,48 @@ bun run bench:ios:receipt -- --output /tmp/rustra-rn-receipt.json
 
 ## 앱 코드
 
+### 일반 함수
+
+`functions` 화면은 같은 계산기 Rust crate와 생성된 네이티브 브리지를 사용합니다.
+여러 인자, 숫자·문자열 반환, 반환값 없음, 상태를 가진 클로저, 도메인 오류 변환을 보여줍니다.
+
+```ts
+import { add, remember, readRemembered, reset, safeDivide } from './generated/react-native';
+
+const total = await add(42, 58); // 입력·출력 DTO 없이 number 반환
+await remember(total); // void
+await reset(); // 인자 없음, void
+const stored = await readRemembered(); // 0
+await safeDivide(1, 0); // math.zero_divisor 오류로 reject
+```
+
+```sh
+bun run codegen
+bun run ios:functions
+# 네이티브 앱을 이미 빌드했다면:
+bun run demo:functions
+```
+
+`App.tsx`가 실제 실행 화면이며, 기본 진입은 계속 `BenchmarkApp`입니다.
+화면은 생성된 명령을 설치된 Rust 코어로 검증하고, iOS에서는 별도
+`Documents/rustra-function-receipt.json`에 결과를 남깁니다. Release 빌드는 예열과
+실행 순서를 번갈아 가며 함수 호출 및 요청 인코딩을 측정합니다. Rust를 변경하면
+네이티브 앱을 다시 빌드해야 합니다. Metro reload는 JS만 갱신합니다.
+등록 코드는 `../calculator/src/ordinary_functions.rs`에 있으며 기존 명령 뒤에 추가해
+명령 번호를 유지합니다. [API 가이드](../../docs/function-registration.ko.md)를 참고하세요.
+
+Release `functions` 앱 설치 후 시뮬레이터에서 독립 실행 3회를 검증합니다.
+
+```sh
+bun run verify:functions:ios --device booted --runs 3
+```
+
+수집기는 이전 실행 결과, 소스·계약 불일치, 검증 실패를 거부합니다. 새 실행 ID와
+시각, 설치된 실행 파일·JS 번들 해시를 새로운 `/tmp/rustra-functions-*` 폴더에 저장합니다.
+`--output <새-폴더>`로 저장 위치를 지정할 수 있습니다.
+
+### 기존 command API
+
 ```ts
 import { addNumbers } from './generated/react-native';
 

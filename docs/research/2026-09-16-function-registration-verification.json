@@ -1,0 +1,582 @@
+{
+  "schemaVersion": 1,
+  "scope": "Ordinary synchronous function registration and supported root binary codecs, local source implementation; unreleased",
+  "environment": {
+    "time": "2026-09-15T18:41:14Z",
+    "platform": "Darwin arm64",
+    "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "bun": "1.4.1",
+    "node": "v22.21.1",
+    "node_path": "/Users/loopy/.local/state/fnm_multishells/52676_1789365293440/bin/node",
+    "base": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+    "branch": "codex/function-registration",
+    "measuredAt": "2026-09-15T18:55:16.217474+00:00",
+    "description": "One local Darwin arm64 run; controller builds/tests finished before serial benchmarks. Unrelated system activity was not controlled.",
+    "cpuModel": null,
+    "cpuModelNote": "Not captured: sandbox sysctl unavailable (EPERM)"
+  },
+  "source": {
+    "branch": "codex/function-registration",
+    "baseCommit": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+    "uncommitted": true,
+    "worktree": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/function-registration",
+    "codeAndTestFilesSha256": {
+      "api-surface/snapshot.json": "87e2ab1e091702e9bc75a021810306795c7bb7c4d3971afa38eb499ec11a17ce",
+      "crates/rustra/Cargo.toml": "f2784fb48b2fad62703d661680b1626c0cf21a8cad9fbe45e2a3e7da2490a38a",
+      "crates/rustra/benches/function_dispatch.rs": "490fedbb2e8359a729e6cacbfae55778098acf2c47b6b2cc2ca1810f7c29007e",
+      "crates/rustra/examples/function_fixture.rs": "c614662e087c67046e66fd93509dcce031920efad3b5e999a50931c3b971f86b",
+      "crates/rustra/src/builder.rs": "1d7b9d9acfdea47379fed9323e0b3f5028ed4265cd4e6131189946b4925c31be",
+      "crates/rustra/src/builder_functions.rs": "b563748f6c64316985e772a39e567e42d8fb0307ca4cba1ba9497d7602b34e12",
+      "crates/rustra/src/command_build.rs": "49d1f2c5cb5502973d0bab0985a51503de7bddffd2755c800c613311fd8585a6",
+      "crates/rustra/src/command_handlers.rs": "b079f538c6da09a6186c1505d422d8350de1b639497470f25e5fddb95bd826a7",
+      "crates/rustra/src/command_into.rs": "a0cd8afd8ff15d87c27bf31aee48c0577db8138a6b74f0434b598a8eed85a663",
+      "crates/rustra/src/command_types.rs": "93e8261b2bd3db5379b75bfd0b48a4ec5b710eed91fb5e7e040de019f9962e1a",
+      "crates/rustra/src/frame_support.rs": "c5f89d7cc87107e3d5b203f456c41c5ab77ac651968ce407b7eaab30e34281ab",
+      "crates/rustra/src/function.rs": "8f6c526278c4898fb9d70023b26e762a52e9a9e69b1c41e0632bf1b686e75ef5",
+      "crates/rustra/src/lib.rs": "d0abba25330360189654e55417f07842debe79066f0189c75eef2f80f4a9a48d",
+      "crates/rustra/src/package_commands_gen.rs": "dbb3ddecf95d5e6577bc92e13285b858c3ed57c0908c850a4eeb778684c2e09e",
+      "crates/rustra/src/package_schema.rs": "c742e12e647384cf46d0bfd3bed0f26c4ae429ba1f20e674f27868eeb8555c1a",
+      "crates/rustra/tests/function_allocations.rs": "69c905c0af872ad0bb6130aa29a277232ce5b4b5b0d4b7b25400f37a103e5748",
+      "crates/rustra/tests/function_registration.rs": "167c979a035f7730754952bbffc62fd07bc9dc22d9516df6879b97c064f2f8ae",
+      "crates/rustra/tests/trust_baseline_ffi.rs": "e037ca2a7a6da23380624d676f6fe23dfe071f5003a03586ba6f6a85f4b953a7",
+      "package.json": "b6ba40f1baefda5472795725aabe33331f16649b9a2ff53cc3b26b5edd300a49",
+      "packages/cli/package.json": "b57fd089411b921f7333ed0f4eee9a0c1f203d83a88bd3fe94b209b62ce7a7f6",
+      "packages/cli/src/function-registration.test.ts": "aa9352578c334331595c1ad1afdc424a18fae2d7db0038206940287077c2193e",
+      "packages/cli/src/function-schema.ts": "9f4052e5d2ee819ac6458f8cd9b9cdfc958b8cc590974f6cfe3a542fe5e7323d",
+      "packages/cli/src/generate-commands.ts": "6aaf48f6a97cbf6bf60869c586d65db237d735b292d4172bedb01ff7326d5130",
+      "packages/cli/src/generate-complex-codec.ts": "1ec9f9d05315157cc2c9bfa2b3fecc1178635a99ea14be07260f8b421aeb62a9",
+      "packages/cli/src/generate-cpp-analysis.ts": "40b27516d12aa2e54edf5c124731fec9036b73b785d08fd5b2832fc6a5335379",
+      "packages/cli/src/generate-postcard-classify.ts": "8db069c0c262b54b1196bfcbd0f692140385016439632e0d3d01fb9a99825c9f",
+      "packages/cli/src/generate-postcard-codec.ts": "4e4d76371716c5c4067310b201b35b28f6b52c529b2cb1c8330f6a316cdf18c4",
+      "packages/cli/src/generate-postcard-decode-complex.ts": "1e22b21e9b6d1a4dcbf7da14eba1168ad44a16e68ffea5f7dd6440486bf11951",
+      "packages/cli/src/generate-postcard-decode.ts": "2f15f748c45c8a52ba981f822b8bd4c2b9f8eedfbaac7fef4aee49ace6bcdc68",
+      "packages/cli/src/generate-postcard-encode-fields.ts": "ae5750da39fc4b757ea198effc0ddfd66bda87cd3ceab59269a9dceb4c064062",
+      "packages/cli/src/generate-postcard-encode-into.ts": "eb7d7cd74ec2a1be11e8120d85edac04288e84ab0faa61160bb73126357ec158",
+      "packages/cli/src/generate-postcard-encoding-support.ts": "c463df818f6c481b82740ee0c009553d9e2ba00123e7b19800b9d7bbe97ae31b",
+      "packages/cli/src/generate-postcard-graph.ts": "50836300156ab268c6e53b6531980d211477dab8ddfa5efdf4b0db8d17bda7a4",
+      "packages/cli/src/generate-postcard-support.ts": "c22da5c02ab1af5d9dada04d8618915a8aecc277f308aff82b1763409736a9ee",
+      "packages/cli/src/generate-postcard-types.ts": "707a9df12c590bc6b78fab40eb89650940a22e8a77522979de9b4435549fc129",
+      "packages/cli/src/schema-diff.ts": "a7f5cd6b22022f14785a23d8fffa19687408ba32b69a6fc3ac003d2abb0bffcb",
+      "packages/cli/src/schema-validation.ts": "15f9e98168443cf1fd0e423299502ccb81d01d85b0c47f4dde5ad0597b0bbcbc",
+      "packages/cli/src/schema.ts": "30e19ae67d6cca108a2cca3bc99a19243c2f73eedcf8bc0129ff5370dbd21061",
+      "packages/node/src/index.test.ts": "fd8b36426438186f161ce1148881c890bb63ab735df6bce03b57f253d455d560",
+      "packages/node/src/node-core.ts": "1705a947cdc8753742381da70affa179b895a6a071f2d96ffcbe68e779b0c348",
+      "packages/node/src/node-loop.ts": "fd49f1f034c54fec0a95639883ee50bfe21b69a91a3f645e9badc2ff0cb8d0ae",
+      "packages/tauri/src/index.test.ts": "bd373f03216a5999a0beeaa035bb5f3f72b50a9a32fa377781c652bbf305a9a7",
+      "packages/tauri/src/index.ts": "bc98aac9c7422d19a6af4725100641124bfc47c8035fd4c7e8e78df06c429d3b",
+      "packages/types/package.json": "afc5bb5facdb8ecdb53cfafc28543da1c642d86155ed73e5c73efac617259030",
+      "packages/types/src/complex-codec.ts": "4c223cdfde738aa8c3428a62daa9da4b7f6ba3725d0e5baac75f201d844a7978",
+      "packages/types/src/frame-engine-async.ts": "0d9dc3ae87c46956c7cb79f58a2a8e97d117f5335d11904a39c05f56cf2c194c",
+      "packages/types/src/frame-engine-dispatch.ts": "b89c258149af464a4bfff32d38d3b1cb9a20e06ae1c981355e9b4bf56be2031f",
+      "packages/types/src/frame-engine-dynamic-codec.ts": "e13ff35a540ef04423928dfa186ea92cf928cf3a7f6d56ec7ab793ccd6789373",
+      "packages/types/src/function-roots.test.ts": "b19cfbdcb156af7e90d53964e8b18296a1b80cc7b39ea1bc61ce7ec8cd4a3088",
+      "packages/types/src/json-wire.ts": "e3affc5600d421366643237a10fc175f192aac43b1bc7bea990bcd241c452112",
+      "packages/types/src/schema-postcard-codec.ts": "ddda378e14c06d1e2844cb6ebf08ee1dfcfe45c415c37925151929c3e87d3d93",
+      "packages/types/src/schema-postcard-fixed-array.ts": "533343759185ae5e7ed3a48e538f56292d6ea55c1114e5d2da0e988ca3adf012",
+      "packages/types/src/schema-postcard-node.ts": "79815fb3ae193679104da932cda5bce4ee0ea5207d8780669a93f656ac842fe0",
+      "packages/types/src/schema-postcard-support.ts": "1ddd9d7b933749e73b512384264e1d488490ea80082f07aa46a9e8a166a0f9a2",
+      "scripts/function-registration-integration.ts": "8d37a37b07fe9a290bc6d35020f4ba543391b43e418652061166aedd95e76ae9"
+    },
+    "manifestSha256": "0074ea8fab9b507a76f941bd7fd902af2f4c190c24dca057b852dc8e0a135bd7",
+    "manifestAlgorithm": "SHA256 of sorted UTF-8 path + NUL + lowercase file SHA256 + newline; excludes docs, changesets, SDD records. Apply files to baseCommit to identify tested code."
+  },
+  "checks": {
+    "rust": {
+      "status": "passed",
+      "command": "CARGO_TARGET_DIR=/tmp/rustra-function-target cargo test -p rustra --locked",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-rust-final.log",
+      "logSha256": "d0ffd2833901d6b6fb12d9f655e859f5d5e04b7496febb9dda0038db4f745c88",
+      "summaries": [
+        "test result: ok. 178 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 9 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
+      ]
+    },
+    "types": {
+      "status": "passed",
+      "command": "bun run --cwd packages/types test",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-types-final.log",
+      "logSha256": "7b6e04872702e9f6fadfec995cedf1c6b7efcedb4829bf305fec43d3323ead5f",
+      "summaries": [" 271 pass", " 0 fail", "Ran 271 tests across 8 files. [400.00ms]"]
+    },
+    "cli": {
+      "status": "passed",
+      "command": "bun run --cwd packages/cli test",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-cli-final.log",
+      "logSha256": "3e894dc2097f0cb29e005dc6199a07badb371076a3c1282646b0d1cfa2b9b7cb",
+      "summaries": [
+        "# tests 318",
+        "# pass 318",
+        "# fail 0",
+        "# skipped 0",
+        " 34 pass",
+        " 0 fail",
+        "Ran 34 tests across 3 files. [49.00ms]"
+      ]
+    },
+    "build": {
+      "status": "passed",
+      "command": "bun run build",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-build-final.log",
+      "logSha256": "685baea275dedba6391f052baa7c97373713fd4e904b42fe192bf264d25a0d4c",
+      "summaries": []
+    },
+    "clippy": {
+      "status": "passed",
+      "command": "CARGO_TARGET_DIR=/tmp/rustra-function-target cargo clippy -p rustra --all-targets --locked -- -D warnings",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-clippy-final.log",
+      "logSha256": "2ea2e2276bd990d41a1120bc5391812b8b35253d5630efa70f5d0ddef91f03e5",
+      "summaries": []
+    },
+    "codegen": {
+      "status": "passed",
+      "command": "node scripts/check-codegen-fresh.mjs",
+      "scope": "after R1; all six examples",
+      "logPath": "/tmp/rustra-function-codegen-final.log",
+      "logSha256": "137b19bab15b36f724d8b9a63d771b10e5cd153251a8cfa1f91f033de3c26c94",
+      "summaries": ["OK: 6개 예제 codegen check 통과 (committed 생성물이 재현 결과와 일치)"]
+    },
+    "gates": {
+      "status": "passed",
+      "command": "cargo fmt --all -- --check && bun run test:api-surface && bun run test:architecture && bun run test:docs && bun run test:release-coherence && git diff --check",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-gates-final.log",
+      "logSha256": "711b3b3cc6c3f42a33dd3f0eb99be3c86f161ac00e9aec8788d3a41d72b7463c",
+      "summaries": [
+        "OK: API surface matches snapshot",
+        " 4 pass",
+        " 0 fail",
+        "Ran 4 tests across 1 file. [52.00ms]",
+        "# tests 37",
+        "# pass 37",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    "integration": {
+      "status": "passed",
+      "command": "bun scripts/function-registration-integration.ts --cpp",
+      "scope": "after R1",
+      "logPath": "/tmp/rustra-function-integration-final.log",
+      "logSha256": "aa157ab07955d6a6cf4790705b9785c0b6b91f302e2fbf256fbf13f406a99605",
+      "summaries": []
+    },
+    "nodeBun": {
+      "status": "passed",
+      "command": "bun run --cwd packages/node test",
+      "scope": "before R1; unchanged Node transport source",
+      "logPath": "/tmp/rustra-function-node-tests.log",
+      "logSha256": "cf220563a7aac97364da1442c248ee9335fc171e65f0b1444ba8bc42a5382513",
+      "summaries": [" 74 pass", " 29 skip", " 0 fail", "Ran 103 tests across 5 files. [131.00ms]"]
+    },
+    "nodeRuntime": {
+      "status": "passed",
+      "command": "bun run --cwd packages/node test:node-runtime",
+      "scope": "before R1; real calculator runtime; unchanged Node transport source",
+      "logPath": "/tmp/rustra-function-node-runtime.log",
+      "logSha256": "5733c0ccfbacbaf691bc314cdc4a0cba8393fc7b608630f1810f16f509dfd675",
+      "summaries": ["# tests 71", "# pass 71", "# fail 0", "# skipped 0"]
+    },
+    "tauri": {
+      "status": "passed",
+      "command": "bun run --cwd packages/tauri test",
+      "scope": "before R1; unchanged Tauri adapter source",
+      "logPath": "/tmp/rustra-function-tauri-tests.log",
+      "logSha256": "7ed34ef015b44cd6d322f27e5b5a5e12321f2fd80bb3eae925f499ff5e6cf2ed",
+      "summaries": [" 47 pass", " 0 fail", "Ran 47 tests across 1 file. [39.00ms]"]
+    },
+    "finalReportDocs": {
+      "status": "passed",
+      "command": "bun run test:docs",
+      "scope": "After adding the final report and receipt",
+      "logPath": "/tmp/rustra-function-docs-report-final.log",
+      "logSha256": "483e183563430c3c0a1ffc795e4077d7a5aad58924666a641151f46b5f687f58",
+      "summaries": ["# tests 37", "# pass 37", "# fail 0", "# skipped 0"]
+    }
+  },
+  "integration": {
+    "ok": true,
+    "commands": 18,
+    "checked": 308,
+    "routes": [
+      "generated",
+      "cursor",
+      "caller-buffer",
+      "live-schema",
+      "native-declined",
+      "node-process-json",
+      "tauri-json-adapter"
+    ],
+    "rustAndCliWrappers": true,
+    "cppShimCapabilityCheck": true,
+    "source": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/function-registration"
+  },
+  "performance": {
+    "rust": {
+      "scope": "Addition 20+22 through real Rust Package dispatch; JSON includes input serde_json::Value construction; no JS/native bridge",
+      "samples": 100,
+      "warmupSeconds": 1,
+      "measurementSeconds": 3,
+      "estimates": {
+        "function_frame": {
+          "nanoseconds": {
+            "mean": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 45.18637726461681,
+                "upper_bound": 45.34049429212588
+              },
+              "point_estimate": 45.2616685715728,
+              "standard_error": 0.039451913986412554
+            },
+            "median": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 45.16303524122472,
+                "upper_bound": 45.28020605142052
+              },
+              "point_estimate": 45.24158611972588,
+              "standard_error": 0.026712431997298933
+            },
+            "median_abs_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.17815785170572165,
+                "upper_bound": 0.3035565938919731
+              },
+              "point_estimate": 0.2169359128088552,
+              "standard_error": 0.030787378648160914
+            },
+            "slope": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 45.31023883491344,
+                "upper_bound": 45.58173831038169
+              },
+              "point_estimate": 45.43619966365439,
+              "standard_error": 0.0696516457490693
+            },
+            "std_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.2784242117599464,
+                "upper_bound": 0.49888698591414277
+              },
+              "point_estimate": 0.3942358895058338,
+              "standard_error": 0.0566260715825788
+            }
+          },
+          "primaryEstimator": "slope"
+        },
+        "function_into": {
+          "nanoseconds": {
+            "mean": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 15.474036952182562,
+                "upper_bound": 15.577420561979967
+              },
+              "point_estimate": 15.523759208011572,
+              "standard_error": 0.02644808997772964
+            },
+            "median": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 15.396080554529316,
+                "upper_bound": 15.512186286525338
+              },
+              "point_estimate": 15.466655316950721,
+              "standard_error": 0.02441209598348042
+            },
+            "median_abs_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.14192925425654918,
+                "upper_bound": 0.24162385317147633
+              },
+              "point_estimate": 0.1738392243924339,
+              "standard_error": 0.02706682516811207
+            },
+            "slope": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 15.405437719455644,
+                "upper_bound": 15.509511886815185
+              },
+              "point_estimate": 15.45233978307053,
+              "standard_error": 0.02659651379681203
+            },
+            "std_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.20631490347234552,
+                "upper_bound": 0.31621990999882876
+              },
+              "point_estimate": 0.26548279621129167,
+              "standard_error": 0.028096289541181128
+            }
+          },
+          "primaryEstimator": "slope"
+        },
+        "legacy_frame": {
+          "nanoseconds": {
+            "mean": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 45.84666766786716,
+                "upper_bound": 46.17001228529979
+              },
+              "point_estimate": 46.001705451284096,
+              "standard_error": 0.08269967029567886
+            },
+            "median": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 45.66788849983374,
+                "upper_bound": 45.929907899706556
+              },
+              "point_estimate": 45.771691614406635,
+              "standard_error": 0.06659100656504971
+            },
+            "median_abs_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.4664377397383279,
+                "upper_bound": 0.8270552453615663
+              },
+              "point_estimate": 0.6593227918334218,
+              "standard_error": 0.09413420139714604
+            },
+            "slope": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 45.91044096319903,
+                "upper_bound": 46.24802549574361
+              },
+              "point_estimate": 46.06735991487058,
+              "standard_error": 0.08617896819889329
+            },
+            "std_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.6512200343154736,
+                "upper_bound": 1.0155971272448212
+              },
+              "point_estimate": 0.8320070989011189,
+              "standard_error": 0.09447269445202815
+            }
+          },
+          "primaryEstimator": "slope"
+        },
+        "legacy_into": {
+          "nanoseconds": {
+            "mean": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 15.327126395865605,
+                "upper_bound": 15.3651753591815
+              },
+              "point_estimate": 15.3448459163444,
+              "standard_error": 0.009752652530129467
+            },
+            "median": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 15.32628756977668,
+                "upper_bound": 15.350309685101458
+              },
+              "point_estimate": 15.338376354987133,
+              "standard_error": 0.005533421740349517
+            },
+            "median_abs_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.03359387813506499,
+                "upper_bound": 0.056147524061803004
+              },
+              "point_estimate": 0.040988211458856456,
+              "standard_error": 0.005755358758715239
+            },
+            "slope": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 15.34566167354466,
+                "upper_bound": 15.390363073332267
+              },
+              "point_estimate": 15.366413694286237,
+              "standard_error": 0.01147071563424366
+            },
+            "std_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.060678503190467956,
+                "upper_bound": 0.1310860773052768
+              },
+              "point_estimate": 0.09809455418256612,
+              "standard_error": 0.018069989511227662
+            }
+          },
+          "primaryEstimator": "slope"
+        },
+        "function_json": {
+          "nanoseconds": {
+            "mean": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 49.20547953519101,
+                "upper_bound": 49.54761269784053
+              },
+              "point_estimate": 49.371596796522255,
+              "standard_error": 0.08751621947694993
+            },
+            "median": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 48.8481145578886,
+                "upper_bound": 49.177092845292144
+              },
+              "point_estimate": 49.04841848094942,
+              "standard_error": 0.09314939639052561
+            },
+            "median_abs_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.33164069848766337,
+                "upper_bound": 0.6909228792184555
+              },
+              "point_estimate": 0.49303225038730913,
+              "standard_error": 0.10157210152881108
+            },
+            "slope": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 48.99338688078476,
+                "upper_bound": 49.33841146501285
+              },
+              "point_estimate": 49.150308335145425,
+              "standard_error": 0.0878859761418759
+            },
+            "std_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 0.7230625565986256,
+                "upper_bound": 1.00555157031297
+              },
+              "point_estimate": 0.8800487275320025,
+              "standard_error": 0.07208514249974485
+            }
+          },
+          "primaryEstimator": "slope"
+        },
+        "legacy_json": {
+          "nanoseconds": {
+            "mean": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 314.0011645981108,
+                "upper_bound": 322.58221627017775
+              },
+              "point_estimate": 318.1162356624679,
+              "standard_error": 2.1920369093185372
+            },
+            "median": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 306.83290155440415,
+                "upper_bound": 309.24200212568087
+              },
+              "point_estimate": 308.06500666717466,
+              "standard_error": 0.5670637714457044
+            },
+            "median_abs_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 2.528620346299754,
+                "upper_bound": 5.815980972259352
+              },
+              "point_estimate": 4.030722212841596,
+              "standard_error": 0.7913550972271093
+            },
+            "slope": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 324.84618578402853,
+                "upper_bound": 340.0109650914748
+              },
+              "point_estimate": 332.7233340403099,
+              "standard_error": 3.8657434640507478
+            },
+            "std_dev": {
+              "confidence_interval": {
+                "confidence_level": 0.95,
+                "lower_bound": 17.482755204234042,
+                "upper_bound": 25.429494660443194
+              },
+              "point_estimate": 22.080763060690643,
+              "standard_error": 2.008566899192435
+            }
+          },
+          "primaryEstimator": "slope"
+        }
+      }
+    },
+    "javascript": {
+      "scope": "Generated request encoding only; excludes transport exact-buffer copy and Rust call",
+      "iterationsPerSample": 50000,
+      "samples": 20,
+      "checksum": 68188736,
+      "nanoseconds": {
+        "encode": {
+          "median": 417.1100000000024,
+          "min": 387.24416000000025,
+          "max": 439.87500000000176
+        },
+        "encodeInto": {
+          "median": 49.18292000000292,
+          "min": 39.60250000000087,
+          "max": 66.27249999999549
+        }
+      }
+    },
+    "allocations": {
+      "scope": "Warmed Rust scalar and unit success responses; handler and buffer operations only",
+      "scalarInto": 0,
+      "unitIntoExactEightBytes": 0,
+      "allocatedFrame": 1,
+      "insufficientBufferFallback": 1,
+      "handlerInvocationsPerCase": 1
+    }
+  },
+  "boundaries": [
+    "No React Native or Tauri application/device runtime measured",
+    "Compiled C++ JSI shim proves capability exclusion only",
+    "No packed consumer, registry publication, release or 1.0 acceptance claim",
+    "JavaScript exact ArrayBuffer copy and bridge/Promise costs excluded from encoding benchmark",
+    "Owned strings and collections can allocate",
+    "No new ordinary async registration or Rust source parameter-name reflection"
+  ]
+}

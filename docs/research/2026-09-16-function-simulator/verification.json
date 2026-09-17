@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-15T19:51:07.256056+00:00",
+  "worktree": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/function-registration",
+  "branch": "codex/function-registration",
+  "baseCommit": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+  "status": "local-uncommitted",
+  "scope": "Runnable ordinary-function calculator and RN functions example, iOS Simulator Release, exact transport buffer reuse",
+  "measurements": {
+    "baseline": {
+      "manifest": "baseline/manifest.json",
+      "manifestSha256": "4dbc34b881e6fd16b8cf49b50b3bec0a65120906c6023bec630825e261c1a72c",
+      "runs": 3,
+      "checksPerRun": 13,
+      "medianOfRunP50Ns": {
+        "generatedFunction": 15060.624957084656,
+        "legacyCommand": 4949.333071708679,
+        "encode": 2102.208185195923,
+        "encodeInto": 644.3166017532349
+      }
+    },
+    "final": {
+      "manifest": "final/manifest.json",
+      "manifestSha256": "49100371fe818eabd465e8dd1c5fb1d5da85ac247cd7e9ff9c94cdc2ed42e6a3",
+      "runs": 3,
+      "checksPerRun": 13,
+      "medianOfRunP50Ns": {
+        "generatedFunction": 14859.290957450867,
+        "legacyCommand": 4965.916991233826,
+        "encode": 2110.641598701477,
+        "encodeInto": 634.5168113708496
+      }
+    }
+  },
+  "interpretation": {
+    "functionLatencyPercentChange": -1.336823672374099,
+    "latencyImprovementEstablished": false,
+    "finalEncodeVsEncodeIntoRatio": 3.326376166679517,
+    "encodingExcludesNativeAndTransportCopy": true,
+    "stableLengthTransportArrayBufferReuseTested": true,
+    "wholeCallAllocationFreeClaim": false,
+    "physicalDeviceTested": false
+  },
+  "sourceInputs": {
+    "path": "source-inputs.json",
+    "sha256": "98f7de47af5d364c34f28ae586db221f73983d291363fe3cd80a18a88c15b0f8"
+  },
+  "continuationSourceHashes": [
+    {
+      "path": "packages/cli/src/generate-positional.ts",
+      "sha256": "20dcc3e12365120ab3f0bd503b8bd1082fab6d1e920d0591680fa5820422707a"
+    },
+    {
+      "path": "packages/cli/src/generate.test.ts",
+      "sha256": "dcc09653324ad988a917353d3f20d3d5062ff828b1e4e40d1ab607ca2ec4b967"
+    },
+    {
+      "path": "packages/types/src/frame-engine-dispatch.ts",
+      "sha256": "8d1225a9e1b81b5f4328ebb801956e46cfe63420dfbcca5ce8b40753d3099096"
+    },
+    {
+      "path": "packages/types/src/runtime-boundaries.test.ts",
+      "sha256": "64bd9b02b53ee511c0176e86c67f86c788dcaabf6e64199a9570de3f3b3dd19c"
+    },
+    {
+      "path": "examples/calculator/src/ordinary_functions.rs",
+      "sha256": "994def507494cd07af9a0be20b3928c2f7dba3788f0b23d1161b12737fe973ad"
+    },
+    {
+      "path": "examples/calculator/src/uniffi_render.rs",
+      "sha256": "9509c4e75650469d7a039073c3b4f8aa6fede84cc7742a07c432259d8fbe027c"
+    },
+    {
+      "path": "examples/calculator/src/uniffi_generated.rs",
+      "sha256": "7984c7e2dea7e1b72e3dfa23507169daab511d358596eefb4c42dcbb96a4dee0"
+    },
+    {
+      "path": "examples/calculator/tests/ordinary_functions.rs",
+      "sha256": "a46d301a06396b64e8ff0531c97f87b974ec107ae0e63d25c2ade56ed4ba13a6"
+    },
+    {
+      "path": "examples/react-native-calculator/App.tsx",
+      "sha256": "f1076f67e89c83bd0b1762fe12b9e25ee6dbb13ad4f4f896ceb9efb3f1b20788"
+    },
+    {
+      "path": "examples/react-native-calculator/src/function-demo.ts",
+      "sha256": "90793af6da400239cdfdf0ba14f6636f892fab860f1b20f8f6c1e3a08f1dde0b"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculatorModule.swift",
+      "sha256": "5bada728d8761657d1510ff896e331b403697723c7427a5f0928bd2731c86ffa"
+    },
+    {
+      "path": "examples/react-native-calculator/scripts/verify-function-simulator.mjs",
+      "sha256": "33c0ef62b3aea2dedc4f8548635cb294cd25f614eac6e4b8f9fc5e9045450c2e"
+    },
+    {
+      "path": "examples/react-native-calculator/package.json",
+      "sha256": "efb1ddc0e9d8e745dbf0422bb44e75e4322a385f43f49f00d094e4668bcc528d"
+    }
+  ],
+  "logs": [
+    {
+      "path": "/tmp/rustra-functions-final-calculator-codegen.log",
+      "sha256": "5ead02c3a9ec51c659dc4b8c8701e2e342e5c454afdb74a7a5b0e45c2c00d04a",
+      "bytes": 5278
+    },
+    {
+      "path": "/tmp/rustra-functions-final-rust-ios.log",
+      "sha256": "0a9e0097cfa5b36e2eeb8cee68f98ca3cfe2c5acb5013abc01f1f868ecd75163",
+      "bytes": 246
+    },
+    {
+      "path": "/tmp/rustra-functions-final-xcodebuild.log",
+      "sha256": "1891f443d11f3494116c9cd29d396a5e0afdf483a4f177097565198f89fd59f9",
+      "bytes": 603835
+    },
+    {
+      "path": "/tmp/rustra-functions-final-calculator-tests.log",
+      "sha256": "08e35aa8f34cfcc97a71858e466b7cf18c305bbf2ae6b6572157094de49238c6",
+      "bytes": 4217
+    },
+    {
+      "path": "/tmp/rustra-frame-buffer-types.log",
+      "sha256": "b677beaeebf92a7a6882c6514be12b1fc12475561783f26687709634d34a0b89",
+      "bytes": 24945
+    },
+    {
+      "path": "/tmp/rustra-facade-portable-cli-tests.log",
+      "sha256": "19bddce8707ef6d64860fb986e7415967b1d985cef9cc7484f69cf2f8edff5f8",
+      "bytes": 78752
+    },
+    {
+      "path": "/tmp/rustra-functions-final-app-typecheck.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "/tmp/rustra-functions-final-app-tests.log",
+      "sha256": "c017c6df915e7195b3951befb0dcef35087a2f6daee8a5ff6608b863097fa64b",
+      "bytes": 1760
+    },
+    {
+      "path": "/tmp/rustra-functions-final-cpp.log",
+      "sha256": "a0f0f46a2bcb3d557d4bde0db5e270f7f6122fd60b91319979e0c1339523daa9",
+      "bytes": 6328
+    },
+    {
+      "path": "/tmp/rustra-functions-final-integration.log",
+      "sha256": "7548f29002600c0ef7dc982dc154bb9966602801534a90556cdbc743751daf9f",
+      "bytes": 599
+    },
+    {
+      "path": "/tmp/rustra-functions-final-calculator-ts.log",
+      "sha256": "abe5f4be60d801360405ab06c1d1439df07a4ca2aee56cece9c6abae64d05c96",
+      "bytes": 11922
+    },
+    {
+      "path": "/tmp/rustra-functions-final-freshness.log",
+      "sha256": "137b19bab15b36f724d8b9a63d771b10e5cd153251a8cfa1f91f033de3c26c94",
+      "bytes": 86
+    },
+    {
+      "path": "/tmp/rustra-functions-final-docs.log",
+      "sha256": "934ff889ce3b9a34d8f0c5ffda907b75944afaf909371ded9c6669464d855e34",
+      "bytes": 9150
+    },
+    {
+      "path": "/tmp/rustra-functions-final-clippy.log",
+      "sha256": "b29ef350f851400debb85adad2ad930c3af0fdfb424a2b9d7e7e66d2fe3794af",
+      "bytes": 2722
+    },
+    {
+      "path": "/tmp/rustra-functions-react-doctor.log",
+      "sha256": "4f7c335ff390374b6c5f004cfe66888e0139088e3cc14282c5b7f009c7ac4fac",
+      "bytes": 1278
+    }
+  ],
+  "validation": {
+    "calculatorRust": {
+      "libPassed": 52,
+      "integrationPassed": 1
+    },
+    "typesPassed": 276,
+    "cliNodePassed": 319,
+    "cliBunPassed": 34,
+    "functionIntegration": {
+      "commands": 18,
+      "checks": 308,
+      "cppShimEnabled": false
+    },
+    "calculatorTs": {
+      "passed": 114,
+      "skipped": 6
+    },
+    "rnTestsPassed": 15,
+    "rnTypecheck": true,
+    "cppCodecHarness": true,
+    "codegenFreshExamples": 6,
+    "uniffiBindingsRegenerated": true,
+    "clippyCalculatorAllTargetsUniffi": true,
+    "rustFmt": true,
+    "architecture": true,
+    "apiSurface": true,
+    "docs": true,
+    "reactDoctorScore": 100,
+    "diffCheckSourcesExcludingUniffiVendorOutput": true
+  },
+  "uiVerification": {
+    "method": "CUA accessibility states, final installed build",
+    "states": [
+      "준비 완료 · Rust에 저장된 값: 0",
+      "네이티브 검증 13개 통과",
+      "42 + 58 = 100 · Rust에 저장된 값: 100",
+      "Cannot divide by zero",
+      "reset() 완료 · Rust에 저장된 값: 0"
+    ]
+  },
+  "limitations": [
+    "Simulator results are not physical-device evidence",
+    "Ordinary functions still use JS binary codec; no new raw native ABI",
+    "UniFFI ordinary-function mirror uses schema-semantic JSON",
+    "Upstream generated UniFFI header/Kotlin retain trailing-whitespace warnings"
+  ],
+  "independentReview": {
+    "spec": "PASS",
+    "quality": "PASS",
+    "claims": "PASS",
+    "openFindings": 0,
+    "reports": [
+      {
+        "path": ".superpowers/sdd/2026-09-16-function-registration/task-4-review.md",
+        "sha256": "f9978b1a2328c8b32f0fd8acd41148b263b0bc45ccc178a39bcf7275db0cdbb1"
+      },
+      {
+        "path": ".superpowers/sdd/2026-09-16-function-registration/task-5-review.md",
+        "sha256": "3b27dd96f4969b978b22f2d0811692ff595d71b1be66fad7791e061990ad1057"
+      }
+    ]
+  }
+}

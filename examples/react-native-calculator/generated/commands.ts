@@ -6,9 +6,14 @@
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, String, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, Tuple_of_String, Tuple_of_double_and_double, Tuple_of_int32, Tuple_of_int32_and_int32, WideAggInput, WideAggOutput, double, int32 } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
+
+export function add(arg0: Tuple_of_int32_and_int32[0], arg1: Tuple_of_int32_and_int32[1], options?: InvokeOptions): Promise<int32> {
+  return invokeGenerated<int32>(39, 'add', [arg0, arg1], options);
+}
+add.commandId = 'add';
 
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(1, 'addNumbers', "a", "b", 'addNumbers');
 
@@ -64,6 +69,11 @@ export function greet(input: GreetInput, options?: InvokeOptions): Promise<Greet
 }
 greet.commandId = 'greet';
 
+export function greetPerson(arg0: Tuple_of_String[0], options?: InvokeOptions): Promise<String> {
+  return invokeGenerated<String>(40, 'greetPerson', [arg0], options);
+}
+greetPerson.commandId = 'greetPerson';
+
 export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
   return invokeGeneratedFields1<IsEvenOutput>(3, 'isEven', input, input["n"], options);
 }
@@ -111,6 +121,21 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
 }
 processItem.commandId = 'processItem';
 
+export function readRemembered(options?: InvokeOptions): Promise<int32> {
+  return invokeGenerated<int32>(43, 'readRemembered', null, options);
+}
+readRemembered.commandId = 'readRemembered';
+
+export function remember(arg0: Tuple_of_int32[0], options?: InvokeOptions): Promise<void> {
+  return invokeGenerated<void>(42, 'remember', [arg0], options).then(() => undefined);
+}
+remember.commandId = 'remember';
+
+export function reset(options?: InvokeOptions): Promise<void> {
+  return invokeGenerated<void>(44, 'reset', null, options).then(() => undefined);
+}
+reset.commandId = 'reset';
+
 export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
   return invokeGeneratedFields1<ResourceCloseOutput>(22, 'resourceClose', input, input["handle"], options);
 }
@@ -136,6 +161,11 @@ export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOpt
   return invokeGeneratedFields1<RegistryDemoOutput>(12, 'rustraRegistryDemo', input, input["op"], options);
 }
 rustraRegistryDemo.commandId = 'rustraRegistryDemo';
+
+export function safeDivide(arg0: Tuple_of_double_and_double[0], arg1: Tuple_of_double_and_double[1], options?: InvokeOptions): Promise<double> {
+  return invokeGenerated<double>(41, 'safeDivide', [arg0, arg1], options);
+}
+safeDivide.commandId = 'safeDivide';
 
 /**
  * HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정.

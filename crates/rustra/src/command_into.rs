@@ -5,6 +5,7 @@ fn build_frame_into_handler<I, O, F>(
     handler: &Arc<F>,
     js_codec_supported: bool,
     complex_codec_supported: bool,
+    strict_args: bool,
 ) -> Option<BinIntoHandler>
 where
     I: DeserializeOwned + 'static,
@@ -26,8 +27,13 @@ where
             if payload.len() < 2 {
                 return Err(RustraError::invalid_args("frame: payload too short"));
             }
-            let input: I = postcard::from_bytes(&payload[2..])
+            let (input, remaining): (I, _) = postcard::take_from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+            if strict_args && !remaining.is_empty() {
+                return Err(RustraError::invalid_args(
+                    "postcard decode: trailing argument bytes",
+                ));
+            }
             let output = handler_into(input)?;
 
             // Try-first: caller 버퍼에 바로 직렬화를 시도한다. 대부분의 응답은
@@ -37,7 +43,7 @@ where
             // 않으므로(1.1.3 flavors.rs — 부분 기록은 있으나 폴백이 전체 재기록)
             // 폴백에서 to_extend 로 온전히 다시 쓴다.
             let available = target.len().min(crate::limits::max_payload_bytes());
-            if available > 8 {
+            if available >= 8 {
                 target[..8].fill(0);
                 target[0] = 1;
                 match postcard::to_slice(&output, &mut target[8..available]) {
@@ -91,7 +97,7 @@ where
             // 실패(버퍼 overflow, 인코딩 에러 모두)면 아래 heap 경로가 같은 값을
             // 다시 인코딩해 Buffered 폴백 또는 동일 에러를 반환한다 — 인코딩이
             // 결정론이므로 결과가 같고, 핸들러는 재실행되지 않는다(비멱등 안전).
-            if target.len() > 8 {
+            if target.len() >= 8 {
                 target[..8].fill(0);
                 target[0] = 1;
                 let body_len = if direct {

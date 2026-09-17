@@ -23,7 +23,7 @@ using namespace facebook::jsi;
 namespace jsi = facebook::jsi;
 namespace rc = rustra::codec;
 namespace rustra::generated {
-const char* compiled_contract_hash() { return "810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf"; }
+const char* compiled_contract_hash() { return "e70c24c62944ff78fb6ca58b5658d85bb5cff49af4acc96b3a78bedcbdfb0a58"; }
 }
 
 // Each invocation owns its captured map values until canonical encoding finishes.

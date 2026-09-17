@@ -23,21 +23,24 @@ const RustraCalculator: RustraCalculatorType = linkedModule
       },
     });
 
+export type RustraCalculatorType = {
+  invokeRaw(payload: string): Promise<string>;
+  invokeSync(command: string, argsJson?: string): string;
+  addSync(a: number, b: number): number;
+  writeBenchmarkReceipt?(receipt: string): string;
+  writeFunctionReceipt?(receipt: string): string;
+};
+
+export default RustraCalculator as RustraCalculatorType;
+
 type InvokeResult = {
   ok: boolean;
   result?: unknown;
   error?: string;
 };
 
-export type RustraCalculatorType = {
-  invokeRaw(payload: string): Promise<string>;
-  invokeSync(command: string, argsJson?: string): string;
-  addSync(a: number, b: number): number;
-  writeBenchmarkReceipt?(receipt: string): string;
-};
-
-export default RustraCalculator as RustraCalculatorType;
-
+// 앱 측(BenchmarkApp)이 import하는 편의 래퍼다 — 모듈 프로젝트 스캔은 앱 쪽 참조를 못 본다.
+// react-doctor-disable-next-line deslop/unused-export
 export async function invokeCommand(command: string, args?: unknown): Promise<unknown> {
   const payload = JSON.stringify({ command, args });
   const raw = await RustraCalculator.invokeRaw(payload);

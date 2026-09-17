@@ -119,6 +119,7 @@ pub fn render_uniffi_generated(schema_json: &str) -> Result<String, RenderError>
 struct ScalarType {
     mirror: &'static str,
     real: &'static str,
+    contract: &'static str,
 }
 
 /// 미러 필드 타입 표현식. 스키마 노드 하나의 해석 결과며 미러→실제(m2r) /
@@ -186,9 +187,23 @@ struct VariantIr {
 struct CommandIr {
     /// camelCase 커맨드 이름 — 그대로 export 함수명이 된다.
     name: String,
-    /// 입력 미러 타입명. `None` = unit 입력(`()` — 파라미터 없는 export).
-    input: Option<String>,
-    output: String,
+    kind: CommandKind,
+}
+
+#[derive(Debug)]
+enum CommandKind {
+    /// 기존 `#[command]` 등록. 명명된 미러 입출력 타입 경로를 그대로 보존한다.
+    Legacy {
+        /// 입력 미러 타입명. `None` = unit 입력(`()` — 파라미터 없는 export).
+        input: Option<String>,
+        output: String,
+    },
+    /// `functionArgs` 메타데이터가 있는 일반 함수. 현재 calculator UniFFI
+    /// 표면은 primitive 위치 인수와 primitive/unit 반환만 지원한다.
+    Function {
+        args: Vec<ScalarType>,
+        output: Option<ScalarType>,
+    },
 }
 
 /// 렌더러 상태 — 정의는 최초 등장 순서를 유지한다(결정론적 출력).
@@ -224,6 +239,21 @@ impl Renderer {
         let base = format!("commands[{name}]");
         ensure_rust_ident("command", &name, &format!("$.{base}.name"))?;
 
+        if let Some(function_args) = command.get("functionArgs") {
+            let arity = function_args
+                .as_u64()
+                .filter(|arity| *arity <= 12)
+                .ok_or_else(|| {
+                    self.error(
+                        format!("{base}.functionArgs"),
+                        "functionArgs must be an integer from 0 through 12",
+                    )
+                })? as usize;
+            let kind = self.collect_function_command(command, &base, arity)?;
+            self.commands.push(CommandIr { name, kind });
+            return Ok(());
+        }
+
         // 입력 — `{"title":"Null","type":"null"}` 은 unit 입력 핸들러(파라미터 없음).
         let input = match command.get("inputSchema") {
             Some(schema) if schema.get("type").and_then(Value::as_str) == Some("null") => None,
@@ -253,10 +283,144 @@ impl Renderer {
 
         self.commands.push(CommandIr {
             name,
-            input,
-            output,
+            kind: CommandKind::Legacy { input, output },
         });
         Ok(())
+    }
+
+    fn collect_function_command(
+        &self,
+        command: &Value,
+        base: &str,
+        arity: usize,
+    ) -> Result<CommandKind, RenderError> {
+        let input_type = command
+            .get("inputType")
+            .and_then(Value::as_str)
+            .ok_or_else(|| self.error(format!("{base}.inputType"), "missing inputType"))?;
+        let output_type = command
+            .get("outputType")
+            .and_then(Value::as_str)
+            .ok_or_else(|| self.error(format!("{base}.outputType"), "missing outputType"))?;
+
+        let input_schema = command
+            .get("inputSchema")
+            .ok_or_else(|| self.error(format!("{base}.inputSchema"), "missing inputSchema"))?;
+        let args = if arity == 0 {
+            if input_schema.get("type").and_then(Value::as_str) != Some("null") {
+                return Err(self.error(
+                    format!("{base}.inputSchema"),
+                    "functionArgs 0 requires a null input schema",
+                ));
+            }
+            ensure_schema_keys(
+                input_schema,
+                &["title", "type"],
+                &format!("{base}.inputSchema"),
+                "unit function input",
+            )?;
+            Vec::new()
+        } else {
+            if input_schema.get("type").and_then(Value::as_str) != Some("array") {
+                return Err(self.error(
+                    format!("{base}.inputSchema"),
+                    format!("functionArgs {arity} requires a fixed tuple input schema"),
+                ));
+            }
+            ensure_schema_keys(
+                input_schema,
+                &["title", "type", "items", "minItems", "maxItems"],
+                &format!("{base}.inputSchema"),
+                "function tuple input",
+            )?;
+            let items = input_schema
+                .get("items")
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    self.error(
+                        format!("{base}.inputSchema.items"),
+                        format!("functionArgs {arity} requires an array of tuple item schemas"),
+                    )
+                })?;
+            if items.len() != arity {
+                return Err(self.error(
+                    format!("{base}.inputSchema"),
+                    format!(
+                        "functionArgs {arity} does not match {} tuple items",
+                        items.len()
+                    ),
+                ));
+            }
+            for bound in ["minItems", "maxItems"] {
+                if input_schema.get(bound).and_then(Value::as_u64) != Some(arity as u64) {
+                    return Err(self.error(
+                        format!("{base}.inputSchema.{bound}"),
+                        format!("functionArgs {arity} requires {bound}={arity}"),
+                    ));
+                }
+            }
+            items
+                .iter()
+                .enumerate()
+                .map(|(index, schema)| {
+                    let path = format!("{base}.inputSchema.items[{index}]");
+                    ordinary_scalar_token(schema, &path, "argument")
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+
+        let expected_input_type = if args.is_empty() {
+            "()".to_string()
+        } else {
+            format!(
+                "Tuple_of_{}",
+                args.iter()
+                    .map(|scalar| scalar.contract)
+                    .collect::<Vec<_>>()
+                    .join("_and_")
+            )
+        };
+        ensure_function_type_metadata(
+            input_type,
+            &expected_input_type,
+            input_schema,
+            "inputType",
+            &format!("{base}.inputType"),
+            &format!("{base}.inputSchema.title"),
+        )?;
+
+        let output_schema = command
+            .get("outputSchema")
+            .ok_or_else(|| self.error(format!("{base}.outputSchema"), "missing outputSchema"))?;
+        let output = if output_schema.get("type").and_then(Value::as_str) == Some("null") {
+            ensure_schema_keys(
+                output_schema,
+                &["title", "type"],
+                &format!("{base}.outputSchema"),
+                "unit function output",
+            )?;
+            None
+        } else {
+            Some(ordinary_scalar_token(
+                output_schema,
+                &format!("{base}.outputSchema"),
+                "return",
+            )?)
+        };
+        let expected_output_type = output
+            .as_ref()
+            .map(|scalar| scalar.contract)
+            .unwrap_or("()");
+        ensure_function_type_metadata(
+            output_type,
+            expected_output_type,
+            output_schema,
+            "outputType",
+            &format!("{base}.outputType"),
+            &format!("{base}.outputSchema.title"),
+        )?;
+
+        Ok(CommandKind::Function { args, output })
     }
 
     /// 명명된 정의(Record/Enum/스칼라 핸들)를 수집한다. 중복 호출은 안전하고
@@ -995,53 +1159,88 @@ impl Renderer {
         out.push_str("    // ── 커맨드별 타입 래퍼 — 스키마 등록 순서 ──\n");
         for command in &self.commands {
             let snake = camel_to_snake(&command.name);
-            match &command.input {
-                Some(input) => {
-                    out.push_str(&format!(
-                        "    /// `{name}` — `crate::{snake}` 커맨드의 UniFFI 타입 래퍼.\n",
-                        name = command.name,
-                    ));
-                    out.push_str("    #[uniffi::export]\n");
-                    out.push_str("    #[allow(non_snake_case)]\n");
-                    out.push_str(&format!(
-                        "    pub fn {name}(input: {input}) -> Result<{output}, RustraCommandFailure> {{\n",
-                        name = command.name,
-                        output = command.output,
-                    ));
-                    // I/O 타입 파라미터를 명시한다 — `input.into()` 의 I 는
-                    // 출력 바인딩만으로는 추론되지 않는다.
-                    out.push_str(&format!(
-                        "        let out: crate::{output} = package()\n",
-                        output = command.output,
-                    ));
-                    out.push_str(&format!(
-                        "            .invoke_typed::<crate::{input}, crate::{output}>(\"{name}\", &input.into())?;\n",
-                        input = input,
-                        output = command.output,
-                        name = command.name,
-                    ));
+            match &command.kind {
+                CommandKind::Legacy { input, output } => {
+                    match input {
+                        Some(input) => {
+                            out.push_str(&format!(
+                                "    /// `{name}` — `crate::{snake}` 커맨드의 UniFFI 타입 래퍼.\n",
+                                name = command.name,
+                            ));
+                            out.push_str("    #[uniffi::export]\n");
+                            out.push_str("    #[allow(non_snake_case)]\n");
+                            out.push_str(&format!(
+                                "    pub fn {name}(input: {input}) -> Result<{output}, RustraCommandFailure> {{\n",
+                                name = command.name,
+                            ));
+                            // I/O 타입 파라미터를 명시한다 — `input.into()` 의 I 는
+                            // 출력 바인딩만으로는 추론되지 않는다.
+                            out.push_str(&format!(
+                                "        let out: crate::{output} = package()\n"
+                            ));
+                            out.push_str(&format!(
+                                "            .invoke_typed::<crate::{input}, crate::{output}>(\"{name}\", &input.into())?;\n",
+                                name = command.name,
+                            ));
+                        }
+                        None => {
+                            out.push_str(&format!(
+                                "    /// `{name}` — `crate::{snake}`(unit 입력)의 UniFFI 타입 래퍼.\n",
+                                name = command.name,
+                            ));
+                            out.push_str("    #[uniffi::export]\n");
+                            out.push_str("    #[allow(non_snake_case)]\n");
+                            out.push_str(&format!(
+                                "    pub fn {name}() -> Result<{output}, RustraCommandFailure> {{\n",
+                                name = command.name,
+                            ));
+                            out.push_str(&format!(
+                                "        let out: crate::{output} =\n            package().invoke_typed::<(), crate::{output}>(\"{name}\", &())?;\n",
+                                name = command.name,
+                            ));
+                        }
+                    }
+                    out.push_str("        Ok(out.into())\n");
+                    out.push_str("    }\n\n");
                 }
-                None => {
+                CommandKind::Function { args, output } => {
+                    let params = args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, scalar)| format!("arg{index}: {}", scalar.mirror))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let input_values = args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, _)| format!("arg{index}"))
+                        .collect::<Vec<_>>();
+                    let input_value = tuple_syntax(&input_values);
+                    let output_mirror = output.as_ref().map(|scalar| scalar.mirror).unwrap_or("()");
+
                     out.push_str(&format!(
-                        "    /// `{name}` — `crate::{snake}`(unit 입력)의 UniFFI 타입 래퍼.\n",
+                        "    /// `{name}` — 일반 함수의 UniFFI 위치 인수 래퍼.\n",
                         name = command.name,
                     ));
                     out.push_str("    #[uniffi::export]\n");
                     out.push_str("    #[allow(non_snake_case)]\n");
                     out.push_str(&format!(
-                        "    pub fn {name}() -> Result<{output}, RustraCommandFailure> {{\n",
+                        "    pub fn {name}({params}) -> Result<{output_mirror}, RustraCommandFailure> {{\n",
                         name = command.name,
-                        output = command.output,
                     ));
                     out.push_str(&format!(
-                        "        let out: crate::{output} =\n            package().invoke_typed::<(), crate::{output}>(\"{name}\", &())?;\n",
-                        output = command.output,
+                        "        let args = serde_json::to_value({input_value})\n            .map_err(rustra::RustraError::internal)?;\n",
+                    ));
+                    out.push_str(&format!(
+                        "        let out = package().invoke_json(\"{name}\", args)?;\n",
                         name = command.name,
                     ));
+                    out.push_str(&format!(
+                        "        serde_json::from_value::<{output_mirror}>(out)\n            .map_err(rustra::RustraError::internal)\n            .map_err(RustraCommandFailure::from)\n"
+                    ));
+                    out.push_str("    }\n\n");
                 }
             }
-            out.push_str("        Ok(out.into())\n");
-            out.push_str("    }\n\n");
         }
     }
 
@@ -1157,31 +1356,34 @@ fn variant_fields_construct(
 /// 스키마 노드의 스칼라 토큰 판정 — 스칼라가 아니면 None, 미지원 포맷은 Err.
 /// 반환은 (미러 토큰, 실제 토큰) 쌍이다.
 fn scalar_token(schema: &Value, path: &str) -> Result<Option<ScalarType>, RenderError> {
-    let same = |token: &'static str| ScalarType {
+    let same = |token: &'static str, contract: &'static str| ScalarType {
         mirror: token,
         real: token,
+        contract,
     };
     let format = schema.get("format").and_then(Value::as_str);
     let token = match schema.get("type").and_then(Value::as_str) {
-        Some("boolean") => same("bool"),
-        Some("string") => same("String"),
+        Some("boolean") => same("bool", "Boolean"),
+        Some("string") => same("String", "String"),
         Some("integer") => match format {
-            Some("int8") => same("i8"),
-            Some("int16") => same("i16"),
-            Some("int32") => same("i32"),
-            Some("int64") => same("i64"),
+            Some("int8") => same("i8", "int8"),
+            Some("int16") => same("i16", "int16"),
+            Some("int32") => same("i32", "int32"),
+            Some("int64") => same("i64", "int64"),
             Some("int") => ScalarType {
                 mirror: "i64",
                 real: "isize",
+                contract: "int",
             },
-            Some("uint8") => same("u8"),
-            Some("uint16") => same("u16"),
-            Some("uint32") => same("u32"),
-            Some("uint64") => same("u64"),
+            Some("uint8") => same("u8", "uint8"),
+            Some("uint16") => same("u16", "uint16"),
+            Some("uint32") => same("u32", "uint32"),
+            Some("uint64") => same("u64", "uint64"),
             // usize — schemars 의 포맷은 "uint". uniffi 미지원이라 u64 미러.
             Some("uint") => ScalarType {
                 mirror: "u64",
                 real: "usize",
+                contract: "uint",
             },
             other => {
                 return Err(RenderError {
@@ -1191,8 +1393,8 @@ fn scalar_token(schema: &Value, path: &str) -> Result<Option<ScalarType>, Render
             }
         },
         Some("number") => match format {
-            Some("float") => same("f32"),
-            Some("double") => same("f64"),
+            Some("float") => same("f32", "float"),
+            Some("double") => same("f64", "double"),
             other => {
                 return Err(RenderError {
                     path: path.to_string(),
@@ -1206,12 +1408,114 @@ fn scalar_token(schema: &Value, path: &str) -> Result<Option<ScalarType>, Render
     Ok(Some(token))
 }
 
+/// 일반 함수 root는 실제 Rust 타입을 이름으로 복원할 수 없으므로, Schemars가
+/// primitive에 내는 제한된 스키마만 허용한다. IP/char처럼 format/constraint가
+/// 붙는 타입은 거부한다. String과 동일 스키마인 타입은 구분할 수 없으므로 실제
+/// 호출은 postcard 타입 추측 대신 `invoke_json`의 serde JSON 의미를 사용한다.
+fn ordinary_scalar_token(
+    schema: &Value,
+    path: &str,
+    position: &str,
+) -> Result<ScalarType, RenderError> {
+    let scalar = scalar_token(schema, path)?.ok_or_else(|| RenderError {
+        path: path.to_string(),
+        reason: format!("ordinary UniFFI function {position} must be a primitive scalar"),
+    })?;
+
+    let allowed_keys: &[&str] = match scalar.contract {
+        "String" | "Boolean" => &["title", "type"],
+        "uint8" | "uint16" | "uint32" | "uint64" | "uint" => {
+            &["title", "type", "format", "minimum"]
+        }
+        _ => &["title", "type", "format"],
+    };
+    ensure_schema_keys(
+        schema,
+        allowed_keys,
+        path,
+        &format!("ordinary function primitive {position}"),
+    )?;
+
+    if matches!(
+        scalar.contract,
+        "uint8" | "uint16" | "uint32" | "uint64" | "uint"
+    ) && schema.get("minimum").and_then(Value::as_f64) != Some(0.0)
+    {
+        return Err(RenderError {
+            path: path.to_string(),
+            reason: "ordinary unsigned primitive requires minimum 0".to_string(),
+        });
+    }
+
+    Ok(scalar)
+}
+
+fn ensure_schema_keys(
+    schema: &Value,
+    allowed: &[&str],
+    path: &str,
+    context: &str,
+) -> Result<(), RenderError> {
+    let object = schema.as_object().ok_or_else(|| RenderError {
+        path: path.to_string(),
+        reason: format!("{context} schema must be an object"),
+    })?;
+    if let Some(key) = object.keys().find(|key| !allowed.contains(&key.as_str())) {
+        return Err(RenderError {
+            path: path.to_string(),
+            reason: format!("{context} has unsupported schema key `{key}`"),
+        });
+    }
+    Ok(())
+}
+
+fn ensure_function_type_metadata(
+    actual: &str,
+    expected: &str,
+    schema: &Value,
+    metadata_name: &str,
+    metadata_path: &str,
+    title_path: &str,
+) -> Result<(), RenderError> {
+    if actual != expected {
+        return Err(RenderError {
+            path: metadata_path.to_string(),
+            reason: format!("{metadata_name} `{actual}` does not match derived `{expected}`"),
+        });
+    }
+
+    if let Some(title) = schema.get("title") {
+        let title = title.as_str().ok_or_else(|| RenderError {
+            path: title_path.to_string(),
+            reason: format!("schema title for {metadata_name} must be a string"),
+        })?;
+        let expected_title = if expected == "()" { "Null" } else { expected };
+        if title != expected_title {
+            return Err(RenderError {
+                path: title_path.to_string(),
+                reason: format!("schema title `{title}` does not match {metadata_name} `{actual}`"),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// 스칼라 변환식 — 미러/실제 토큰이 다르면(usize↔u64) 경계에서 cast 한다.
 fn scalar_cast(v: &str, target: &str, source: &str) -> String {
     if target == source {
         v.to_string()
     } else {
         format!("{v} as {target}")
+    }
+}
+
+/// 함수 위치 인수의 실제 tuple 타입/값 문법. 한 원소 tuple의 trailing comma와
+/// 0원소 unit을 같은 규칙으로 렌더링한다.
+fn tuple_syntax(items: &[String]) -> String {
+    match items {
+        [] => "()".to_string(),
+        [only] => format!("({only},)"),
+        _ => format!("({})", items.join(", ")),
     }
 }
 
@@ -1261,6 +1565,352 @@ mod tests {
             "inputSchema": serde_json::from_str::<Value>(input).unwrap(),
             "outputSchema": serde_json::from_str::<Value>(output).unwrap(),
         })
+    }
+
+    fn function_command(
+        name: &str,
+        arity: u8,
+        input: serde_json::Value,
+        output: serde_json::Value,
+    ) -> serde_json::Value {
+        let input_type = if input.get("type").and_then(Value::as_str) == Some("null") {
+            "()"
+        } else {
+            input.get("title").and_then(Value::as_str).unwrap()
+        };
+        let output_type = if output.get("type").and_then(Value::as_str) == Some("null") {
+            "()"
+        } else {
+            output.get("title").and_then(Value::as_str).unwrap()
+        };
+        serde_json::json!({
+            "name": name,
+            "commandId": 40 + arity,
+            "inputType": input_type,
+            "outputType": output_type,
+            "inputSchema": input,
+            "outputSchema": output,
+            "functionArgs": arity,
+        })
+    }
+
+    fn wrapper_block<'a>(source: &'a str, marker: &str) -> &'a str {
+        let start = source.find(marker).unwrap();
+        let tail = &source[start + marker.len()..];
+        let next_wrapper = tail.find("\n    /// `");
+        let generic_surface = tail.find("\n    // ── 제네릭 표면");
+        let end = match (next_wrapper, generic_surface) {
+            (Some(left), Some(right)) => left.min(right),
+            (Some(end), None) | (None, Some(end)) => end,
+            (None, None) => tail.len(),
+        };
+        &source[start..start + marker.len() + end]
+    }
+
+    #[test]
+    fn renders_ordinary_positional_primitive_arguments_and_return() {
+        let source = render_uniffi_generated(&doc(serde_json::json!([
+            function_command(
+                "add",
+                2,
+                serde_json::json!({
+                    "title": "Tuple_of_int32_and_int32",
+                    "type": "array",
+                    "items": [
+                        {"type": "integer", "format": "int32"},
+                        {"type": "integer", "format": "int32"}
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2
+                }),
+                serde_json::json!({"title": "int32", "type": "integer", "format": "int32"})
+            ),
+            function_command(
+                "greetPerson",
+                1,
+                serde_json::json!({
+                    "title": "Tuple_of_String",
+                    "type": "array",
+                    "items": [{"type": "string"}],
+                    "minItems": 1,
+                    "maxItems": 1
+                }),
+                serde_json::json!({"title": "String", "type": "string"})
+            )
+        ])))
+        .unwrap();
+
+        assert!(
+            source.contains(
+                "pub fn add(arg0: i32, arg1: i32) -> Result<i32, RustraCommandFailure> {"
+            )
+        );
+        assert!(source.contains("let args = serde_json::to_value((arg0, arg1))"));
+        assert!(source.contains("package().invoke_json(\"add\", args)?"));
+        assert!(source.contains("serde_json::from_value::<i32>(out)"));
+        assert!(source.contains(
+            "pub fn greetPerson(arg0: String) -> Result<String, RustraCommandFailure> {"
+        ));
+        assert!(source.contains("let args = serde_json::to_value((arg0,))"));
+        assert!(source.contains("package().invoke_json(\"greetPerson\", args)?"));
+        assert!(source.contains("serde_json::from_value::<String>(out)"));
+        assert!(!source.contains("pub struct Tuple_of_int32_and_int32"));
+    }
+
+    #[test]
+    fn renders_ordinary_zero_arguments_and_unit_return() {
+        let source = render_uniffi_generated(&doc(serde_json::json!([function_command(
+            "reset",
+            0,
+            serde_json::json!({"title": "Null", "type": "null"}),
+            serde_json::json!({"title": "Null", "type": "null"})
+        )])))
+        .unwrap();
+
+        assert!(source.contains("pub fn reset() -> Result<(), RustraCommandFailure> {"));
+        assert!(source.contains("let args = serde_json::to_value(())"));
+        assert!(source.contains("package().invoke_json(\"reset\", args)?"));
+        assert!(source.contains("serde_json::from_value::<()>(out)"));
+    }
+
+    #[test]
+    fn ordinary_plain_string_schema_uses_json_semantics_for_socket_addr() {
+        let package = rustra::Package::builder("test.socket")
+            .function("socketPort", |addr: std::net::SocketAddr| addr.port())
+            .build();
+        let schema_json = package.generate_typescript().unwrap().schema_json;
+        let source = render_uniffi_generated(&schema_json).unwrap();
+
+        assert!(
+            source
+                .contains("pub fn socketPort(arg0: String) -> Result<u16, RustraCommandFailure> {")
+        );
+        assert!(source.contains("let args = serde_json::to_value((arg0,))"));
+        assert!(source.contains("package().invoke_json(\"socketPort\", args)?"));
+        assert!(!source.contains("invoke_typed::<(String,), u16>"));
+
+        let args = serde_json::to_value(("127.0.0.1:4317".to_string(),)).unwrap();
+        let output = package.invoke_json("socketPort", args).unwrap();
+        assert_eq!(serde_json::from_value::<u16>(output).unwrap(), 4317);
+        let error = package
+            .invoke_json("socketPort", serde_json::json!(["not a socket"]))
+            .unwrap_err();
+        assert_eq!(error.code(), "command.invalid_args");
+    }
+
+    #[test]
+    fn ordinary_commands_keep_schema_order_around_legacy_commands() {
+        let legacy = object_command(
+            "addNumbers",
+            r#"{"title":"AddNumbersInput","type":"object","required":["a","b"],
+                "properties":{"a":{"type":"integer","format":"int64"},"b":{"type":"integer","format":"int64"}}}"#,
+            r#"{"title":"AddNumbersOutput","type":"object","required":["value"],
+                "properties":{"value":{"type":"integer","format":"int64"}}}"#,
+        );
+        let ordinary = function_command(
+            "readRemembered",
+            0,
+            serde_json::json!({"title": "Null", "type": "null"}),
+            serde_json::json!({"title": "int32", "type": "integer", "format": "int32"}),
+        );
+        let source = render_uniffi_generated(&doc(serde_json::json!([legacy, ordinary]))).unwrap();
+
+        let legacy_at = source.find("pub fn addNumbers").unwrap();
+        let ordinary_at = source.find("pub fn readRemembered").unwrap();
+        assert!(legacy_at < ordinary_at);
+        assert!(source.contains(
+            "invoke_typed::<crate::AddNumbersInput, crate::AddNumbersOutput>(\"addNumbers\", &input.into())"
+        ));
+    }
+
+    #[test]
+    fn current_calculator_legacy_wrappers_still_render_byte_identically() {
+        let source = render_uniffi_generated(include_str!("../generated/schema.json")).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "rustra-uniffi-render-legacy-{}.rs",
+            std::process::id()
+        ));
+        std::fs::write(&path, source).unwrap();
+        let status = std::process::Command::new("rustfmt")
+            .args(["--edition", "2024", "--"])
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let formatted = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let committed = include_str!("uniffi_generated.rs");
+        // rustfmt 출력과 체크아웃 파일은 개행 스타일이 플랫폼마다 다르다(Windows
+        // autocrlf) — 바이트 동일성 계약은 LF 정규화 기준으로 비교한다.
+        let normalize = |s: &str| s.replace("\r\n", "\n");
+        let formatted = normalize(&formatted);
+        let committed = normalize(committed);
+        let schema: Value = serde_json::from_str(include_str!("../generated/schema.json")).unwrap();
+        for command in schema["commands"].as_array().unwrap() {
+            if command.get("functionArgs").is_some() {
+                continue;
+            }
+            let name = command["name"].as_str().unwrap();
+            let marker = format!("    /// `{name}`");
+            let rendered_wrapper = wrapper_block(&formatted, &marker);
+            let committed_wrapper = wrapper_block(&committed, &marker);
+            assert_eq!(rendered_wrapper, committed_wrapper, "legacy wrapper {name}");
+        }
+    }
+
+    #[test]
+    fn ordinary_function_arity_mismatch_fails_closed() {
+        let error = render_uniffi_generated(&doc(serde_json::json!([function_command(
+            "add",
+            2,
+            serde_json::json!({
+                "title": "Tuple_of_int32",
+                "type": "array",
+                "items": [{"type": "integer", "format": "int32"}],
+                "minItems": 1,
+                "maxItems": 1
+            }),
+            serde_json::json!({"title": "int32", "type": "integer", "format": "int32"})
+        )])))
+        .unwrap_err();
+
+        assert!(error.path.ends_with("commands[add].inputSchema"), "{error}");
+        assert!(error.reason.contains("functionArgs 2"), "{error}");
+        assert!(error.reason.contains("1 tuple items"), "{error}");
+    }
+
+    #[test]
+    fn ordinary_function_unsupported_root_shape_fails_closed() {
+        let error = render_uniffi_generated(&doc(serde_json::json!([function_command(
+            "unsupported",
+            1,
+            serde_json::json!({
+                "title": "Tuple_of_Object",
+                "type": "array",
+                "items": [{"type": "object", "properties": {"value": {"type": "string"}}}],
+                "minItems": 1,
+                "maxItems": 1
+            }),
+            serde_json::json!({"title": "String", "type": "string"})
+        )])))
+        .unwrap_err();
+
+        assert!(error.path.ends_with("inputSchema.items[0]"), "{error}");
+        assert!(error.reason.contains("primitive"), "{error}");
+    }
+
+    #[test]
+    fn ordinary_function_non_numeric_metadata_fails_closed() {
+        let mut command = function_command(
+            "badMetadata",
+            0,
+            serde_json::json!({"title": "Null", "type": "null"}),
+            serde_json::json!({"title": "Null", "type": "null"}),
+        );
+        command["functionArgs"] = serde_json::json!("0");
+
+        let error = render_uniffi_generated(&doc(serde_json::json!([command]))).unwrap_err();
+        assert!(error.path.ends_with("commands[badMetadata].functionArgs"));
+        assert!(
+            error.reason.contains("integer from 0 through 12"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn ordinary_formatted_or_constrained_string_fails_closed() {
+        for (label, input_title, schema, expected) in [
+            (
+                "formatted",
+                "Tuple_of_IPv4Addr",
+                serde_json::json!({"type": "string", "format": "ipv4"}),
+                "format",
+            ),
+            (
+                "constrained",
+                "Tuple_of_Character",
+                serde_json::json!({"type": "string", "minLength": 1, "maxLength": 1}),
+                "minLength",
+            ),
+        ] {
+            let error = render_uniffi_generated(&doc(serde_json::json!([function_command(
+                label,
+                1,
+                serde_json::json!({
+                    "title": input_title,
+                    "type": "array",
+                    "items": [schema],
+                    "minItems": 1,
+                    "maxItems": 1
+                }),
+                serde_json::json!({"title": "String", "type": "string"})
+            )])))
+            .unwrap_err();
+
+            assert!(error.path.ends_with("inputSchema.items[0]"), "{error}");
+            assert!(error.reason.contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn ordinary_type_metadata_must_match_schema_derived_contract_names() {
+        let mut bad_input = function_command(
+            "badInput",
+            1,
+            serde_json::json!({
+                "title": "Tuple_of_int32",
+                "type": "array",
+                "items": [{"type": "integer", "format": "int32"}],
+                "minItems": 1,
+                "maxItems": 1
+            }),
+            serde_json::json!({"title": "int32", "type": "integer", "format": "int32"}),
+        );
+        bad_input["inputType"] = serde_json::json!("Tuple_of_String");
+        let input_error =
+            render_uniffi_generated(&doc(serde_json::json!([bad_input]))).unwrap_err();
+        assert!(input_error.path.ends_with("commands[badInput].inputType"));
+        assert!(
+            input_error.reason.contains("Tuple_of_int32"),
+            "{input_error}"
+        );
+
+        let mut bad_output = function_command(
+            "badOutput",
+            0,
+            serde_json::json!({"title": "Null", "type": "null"}),
+            serde_json::json!({"title": "int32", "type": "integer", "format": "int32"}),
+        );
+        bad_output["outputType"] = serde_json::json!("String");
+        let output_error =
+            render_uniffi_generated(&doc(serde_json::json!([bad_output]))).unwrap_err();
+        assert!(
+            output_error
+                .path
+                .ends_with("commands[badOutput].outputType")
+        );
+        assert!(output_error.reason.contains("int32"), "{output_error}");
+    }
+
+    #[test]
+    fn ordinary_metadata_must_match_schema_title_when_present() {
+        let mut command = function_command(
+            "badTitle",
+            1,
+            serde_json::json!({
+                "title": "Tuple_of_int32",
+                "type": "array",
+                "items": [{"type": "integer", "format": "int32"}],
+                "minItems": 1,
+                "maxItems": 1
+            }),
+            serde_json::json!({"title": "int32", "type": "integer", "format": "int32"}),
+        );
+        command["inputSchema"]["title"] = serde_json::json!("WrongTuple");
+
+        let error = render_uniffi_generated(&doc(serde_json::json!([command]))).unwrap_err();
+        assert!(error.path.ends_with("commands[badTitle].inputSchema.title"));
+        assert!(error.reason.contains("inputType"), "{error}");
     }
 
     #[test]

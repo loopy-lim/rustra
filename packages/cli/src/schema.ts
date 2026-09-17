@@ -15,6 +15,8 @@ export type CommandSchema = {
   execution?: 'sync' | 'async';
   /** 명령 이름 (예: "addNumbers") */
   name: string;
+  /** Ordinary function arity; omitted for legacy object commands. */
+  functionArgs?: number;
   /** 명령 ID (Frame 바이너리 프로토콜용, 1부터 시작) */
   commandId: number;
   /** 입력 타입의 짧은 이름 (예: "AddNumbersInput") */

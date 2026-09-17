@@ -1,6 +1,7 @@
 use super::*;
 
 include!("builder_commands.rs");
+include!("builder_functions.rs");
 
 include!("builder_capabilities.rs");
 

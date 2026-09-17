@@ -1,0 +1,161 @@
+{
+  "kind": "rustra-ordinary-functions",
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-15T19:43:13.463Z",
+  "platform": "ios",
+  "buildMode": "release",
+  "buildFingerprint": "65c339a0ba66770cf2c7b57fbf31a89477776c7039c2768521295210668322f1",
+  "contractHash": "bb88ac05d152c16fac2fe5e194323a3222534cbdd7b1d13b5b590d120dcf8a7c",
+  "checks": [
+    {
+      "name": "add(42, 58)",
+      "actual": 100,
+      "passed": true
+    },
+    {
+      "name": "greetPerson(\"민지\")",
+      "actual": "Hello, 민지!",
+      "passed": true
+    },
+    {
+      "name": "remember(100) returns void",
+      "actual": "undefined",
+      "passed": true
+    },
+    {
+      "name": "readRemembered()",
+      "actual": 100,
+      "passed": true
+    },
+    {
+      "name": "reset() returns void",
+      "actual": "undefined",
+      "passed": true
+    },
+    {
+      "name": "reset clears Rust state",
+      "actual": 0,
+      "passed": true
+    },
+    {
+      "name": "safeDivide(84, 2)",
+      "actual": 42,
+      "passed": true
+    },
+    {
+      "name": "zero divisor maps domain error",
+      "actual": "math.zero_divisor",
+      "passed": true
+    },
+    {
+      "name": "function uses supported JS frame route",
+      "actual": 0,
+      "passed": true
+    },
+    {
+      "name": "live schema add",
+      "actual": 100,
+      "passed": true
+    },
+    {
+      "name": "live schema reset returns void",
+      "actual": "undefined",
+      "passed": true
+    },
+    {
+      "name": "cursor matches generated wire",
+      "actual": "34,0,84,116",
+      "passed": true
+    },
+    {
+      "name": "legacy addNumbers still works",
+      "actual": 100,
+      "passed": true
+    }
+  ],
+  "correctness": {
+    "passed": true,
+    "checkedBeforeTiming": true
+  },
+  "benchmark": {
+    "scope": "Hermes native app JS. Generated calls include await and native roundtrip; legacy input/output shape, i64 width and result normalization differ. Encoding excludes native and exact-buffer transport copies.",
+    "samples": 20,
+    "callIterationsPerSample": 1000,
+    "encodingIterationsPerSample": 5000,
+    "checksum": 11211552,
+    "nanoseconds": {
+      "generatedFunction": {
+        "label": "generatedFunction",
+        "avg": 15066.320848464966,
+        "stddev": 341.6605183786858,
+        "min": 14449.874997138977,
+        "p50": 15112.459063529968,
+        "p95": 15741.45793914795,
+        "p99": 15741.45793914795,
+        "max": 15741.45793914795,
+        "ops": 66373.20484927049,
+        "batchMeans": [
+          14959.41698551178, 15079.625010490417, 15741.45793914795, 15068.20797920227,
+          15205.708026885986, 15295.874953269958, 15112.459063529968, 15012.667059898376,
+          15523.70798587799, 15429.665923118591, 15220.00002861023, 14668.874979019165,
+          15148.584008216858, 14468.375086784363, 14844.04194355011, 14668.500065803528,
+          15481.915950775146, 14449.874997138977, 15224.166989326477, 14723.291993141174
+        ]
+      },
+      "legacyCommand": {
+        "label": "legacyCommand",
+        "avg": 4994.803988933563,
+        "stddev": 290.44103209996877,
+        "min": 4651.332974433899,
+        "p50": 4965.916991233826,
+        "p95": 5812.958002090454,
+        "p99": 5812.958002090454,
+        "max": 5812.958002090454,
+        "ops": 200208.05665559447,
+        "batchMeans": [
+          5179.5830726623535, 5812.958002090454, 4965.916991233826, 5262.374997138977,
+          4992.332935333252, 4981.582999229431, 4877.291917800903, 5306.04100227356,
+          4766.957998275757, 4876.540899276733, 4715.291976928711, 4651.332974433899,
+          4670.041084289551, 5211.50004863739, 4811.625003814697, 4695.500016212463,
+          4897.040963172913, 5372.291922569275, 4700.291991233826, 5149.5829820632935
+        ]
+      },
+      "encode": {
+        "label": "encode",
+        "avg": 2096.9508373737335,
+        "stddev": 56.505165469134994,
+        "min": 2010.2417945861816,
+        "p50": 2112.5,
+        "p95": 2215.183401107788,
+        "p99": 2215.183401107788,
+        "max": 2215.183401107788,
+        "ops": 476882.901676618,
+        "batchMeans": [
+          2046.3083982467651, 2058.5333824157715, 2126.824998855591, 2164.4500017166138,
+          2149.1666078567505, 2215.183401107788, 2100.3167867660522, 2128.441596031189,
+          2135.2999925613403, 2164.241600036621, 2025.950002670288, 2014.1916036605835,
+          2044.4249868392944, 2094.4249868392944, 2112.5, 2130.466604232788, 2010.2417945861816,
+          2020.0249910354614, 2074.566602706909, 2123.458409309387
+        ]
+      },
+      "encodeInto": {
+        "label": "encodeInto",
+        "avg": 653.6533498764038,
+        "stddev": 49.45156399751896,
+        "min": 611.4500045776367,
+        "p50": 635.6750011444092,
+        "p95": 795.0750112533569,
+        "p99": 795.0750112533569,
+        "max": 795.0750112533569,
+        "ops": 1529862.8855632504,
+        "batchMeans": [
+          641.6584014892578, 709.3499898910522, 650.408411026001, 647.5666046142578,
+          795.0750112533569, 634.3333959579468, 612.716794013977, 645.7082033157349,
+          635.6750011444092, 635.575008392334, 765.9082174301147, 684.9749803543091,
+          611.4833831787109, 635.5999946594238, 622.8584051132202, 620.1333999633789,
+          611.4500045776367, 678.5583972930908, 614.8916006088257, 619.1417932510376
+        ]
+      }
+    }
+  }
+}

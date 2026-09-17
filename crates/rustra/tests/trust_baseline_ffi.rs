@@ -625,28 +625,11 @@ fn caller_buffer_frame_probe_then_write() {
     test_package().register_ffi();
 
     // countUp 을 Frame 프레임으로 — tier 판정을 위해 postcard 입력이 아닌
-    // Tier 3 JSON-in-binary 프레임으로 호출한다(command_id + JSON).
-    // countUp 의 command_id 를 live_schema 에서 조회.
-    let pkg = test_package();
-    let schema = pkg.live_schema();
-    let id = schema["commands"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["name"] == "countUp")
-        .unwrap()["commandId"]
-        .as_u64()
-        .unwrap() as u16;
+    // Use an unregistered id for a deterministic error frame. This tests the
+    // caller-buffer protocol without executing shared counter handlers or
+    // depending on a malformed request's former codec-selection bug.
+    let req = 32766u16.to_le_bytes();
 
-    let mut req: Vec<u8> = Vec::new();
-    req.extend_from_slice(&id.to_le_bytes());
-    req.extend_from_slice(br#"{}"#);
-
-    // countUp 은 serde_json::Value 핸들러라 Frame typed fast path 가 postcard
-    // 디코드에 실패한다 — 에러 프레임(ok=0)도 유효한 응답이므로 여기선 프로토콜
-    // (probe 크기 보고/직접 기록/재probe 신호)만 검증한다. 핸들러 1회 실행은
-    // JSON caller-buffer 테스트(caller_buffer_probe_executes_handler_exactly_once)가
-    // 고정한다.
     let mut needed: usize = 0;
     let probe = unsafe {
         rustra_ffi_invoke_frame_into(

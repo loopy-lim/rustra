@@ -74,13 +74,22 @@ export function createFrameInvokeRaw(
           command,
           signal,
           (resolve, reject, isSettled) => {
-            const encoded = encodeTier3Request(entry.commandId, args);
+            const encoded = encodeTier3Request(
+              entry.commandId,
+              args,
+              (entry.inputSchema as { type?: unknown } | undefined)?.type === 'null',
+            );
             const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
             if (tooLarge) throw tooLarge;
             return native.invokeAsync!(encoded, (resp) => {
               if (isSettled()) return;
               const outcome = decodeTier3Response(resp);
-              if (outcome.ok) resolve(outcome.result as T);
+              if (outcome.ok)
+                resolve(
+                  ((entry.outputSchema as { type?: unknown } | undefined)?.type === 'null'
+                    ? undefined
+                    : outcome.result) as T,
+                );
               else {
                 const e =
                   outcome.error ??
