@@ -841,13 +841,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "68928",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "68928", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/5866A622-27C4-4915-8CB5-756ECF3E9014/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -910,11 +904,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "a270d6dcabdd65270592157bb706556f2bed187335805242e6e086ba773ad908"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\nbun /private/tmp/rustra-freeze-parity-candidate.ts /private/tmp/rustra-nitro-parity-candidate-source-call-profile-3\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-3');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=pair&framework=rustra&run=pair-rustra-3&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-3/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-3/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-3/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-3/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-3');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -1056,13 +1046,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "76328",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "76328", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/C391886A-2247-42DB-B320-2112FB0604A1/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -1125,11 +1109,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "badb5a15f398fc1311d920b4e051bf2b51690baa346172a22dd940117c4bc9b5"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-4');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=pair&framework=nitro&run=profile-4-nitro&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-4/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-4/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-4/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-4/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-4');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -1271,13 +1251,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "76914",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "76914", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/CD460541-BAA3-4919-B8D0-672B500258B7/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -1340,11 +1314,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "a1454d1fcc54b190c4b8b8d5a6ac6511f50b020cd60f4a5d87d95d4477c90d4d"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-5');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=string&framework=rustra&run=profile-5-rustra&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-5/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-5/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-5/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-5/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-5');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -1486,13 +1456,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "77829",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "77829", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/F4DDEBE6-C63F-41F8-B7D6-47E1442A9FC7/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -1555,11 +1519,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "98c9d6cb219ed590a5111c702e1d2ea1e52c837e43bbd6aad893d93648b84a7e"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-6');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=string&framework=nitro&run=profile-6-nitro&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-6/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-6/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-6/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-6/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-6');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -1701,13 +1661,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "78791",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "78791", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/6F3BFA4B-52C9-4308-ACC7-9529FCCC7619/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -1770,11 +1724,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "5cb8083d7fac6d1648bb3d41d96bfd53b3bb1b7504fe6ca7b0ef7baa903bfdca"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-7');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=balanced8191%2Fecho&framework=rustra&run=profile-7-rustra&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-7/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-7/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-7/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-7/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-7');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -1916,13 +1866,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "79653",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "79653", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/1BA0BF86-5B8B-4ECB-BE2F-F3F3DCB4BC0A/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -1985,11 +1929,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "be857a182fb9bb2fa4a03d7f70260869a0d08efa0747ca7ff0506ec96fe262a8"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-8');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=balanced8191%2Fecho&framework=nitro&run=profile-8-nitro&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-8/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-8/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-8/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-8/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-8');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -2131,13 +2071,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "80536",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "80536", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/65ECFBFD-1041-408C-BD4A-2B02712A868A/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -2200,11 +2134,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "8dd95297e2ac00b90a27af11a082fddeef91503a68e693634f779ad57b9d7037"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-9');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=balanced8191%2Fresident-dfs&framework=rustra&run=profile-9-rustra&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-9/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-9/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-9/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-9/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-9');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
@@ -2346,13 +2276,7 @@
           "stderr": ""
         },
         {
-          "args": [
-            "ps",
-            "-p",
-            "81457",
-            "-o",
-            "comm="
-          ],
+          "args": ["ps", "-p", "81457", "-o", "comm="],
           "status": 0,
           "stdout": "/Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/0751A9CA-6AFB-45DB-B4F7-E349BACC2443/RustraProfile.app/reactnativecalculator",
           "stderr": ""
@@ -2415,11 +2339,7 @@
           "Frameworks/React.framework/_CodeSignature/CodeResources": "86a66ffca490604e803472a8f5ac8391cb6a0cfe9ee2de4ec881a8a8b493dc49"
         },
         "hermescSha256": "bdaa0ac5e68d10f55e81bf194bb4945412426f0b58b16f6b1a527df8d5b74ac0",
-        "hermesCompileArgs": [
-          "-emit-binary",
-          "-max-diagnostic-width=80",
-          "-O"
-        ],
+        "hermesCompileArgs": ["-emit-binary", "-max-diagnostic-width=80", "-O"],
         "profileBundleSourceSha256": "8d59252edf40f09a837edd0204fb44b7b669295dc35162bcc21778b050fbb0c3"
       },
       "buildRecipe": "#!/bin/zsh\nset -eu\ncd /Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator\nbun run build:fingerprint\npython3 - <<'PY'\nfrom pathlib import Path\nimport shutil,plistlib,hashlib,json\nsrc=Path('/private/tmp/rustra-nitro-parity-candidate-ios-followup-map-1.app')\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-10');out.mkdir()\ndst=out/'RustraProfile.app';shutil.copytree(src,dst)\np=dst/'Info.plist';info=plistlib.loads(p.read_bytes());assert info['CFBundleIdentifier']=='com.rustra.nitroparity'\nrecord={'baseApp':str(src),'profileApp':str(dst),'baseBinarySha256':hashlib.sha256((src/'reactnativecalculator').read_bytes()).hexdigest(),'infoPlistChange':'Info.plist and all native inputs unchanged; launch plan embedded in dedicated profiling JS bundle.'}\n(out/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\\n')\nPY\nEXPO_PUBLIC_PARITY_PROFILE_URL='rustra-parity://profile?case=balanced8191%2Fresident-dfs&framework=nitro&run=profile-10-nitro&ms=15000' EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity EXPO_PUBLIC_PARITY_PROFILE=1 EXPO_PUBLIC_PARITY_DIAGNOSTIC=0 EXPO_PUBLIC_PARITY_ENVIRONMENT=simulator NODE_ENV=production fnm exec --using 22.21.1 node node_modules/expo/bin/cli export:embed --entry-file index.ts --platform ios --dev false --minify false --reset-cache --max-workers 2 --bundle-output /private/tmp/rustra-nitro-call-profile-ios-10/profile.js --assets-dest /private/tmp/rustra-nitro-call-profile-ios-10/RustraProfile.app\n./ios/Pods/hermes-engine/destroot/bin/hermesc -emit-binary -max-diagnostic-width=80 -O -out /private/tmp/rustra-nitro-call-profile-ios-10/RustraProfile.app/main.jsbundle /private/tmp/rustra-nitro-call-profile-ios-10/profile.js\npython3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nout=Path('/private/tmp/rustra-nitro-call-profile-ios-10');p=out/'build-provenance.json';r=json.loads(p.read_text());app=out/'RustraProfile.app'\nh=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nassert h(app/'reactnativecalculator')==r['baseBinarySha256']\nbase=Path(r['baseApp']);original={str(f.relative_to(base)):h(f) for f in base.rglob('*') if f.is_file() and (f.suffix in ['.dylib','.so'] or '.framework/' in str(f))};current={k:h(app/k) for k in original};assert original==current\nr.update({'profileBinarySha256':h(app/'reactnativecalculator'),'profileBundleSha256':h(app/'main.jsbundle'),'profileInfoPlistSha256':h(app/'Info.plist'),'unchangedNativeInputs':original,'hermescSha256':h(Path('ios/Pods/hermes-engine/destroot/bin/hermesc')),'hermesCompileArgs':['-emit-binary','-max-diagnostic-width=80','-O'],'profileBundleSourceSha256':h(out/'profile.js')})\np.write_text(json.dumps(r,indent=2)+'\\n');print('Profile app prepared; exact original native executable retained',r['profileBinarySha256'])\nPY\n"
