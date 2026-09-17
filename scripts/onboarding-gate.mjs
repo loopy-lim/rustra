@@ -108,6 +108,30 @@ function tail(text) {
   return trimmed.length <= OUTPUT_TAIL_CHARS ? trimmed : `…${trimmed.slice(-OUTPUT_TAIL_CHARS)}`;
 }
 
+function errorText(cause) {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return message.trim() ? message : 'runner threw without diagnostics';
+}
+
+function failedRunnerOutput(result) {
+  if (result?.ok === true) return null;
+  const details = [];
+  if (result?.output) details.push(String(result.output));
+  if (result?.error) details.push(errorText(result.error));
+  if (result?.status !== undefined && result?.status !== null)
+    details.push(`status ${result.status}`);
+  if (result?.signal) details.push(`signal ${result.signal}`);
+  return details.join('\n') || 'runner reported failure without output or diagnostics';
+}
+
+async function runStep(runner, step, command) {
+  try {
+    return failedRunnerOutput(await runner(step, command));
+  } catch (cause) {
+    return errorText(cause);
+  }
+}
+
 function cliBin(repoRoot) {
   return resolve(repoRoot, 'packages', 'cli', 'dist', 'index.js');
 }
@@ -241,33 +265,33 @@ export async function runOnboardingSteps({
       try {
         injectWorkspacePatch(projectDir, repoRoot);
       } catch (cause) {
-        failure = cause instanceof Error ? cause.message : String(cause);
+        failure = errorText(cause);
       }
     } else if (step.name === 'mutate') {
       // 스키마 변경은 스폰이 아니라 fs 조작으로 재현한다 — runner 를 거치지 않는다.
       try {
         mutate(projectDir);
       } catch (cause) {
-        failure = cause instanceof Error ? cause.message : String(cause);
+        failure = errorText(cause);
       }
     } else if (step.name === 'verify') {
       const drift = verifyRegenerated(projectDir);
       if (drift) failure = drift;
       else {
         // 재호출 — 변경된 계약으로 demo 가 다시 돌아가는 것까지가 사이클의 끝이다.
-        const result = await runner(step.name, commandFor('demo', root, repoRoot));
-        if (!result.ok) failure = result.output;
+        failure = await runStep(runner, step.name, commandFor('demo', root, repoRoot));
       }
     } else {
       const command = step.argv
         ? { cwd: projectDir, argv: step.argv }
         : commandFor(step.name, root, repoRoot);
-      const result = await runner(step.name, command);
-      if (!result.ok) failure = result.output;
+      failure = await runStep(runner, step.name, command);
     }
-    if (step.report === false) continue;
-    steps.push({ name: step.name, durationMs: Date.now() - startedAt });
-    if (failure)
+    // Successful preparation remains an internal implementation detail. A failed hidden step must
+    // still be disclosed in the report; otherwise the gate can continue after a broken prerequisite.
+    if (step.report !== false || failure !== null)
+      steps.push({ name: step.name, durationMs: Date.now() - startedAt });
+    if (failure !== null)
       return {
         ok: false,
         steps,
@@ -290,6 +314,9 @@ function defaultRunner(step, command) {
   return {
     ok: spawned.status === 0,
     output: spawned.status === 0 ? '' : output,
+    status: spawned.status,
+    signal: spawned.signal,
+    error: spawned.error,
   };
 }
 

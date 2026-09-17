@@ -271,6 +271,8 @@ jobs:
         # 테스트 — npm 발행은 버전 PR 승인 후 자동 진행되므로 머지 전에 걸러야
         # 한다.
         run: bun run test:release-tools
+      - name: Registry consumer gate unit tests
+        run: bun run test:registry-consumer
       - name: Full compatibility matrix (test:compat)
         # test:compat — ts:node/ts:bun/adapters/runtime 전체 체인. test:ts:bun 과
         # test:runtime:* 이 rustra-calculator-example 바이너리를 요구해 Rust
