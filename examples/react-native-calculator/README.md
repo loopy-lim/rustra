@@ -33,6 +33,50 @@ bun run bench:ios:receipt -- --output /tmp/rustra-rn-receipt.json
 
 ## App Code
 
+### Ordinary functions
+
+The `functions` screen uses the same calculator Rust crate and generated native
+bridge. It demonstrates multiple parameters, scalar/string returns, unit returns,
+stateful closures and a mapped domain error:
+
+```ts
+import { add, remember, readRemembered, reset, safeDivide } from './generated/react-native';
+
+const total = await add(42, 58); // number, no input/output DTO
+await remember(total);         // void
+await reset();                 // no arguments, void
+const stored = await readRemembered(); // 0
+await safeDivide(1, 0);        // rejects with math.zero_divisor
+```
+
+```sh
+bun run codegen
+bun run ios:functions
+# When the native app is already built:
+bun run demo:functions
+```
+
+`App.tsx` is this runnable screen; the default entry still opens `BenchmarkApp`.
+The screen checks the generated commands against the installed Rust core and
+records a separate `Documents/rustra-function-receipt.json` on iOS. Release builds
+also measure generated calls and request encoding with warmup and alternating
+batches. Rebuild native code after changing Rust; a Metro reload only updates JS.
+The Rust registrations are in `../calculator/src/ordinary_functions.rs` and append
+to the existing commands, preserving their IDs. See the [API guide](../../docs/function-registration.md).
+
+
+After installing a Release `functions` build, verify three independent Simulator launches:
+
+```sh
+bun run verify:functions:ios --device booted --runs 3
+```
+
+The collector rejects stale results, source/contract mismatches and failed checks. It
+records fresh launch IDs, timestamps and installed executable/bundle hashes under a
+new `/tmp/rustra-functions-*` directory. Pass `--output <new-directory>` to choose it.
+
+### Existing command API
+
 ```ts
 import { addNumbers } from './generated/react-native';
 

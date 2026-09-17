@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { registerRootComponent } from 'expo';
 
 import BenchmarkApp from './BenchmarkApp';
+import FunctionsApp from './App';
 import DynamicRegistryApp from './DynamicRegistryApp';
 import HotCoreApp from './HotCoreApp';
 import ReloadStressApp from './ReloadStressApp';
@@ -9,6 +10,7 @@ import ReloadStressApp from './ReloadStressApp';
 const demo = process.env.EXPO_PUBLIC_RUSTRA_DEMO;
 
 const APPS: Record<string, ComponentType> = {
+  functions: FunctionsApp,
   dynamic: DynamicRegistryApp,
   reload: ReloadStressApp,
   'hot-core': HotCoreApp,

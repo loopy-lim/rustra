@@ -58,3 +58,7 @@ harness = false
 [[bench]]
 name = "type_scaling"
 harness = false
+
+[[bench]]
+name = "function_dispatch"
+harness = false

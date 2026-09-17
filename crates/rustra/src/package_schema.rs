@@ -217,6 +217,12 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
             .expect("command schema is an object")
             .insert("devices".into(), json!(devices));
     }
+    if let Some(arity) = command.function_args {
+        entry
+            .as_object_mut()
+            .expect("command entry")
+            .insert("functionArgs".into(), json!(arity));
+    }
     if let Some(description) = &command.description {
         entry
             .as_object_mut()

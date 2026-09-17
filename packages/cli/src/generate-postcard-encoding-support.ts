@@ -1,4 +1,5 @@
 export const ENC_INTO_KINDS = new Set([
+  'unit',
   'zigzag',
   'uvar',
   'zigzag64',

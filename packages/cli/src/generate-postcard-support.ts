@@ -1,9 +1,12 @@
+import type { ComplexSchema } from '@rustra/types';
+import { createSchemaPostcardCodec } from '@rustra/types';
 import type { CommandSchema, JsonSchema } from './schema.js';
 import { buildCodecIr } from './codec-ir.js';
 import {
   collectPostcardFields,
   hasCyclicRef,
   hasSet,
+  hasFixedArray,
   refTypeName,
 } from './generate-postcard-ir.js';
 
@@ -43,8 +46,28 @@ export function commandCodecSupported(
   command: CommandSchema,
   definitions: Record<string, JsonSchema>,
 ): boolean {
-  if (command.inputType !== '()' && command.inputSchema.type !== 'object') return false;
-  if (command.outputType !== '()' && command.outputSchema.type !== 'object') return false;
+  // Static and live clients share the Rust route/depth boundary, including the
+  // legacy unit sentinel whose historical schema may be an empty object.
+  const compatible =
+    createSchemaPostcardCodec(
+      command.commandId,
+      (command.inputType === '()' ? { type: 'null' } : command.inputSchema) as ComplexSchema,
+      (command.outputType === '()' ? { type: 'null' } : command.outputSchema) as ComplexSchema,
+      definitions as Record<string, ComplexSchema>,
+      true,
+    ) !== null;
+  if (!compatible) return false;
+  if (
+    hasFixedArray(command.inputSchema, definitions) ||
+    hasFixedArray(command.outputSchema, definitions) ||
+    command.functionArgs !== undefined ||
+    (command.inputType !== '()' &&
+      (command.inputSchema.type !== 'object' || !!command.inputSchema.additionalProperties)) ||
+    (command.outputType !== '()' &&
+      (command.outputSchema.type !== 'object' || !!command.outputSchema.additionalProperties))
+  ) {
+    return true;
+  }
   if (
     hasCyclicRef(command.inputSchema, definitions) ||
     hasCyclicRef(command.outputSchema, definitions)
@@ -53,8 +76,14 @@ export function commandCodecSupported(
   }
   if (hasSet(command.inputSchema, definitions) || hasSet(command.outputSchema, definitions))
     return false;
-  const input = collectPostcardFields(command.inputSchema, definitions);
-  const output = collectPostcardFields(command.outputSchema, definitions);
+  const input = collectPostcardFields(
+    command.inputType === '()' ? { type: 'null' } : command.inputSchema,
+    definitions,
+  );
+  const output = collectPostcardFields(
+    command.outputType === '()' ? { type: 'null' } : command.outputSchema,
+    definitions,
+  );
   return (
     input.unsupported.length === 0 &&
     output.unsupported.length === 0 &&

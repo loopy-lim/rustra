@@ -1,16 +1,12 @@
 //! # rustra — Rust → TypeScript bridge framework
-//!
 //! Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든
 //! 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크입니다.
 //!
 //! ## 작동 방식
-//!
 //! ```text
 //! Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플랫폼 어댑터로 실행
 //! ```
-//!
 //! ## 빠른 예제
-//!
 //! ```rust
 //! use rustra::prelude::*;
 //! use serde::{Serialize, Deserialize};
@@ -129,6 +125,9 @@ mod error;
 pub mod events;
 mod executor;
 pub mod ffi;
+mod function;
+#[doc(hidden)]
+pub use function::Function;
 // hot-core 는 tauri_support 의 디스패치 간접화(JsonDispatch)가 tauri feature
 // 만으로도 성립해야 하므로 두 feature 중 하나라도 켜지면 컴파일된다. dylib
 // 로딩 본체(libloading)는 모듈 내부에서 `hot-core` feature 로 게이트된다.

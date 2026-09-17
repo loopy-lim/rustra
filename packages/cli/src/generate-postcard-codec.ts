@@ -1,7 +1,13 @@
 import type { CommandSchema, PackageSchema } from './schema.js';
 import { commandFunctionName, postcardHelperSource } from './codegen.js';
 import { finishGeneratedText } from './generate-surface.js';
-import { collectAllDefinitions, collectPostcardFields } from './generate-postcard-ir.js';
+import { validateFunctionArgs } from './function-schema.js';
+import {
+  collectAllDefinitions,
+  collectPostcardFields,
+  postcardRootAccess,
+  hasFixedArray,
+} from './generate-postcard-ir.js';
 import { ENC_INTO_KINDS } from './generate-postcard-ir.js';
 import {
   generateFieldEncodeExpr,
@@ -24,11 +30,17 @@ export function generateFrameCodecsTs(schema: PackageSchema): string {
   output += "import type { FrameCodec, RustraError, ComplexSchema } from '@rustra/types';\n";
   output += `import type { ${importTypes.join(', ')} } from './types.js';\n\n`;
   for (const command of schema.commands) {
+    validateFunctionArgs(command);
     const codec = generatePostcardCodec(command, definitions);
     if (codec !== null) output += codec;
     else if (complexCodecSupported(command, definitions))
       output += generateComplexCodec(command, definitions);
   }
+  if (output.includes('= createSchemaPostcardCodec('))
+    output = output.replace(
+      'import { createComplexCodec }',
+      'import { createComplexCodec, createSchemaPostcardCodec }',
+    );
   return finishGeneratedText(output);
 }
 
@@ -42,8 +54,35 @@ function generatePostcardCodec(
   // 로 매핑한다(호출부는 undefined 를 전달, 인코더는 필드가 없어 무시한다).
   const inType = command.inputType === '()' ? 'void' : command.inputType;
   const outType = command.outputType === '()' ? 'void' : command.outputType;
-  const inResult = collectPostcardFields(command.inputSchema, definitions);
-  const outResult = collectPostcardFields(command.outputSchema, definitions);
+  const rootCommand =
+    hasFixedArray(command.inputSchema, definitions) ||
+    hasFixedArray(command.outputSchema, definitions) ||
+    command.functionArgs !== undefined ||
+    (command.inputType !== '()' &&
+      (command.inputSchema.type !== 'object' || !!command.inputSchema.additionalProperties)) ||
+    (command.outputType !== '()' &&
+      (command.outputSchema.type !== 'object' || !!command.outputSchema.additionalProperties));
+  const scalar = (node: import('./schema.js').JsonSchema) =>
+    typeof node.type === 'string' &&
+    ['integer', 'number', 'boolean', 'string', 'null'].includes(node.type) &&
+    !node.enum &&
+    node.format !== 'uint8' &&
+    node.format !== 'int8';
+  const directInput =
+    command.inputSchema.type === 'null' ||
+    scalar(command.inputSchema) ||
+    (Array.isArray(command.inputSchema.items) && command.inputSchema.items.every(scalar));
+  if (rootCommand && !(directInput && scalar(command.outputSchema))) {
+    return `export const ${fnName}Codec = createSchemaPostcardCodec(${command.commandId}, ${JSON.stringify(command.inputSchema)} as ComplexSchema, ${JSON.stringify(command.outputSchema)} as ComplexSchema, ${JSON.stringify(definitions)} as Record<string, ComplexSchema>, true)! as FrameCodec<${inType}, ${outType}>;\n\n`;
+  }
+  const inResult = collectPostcardFields(
+    command.inputType === '()' ? { type: 'null' } : command.inputSchema,
+    definitions,
+  );
+  const outResult = collectPostcardFields(
+    command.outputType === '()' ? { type: 'null' } : command.outputSchema,
+    definitions,
+  );
   if (inResult.unsupported.length > 0 || outResult.unsupported.length > 0) return null;
   const inFields = inResult.fields;
   const outFields = outResult.fields;
@@ -53,18 +92,35 @@ function generatePostcardCodec(
     '',
     `  encode(args: ${inType}): ArrayBuffer {`,
     `    // [cmd_id: u16 LE][postcard(${inType})]`,
+    ...(Array.isArray(command.inputSchema.items)
+      ? [
+          `    if (!Array.isArray(args) || args.length !== ${command.inputSchema.items.length}) throw new Error('invalid tuple arity');`,
+        ]
+      : []),
     `    const parts: Uint8Array[] = [];`,
     `    const cmdId = new Uint8Array(2);`,
     `    new DataView(cmdId.buffer).setUint16(0, ${command.commandId}, true);`,
     `    parts.push(cmdId);`,
   ];
   for (const field of inFields)
-    lines.push(generateFieldEncodeExpr(field, `args.${field.name}`, definitions, '    '));
+    lines.push(
+      generateFieldEncodeExpr(
+        field,
+        postcardRootAccess(command.inputSchema, 'args', field.name),
+        definitions,
+        '    ',
+      ),
+    );
   lines.push(`    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;`, `  },`);
   if (inFields.every((field) => ENC_INTO_KINDS.has(field.kind))) {
     lines.push(
       '',
       `  encodeInto(args: ${inType}, reuse?: Uint8Array): Uint8Array {`,
+      ...(Array.isArray(command.inputSchema.items)
+        ? [
+            `    if (!Array.isArray(args) || args.length !== ${command.inputSchema.items.length}) throw new Error('invalid tuple arity');`,
+          ]
+        : []),
       `    let out = reuse ?? new Uint8Array(64);`,
       `    let w = 0;`,
       `    const ensure = (need: number) => {`,
@@ -77,7 +133,13 @@ function generatePostcardCodec(
       `    out[w++] = ${command.commandId & 0xff}; out[w++] = ${(command.commandId >> 8) & 0xff};`,
     );
     for (const field of inFields)
-      lines.push(generateFieldEncodeIntoExpr(field, `args.${field.name}`, '    '));
+      lines.push(
+        generateFieldEncodeIntoExpr(
+          field,
+          postcardRootAccess(command.inputSchema, 'args', field.name),
+          '    ',
+        ),
+      );
     lines.push(`    return out.subarray(0, w);`, `  },`);
   }
   lines.push(
@@ -111,15 +173,28 @@ function generatePostcardCodec(
     `    }`,
   );
   if (outFields.length === 0) {
-    lines.push(`    return { ok: true, result: {} as ${outType} };`);
+    lines.push(
+      `    return { ok: true, result: ${outType === 'void' ? 'undefined' : '{}'} as ${outType} };`,
+    );
   } else {
     lines.push(
       `    // Decode postcard from offset 8`,
       `    let offset = 8;`,
-      `    const result: Partial<${outType}> = {};`,
+      command.outputSchema.type === 'object' && !command.outputSchema.additionalProperties
+        ? `    const result: Partial<${outType}> = {};`
+        : command.outputSchema.type === 'array' && Array.isArray(command.outputSchema.items)
+          ? `    let result = [] as unknown as ${outType};`
+          : `    let result!: ${outType};`,
     );
     for (const field of outFields)
-      lines.push(generateFieldDecodeExpr(field, `result.${field.name}`, definitions, '    '));
+      lines.push(
+        generateFieldDecodeExpr(
+          field,
+          postcardRootAccess(command.outputSchema, 'result', field.name),
+          definitions,
+          '    ',
+        ),
+      );
     lines.push(`    return { ok: true, result: result as ${outType} };`);
   }
   lines.push(`  },`, `};`, '');

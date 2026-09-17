@@ -672,6 +672,8 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
+    external fun uniffi_rustra_calculator_example_checksum_func_add(
+    ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_addnumbers(
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_benchadd(
@@ -706,6 +708,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_greet(
     ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_greetperson(
+    ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_invokejson(
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_iseven(
@@ -718,6 +722,12 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_processitem(
     ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_readremembered(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_remember(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_reset(
+    ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_resourceclose(
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_resourceopen(
@@ -727,6 +737,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_rustra_calculator_example_checksum_func_resourcewrite(
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_rustraregistrydemo(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_safedivide(
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_scoretotal(
     ): Int
@@ -757,6 +769,8 @@ internal object UniffiLib {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "rustra_calculator_example"))
         
     }
+    external fun uniffi_rustra_calculator_example_fn_func_add(`arg0`: Int,`arg1`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
     external fun uniffi_rustra_calculator_example_fn_func_addnumbers(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_benchadd(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -791,6 +805,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_greet(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_greetperson(`arg0`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_invokejson(`command`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_iseven(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -803,6 +819,12 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_processitem(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_readremembered(uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    external fun uniffi_rustra_calculator_example_fn_func_remember(`arg0`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_rustra_calculator_example_fn_func_reset(uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_rustra_calculator_example_fn_func_resourceclose(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_resourceopen(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -813,6 +835,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_rustraregistrydemo(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_safedivide(`arg0`: Double,`arg1`: Double,uniffi_out_err: UniffiRustCallStatus, 
+    ): Double
     external fun uniffi_rustra_calculator_example_fn_func_scoretotal(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_securecompute(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -948,6 +972,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_add() and 0xFFFF) != 7317) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_addnumbers() and 0xFFFF) != 26346) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -999,6 +1026,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rustra_calculator_example_checksum_func_greet() and 0xFFFF) != 40983) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_greetperson() and 0xFFFF) != 12281) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_invokejson() and 0xFFFF) != 15830) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1017,6 +1047,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rustra_calculator_example_checksum_func_processitem() and 0xFFFF) != 6741) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_readremembered() and 0xFFFF) != 1137) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_remember() and 0xFFFF) != 37808) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_reset() and 0xFFFF) != 42920) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_resourceclose() and 0xFFFF) != 35746) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1030,6 +1069,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_rustraregistrydemo() and 0xFFFF) != 30147) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_safedivide() and 0xFFFF) != 65085) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_scoretotal() and 0xFFFF) != 64792) {
@@ -4204,6 +4246,22 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
     }
 }
         /**
+         * `add` — 일반 함수의 UniFFI 위치 인수 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `add`(`arg0`: kotlin.Int, `arg1`: kotlin.Int): kotlin.Int {
+            return FfiConverterInt.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_add(
+    
+        
+        FfiConverterInt.lower(`arg0`),
+        FfiConverterInt.lower(`arg1`),_status)
+}
+    )
+    }
+    
+
+        /**
          * `addNumbers` — `crate::add_numbers` 커맨드의 UniFFI 타입 래퍼.
          */
     @Throws(RustraCommandFailure::class) fun `addNumbers`(`input`: AddNumbersInput): AddNumbersOutput {
@@ -4456,6 +4514,21 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
     
 
         /**
+         * `greetPerson` — 일반 함수의 UniFFI 위치 인수 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `greetPerson`(`arg0`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_greetperson(
+    
+        
+        FfiConverterString.lower(`arg0`),_status)
+}
+    )
+    }
+    
+
+        /**
          * 이름 기반 JSON 호출 — `Package::invoke_json` 의 문자열 경계 래퍼.
          */
     @Throws(RustraCommandFailure::class) fun `invokeJson`(`command`: kotlin.String, `argsJson`: kotlin.String): kotlin.String {
@@ -4546,6 +4619,47 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
     
 
         /**
+         * `readRemembered` — 일반 함수의 UniFFI 위치 인수 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `readRemembered`(): kotlin.Int {
+            return FfiConverterInt.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_readremembered(
+    
+        _status)
+}
+    )
+    }
+    
+
+        /**
+         * `remember` — 일반 함수의 UniFFI 위치 인수 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `remember`(`arg0`: kotlin.Int)
+        = 
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_remember(
+    
+        
+        FfiConverterInt.lower(`arg0`),_status)
+}
+    
+    
+
+        /**
+         * `reset` — 일반 함수의 UniFFI 위치 인수 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `reset`()
+        = 
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_reset(
+    
+        _status)
+}
+    
+    
+
+        /**
          * `resourceClose` — `crate::resource_close` 커맨드의 UniFFI 타입 래퍼.
          */
     @Throws(RustraCommandFailure::class) fun `resourceClose`(`input`: ResourceCloseInput): ResourceCloseOutput {
@@ -4615,6 +4729,22 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
     
         
         FfiConverterTypeRegistryDemoInput.lower(`input`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * `safeDivide` — 일반 함수의 UniFFI 위치 인수 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `safeDivide`(`arg0`: kotlin.Double, `arg1`: kotlin.Double): kotlin.Double {
+            return FfiConverterDouble.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_safedivide(
+    
+        
+        FfiConverterDouble.lower(`arg0`),
+        FfiConverterDouble.lower(`arg1`),_status)
 }
     )
     }
