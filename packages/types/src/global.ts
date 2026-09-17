@@ -4,3 +4,5 @@ export * from './global-config.js';
 export * from './global-bytes.js';
 export * from './global-fields.js';
 export * from './global-batch.js';
+
+export { bindSync } from './global-sync.js';

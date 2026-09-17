@@ -1,5 +1,7 @@
 #include "RustraJSIBridge.hpp"
 #include "RustraTurboInterop.hpp"
+#include "rustra-sync-core.hpp"
+#include "rustra-sync-contract.hpp"
 #include "rustra-generated-codecs.hpp"
 #include <folly/dynamic.h>
 #include <atomic>
@@ -182,6 +184,9 @@ static Value createOwnedArrayBuffer(Runtime& rt, uint8_t* data, size_t size,
     throw;
   }
   ArrayBuffer bufferHandle(rt, std::move(buffer));
+  // External MutableBuffer storage receives no automatic Hermes GC credit.
+  // Its NativeState owns the matching debit; the buffer keeps its producing core.
+  if (size != 0) bufferHandle.setExternalMemoryPressure(rt, size);
   return Value(rt, bufferHandle);
 }
 
@@ -276,8 +281,8 @@ static std::string parseFrameErrorBody(const uint8_t* resp, size_t out_len) {
 template <typename Decode>
 static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize,
                              const char* tailSuffix, Decode decode,
-                             const std::string* batchItemName = nullptr) {
-  const CoreTable* core = core::currentCoreTable();
+                             const std::string* batchItemName = nullptr,
+                             const CoreTable* core = core::currentCoreTable()) {
   // (Tier 1) 고정 스택 버퍼 — 대부분의 응답(숫자/작은 객체)이 여기에 들어온다.
   // 부족하면 아래 폴백 경로가 처리하므로 안전하다.
   constexpr size_t kStackCap = 512;
@@ -401,6 +406,8 @@ TypedInvokeResult invokeTypedById(
     return toCommandErrorResult(rt, text);
   }
 }
+
+#include "RustraSyncBinding.inc"
 
 // ── EventDispatcher: Rust → JS push delivery ───────────────
 //
@@ -873,6 +880,18 @@ using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
 // 블록으로 옮겨졌다(정적 테이블 초기화와 23심볼 바인딩의 단일 선언 지점).
 
 RustraHostObject::RustraHostObject(Runtime& rt) {
+  {
+    auto name = PropNameID::forAscii(rt, "bindSyncCommand");
+    auto function = Function::createFromHostFunction(rt, name, 4,
+      [](Runtime& runtime, const Value&, const Value* args, size_t count) -> Value {
+        if (count != 4) throw JSError(runtime, "sync.unavailable: bindSyncCommand requires id, name, contract, route");
+        return createNativeSyncBinding(runtime, requireU16(runtime, args[0], "command id"),
+          args[1].asString(runtime).utf8(runtime), args[2].asString(runtime).utf8(runtime),
+          requireU16(runtime, args[3], "sync route"));
+      });
+    cache_["bindSyncCommand"] = std::make_unique<CachedFunction>(CachedFunction{std::move(name), std::move(function)});
+  }
+
   // makeInvoke — fn/free 를 람다 캡처하지 않고 호출 시점 테이블에서 읽는다.
   // 핫코어 스왑 뒤 다음 호출부터 새 코어로 향한다. fn/free 를 같은 테이블
   // 로드에서 꺼내므로 free 짝이 같은 코어의 allocator 를 쓴다.
@@ -1119,12 +1138,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         // 라우팅 마스크 조회도 현재 코어 기준 — 스왑 뒤 신 코어의 실제
         // handler 보유를 따라간다(오래된 코어를 광고하지 않는다).
         const CoreTable* core = core::currentCoreTable();
-        uint32_t capabilities = 0;
-        if (gen::has_static_codec_id(cmdId)) capabilities |= 1u;
-        if (gen::has_pos_codec(cmdId)) capabilities |= 2u;
-        if (gen::has_raw_codec(cmdId) && core->has_raw(cmdId) != 0) capabilities |= 4u;
-        if (gen::has_buffer_codec(cmdId) && core->has_buffer(cmdId) != 0) capabilities |= 8u;
-        return Value(static_cast<double>(capabilities));
+        return Value(static_cast<double>(codecCapabilities(core, cmdId)));
       });
     cache_["getCodecCapabilities"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -1144,24 +1158,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, "RustraJSI: invokeTypedBuffer requires (cmdId, bytes)");
         }
         uint16_t cmdId = requireU16(rt, args[0], "command id");
-        auto [data, size] = extractByteBuffer(rt, args[1]);
-        // 진입 시 테이블 1회 로드 — invoke/free_owned_bytes 짝과 결과
-        // ArrayBuffer 의 소유 테이블이 모두 같은 코어에 묶인다.
-        const CoreTable* core = core::currentCoreTable();
-        uint8_t* output = nullptr;
-        size_t outputSize = 0;
-        uint32_t status = core->invoke_buffer(
-          cmdId, data, size, &output, &outputSize);
-        if (status == UINT32_MAX || output == nullptr) {
-          throw JSError(rt, "RustraJSI: direct buffer ABI failed");
-        }
-        if (status != 0) {
-          std::string error(reinterpret_cast<const char*>(output), outputSize);
-          core->free_owned_bytes(output, outputSize);
-          throw JSError(rt, error.empty() ? "buffer invoke failed" : error);
-        }
-        Value buffer = createOwnedArrayBuffer(rt, output, outputSize, core);
-        return gen::decode_buffer_result_by_id(rt, cmdId, std::move(buffer));
+        return invokeBufferOnCore(rt, core::currentCoreTable(), cmdId, args[1]);
       });
     cache_["invokeTypedBuffer"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -1243,40 +1240,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, "RustraJSI: invokeTypedRaw requires (cmdId, ...args)");
         }
         uint16_t cmdId = requireU16(rt, args[0], "command id");
-        size_t slotCount = count - 1;
-        // 스택 슬롯 — 아리티 최대 3 + 여유. 힙 할당 없음.
-        uint64_t slots[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-        if (slotCount > 8) {
-          throw JSError(rt, "RustraJSI: invokeTypedRaw supports up to 8 scalar args");
-        }
-        // 명령 스키마가 각 슬롯 종류를 결정한다. 값이 정수처럼 보이더라도 f64
-        // 필드면 IEEE-754 비트로 보내야 하므로 런타임 값 휴리스틱을 쓰지 않는다.
-        gen::encode_raw_slots(rt, cmdId, args + 1, slotCount, slots);
-        uint64_t outSlot = 0;
-        uint8_t errBuf[256];
-        size_t errLen = 0;
-        uint32_t code = core::currentCoreTable()->invoke_raw(
-          cmdId, slots, slotCount, &outSlot, errBuf, sizeof(errBuf), &errLen);
-        if (code == UINT32_MAX) {
-          // 폴백 신호 — 특수 NaN 페이로드. JS 엔진은 Number.isNaN 으로 감별해
-          // invokeTypedById 로 되돌린다(엔진 코드의 판별 주석 참조).
-          uint64_t fallbackBits = 0x7ff8000000000001ULL;
-          double fallback;
-          std::memcpy(&fallback, &fallbackBits, sizeof(double));
-          return Value(fallback);
-        }
-        if (code != 0) {
-          // 에러 와이어([ok:0][pad][err_len u16 @8][postcard @10]) 파싱 —
-          // typedInvokeTail 과 동일한 parseFrameErrorBody 재사용.
-          if (errLen >= 10) {
-            throw JSError(rt, parseFrameErrorBody(errBuf, errLen));
-          }
-          throw JSError(rt, "RustraJSI: invokeTypedRaw failed");
-        }
-        // 결과 슬롯 → 생성된 공개 output shape. 필드 종류별 비트 해석(f64,
-        // bool, signed/unsigned)과 단일 프로퍼티 이름은 코드젠 메타데이터가
-        // 복원한다. raw lower-bound primitive가 공개 API로 새지 않는다.
-        return gen::decode_raw_result(rt, cmdId, outSlot);
+        return invokeRawOnCore(rt, core::currentCoreTable(), cmdId, args + 1, count - 1);
       });
     cache_["invokeTypedRaw"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});

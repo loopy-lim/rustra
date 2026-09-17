@@ -40,6 +40,9 @@ run_one tgen "$IOS_DIR/test-rustra-generated-codecs.cpp" "$GENERATED_DIR/rustra-
 # (B) 저수준 Writer/Reader 단위 테스트 (rustra-codec.hpp, 헤더-only).
 run_one tcodec "$IOS_DIR/test-rustra-codec.cpp"
 
+# Atomic sync binding selection, concurrent core publication and reentry.
+run_one tsync "$IOS_DIR/test-rustra-sync-core.cpp"
+
 if [ "$FAIL" -ne 0 ]; then
   echo "FAILED: some C++ codec checks failed (exit $FAIL)"
   exit "$FAIL"

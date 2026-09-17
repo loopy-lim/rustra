@@ -25,6 +25,16 @@ namespace margelo::nitro::nitrobench { struct BytesPayload; }
 namespace margelo::nitro::nitrobench { struct BufferPayload; }
 // Forward declaration of `PairPayload` to properly resolve imports.
 namespace margelo::nitro::nitrobench { struct PairPayload; }
+// Forward declaration of `ParityTree` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct ParityTree; }
+// Forward declaration of `ParitySearch` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct ParitySearch; }
+// Forward declaration of `ParityFindInput` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct ParityFindInput; }
+// Forward declaration of `ParityStored` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct ParityStored; }
+// Forward declaration of `ParityQuery` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct ParityQuery; }
 
 #include "AddResult.hpp"
 #include "AddPayload.hpp"
@@ -32,6 +42,12 @@ namespace margelo::nitro::nitrobench { struct PairPayload; }
 #include "BytesPayload.hpp"
 #include "BufferPayload.hpp"
 #include "PairPayload.hpp"
+#include <NitroModules/Promise.hpp>
+#include "ParityTree.hpp"
+#include "ParitySearch.hpp"
+#include "ParityFindInput.hpp"
+#include "ParityStored.hpp"
+#include "ParityQuery.hpp"
 
 namespace margelo::nitro::nitrobench {
 
@@ -70,6 +86,20 @@ namespace margelo::nitro::nitrobench {
       virtual BytesPayload echoBytes(const BytesPayload& value) = 0;
       virtual BufferPayload echoBuffer(const BufferPayload& value) = 0;
       virtual PairPayload echoPair(const PairPayload& value) = 0;
+      virtual std::shared_ptr<Promise<AddResult>> benchAddAsync(const AddPayload& value) = 0;
+      virtual std::shared_ptr<Promise<StringPayload>> echoStringAsync(const StringPayload& value) = 0;
+      virtual std::shared_ptr<Promise<PairPayload>> echoPairAsync(const PairPayload& value) = 0;
+      virtual std::shared_ptr<Promise<BufferPayload>> echoBufferAsync(const BufferPayload& value) = 0;
+      virtual ParityTree parityEcho(const ParityTree& value) = 0;
+      virtual ParitySearch parityFind(const ParityFindInput& value) = 0;
+      virtual ParityStored parityStore(const ParityTree& value) = 0;
+      virtual ParitySearch parityResident(const ParityQuery& value) = 0;
+      virtual ParitySearch parityIndexed(const ParityQuery& value) = 0;
+      virtual std::shared_ptr<Promise<ParityTree>> parityEchoAsync(const ParityTree& value) = 0;
+      virtual std::shared_ptr<Promise<ParitySearch>> parityFindAsync(const ParityFindInput& value) = 0;
+      virtual std::shared_ptr<Promise<ParityStored>> parityStoreAsync(const ParityTree& value) = 0;
+      virtual std::shared_ptr<Promise<ParitySearch>> parityResidentAsync(const ParityQuery& value) = 0;
+      virtual std::shared_ptr<Promise<ParitySearch>> parityIndexedAsync(const ParityQuery& value) = 0;
 
     protected:
       // Hybrid Setup

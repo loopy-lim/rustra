@@ -88,9 +88,7 @@ pub use rustra_macros::build;
 /// ```
 pub use rustra_macros::command;
 
-pub use frame_codec::decode_frame_error_parts;
-pub use frame_codec::decode_frame_response;
-pub use frame_codec::encode_frame_error;
+pub use frame_codec::{decode_frame_error_parts, decode_frame_response, encode_frame_error};
 /// 패키지 빌더에 `#[command]` 함수들을 등록하는 매크로입니다.
 ///
 /// ```rust
@@ -196,3 +194,6 @@ pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
 
 #[cfg(test)]
 mod internal_tests;
+
+mod command_execution;
+pub use command_execution::CommandExecution;

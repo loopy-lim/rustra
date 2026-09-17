@@ -214,7 +214,27 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
             position: 0,
             length,
         };
-        let result = visitor.visit_seq(&mut access)?;
+        // An over-depth child stays lazy: empty sequences and custom seeds
+        // that never enter the Deserializer must keep their existing behavior.
+        let result = if access.tuple.is_none() && access.de.depth < access.de.limits.max_depth {
+            match access.items {
+                Some(ir @ IrNode::Int { unsigned: true }) => {
+                    visitor.visit_seq(IntegerSeq::<true> {
+                        access: &mut access,
+                        ir,
+                    })?
+                }
+                Some(ir @ IrNode::Int { unsigned: false }) => {
+                    visitor.visit_seq(IntegerSeq::<false> {
+                        access: &mut access,
+                        ir,
+                    })?
+                }
+                _ => visitor.visit_seq(&mut access)?,
+            }
+        } else {
+            visitor.visit_seq(&mut access)?
+        };
         if access.position != length {
             return Err(error("tuple length mismatch"));
         }
@@ -330,14 +350,6 @@ impl<'de, 'b> De<'de, 'b> {
         let IrNode::Int { unsigned } = self.node()? else {
             return Err(error("expected integer node"));
         };
-        if *unsigned {
-            let value = u64::try_from(self.reader.varint()?)
-                .map_err(|_| error("decoded unsigned integer exceeds u64"))?;
-            visitor.visit_u64(value)
-        } else {
-            let value = i64::try_from(self.reader.zigzag()?)
-                .map_err(|_| error("decoded integer exceeds JSON safe range"))?;
-            visitor.visit_i64(value)
-        }
+        read_integer(self.reader, *unsigned, visitor)
     }
 }

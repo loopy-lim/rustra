@@ -6,7 +6,7 @@
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -75,6 +75,31 @@ export function kindEcho(input: KindEchoInput, options?: InvokeOptions): Promise
 kindEcho.commandId = 'kindEcho';
 
 export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
+
+export function parityEcho(input: ParityTree, options?: InvokeOptions): Promise<ParityTree> {
+  return invokeGenerated<ParityTree>(34, 'parityEcho', input, options);
+}
+parityEcho.commandId = 'parityEcho';
+
+export function parityFind(input: ParityFindInput, options?: InvokeOptions): Promise<ParitySearch> {
+  return invokeGenerated<ParitySearch>(35, 'parityFind', input, options);
+}
+parityFind.commandId = 'parityFind';
+
+export function parityIndexed(input: ParityQuery, options?: InvokeOptions): Promise<ParitySearch> {
+  return invokeGeneratedFields1<ParitySearch>(38, 'parityIndexed', input, input["id"], options);
+}
+parityIndexed.commandId = 'parityIndexed';
+
+export function parityResident(input: ParityQuery, options?: InvokeOptions): Promise<ParitySearch> {
+  return invokeGeneratedFields1<ParitySearch>(37, 'parityResident', input, input["id"], options);
+}
+parityResident.commandId = 'parityResident';
+
+export function parityStore(input: ParityTree, options?: InvokeOptions): Promise<ParityStored> {
+  return invokeGenerated<ParityStored>(36, 'parityStore', input, options);
+}
+parityStore.commandId = 'parityStore';
 
 export function platformNativeInfo(options?: InvokeOptions): Promise<PlatformNativeInfoOutput> {
   return invokeGenerated<PlatformNativeInfoOutput>(30, 'platformNativeInfo', undefined, options);

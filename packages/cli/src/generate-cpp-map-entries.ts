@@ -1,0 +1,28 @@
+export function appendCppMapEntries(lines: string[]): void {
+  lines.push(
+    `// Each invocation owns its captured map values until canonical encoding finishes.`,
+    `// Small maps avoid a vector allocation; larger maps retain bounded reservation.`,
+    `class RustraMapEntries {`,
+    `public:`,
+    `  using Entry = std::pair<std::string, jsi::Value>;`,
+    `  RustraMapEntries(jsi::Runtime& rt, size_t count) : use_inline_(count <= inline_entries_.size()) {`,
+    `    if (count > heap_entries_.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity");`,
+    `    if (!use_inline_) heap_entries_.reserve(std::min<size_t>(count, 64));`,
+    `  }`,
+    `  void emplace_back(std::string&& key, jsi::Value&& value) {`,
+    `    if (use_inline_) inline_entries_[size_] = Entry(std::move(key), std::move(value));`,
+    `    else heap_entries_.emplace_back(std::move(key), std::move(value));`,
+    `    ++size_;`,
+    `  }`,
+    `  Entry* begin() { return use_inline_ ? inline_entries_.data() : heap_entries_.data(); }`,
+    `  Entry* end() { return begin() + size_; }`,
+    `  size_t size() const { return size_; }`,
+    `private:`,
+    `  std::array<Entry, 4> inline_entries_;`,
+    `  std::vector<Entry> heap_entries_;`,
+    `  size_t size_ = 0;`,
+    `  bool use_inline_;`,
+    `};`,
+    ``,
+  );
+}

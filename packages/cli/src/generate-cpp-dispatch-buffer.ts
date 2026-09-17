@@ -1,3 +1,5 @@
+import { cppPropertyNames } from './generate-cpp-properties.js';
+import { collectPostcardFields } from './generate-postcard-graph.js';
 import type { PostcardField } from './generate-postcard-ir.js';
 import type { CppCommandSets } from './generate-cpp-output-types.js';
 
@@ -39,12 +41,38 @@ export function appendCppBufferDispatch(lines: string[], sets: CppCommandSets): 
     lines.push(
       `    case ${cmd.commandId}: {`,
       `      auto result = Object(rt);`,
-      `      result.setProperty(rt, cachedProp(rt, "${output.name}"), std::move(buffer));`,
+      `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "${output.name}"), std::move(buffer));`,
       `      return result;`,
       `    }`,
     );
   lines.push(
     `    default: throw JSError(rt, "rustra: no buffer result codec for cmd_id " + std::to_string(cmd_id));`,
+    `  }`,
+    `}`,
+    ``,
+  );
+  lines.push(
+    `Value decode_buffer_bound(Runtime& rt, const BoundCodecContext& context, Value buffer) {`,
+    `  switch (context.commandId) {`,
+  );
+  for (const { cmd, output } of bufferCommands) {
+    const names = cppPropertyNames(
+      collectPostcardFields(cmd.outputSchema, sets.definitions).fields,
+      sets.definitions,
+    );
+    const index = names.indexOf(output.name);
+    if (index < 0) throw new Error(`Missing generated buffer result property: ${output.name}`);
+    const property = `context.output[${index}]`;
+    lines.push(
+      `    case ${cmd.commandId}: {`,
+      `      auto result = Object(rt);`,
+      `      result.setProperty(rt, ${property}, std::move(buffer));`,
+      `      return result;`,
+      `    }`,
+    );
+  }
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no bound buffer result codec");`,
     `  }`,
     `}`,
     ``,
@@ -59,6 +87,18 @@ export function appendCppBufferDispatch(lines: string[], sets: CppCommandSets): 
     ``,
   );
   appendRawDispatch(lines, rawCommands);
+  lines.push(
+    `Value decode_raw_bound(Runtime& rt, const BoundCodecContext& context, uint64_t slot) {`,
+    `  switch (context.commandId) {`,
+  );
+  for (const { cmd, shape } of rawCommands)
+    appendRawResult(lines, cmd.commandId, shape, 'context.output[0]');
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no bound raw result codec");`,
+    `  }`,
+    `}`,
+    ``,
+  );
   lines.push(`} // namespace rustra::generated`);
 }
 
@@ -117,37 +157,37 @@ function appendRawResult(
   lines: string[],
   commandId: number,
   shape: CppCommandSets['rawCommands'][number]['shape'],
+  retainedProperty?: string,
 ): void {
   lines.push(`    case ${commandId}: {`);
   if (!shape.outputField) lines.push(`      return Value::undefined();`);
   else {
     const field = shape.outputField;
     const name = JSON.stringify(field.name);
+    const property = retainedProperty ?? `jsi::PropNameID::forAscii(rt, ${name})`;
     lines.push(`      Object result(rt);`);
     if (field.kind === 'zigzag')
       lines.push(
         `      int64_t value; std::memcpy(&value, &slot, sizeof(value));`,
-        `      result.setProperty(rt, cachedProp(rt, ${name}), static_cast<double>(value));`,
+        `      result.setProperty(rt, ${property}, static_cast<double>(value));`,
       );
     else if (field.kind === 'zigzag64')
       lines.push(
         `      int64_t value; std::memcpy(&value, &slot, sizeof(value));`,
-        `      result.setProperty(rt, cachedProp(rt, ${name}), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));`,
+        `      result.setProperty(rt, ${property}, value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));`,
       );
     else if (field.kind === 'uvar')
-      lines.push(
-        `      result.setProperty(rt, cachedProp(rt, ${name}), static_cast<double>(slot));`,
-      );
+      lines.push(`      result.setProperty(rt, ${property}, static_cast<double>(slot));`);
     else if (field.kind === 'uvar64')
       lines.push(
-        `      result.setProperty(rt, cachedProp(rt, ${name}), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));`,
+        `      result.setProperty(rt, ${property}, slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));`,
       );
     else if (field.kind === 'f64' || field.kind === 'f32')
       lines.push(
         `      double value; std::memcpy(&value, &slot, sizeof(value));`,
-        `      result.setProperty(rt, cachedProp(rt, ${name}), value);`,
+        `      result.setProperty(rt, ${property}, value);`,
       );
-    else lines.push(`      result.setProperty(rt, cachedProp(rt, ${name}), slot != 0);`);
+    else lines.push(`      result.setProperty(rt, ${property}, slot != 0);`);
     lines.push(`      return std::move(result);`);
   }
   lines.push(`    }`);

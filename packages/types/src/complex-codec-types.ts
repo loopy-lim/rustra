@@ -18,6 +18,7 @@ export type ComplexSchema = {
 };
 
 export type ComplexCodecOptions = {
+  execution?: 'sync' | 'async';
   commandId: number;
   inputSchema: ComplexSchema;
   outputSchema: ComplexSchema;

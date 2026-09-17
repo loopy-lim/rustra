@@ -6,6 +6,7 @@ import { decodeUtf8 } from './utf8.js';
 
 export type LiveSchemaEntry = {
   commandId: number;
+  execution?: 'sync' | 'async';
   inputSchema?: unknown;
   outputSchema?: unknown;
   /**
@@ -18,6 +19,15 @@ export type LiveSchemaEntry = {
 
 /** createFrameEngine 이 요구하는 네이티브 인터페이스 (invokeFrame + live schema). */
 export type FrameSchemaNative = {
+  /** Atomic native binding: validates contract/frozen execution metadata and pins
+   * one native core for each entire invocation, revalidating core replacement.
+   * Route: 0 whole input, 1..3 generated fields, 4 single byte field. */
+  bindSyncCommand?(
+    commandId: number,
+    command: string,
+    contractHash: string,
+    route: number,
+  ): (input: unknown, field0?: unknown, field1?: unknown, field2?: unknown) => unknown;
   /**
    * 응답은 소유 ArrayBuffer 또는 재사용 버퍼의 뷰(ArrayBufferView)다. 뷰는
    * 이 호출의 디코드가 끝날 때까지만 유효하다(다음 invoke 가 덮어쓴다) —
@@ -85,6 +95,8 @@ export type FrameSchemaNative = {
  * 없다 — 없으면 undefined 로 두고 소비자에서 관례값 1 로 취급한다).
  */
 export type LiveSchemaDocument = {
+  /** Runtime-only immutable registry state; excluded from the contract hash. */
+  registryFrozen?: boolean;
   commands: Map<string, LiveSchemaEntry>;
   schemaVersion?: number;
   /** (T0-3) 문서에 세대가 있으면 채운다(구 네이티브는 undefined). */
@@ -110,9 +122,11 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
   const parsed = JSON.parse(json) as {
     schemaVersion?: unknown;
     schemaGeneration?: unknown;
+    registryFrozen?: unknown;
     commands?: Array<{
       name: string;
       commandId: number;
+      execution?: unknown;
       inputSchema?: unknown;
       outputSchema?: unknown;
       definitions?: Record<string, ComplexSchema>;
@@ -125,9 +139,11 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
       inputSchema: c.inputSchema,
       outputSchema: c.outputSchema,
       definitions: c.definitions,
+      ...(c.execution === 'sync' || c.execution === 'async' ? { execution: c.execution } : {}),
     });
   }
   const doc: LiveSchemaDocument = { commands: map };
+  if (typeof parsed.registryFrozen === 'boolean') doc.registryFrozen = parsed.registryFrozen;
   if (typeof parsed.schemaVersion === 'number' && Number.isFinite(parsed.schemaVersion)) {
     doc.schemaVersion = parsed.schemaVersion;
   }
