@@ -28,7 +28,14 @@ let package = Package::builder("app.functions")
 assert_eq!(package.invoke_json("add", serde_json::json!([2, 3])).unwrap(), serde_json::json!(5));
 ```
 
-기존 방식대로 코드 생성과 호스트 설정을 마치면, 생성된 함수를 바로 호출합니다.
+등록한 함수를 바꿀 때마다 재생성하고 타입 검사를 돌립니다:
+
+```sh
+rustra codegen            # 또는 스캐폴드 스크립트: bun run codegen
+bunx tsc --noEmit         # 위치 인자 시그니처는 컴파일타임에 검증된다
+```
+
+그다음 생성된 함수를 바로 호출합니다:
 
 ```ts
 import { add, reset, read } from './generated/commands.js';
