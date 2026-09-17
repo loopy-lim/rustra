@@ -83,6 +83,15 @@ export function diffSchemas(oldSchema: PackageSchema, newSchema: PackageSchema):
     }
 
     const newCmd = newCommands.get(name)!;
+    if (oldCmd.functionArgs !== newCmd.functionArgs) {
+      breaking.push({
+        type: 'field_type_changed',
+        command: name,
+        field: 'functionArgs',
+        from: String(oldCmd.functionArgs),
+        to: String(newCmd.functionArgs),
+      });
+    }
     compareSchemas(
       oldCmd.inputSchema,
       newCmd.inputSchema,

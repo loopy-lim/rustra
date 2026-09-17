@@ -1,0 +1,35 @@
+{
+  "simulator": "99B087B5-DEF6-4CF1-9177-81A5DE564CFC",
+  "bundleId": "com.alt-shifted.react-native-calculator",
+  "demo": "functions",
+  "arch": "arm64",
+  "configuration": "Release",
+  "buildFingerprint": "278ee8f3225c70ece1050a91b45dd98cd84cfaf19f0aa11464ef78c751c3125c",
+  "artifacts": {
+    "reactnativecalculator": "75a5439b7f730c7a16fb63b78e9bb1e48078b60d495f051953f3bfecc3ee67dc",
+    "main.jsbundle": "ec50393431659ab686c100a752e3b5267bd5c13186508bed961085500f1ac1f0"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "launch": "com.alt-shifted.react-native-calculator: 8891",
+      "startedAt": "2026-09-15T19:35:40.664521+00:00",
+      "generatedAt": "2026-09-15T19:35:42.780Z",
+      "receiptSha256": "00a241605cbe0380275f28d7402e7dd592804134d5f4da13db9c23b7b3668e9b"
+    },
+    {
+      "run": 2,
+      "launch": "com.alt-shifted.react-native-calculator: 8930",
+      "startedAt": "2026-09-15T19:35:42.980145+00:00",
+      "generatedAt": "2026-09-15T19:35:45.155Z",
+      "receiptSha256": "456339b4b2fb5383ad74e596efac4fc4844b624446851a4962a5a2c3d3b854a2"
+    },
+    {
+      "run": 3,
+      "launch": "com.alt-shifted.react-native-calculator: 8964",
+      "startedAt": "2026-09-15T19:35:45.336214+00:00",
+      "generatedAt": "2026-09-15T19:35:47.460Z",
+      "receiptSha256": "58a765c0d35567b6877657c1d2ca497288d7932af7050e152cb54d4107714f5e"
+    }
+  ]
+}

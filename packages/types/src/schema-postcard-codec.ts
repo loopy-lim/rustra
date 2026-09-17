@@ -21,7 +21,8 @@
 // 혼합 object, uniqueItems string set 등.
 
 import type { ComplexSchema } from './complex-codec-types.js';
-import { compileNode } from './schema-postcard-node.js';
+import { postcardSchemaSupported, isNamedPostcardRoot } from './schema-postcard-support.js';
+import { compileNode, compileStruct } from './schema-postcard-node.js';
 import { concatBytes, decString } from './schema-postcard-wire.js';
 import type { RustraError } from './errors.js';
 import type { FrameCodec } from './public.js';
@@ -39,19 +40,34 @@ function decodeErrorFrame(u8: Uint8Array, view: DataView): { ok: false; error: R
 }
 
 /**
- * live_schema 명령 엔트리로부터 postcard 코덱을 생성한다.
- * 입력/출력 스키마 중 하나라도 postcard 미지원 형태면 null — 호출자(엔진)는
- * 그 명령을 Tier 3(JSON-in-binary)로 폴백한다.
+ * Compile a low-level postcard encoder/decoder, or return null for unsupported nodes.
+ * By default this preserves encoding support such as Set, independent of which
+ * wire route a Rust command selects. Generated and live command routing MUST pass
+ * respectRustRoute=true; null then means try the complex codec before Tier3 JSON.
  */
 export function createSchemaPostcardCodec(
   commandId: number,
   inputSchema: ComplexSchema,
   outputSchema: ComplexSchema,
   definitions: Record<string, ComplexSchema> = {},
+  /** Select only shapes whose Rust command route is postcard (rather than complex). */
+  respectRustRoute = false,
 ): FrameCodec<unknown, unknown> | null {
-  const input = compileNode(inputSchema, definitions, 0);
+  if (
+    respectRustRoute &&
+    (!postcardSchemaSupported(inputSchema, definitions) ||
+      !postcardSchemaSupported(outputSchema, definitions))
+  )
+    return null;
+  // Root named fields retain their old depth-zero budget. Nested node compilation
+  // always uses compileNode/compileStruct and never re-enters this root wrapper.
+  const compileRoot = (schema: ComplexSchema) =>
+    isNamedPostcardRoot(schema)
+      ? compileStruct(schema, definitions, 0)
+      : compileNode(schema, definitions, 0);
+  const input = compileRoot(inputSchema);
   if (!input) return null;
-  const output = compileNode(outputSchema, definitions, 0);
+  const output = compileRoot(outputSchema);
   if (!output) return null;
   return {
     commandId,
@@ -81,7 +97,7 @@ export function createSchemaPostcardCodec(
       // postcard output at offset 8
       try {
         const v = output.decode(u8, 8);
-        return { ok: true, result: v.value };
+        return { ok: true, result: outputSchema.type === 'null' ? undefined : v.value };
       } catch {
         return {
           ok: false,

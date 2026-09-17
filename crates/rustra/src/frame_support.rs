@@ -16,12 +16,19 @@
 /// 정의를 따라가 재검증해 그 조합을 Tier 3 로 밀어낸다.
 pub(crate) fn js_postcard_codec_supported_with_defs(schema: &Value, definitions: &Value) -> bool {
     let defs = definitions.as_object();
-    let Some(props) = schema.get("properties").and_then(Value::as_object) else {
-        return true;
-    };
-    props
-        .values()
-        .all(|p| js_field_supported_with_defs(p, defs, 0))
+    // Legacy named root objects start each property at depth zero. This is an
+    // entry-point rule only: nested objects must still consume walker depth.
+    if schema.get("type").and_then(Value::as_str) == Some("object")
+        && schema
+            .get("additionalProperties")
+            .is_none_or(|value| value == &Value::Bool(false))
+        && let Some(properties) = schema.get("properties").and_then(Value::as_object)
+    {
+        return properties
+            .values()
+            .all(|field| js_field_supported_with_defs(field, defs, 0));
+    }
+    js_field_supported_with_defs(schema, defs, 0)
 }
 
 fn resolve_ref<'a>(
@@ -56,6 +63,9 @@ fn js_field_supported_with_defs(
 ) -> bool {
     if depth > 8 {
         return false; // 과도한 중첩(순환 $ref 포함) — 안전하게 미지원 취급
+    }
+    if schema.get("type").and_then(Value::as_str) == Some("null") {
+        return true;
     }
     // int64/uint64 는 TS CLI 의 uvar64/zigzag64 64-bit 헬퍼로 postcard
     // fast-path 에 합류했다(@rustra/cli classifyPostcardField 와 동일 판정).
@@ -120,7 +130,10 @@ fn js_field_supported_with_defs(
     // 중첩 구조체가 여기서 false 폴백에 걸려 Tier 3 로 잘못 밀려지는 일을 막는다.
     // additionalProperties (properties 없음) 는 동적 맵 — 원시값 맵만 지원.
     if schema.get("type").and_then(Value::as_str) == Some("object") {
-        if let Some(v) = schema.get("additionalProperties") {
+        if let Some(v) = schema
+            .get("additionalProperties")
+            .filter(|value| **value != Value::Bool(false))
+        {
             if schema.get("properties").is_some() {
                 return false; // 혼합 형태 — 미지원
             }

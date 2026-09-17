@@ -193,3 +193,6 @@ export function toUpper(s: string): Promise<ToUpperOutput> {
 export function wideAgg(input: WideAggInput): Promise<WideAggOutput> {
   return call<WideAggOutput>(28, 'wideAgg', input);
 }
+
+// Ordinary functions retain the generated positional API and portable invoke route.
+export { add, greetPerson, readRemembered, remember, reset, safeDivide } from './commands.js';

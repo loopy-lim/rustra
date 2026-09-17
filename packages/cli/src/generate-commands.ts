@@ -1,3 +1,4 @@
+import { validateFunctionArgs } from './function-schema.js';
 import type { PackageSchema } from './schema.js';
 import { commandFunctionName } from './codegen.js';
 import { setCodegenContext } from './codegen-warnings.js';
@@ -41,6 +42,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
+    validateFunctionArgs(command);
     const fnName = commandFunctionName(command.name);
     // unit 출력 `()` → Promise<void>.
     const outType = command.outputType === '()' ? 'void' : command.outputType;
@@ -49,6 +51,17 @@ export function generateCommandsTs(schema: PackageSchema): string {
       output += generatedJsDoc(command.description);
     } else if (typeof command.inputSchema?.description === 'string') {
       output += generatedJsDoc(command.inputSchema.description);
+    }
+    if (command.functionArgs !== undefined) {
+      const args = Array.from({ length: command.functionArgs }, (_, i) => `arg${i}`);
+      const params = args.map((arg, i) => `${arg}: ${command.inputType}[${i}]`);
+      const payload = args.length ? `[${args.join(', ')}]` : 'null';
+      const normalize = outType === 'void' ? '.then(() => undefined)' : '';
+      output +=
+        `export function ${fnName}(${[...params, 'options?: InvokeOptions'].join(', ')}): Promise<${outType}> {\n` +
+        `  return invokeGenerated<${outType}>(${command.commandId}, '${command.name}', ${payload}, options)${normalize};\n` +
+        `}\n${fnName}.commandId = '${command.name}';\n\n`;
+      continue;
     }
     if (command.inputType === '()') {
       output +=

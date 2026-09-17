@@ -35,7 +35,14 @@ export function createComplexCodec<I, O>(options: ComplexCodecOptions): FrameCod
     const writer = new Writer(maxPayloadBytes);
     writer.byte(options.commandId & 0xff);
     writer.byte((options.commandId >> 8) & 0xff);
-    encodeNode(writer, inputIr, args, maxDepth, 0, maxCollectionLength);
+    encodeNode(
+      writer,
+      inputIr,
+      options.inputSchema.type === 'null' && args === undefined ? null : args,
+      maxDepth,
+      0,
+      maxCollectionLength,
+    );
     return writer.finish();
   };
 
@@ -69,7 +76,7 @@ export function createComplexCodec<I, O>(options: ComplexCodecOptions): FrameCod
         const result = decodeNode(reader, outputIr, maxDepth, 0, maxCollectionLength) as O;
         if (reader.remaining !== 0)
           throw new ComplexCodecError('trailing bytes in complex response');
-        return { ok: true, result };
+        return { ok: true, result: options.outputSchema.type === 'null' ? undefined : result };
       } catch (error) {
         return {
           ok: false,

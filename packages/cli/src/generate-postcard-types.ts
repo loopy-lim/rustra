@@ -1,4 +1,5 @@
 export type PostcardFieldKind =
+  | 'unit'
   | 'zigzag'
   | 'uvar'
   | 'zigzag64'

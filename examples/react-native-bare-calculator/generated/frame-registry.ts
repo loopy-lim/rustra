@@ -6,9 +6,11 @@
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-import { addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, channelDemoBytesCodec, clampCodec, createItemCodec, deviceDemoCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, kindEchoComplexCodec, multiplyCodec, parityEchoCodec, parityFindCodec, parityIndexedCodec, parityResidentCodec, parityStoreCodec, platformNativeInfoCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, tagSetComplexCodec, toUpperCodec, wideAggCodec } from './frame-codecs.js';
+import { addCodec, addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, channelDemoBytesCodec, clampCodec, createItemCodec, deviceDemoCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, greetPersonCodec, isEvenCodec, kindEchoComplexCodec, multiplyCodec, parityEchoCodec, parityFindCodec, parityIndexedCodec, parityResidentCodec, parityStoreCodec, platformNativeInfoCodec, processItemCodec, readRememberedCodec, rememberCodec, resetCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, safeDivideCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, tagSetComplexCodec, toUpperCodec, wideAggCodec } from './frame-codecs.js';
 
 export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<any, any>>([
+  // route: postcard
+  ['add', addCodec],
   // route: postcard
   ['addNumbers', addNumbersCodec],
   // route: postcard
@@ -40,6 +42,8 @@ export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<
   // route: postcard
   ['greet', greetCodec],
   // route: postcard
+  ['greetPerson', greetPersonCodec],
+  // route: postcard
   ['isEven', isEvenCodec],
   // route: complex
   ['kindEcho', kindEchoComplexCodec],
@@ -60,6 +64,12 @@ export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<
   // route: postcard
   ['processItem', processItemCodec],
   // route: postcard
+  ['readRemembered', readRememberedCodec],
+  // route: postcard
+  ['remember', rememberCodec],
+  // route: postcard
+  ['reset', resetCodec],
+  // route: postcard
   ['resourceClose', resourceCloseCodec],
   // route: postcard
   ['resourceOpen', resourceOpenCodec],
@@ -69,6 +79,8 @@ export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<
   ['resourceWrite', resourceWriteCodec],
   // route: postcard
   ['rustraRegistryDemo', rustraRegistryDemoCodec],
+  // route: postcard
+  ['safeDivide', safeDivideCodec],
   // route: postcard
   ['scoreTotal', scoreTotalCodec],
   // route: postcard

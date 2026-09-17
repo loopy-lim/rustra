@@ -1850,3 +1850,30 @@ processTest(
     }
   },
 );
+
+processTest('JSON transports preserve explicit null for zero-argument functions', async () => {
+  const { createNodeLoopTransport } = await import('./index.js');
+  const once = createNodeProcessTransport({
+    command: process.execPath,
+    args: [
+      '-e',
+      `let text=''; process.stdin.on('data', c=>text+=c); process.stdin.on('end', ()=>process.stdout.write(JSON.stringify({ok:true,result:JSON.parse(text).args})));`,
+    ],
+  });
+  const loop = createNodeLoopTransport({
+    command: process.execPath,
+    args: [
+      '-e',
+      `require('readline').createInterface({input:process.stdin}).on('line', line=>{const q=JSON.parse(line);process.stdout.write(JSON.stringify({id:q.id,ok:true,result:q.args})+'\\n');});`,
+    ],
+  });
+  try {
+    for (const transport of [once, loop]) {
+      assert.equal(await transport.invoke('reset', null), null);
+      assert.deepEqual(await transport.invoke('legacy'), {});
+    }
+  } finally {
+    once.dispose();
+    loop.dispose();
+  }
+});

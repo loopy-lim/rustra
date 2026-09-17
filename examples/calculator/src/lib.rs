@@ -6,6 +6,7 @@ use rustra::prelude::*;
 
 /// 루프형 stdio 런타임 코어 — `loop-stdio` bin 과 통합 테스트가 공유한다.
 pub mod loop_stdio;
+mod ordinary_functions;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -848,7 +849,8 @@ pub fn calculator_package() -> Package {
             .devices_meta_if(__RUstra_meta_device_demo, __RUstra_devices_device_demo)
             // A5: 태그 enum 표본 — 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에.
             .command_fn(kind_echo);
-            let pkg = parity_bench::register_commands(builder).build();
+            let pkg =
+                ordinary_functions::register(parity_bench::register_commands(builder)).build();
 
             // Auto-register for generic FFI with JSON default
             pkg.register_ffi_with_default(FfiFormat::Json);

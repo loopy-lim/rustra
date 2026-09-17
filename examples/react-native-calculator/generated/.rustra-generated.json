@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf",
+  "schemaHash": "e70c24c62944ff78fb6ca58b5658d85bb5cff49af4acc96b3a78bedcbdfb0a58",
   "generatorVersion": "0.10.0",
   "files": [
     {
@@ -29,7 +29,7 @@
     },
     {
       "path": "../modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
-      "sha256": "76a97a080e627cbfea23aacde1ffd9390962673380983b9f8f9e6e9f80adeb7e"
+      "sha256": "b25b98046764e60bb30aebe776487a14b007a48ca37cb2433603839a83079f87"
     },
     {
       "path": "../modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
@@ -65,11 +65,11 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "591b96440b6501bd3baa920abfe8918f97f1b73a48584d9f5d2245180a4dcd9a"
+      "sha256": "2dee02a2675f4b71db4abeed120085332e12ac1ffd3077479395856f81c210c2"
     },
     {
       "path": "contract.ts",
-      "sha256": "a2489afa3a08759019d8803fbbcc79d1cbd650b419f985507ddf31d1d872bebb"
+      "sha256": "68a92f4a96ae09133e70b696b175ca0dc9fd27b6d80dee33d2462d26727ac6b3"
     },
     {
       "path": "devices.ts",
@@ -81,15 +81,15 @@
     },
     {
       "path": "frame-codecs.ts",
-      "sha256": "a71d1d153ac983d105c228be1c41319d7e1122aa26fbd4a62651c1ad6298e736"
+      "sha256": "a1e5ee165e733a63c8bd340b3893018a22ec806850f4952a5b17d7fd6432e415"
     },
     {
       "path": "frame-registry.ts",
-      "sha256": "5584970dc9bd926c03bf8564793cd98305f4dd50ffdd273e58efc92fb3347469"
+      "sha256": "5c0b5eaaf01fd732f9aa1b25e13190e6fc328871544af451a48587a60e6de136"
     },
     {
       "path": "positional-facade.ts",
-      "sha256": "1e7e0c051c63cc4faaa2dd74150e546366f98da2fb2cad730687a1a0f9d8db31"
+      "sha256": "9851448a8e98803fdeba9198ad21c4c9cb998190ed1a71ea1e0f3d0816cb8081"
     },
     {
       "path": "react-native.ts",
@@ -97,7 +97,7 @@
     },
     {
       "path": "types.ts",
-      "sha256": "7731a22a3e5cf80c7b25f319dc098014249e133a40dae2b09f3fe5ef96e5de4a"
+      "sha256": "d560df706490350eaa997375bf7abae9eff3768c152b1e72a2349cd6ed55703d"
     }
   ]
 }
