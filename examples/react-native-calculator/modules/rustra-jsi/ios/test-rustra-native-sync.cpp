@@ -20,6 +20,7 @@ public:
   size_t globals = 0, nativeStates = 0;
   jsi::Object global() override { ++globals; return RuntimeDecorator::global(); }
   bool throwPressure = false, throwBufferCreation = false, throwResult = false;
+  std::string throwName;
   void setExternalMemoryPressure(const jsi::Object& object, size_t size) override {
     if (throwPressure) throw std::runtime_error("injected pressure failure");
     RuntimeDecorator::setExternalMemoryPressure(object, size);
@@ -46,7 +47,9 @@ protected:
     ++utf8Names; return RuntimeDecorator::createPropNameIDFromUtf8(value, size);
   }
   jsi::PropNameID createPropNameIDFromAscii(const char* value, size_t size) override {
-    ++asciiNames; return RuntimeDecorator::createPropNameIDFromAscii(value, size);
+    ++asciiNames;
+    if (!throwName.empty() && std::string_view(value, size) == throwName) throw std::runtime_error("injected name construction failure");
+    return RuntimeDecorator::createPropNameIDFromAscii(value, size);
   }
   jsi::String createStringFromAscii(const char* value, size_t size) override {
     ++asciiStrings; return RuntimeDecorator::createStringFromAscii(value, size);
@@ -134,15 +137,68 @@ static void installTestAPI(jsi::Runtime& rt) {
     check(counted.asciiNames == 1, "result did not own its one actual property name");
     return jsi::Value();
   });
+  host(rt, "checkBoundConversionWork", 0, [](auto& r, const auto&, const auto*, size_t) {
+    struct Example { uint16_t id, route; const char* name; const char* input; size_t dynamicKeys; size_t constructorLookups = 0; };
+    for (const auto& example : {
+      Example{16, 0, "span", "({pair:['tuple caption',37]})", 0},
+      Example{26, 0, "benchEchoPair", "({name:'arbitrary',value:17})", 0},
+      Example{34, 0, "parityEcho", "({nodes:Array.from({length:3},()=>node({owner:'a',kind:'b'}))})", 6},
+      Example{23, 2, "benchAdd", "({a:2,b:5})", 0},
+      Example{25, 4, "benchEchoBytes", "({data:new Uint8Array([1,2,3]).buffer})", 0},
+      Example{25, 4, "benchEchoBytes", "({data:[1,2,3]})", 0, 1},
+    }) {
+      auto input = evaluate(r, example.input);
+      std::vector<jsi::Value> args;
+      args.push_back(jsi::Value(r, input));
+      if (example.route == 2) { args.emplace_back(2); args.emplace_back(5); }
+      if (example.route == 4) args.push_back(input.asObject(r).getProperty(r, "data"));
+      CountingRuntime counted(r);
+      auto function = rustra::createNativeSyncBinding(counted, example.id, example.name,
+        rustra::generated::compiled_contract_hash(), example.route).asObject(counted).asFunction(counted);
+      for (int call = 0; call < 3; ++call) {
+        r.instrumentation().collectGarbage("bound-codec-call");
+        counted.asciiNames = counted.asciiStrings = counted.utf8Names = counted.globals = counted.nativeStates = 0;
+        auto result = function.call(counted, static_cast<const jsi::Value*>(args.data()), args.size());
+        check(result.isObject(), "bound codec lost result shape");
+        check(counted.asciiNames == 0, "warm binding recreated fixed schema names");
+        // Framed bytes preserve per-call ArrayBuffer constructor lookup, including reload/reentry.
+        check(counted.asciiStrings == example.constructorLookups, "unexpected constructor name lookup");
+        check(counted.utf8Names == example.dynamicKeys, "dynamic output names were cached or duplicated");
+        check(counted.globals == example.constructorLookups && counted.nativeStates == 0, "bound codec used global property cache");
+      }
+    }
+    return jsi::Value();
+  });
+  host(rt, "checkBoundConstructionFailure", 0, [](auto& r, const auto&, const auto*, size_t) {
+    CountingRuntime counted(r); counted.throwName = "nodes";
+    const auto frames = peers[0].frames, raws = peers[0].raws;
+    bool threw = false;
+    try { rustra::createNativeSyncBinding(counted, 34, "parityEcho", rustra::generated::compiled_contract_hash(), 0); }
+    catch (const std::exception&) { threw = true; }
+    check(threw, "context construction failure was bypassed");
+    check(peers[0].frames == frames && peers[0].raws == raws, "failed binding dispatched a handler");
+    counted.throwName.clear();
+    auto function = rustra::createNativeSyncBinding(counted, 34, "parityEcho", rustra::generated::compiled_contract_hash(), 0).asObject(counted).asFunction(counted);
+    auto input = evaluate(r, "({nodes:[node({},'after')]})");
+    auto result = function.call(counted, input);
+    check(result.isObject(), "construction failure contaminated next binding");
+    return jsi::Value();
+  });
   host(rt, "checkPressureFailure", 0, [](auto& r, const auto&, const auto*, size_t) {
     auto input = evaluate(r, "new Uint8Array([1,2,3]).buffer");
-    for (int boundary = 0; boundary < 3; ++boundary) {
+    for (int boundary = 0; boundary < 6; ++boundary) {
       CountingRuntime counted(r);
-      counted.throwPressure = boundary == 0;
-      counted.throwBufferCreation = boundary == 1;
-      counted.throwResult = boundary == 2;
+      counted.throwPressure = boundary % 3 == 0;
+      counted.throwBufferCreation = boundary % 3 == 1;
+      counted.throwResult = boundary % 3 == 2;
       auto before = peers[0].ownedFrees, dispatched = peers[0].buffers; bool threw = false;
-      try { rustra::invokeBufferOnCore(counted, &tables[0], 25, input); }
+      try {
+        if (boundary < 3) rustra::invokeBufferOnCore(counted, &tables[0], 25, input);
+        else {
+          auto context = rustra::generated::make_bound_codec_context(counted, 25);
+          rustra::invokeBufferOnCore(counted, &tables[0], 25, input, *context);
+        }
+      }
       catch (const std::exception&) { threw = true; }
       publish(1); r.instrumentation().collectGarbage("owned-output-exception");
       check(threw, "owned output failure injection was bypassed");

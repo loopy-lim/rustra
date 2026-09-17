@@ -12,13 +12,19 @@ export function cppEncodeCommand(
   const fields = collectPostcardFields(command.inputSchema, definitions).fields;
   const properties = cppProperties(fields, definitions);
   const lines = [
+    `static void encode_body_${fnName}(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {`,
+    ...properties.references,
+  ];
+  for (const field of fields)
+    lines.push(cppFieldEncodeExpr(field, 'argsObj', definitions, '  ', properties.property));
+  lines.push(
+    '}',
     `static void encode_${fnName}(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {`,
     `  w.push_u8(${command.commandId & 0xff}); w.push_u8(${(command.commandId >> 8) & 0xff}); // cmd_id = ${command.commandId} LE`,
     `  auto argsObj = args.asObject(rt);`,
     ...properties.declarations,
-  ];
-  for (const field of fields)
-    lines.push(cppFieldEncodeExpr(field, 'argsObj', definitions, '  ', properties.property));
-  lines.push('}');
+    `  encode_body_${fnName}(rt, argsObj, w, _properties.data());`,
+    '}',
+  );
   return lines.join('\n') + '\n';
 }

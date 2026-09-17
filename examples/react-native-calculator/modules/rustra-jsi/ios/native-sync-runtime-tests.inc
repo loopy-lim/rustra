@@ -1,3 +1,17 @@
+// Exercise managed HostFunction context ownership without the shared fake ABI ledger.
+static jsi::Function codecLoopback(jsi::Runtime& rt) {
+  auto context = rustra::generated::make_bound_codec_context(rt, 34);
+  return jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, "codecLoopback"), 1,
+    [context](jsi::Runtime& runtime, const jsi::Value&, const jsi::Value* args, size_t count) {
+      const auto snapshot = context;
+      if (count != 1) throw jsi::JSError(runtime, "loopback expects input");
+      rustra::codec::Writer writer;
+      if (!rustra::generated::encode_bound(runtime, *snapshot, args[0], writer)) throw jsi::JSError(runtime, "codec unavailable");
+      rustra::codec::Reader reader(writer.data() + 2, writer.size() - 2);
+      return rustra::generated::decode_bound(runtime, *snapshot, reader);
+    });
+}
+
 // Separate runtimes may operate on separate threads. No test ABI state is used.
 static void runtimeIsolationTests() {
   std::array<std::string, 2> errors;
@@ -10,10 +24,10 @@ static void runtimeIsolationTests() {
           auto& rt = *runtime;
           const std::string marker = "runtime-" + std::to_string(worker);
           auto input = evaluate(rt, "({nodes:[{id:1,name:'node',tag:'folder',note:'" + marker + "',metadata:{owner:'x'},children:[]}]})");
-          rustra::codec::Writer writer;
-          if (!rustra::generated::encode_by_id(rt, 34, input, writer)) throw std::runtime_error("encode unavailable");
-          rustra::codec::Reader reader(writer.data() + 2, writer.size() - 2);
-          auto result = rustra::generated::decode_by_id(rt, 34, reader);
+          auto function = codecLoopback(rt);
+          rt.global().setProperty(rt, "retainedBinding", function);
+          rt.instrumentation().collectGarbage("concurrent-bound-context");
+          auto result = function.call(rt, input);
           auto node = result.asObject(rt).getPropertyAsObject(rt, "nodes").asArray(rt).getValueAtIndex(rt, 0).asObject(rt);
           if (node.getProperty(rt, "note").asString(rt).utf8(rt) != marker) throw std::runtime_error("cross-runtime property");
         }
@@ -42,12 +56,16 @@ static void runtimeDecoratorReuseTest() {
       wrapper.emplace(*engine);
       if (previousAddress) check(previousAddress == &*wrapper, "decorator address was not reused");
       previousAddress = &*wrapper;
-      rustra::codec::Writer writer;
-      check(rustra::generated::encode_by_id(*wrapper, 34, input, writer), "decorated codec unavailable");
-      rustra::codec::Reader reader(writer.data() + 2, writer.size() - 2);
-      auto result = rustra::generated::decode_by_id(*wrapper, 34, reader);
+      {
+      auto function = codecLoopback(*wrapper);
+      engine->global().setProperty(*engine, "retainedBinding", function);
+      wrapper->asciiNames = wrapper->globals = wrapper->nativeStates = 0;
+      auto result = function.call(*wrapper, input);
+      check(wrapper->asciiNames == 0 && wrapper->globals == 0 && wrapper->nativeStates == 0,
+            "decorated bound call created fixed/global property state");
       auto node = result.asObject(*engine).getPropertyAsObject(*engine, "nodes").asArray(*engine).getValueAtIndex(*engine, 0).asObject(*engine);
       check(node.getProperty(*engine, "note").asString(*engine).utf8(*engine) == "snapshot", "decorator reused foreign runtime IDs");
+      }
       wrapper.reset();
     }
     std::cout << "PASS decorator address reuse with two live Hermes runtimes\n";

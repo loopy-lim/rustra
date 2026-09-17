@@ -62,7 +62,7 @@ template<int I> static size_t frame(const uint8_t* request, size_t size, uint8_t
       const double value = a + b + I * 1000;
       const auto* bytes = reinterpret_cast<const uint8_t*>(&value);
       p.response.insert(p.response.end(), bytes, bytes + 8);
-    } else if (id == 24 || id == 25 || id == 26 || id == 34) {
+    } else if (id == 16 || id == 24 || id == 25 || id == 26 || id == 34) {
       p.response.insert(p.response.end(), request + 2, request + size);
     } else throw std::runtime_error("unexpected fake command");
     if (p.mode == 1) p.response = errorFrame();
@@ -104,7 +104,7 @@ template<int I> static void initTable() {
   tables[I] = t;
 }
 static void initializePeers() {
-  const std::string commands = R"([{"name":"benchAdd","commandId":23,"execution":"sync"},{"name":"benchEchoString","commandId":24,"execution":"sync"},{"name":"benchEchoBytes","commandId":25,"execution":"sync"},{"name":"benchEchoPair","commandId":26,"execution":"sync"},{"name":"parityEcho","commandId":34,"execution":"sync"}])";
+  const std::string commands = R"([{"name":"span","commandId":16,"execution":"sync"},{"name":"benchAdd","commandId":23,"execution":"sync"},{"name":"benchEchoString","commandId":24,"execution":"sync"},{"name":"benchEchoBytes","commandId":25,"execution":"sync"},{"name":"benchEchoPair","commandId":26,"execution":"sync"},{"name":"parityEcho","commandId":34,"execution":"sync"}])";
   for (auto& p : peers) {
     p.hash = rustra::generated::compiled_contract_hash();
     p.schema = "{\"registryFrozen\":true,\"schemaGeneration\":1,\"commands\":" + commands + "}";

@@ -6,6 +6,7 @@ import { appendCppRuntimeHelpers } from './generate-cpp-runtime-helpers.js';
 import { appendCppMapEntries } from './generate-cpp-map-entries.js';
 import { appendCppGeneratedFunctions } from './generate-cpp-functions.js';
 import { appendCppDispatchCore } from './generate-cpp-dispatch-core.js';
+import { appendCppBoundContext } from './generate-cpp-bound-context.js';
 import { appendCppBufferDispatch } from './generate-cpp-dispatch-buffer.js';
 export { generateFrameCodecsHpp } from './generate-cpp-hpp.js';
 
@@ -20,6 +21,7 @@ export function generateFrameCodecsCpp(schema: PackageSchema, schemaContent?: st
     `#include <cmath>`,
     `#include <cstring>`,
     `#include <jsi/jsi.h>`,
+    `#include <initializer_list>`,
     `#include <limits>`,
     `#include <stdexcept>`,
     `#include <string>`,
@@ -38,6 +40,7 @@ export function generateFrameCodecsCpp(schema: PackageSchema, schemaContent?: st
   ];
   appendCppMapEntries(lines);
   appendCppRuntimeHelpers(lines);
+  appendCppBoundContext(lines, sets);
   appendCppGeneratedFunctions(lines, sets);
   appendCppDispatchCore(lines, sets);
   appendCppBufferDispatch(lines, sets);

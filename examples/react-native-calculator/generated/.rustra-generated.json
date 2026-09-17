@@ -29,11 +29,11 @@
     },
     {
       "path": "../modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
-      "sha256": "690841f0cdd99a55f9895f8e238209c3ca63cf655935106e54284219d58e8352"
+      "sha256": "76a97a080e627cbfea23aacde1ffd9390962673380983b9f8f9e6e9f80adeb7e"
     },
     {
       "path": "../modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
-      "sha256": "305998cbad940063c9cc6a5e35887eca2e8070b9cf763c8033bcb87fe50f0979"
+      "sha256": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d"
     },
     {
       "path": "../modules/rustra-jsi/ios/build-rust-ios.sh",

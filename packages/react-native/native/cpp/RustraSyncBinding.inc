@@ -61,8 +61,9 @@ static uint32_t validateSyncCore(Runtime& rt, const CoreTable* core, uint16_t id
   return codecCapabilities(core, id);
 }
 
-static Value invokeRawOnCore(Runtime& rt, const CoreTable* core, uint16_t id,
-                           const Value* values, size_t count) {
+template<typename Decode>
+static Value invokeRawOnCoreWithDecode(Runtime& rt, const CoreTable* core, uint16_t id,
+                                      const Value* values, size_t count, Decode&& decode) {
   if (count > 8) throw JSError(rt, "sync.unavailable: too many scalar fields");
   uint64_t slots[8] = {}, output = 0;
   gen::encode_raw_slots(rt, id, values, count, slots);
@@ -73,10 +74,19 @@ static Value invokeRawOnCore(Runtime& rt, const CoreTable* core, uint16_t id,
     if (errorLength >= 10 && errorLength <= sizeof(error)) throw JSError(rt, parseFrameErrorBody(error, errorLength));
     throw JSError(rt, "RustraJSI: invokeTypedRaw failed");
   }
-  return gen::decode_raw_result(rt, id, output);
+  return decode(output);
 }
 
-static Value invokeBufferOnCore(Runtime& rt, const CoreTable* core, uint16_t id, const Value& value) {
+static Value invokeRawOnCore(Runtime& rt, const CoreTable* core, uint16_t id,
+                             const Value* values, size_t count) {
+  return invokeRawOnCoreWithDecode(rt, core, id, values, count, [&rt, id](uint64_t output) {
+    return gen::decode_raw_result(rt, id, output);
+  });
+}
+
+template<typename Decode>
+static Value invokeBufferOnCoreWithDecode(Runtime& rt, const CoreTable* core, uint16_t id,
+                                         const Value& value, Decode&& decode) {
   auto [data, size] = extractByteBuffer(rt, value);
   uint8_t* output = nullptr; size_t outputSize = 0;
   auto status = core->invoke_buffer(id, data, size, &output, &outputSize);
@@ -87,30 +97,71 @@ static Value invokeBufferOnCore(Runtime& rt, const CoreTable* core, uint16_t id,
     throw JSError(rt, error.empty() ? "buffer invoke failed" : error);
   }
   auto buffer = createOwnedArrayBuffer(rt, output, outputSize, core);
-  return gen::decode_buffer_result_by_id(rt, id, std::move(buffer));
+  return decode(std::move(buffer));
 }
 
+static Value invokeBufferOnCore(Runtime& rt, const CoreTable* core, uint16_t id, const Value& value) {
+  return invokeBufferOnCoreWithDecode(rt, core, id, value, [&rt, id](Value buffer) {
+    return gen::decode_buffer_result_by_id(rt, id, std::move(buffer));
+  });
+}
+
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+static Value invokeRawOnCore(Runtime& rt, const CoreTable* core, uint16_t id,
+                             const Value* values, size_t count, const gen::BoundCodecContext& context) {
+  return invokeRawOnCoreWithDecode(rt, core, id, values, count, [&rt, &context](uint64_t output) {
+    return gen::decode_raw_bound(rt, context, output);
+  });
+}
+static Value invokeBufferOnCore(Runtime& rt, const CoreTable* core, uint16_t id,
+                                const Value& value, const gen::BoundCodecContext& context) {
+  return invokeBufferOnCoreWithDecode(rt, core, id, value, [&rt, &context](Value buffer) {
+    return gen::decode_buffer_bound(rt, context, std::move(buffer));
+  });
+}
+#endif
+
 static Value invokeBoundSync(Runtime& rt, const CoreTable* core, uint32_t capabilities,
-                             uint16_t id, uint16_t route, const Value* args, size_t count) {
+                             uint16_t id, uint16_t route, const Value* args, size_t count
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+                             , const gen::BoundCodecContext& context
+#endif
+                             ) {
   if (count == 0) throw JSError(rt, "sync.unavailable: bound command requires its input");
   // route 0 = whole object, 1..3 = fixed field count, 4 = single byte field.
   const size_t fields = count - 1;
   if ((route == 0 && fields != 0) || (route >= 1 && route <= 3 && fields != route) ||
       (route == 4 && fields != 1)) throw JSError(rt, "sync.unavailable: invalid bound argument count");
   if (route == 4 && (capabilities & 8) && args[1].isObject() && !args[1].asObject(rt).isArray(rt)) {
-    return invokeBufferOnCore(rt, core, id, args[1]);
+    return invokeBufferOnCore(rt, core, id, args[1]
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+      , context
+#endif
+    );
   }
   if (route >= 1 && route <= 3 && (capabilities & 4)) {
-    Value raw = invokeRawOnCore(rt, core, id, args + 1, fields);
+    Value raw = invokeRawOnCore(rt, core, id, args + 1, fields
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+      , context
+#endif
+    );
     // Only this unavailable marker means no handler ran. Never retry an error.
     if (!(raw.isNumber() && std::isnan(raw.getNumber()))) return raw;
   }
   rc::Writer writer;
   if (route != 0 && (capabilities & 2)) gen::encode_pos_by_id(rt, id, args + 1, fields, writer);
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+  else if (!gen::encode_bound(rt, context, args[0], writer)) throw JSError(rt, "sync.unavailable: native codec missing");
+  // typedInvokeTail invokes this decoder synchronously; the reference never escapes.
+  return typedInvokeTail(rt, writer.data(), writer.size(), "", [&rt, &context](rc::Reader& reader) {
+    return gen::decode_bound(rt, context, reader);
+  }, nullptr, core);
+#else
   else if (!gen::encode_by_id(rt, id, args[0], writer)) throw JSError(rt, "sync.unavailable: native codec missing");
   return typedInvokeTail(rt, writer.data(), writer.size(), "", [&rt, id](rc::Reader& reader) {
     return gen::decode_by_id(rt, id, reader);
   }, nullptr, core);
+#endif
 }
 
 static Value createNativeSyncBinding(Runtime& rt, uint16_t id, std::string command,
@@ -121,16 +172,31 @@ static Value createNativeSyncBinding(Runtime& rt, uint16_t id, std::string comma
     return validateSyncCore(rt, core, id, command, expectedHash);
   };
   cache->select(core::currentCoreTable(), validate); // Binding fails before exposing a function.
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+  auto context = gen::make_bound_codec_context(rt, id);
+#endif
   auto name = PropNameID::forAscii(rt, "rustraBoundSync");
   return Function::createFromHostFunction(rt, name, route == 4 ? 2 : route + 1,
-    [cache, id, route, command = std::move(command), expectedHash = std::move(expectedHash)]
+    [cache, id, route,
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+     context,
+#endif
+     command = std::move(command), expectedHash = std::move(expectedHash)]
     (Runtime& runtime, const Value&, const Value* args, size_t count) -> Value {
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+      // Strong local ownership precedes validation/getter/native reentry.
+      const auto codec = context;
+#endif
       // Atomic capture is the invocation boundary. Hot publish after this load
       // affects only subsequent calls. Table/dylib lifetime is process-long.
       const auto snapshot = cache->select(core::currentCoreTable(), [&](const CoreTable* core) {
         return validateSyncCore(runtime, core, id, command, expectedHash);
       });
-      return invokeBoundSync(runtime, snapshot.core, snapshot.metadata, id, route, args, count);
+      return invokeBoundSync(runtime, snapshot.core, snapshot.metadata, id, route, args, count
+#if defined(RUSTRA_GENERATED_BOUND_CODEC_CONTEXT)
+        , *codec
+#endif
+      );
     });
 }
 
