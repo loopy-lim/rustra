@@ -603,7 +603,10 @@ test('generateFrameCodecsCpp assigns tuple decode values to array slots', () => 
 test('generateFrameCodecsCpp owns finite property names within each invocation', () => {
   const hpp = generateFrameCodecsHpp(cppSchema);
   const cpp = generateFrameCodecsCpp(cppSchema);
-  assert.match(cpp, /const std::array<jsi::PropNameID, \d+> _properties\{jsi::PropNameID::forAscii\(rt, "/);
+  assert.match(
+    cpp,
+    /const std::array<jsi::PropNameID, \d+> _properties\{jsi::PropNameID::forAscii\(rt, "/,
+  );
   assert.ok(!cpp.includes('PropertyNameContext'));
   assert.ok(!cpp.includes('NativeState'));
   assert.ok(!cpp.includes('RuntimePropNameCache'));

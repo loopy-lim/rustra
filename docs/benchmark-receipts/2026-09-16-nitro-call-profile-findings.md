@@ -8,12 +8,12 @@ Each directory below is under `/private/tmp/` and contains `sample.txt` and `rec
 
 Only the `com.facebook.react.runtime.JavaScript` subtree is used. Main/UI/Hades/worker thread totals are excluded. `L` means a one-based line in that directory's sample.txt. Counts are inclusive at the specified branch; child counts are examples within their parent, never additional cost. Sibling call-site counts can be summed; matching symbols at different depths are not blindly summed. No cross-process count difference or within-process percentage is throughput, causal time subtraction, or a promised gain.
 
-| Case | Rustra directory / JS thread anchor | Nitro directory / JS thread anchor |
-| --- | --- | --- |
-| pair | rustra-call-profile-pair-rustra-3; L56, 8162 samples | rustra-call-profile-4-nitro; L56, 8162 |
-| string | rustra-call-profile-5-rustra; L56, 8110 | rustra-call-profile-6-nitro; L62, 8124 |
-| balanced8191/echo | rustra-call-profile-7-rustra; L56, 8015 | rustra-call-profile-8-nitro; L56, 8057 |
-| balanced8191/resident-dfs | rustra-call-profile-9-rustra; L56, 8049 | rustra-call-profile-10-nitro; L56, 8280 |
+| Case                      | Rustra directory / JS thread anchor                  | Nitro directory / JS thread anchor      |
+| ------------------------- | ---------------------------------------------------- | --------------------------------------- |
+| pair                      | rustra-call-profile-pair-rustra-3; L56, 8162 samples | rustra-call-profile-4-nitro; L56, 8162  |
+| string                    | rustra-call-profile-5-rustra; L56, 8110              | rustra-call-profile-6-nitro; L62, 8124  |
+| balanced8191/echo         | rustra-call-profile-7-rustra; L56, 8015              | rustra-call-profile-8-nitro; L56, 8057  |
+| balanced8191/resident-dfs | rustra-call-profile-9-rustra; L56, 8049              | rustra-call-profile-10-nitro; L56, 8280 |
 
 ## Pair: fixed output names are a concrete small-call candidate
 
