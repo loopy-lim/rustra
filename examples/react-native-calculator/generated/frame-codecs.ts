@@ -905,15 +905,70 @@ export const createItemCodec: FrameCodec<CreateItemInput, CreateItemOutput> = {
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const deviceDemoComplexCodec: FrameCodec<void, DeviceDemoOutput> = createComplexCodec<void, DeviceDemoOutput>({
+export const deviceDemoCodec: FrameCodec<void, DeviceDemoOutput> = {
   commandId: 32,
-  inputSchema: {"title":"Null","type":"null"} as ComplexSchema,
-  outputSchema: {"title":"DeviceDemoOutput","description":"디바이스 역량 계약 — 커맨드가 전제하는 디바이스 역량 선언의 예시.\n\n`device_demo` 는 `#[command(device(camera, bluetooth))]` 로 카메라·블루투스를 전제한다고 선언한다. 선언은 schema.json 의 조건부 `devices` 필드와 생성 `devices.ts`(토큰 유니언 + 커맨드별 요구 상수)의 원천이 될 뿐 런타임 게이팅은 하지 않는다 — 하드웨어 접근·권한 확인은 호스트 앱이 getDeviceStatus 로 사전 조회하는 패턴의 뼈대가 되는 예시다(여기서는 하드웨어에 접근하지 않는다).","type":"object","required":["os"],"properties":{"os":{"description":"std::env::consts::OS — 선언과 무관한 컴파일 대상 확인용.","type":"string"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const deviceDemoCodec = deviceDemoComplexCodec;
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 32, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 32; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: DeviceDemoOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<DeviceDemoOutput> = {};
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.os = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as DeviceDemoOutput };
+  },
+};
 
 export const divideCodec: FrameCodec<DivideInput, DivideOutput> = {
   commandId: 10,
@@ -1924,15 +1979,75 @@ export const parityStoreCodec: FrameCodec<ParityTree, ParityStored> = {
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const platformNativeInfoComplexCodec: FrameCodec<void, PlatformNativeInfoOutput> = createComplexCodec<void, PlatformNativeInfoOutput>({
+export const platformNativeInfoCodec: FrameCodec<void, PlatformNativeInfoOutput> = {
   commandId: 30,
-  inputSchema: {"title":"Null","type":"null"} as ComplexSchema,
-  outputSchema: {"title":"PlatformNativeInfoOutput","description":"플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.\n\n`platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고, Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다 (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.","type":"object","required":["os","windowKind"],"properties":{"os":{"description":"std::env::consts::OS — 컴파일 대상 OS 문자열.","type":"string"},"windowKind":{"description":"네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값.","type":"string"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const platformNativeInfoCodec = platformNativeInfoComplexCodec;
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 30, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 30; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: PlatformNativeInfoOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<PlatformNativeInfoOutput> = {};
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.os = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.windowKind = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as PlatformNativeInfoOutput };
+  },
+};
 
 export const processItemCodec: FrameCodec<ProcessItemInput, ProcessItemOutput> = {
   commandId: 9,
@@ -2006,35 +2121,188 @@ export const processItemCodec: FrameCodec<ProcessItemInput, ProcessItemOutput> =
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const readRememberedComplexCodec: FrameCodec<void, int32> = createComplexCodec<void, int32>({
+export const readRememberedCodec: FrameCodec<void, int32> = {
   commandId: 43,
-  inputSchema: {"title":"Null","type":"null"} as ComplexSchema,
-  outputSchema: {"title":"int32","type":"integer","format":"int32"} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const readRememberedCodec = readRememberedComplexCodec;
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 43, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const rememberComplexCodec: FrameCodec<Tuple_of_int32, void> = createComplexCodec<Tuple_of_int32, void>({
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 43; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: int32; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    let result!: int32;
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as int32 };
+  },
+};
+
+export const rememberCodec: FrameCodec<Tuple_of_int32, void> = {
   commandId: 42,
-  inputSchema: {"title":"Tuple_of_int32","type":"array","items":[{"type":"integer","format":"int32"}],"maxItems":1,"minItems":1} as ComplexSchema,
-  outputSchema: {"title":"Null","type":"null"} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const rememberCodec = rememberComplexCodec;
+  encode(args: Tuple_of_int32): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(Tuple_of_int32)]
+    if (!Array.isArray(args) || args.length !== 1) throw new Error('invalid tuple arity');
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 42, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzagVarint(args[0]));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const resetComplexCodec: FrameCodec<void, void> = createComplexCodec<void, void>({
+  encodeInto(args: Tuple_of_int32, reuse?: Uint8Array): Uint8Array {
+    if (!Array.isArray(args) || args.length !== 1) throw new Error('invalid tuple arity');
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 42; out[w++] = 0;
+    { const _z = args[0] >= 0 ? args[0] * 2 : -args[0] * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: void; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    return { ok: true, result: undefined as void };
+  },
+};
+
+export const resetCodec: FrameCodec<void, void> = {
   commandId: 44,
-  inputSchema: {"title":"Null","type":"null"} as ComplexSchema,
-  outputSchema: {"title":"Null","type":"null"} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const resetCodec = resetComplexCodec;
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 44, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 44; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: void; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    return { ok: true, result: undefined as void };
+  },
+};
 
 export const resourceCloseCodec: FrameCodec<ResourceCloseInput, ResourceCloseOutput> = {
   commandId: 22,
