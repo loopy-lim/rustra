@@ -48,3 +48,5 @@ Nitro의 생성 PairPayload 변환기는 설치된 `PropNameIDCache`에서 고�
 ## 전후 측정
 
 최종 수치와 채택 판단은 고정 후보의 측정이 끝난 뒤 이 절에 기록한다. 사전 계획은 iOS의 기존/후보 순서를 AB, BA, AB, BA, AB로 둔 다섯 쌍이며, 각 프로세스는 기존 v2 전체 90개 항목을 실행한다. 후보의 다섯 실행은 원래 Nitro 판정에도 그대로 사용한다. Android는 고정한 후보로 원래 v2 다섯 실행을 수행하며, 보존된 이전 집단과의 차이를 인과적 Android A/B 효과라고 표현하지 않는다. 프로파일러 없이 측정하고 느린 표본을 제외하지 않는다.
+
+**2026-09-18 측정 완료 — 채택.** 계획대로 iPhone 17 시뮬레이터(iOS 26.2, Hermes Release)에서 AB·BA·AB·BA·AB 다섯 쌍, 실행마다 설치를 교체해 10회를 돌렸고 각 실행이 90개 항목 검증을 통과했다. 후보/기존 비율의 전체 지오메edian은 0.9829(후보가 1.7% 빠름)이며 레인별로 sync-public 0.9609, async-public 0.9919, sync-internal-diagnostic 0.9961이다. 페어별 로그비율 t(4) 명목 95%에서 유의한 개선 12/90(전부 sync-public 10·내부 진단 2), 유의한 악화 0건. 프로파일이 가리킨 소형 공개 동기 호출에서 가장 컸다: indexed 15–16%, buffer64 15.5%, buffer65536 16%, pair 8%, add·string 3.5–4%. watch 항목은 sync-public/buffer1048571(비율 1.094, CI [0.861,1.389]로 1을 포함 — 불유의). 수치·근거는 [이름 재사용 A/B 수화물](../benchmark-receipts/2026-09-18-nitro-name-reuse-ab.json), 실행 방법은 `run-nitro-parity-once.ts`(설치 교차 프로토콜용 1회 실행 수집기)와 `aggregate-parity-ab.ts`에 있다. 채택으로 생성 헤더의 `RUSTRA_GENERATED_BOUND_CODEC_CONTEXT` 마커와 현재 main 동작은 그대로 유지된다.

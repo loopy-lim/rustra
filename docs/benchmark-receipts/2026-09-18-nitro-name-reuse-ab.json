@@ -1,0 +1,988 @@
+{
+ "contract": "rustra-name-reuse-ab/v1",
+ "status": "adopted",
+ "date": "2026-09-18",
+ "sourceCommit": "38f6e3bd",
+ "candidateBaseline": "8db7279cd30cf50ab1ba625f325a11a832697891",
+ "decision": "adopt bound-context name reuse (current main); measured faster or equal, no significant regression",
+ "environment": {
+  "device": "iPhone 17 Simulator",
+  "runtime": "iOS 26.2",
+  "udid": "99B087B5-DEF6-4CF1-9177-81A5DE564CFC",
+  "jsEngine": "Hermes (Release)"
+ },
+ "methodology": {
+  "protocol": "AB BA AB BA AB — five legacy/candidate pairs, install swapped per run",
+  "runs": 10,
+  "launchesPerArm": 5,
+  "suite": "public v2 nitro parity matrix, 90 cases, 31 rounds per case per launch",
+  "validation": "run-nitro-parity-once.ts — validateReceipt against host manifest per run, binary SHA re-checked after each run",
+  "statistics": "paired launch log-ratio, t(4) nominal 95% intervals, no multiplicity correction"
+ },
+ "arms": {
+  "candidate": {
+   "description": "bound codec context — generated property names owned per binding install",
+   "runs": [
+    1,
+    4,
+    5,
+    8,
+    10
+   ],
+   "binarySha256": "4100ddb5bb07573c32c31bf856d2923061e1741c12748cf34e895d1718147576",
+   "bundleSha256": "bb75f19943ae9e9af1b86b7dfa097af4a630df58fc0fe5b3ccb55a7d0d6b16d4",
+   "fingerprint": "fcc37e1d9fabdd854f62b882cc4d2047ba551619a0a275bfd3d640051cd68c27",
+   "launches": [
+    "com.rustra.nitroparity: 40308",
+    "com.rustra.nitroparity: 42518",
+    "com.rustra.nitroparity: 43124",
+    "com.rustra.nitroparity: 45750",
+    "com.rustra.nitroparity: 45931"
+   ]
+  },
+  "legacy": {
+   "description": "RUSTRA_GENERATED_BOUND_CODEC_CONTEXT undefined — per-call by-id name ownership",
+   "runs": [
+    2,
+    3,
+    6,
+    7,
+    9
+   ],
+   "binarySha256": "56ecb32670942c50485b24ee4271da716fb344ef44d7de8f3998ea6a9e44ad01",
+   "bundleSha256": "850046964b80f302afbd04d905c7d30917c2e7dbb22ffc2b436ccf11589b06d4",
+   "fingerprint": "7f4735d0a05a24f20c3ecc5aaf75f4801b4b263478be3d38b5340c05297742a8",
+   "launches": [
+    "com.rustra.nitroparity: 40904",
+    "com.rustra.nitroparity: 41883",
+    "com.rustra.nitroparity: 44449",
+    "com.rustra.nitroparity: 45039",
+    "com.rustra.nitroparity: 45808"
+   ]
+  }
+ },
+ "summary": {
+  "overallGeomeanRatio": 0.9829,
+  "laneGeomeanRatio": {
+   "sync-public": 0.9609,
+   "async-public": 0.9919,
+   "sync-internal-diagnostic": 0.9961
+  },
+  "significantlyFaster": 12,
+  "significantlySlower": 1,
+  "keyWins": {
+   "sync-public/balanced255/indexed": 0.8445,
+   "sync-public/buffer65536": 0.8406,
+   "sync-public/buffer64": 0.8453,
+   "sync-public/balanced8191/indexed": 0.8503,
+   "sync-public/balanced1023/indexed": 0.8523,
+   "sync-public/wide1025/indexed": 0.8741,
+   "sync-public/pair": 0.9203,
+   "sync-public/add": 0.9608,
+   "sync-public/string": 0.9646
+  },
+  "watchItem": "sync-internal-diagnostic/balanced255/indexed ratio 1.021 [1.0000,1.0423] — marginally significant (2.1%); sync-public/buffer1048571 ratio 1.094 but CI [0.861,1.389] crosses 1 — not significant"
+ },
+ "cases": [
+  {
+   "id": "add",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.002004339919034883,
+   "ratio": 1.0020063499509952,
+   "ci95": [
+    0.9856660610054357,
+    1.0186175268304984
+   ]
+  },
+  {
+   "id": "string",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.006201575902708664,
+   "ratio": 0.9938176141790543,
+   "ci95": [
+    0.9862238573978706,
+    1.0014698416021914
+   ]
+  },
+  {
+   "id": "pair",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.0037399194849356996,
+   "ratio": 0.9962670653037123,
+   "ci95": [
+    0.9824918463084571,
+    1.0102354224497627
+   ]
+  },
+  {
+   "id": "buffer64",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.011271481083041135,
+   "ratio": 0.9887918040642454,
+   "ci95": [
+    0.9618662426853998,
+    1.0164710937926191
+   ]
+  },
+  {
+   "id": "buffer65536",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.028808298221696577,
+   "ratio": 1.0292272708639885,
+   "ci95": [
+    0.8515430804436834,
+    1.2439872971995702
+   ]
+  },
+  {
+   "id": "buffer1048571",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.04111584159695784,
+   "ratio": 0.9597179482484363,
+   "ci95": [
+    0.8102426682728248,
+    1.1367687438055898
+   ]
+  },
+  {
+   "id": "balanced255/echo",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.003990949031273716,
+   "ratio": 1.0039989234733604,
+   "ci95": [
+    0.9773052422147225,
+    1.0314217040843388
+   ]
+  },
+  {
+   "id": "balanced255/input-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.0008133609660420281,
+   "ratio": 1.0008136918337716,
+   "ci95": [
+    0.9729358652460163,
+    1.0294903102463715
+   ]
+  },
+  {
+   "id": "balanced255/resident-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.01761258664168935,
+   "ratio": 0.9825416083776053,
+   "ci95": [
+    0.9377695841906631,
+    1.0294511876565333
+   ]
+  },
+  {
+   "id": "balanced255/indexed",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.0207353935826075,
+   "ratio": 1.020951865477155,
+   "ci95": [
+    1.0000407139481233,
+    1.0423002754619388
+   ]
+  },
+  {
+   "id": "balanced255/setup",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.009650668030338663,
+   "ratio": 0.9903957502239785,
+   "ci95": [
+    0.9708828049280632,
+    1.0103008695621045
+   ]
+  },
+  {
+   "id": "balanced255/update",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.015742185812720837,
+   "ratio": 1.0158667467820934,
+   "ci95": [
+    0.9687683026818628,
+    1.065254967943074
+   ]
+  },
+  {
+   "id": "balanced1023/echo",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.014322752016600698,
+   "ratio": 0.9857793306466915,
+   "ci95": [
+    0.9394971012637906,
+    1.0343415508393246
+   ]
+  },
+  {
+   "id": "balanced1023/input-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.002433977654291613,
+   "ratio": 0.9975689820675333,
+   "ci95": [
+    0.9603989546598433,
+    1.0361775896931473
+   ]
+  },
+  {
+   "id": "balanced1023/resident-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.004297443816437989,
+   "ratio": 0.9957117769818898,
+   "ci95": [
+    0.9679248342220222,
+    1.024296420307588
+   ]
+  },
+  {
+   "id": "balanced1023/indexed",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.0016919989452863792,
+   "ratio": 1.0016934311831696,
+   "ci95": [
+    0.9837592472062503,
+    1.0199545599444264
+   ]
+  },
+  {
+   "id": "balanced1023/setup",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.006351468933758986,
+   "ratio": 0.9936686590085037,
+   "ci95": [
+    0.9508193050239508,
+    1.038449049865354
+   ]
+  },
+  {
+   "id": "balanced1023/update",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.024399483509623118,
+   "ratio": 0.9758957776070981,
+   "ci95": [
+    0.95470554296155,
+    0.9975563416098431
+   ]
+  },
+  {
+   "id": "balanced8191/echo",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.003883737369213504,
+   "ratio": 1.0038912888500147,
+   "ci95": [
+    0.9877820789592001,
+    1.0202632152334992
+   ]
+  },
+  {
+   "id": "balanced8191/input-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.005694609694699576,
+   "ratio": 1.0057108548063716,
+   "ci95": [
+    0.9965949013756028,
+    1.014910192776673
+   ]
+  },
+  {
+   "id": "balanced8191/resident-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.0007760387049367302,
+   "ratio": 0.9992242623352211,
+   "ci95": [
+    0.971929898856005,
+    1.0272851237672345
+   ]
+  },
+  {
+   "id": "balanced8191/indexed",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.003463947310480038,
+   "ratio": 1.0034699537092455,
+   "ci95": [
+    0.9775663367348194,
+    1.0300599664270018
+   ]
+  },
+  {
+   "id": "balanced8191/setup",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.011991676347028815,
+   "ratio": 0.9880799372622076,
+   "ci95": [
+    0.9708099158701196,
+    1.0056571801134169
+   ]
+  },
+  {
+   "id": "balanced8191/update",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.011279714174186798,
+   "ratio": 0.9887836632847103,
+   "ci95": [
+    0.9730008604800945,
+    1.0048224749732717
+   ]
+  },
+  {
+   "id": "wide1025/echo",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.0006968836854734179,
+   "ratio": 0.9993033590815654,
+   "ci95": [
+    0.9514031215810731,
+    1.0496152270471655
+   ]
+  },
+  {
+   "id": "wide1025/input-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.0029935155986964127,
+   "ratio": 0.9970109605015841,
+   "ci95": [
+    0.95319441763416,
+    1.0428416668946592
+   ]
+  },
+  {
+   "id": "wide1025/resident-dfs",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": 0.00232742467074089,
+   "ratio": 1.002330135226003,
+   "ci95": [
+    0.9747201501195302,
+    1.0307222025306189
+   ]
+  },
+  {
+   "id": "wide1025/indexed",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.008604017482983822,
+   "ratio": 0.9914328911454245,
+   "ci95": [
+    0.9591686171620565,
+    1.0247824627053062
+   ]
+  },
+  {
+   "id": "wide1025/setup",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.018600293991863054,
+   "ratio": 0.9815716239184062,
+   "ci95": [
+    0.96739628560256,
+    0.9959546746467965
+   ]
+  },
+  {
+   "id": "wide1025/update",
+   "lane": "sync-internal-diagnostic",
+   "logRatioMean": -0.001060066553609929,
+   "ratio": 0.9989404951184516,
+   "ci95": [
+    0.9881797140952026,
+    1.0098184556451641
+   ]
+  },
+  {
+   "id": "add",
+   "lane": "async-public",
+   "logRatioMean": 0.006715796890159796,
+   "ratio": 1.0067383984215308,
+   "ci95": [
+    0.9771334765841855,
+    1.0372402820537574
+   ]
+  },
+  {
+   "id": "string",
+   "lane": "async-public",
+   "logRatioMean": 0.00845449811617738,
+   "ratio": 1.0084903383178134,
+   "ci95": [
+    0.983737238468435,
+    1.033866283301231
+   ]
+  },
+  {
+   "id": "pair",
+   "lane": "async-public",
+   "logRatioMean": 0.006015122481369251,
+   "ratio": 1.0060332496581057,
+   "ci95": [
+    0.9781403253399207,
+    1.0347215764424447
+   ]
+  },
+  {
+   "id": "buffer64",
+   "lane": "async-public",
+   "logRatioMean": 0.0011214295910325876,
+   "ratio": 1.0011220586283147,
+   "ci95": [
+    0.9641331672611423,
+    1.0395300258358706
+   ]
+  },
+  {
+   "id": "buffer65536",
+   "lane": "async-public",
+   "logRatioMean": -0.06968468694583152,
+   "ratio": 0.9326878622042419,
+   "ci95": [
+    0.8044867072951071,
+    1.0813188588633997
+   ]
+  },
+  {
+   "id": "buffer1048571",
+   "lane": "async-public",
+   "logRatioMean": 0.009652872010962243,
+   "ratio": 1.0096996112482322,
+   "ci95": [
+    0.8641484297971175,
+    1.1797664264623904
+   ]
+  },
+  {
+   "id": "balanced255/echo",
+   "lane": "async-public",
+   "logRatioMean": 0.008289124730620528,
+   "ratio": 1.0083235746457808,
+   "ci95": [
+    0.9745364207672358,
+    1.0432821283231286
+   ]
+  },
+  {
+   "id": "balanced255/input-dfs",
+   "lane": "async-public",
+   "logRatioMean": -0.0012212024418684249,
+   "ratio": 0.9987795429223891,
+   "ci95": [
+    0.9501015917699074,
+    1.0499514830850243
+   ]
+  },
+  {
+   "id": "balanced255/resident-dfs",
+   "lane": "async-public",
+   "logRatioMean": -0.00858329744091667,
+   "ratio": 0.9914534338894584,
+   "ci95": [
+    0.9375537669896598,
+    1.0484517754404583
+   ]
+  },
+  {
+   "id": "balanced255/indexed",
+   "lane": "async-public",
+   "logRatioMean": 0.009940697787554263,
+   "ratio": 1.0099902706505919,
+   "ci95": [
+    0.9740636481887333,
+    1.047241983319766
+   ]
+  },
+  {
+   "id": "balanced255/setup",
+   "lane": "async-public",
+   "logRatioMean": -0.022828957367628487,
+   "ratio": 0.977429651617026,
+   "ci95": [
+    0.943467750815992,
+    1.0126140750798276
+   ]
+  },
+  {
+   "id": "balanced255/update",
+   "lane": "async-public",
+   "logRatioMean": -0.026036325920464554,
+   "ratio": 0.9742996966326235,
+   "ci95": [
+    0.9272757619993742,
+    1.0237083052959846
+   ]
+  },
+  {
+   "id": "balanced1023/echo",
+   "lane": "async-public",
+   "logRatioMean": -0.004945628444301954,
+   "ratio": 0.9950665810399024,
+   "ci95": [
+    0.9244612217666639,
+    1.0710643966333493
+   ]
+  },
+  {
+   "id": "balanced1023/input-dfs",
+   "lane": "async-public",
+   "logRatioMean": -0.0018118157067257578,
+   "ratio": 0.9981898246405333,
+   "ci95": [
+    0.9383214499345772,
+    1.061878022809102
+   ]
+  },
+  {
+   "id": "balanced1023/resident-dfs",
+   "lane": "async-public",
+   "logRatioMean": 0.0036716129289756315,
+   "ratio": 1.0036783615566476,
+   "ci95": [
+    0.9639107502859038,
+    1.0450866464122766
+   ]
+  },
+  {
+   "id": "balanced1023/indexed",
+   "lane": "async-public",
+   "logRatioMean": -0.00040720758803031826,
+   "ratio": 0.999592875309727,
+   "ci95": [
+    0.9659491685687933,
+    1.0344083818100072
+   ]
+  },
+  {
+   "id": "balanced1023/setup",
+   "lane": "async-public",
+   "logRatioMean": -0.03396586655912502,
+   "ratio": 0.9666044976118903,
+   "ci95": [
+    0.9201612786246454,
+    1.0153918410912255
+   ]
+  },
+  {
+   "id": "balanced1023/update",
+   "lane": "async-public",
+   "logRatioMean": -0.009435390892361086,
+   "ratio": 0.990608982737771,
+   "ci95": [
+    0.9164413964388315,
+    1.0707789505078946
+   ]
+  },
+  {
+   "id": "balanced8191/echo",
+   "lane": "async-public",
+   "logRatioMean": -0.005603571156574368,
+   "ratio": 0.9944120995639499,
+   "ci95": [
+    0.9649045178913986,
+    1.0248220475950556
+   ]
+  },
+  {
+   "id": "balanced8191/input-dfs",
+   "lane": "async-public",
+   "logRatioMean": 0.0010719034108672583,
+   "ratio": 1.0010724781046487,
+   "ci95": [
+    0.9745946230855781,
+    1.0282696853444317
+   ]
+  },
+  {
+   "id": "balanced8191/resident-dfs",
+   "lane": "async-public",
+   "logRatioMean": 0.002969328756118328,
+   "ratio": 1.002973741579376,
+   "ci95": [
+    0.9512302566573487,
+    1.0575318849010262
+   ]
+  },
+  {
+   "id": "balanced8191/indexed",
+   "lane": "async-public",
+   "logRatioMean": -0.0036316385512556804,
+   "ratio": 0.9963749478724453,
+   "ci95": [
+    0.9761873089845765,
+    1.0169800688973138
+   ]
+  },
+  {
+   "id": "balanced8191/setup",
+   "lane": "async-public",
+   "logRatioMean": -0.023397127783941835,
+   "ratio": 0.9768744627408327,
+   "ci95": [
+    0.945716551109987,
+    1.009058913936896
+   ]
+  },
+  {
+   "id": "balanced8191/update",
+   "lane": "async-public",
+   "logRatioMean": -0.02200674316784566,
+   "ratio": 0.9782336386353521,
+   "ci95": [
+    0.9511104548996778,
+    1.0061303046644545
+   ]
+  },
+  {
+   "id": "wide1025/echo",
+   "lane": "async-public",
+   "logRatioMean": -0.0176487502139315,
+   "ratio": 0.982506076805648,
+   "ci95": [
+    0.9609896600369544,
+    1.0045042429727131
+   ]
+  },
+  {
+   "id": "wide1025/input-dfs",
+   "lane": "async-public",
+   "logRatioMean": -0.01379493751224505,
+   "ratio": 0.9862997766128833,
+   "ci95": [
+    0.9579455088022233,
+    1.015493303541824
+   ]
+  },
+  {
+   "id": "wide1025/resident-dfs",
+   "lane": "async-public",
+   "logRatioMean": -0.00760383360692541,
+   "ratio": 0.9924250024014766,
+   "ci95": [
+    0.9517073034267619,
+    1.0348847611500587
+   ]
+  },
+  {
+   "id": "wide1025/indexed",
+   "lane": "async-public",
+   "logRatioMean": -0.00378912195205202,
+   "ratio": 0.9962180477120958,
+   "ci95": [
+    0.9785040819273486,
+    1.014252691345427
+   ]
+  },
+  {
+   "id": "wide1025/setup",
+   "lane": "async-public",
+   "logRatioMean": -0.011229567222038018,
+   "ratio": 0.9888332490150349,
+   "ci95": [
+    0.9322794787165644,
+    1.0488176739701702
+   ]
+  },
+  {
+   "id": "wide1025/update",
+   "lane": "async-public",
+   "logRatioMean": -0.017100233949269673,
+   "ratio": 0.98304514519928,
+   "ci95": [
+    0.9247602392381202,
+    1.0450035765984496
+   ]
+  },
+  {
+   "id": "add",
+   "lane": "sync-public",
+   "logRatioMean": -0.03991905832837437,
+   "ratio": 0.9608672102030255,
+   "ci95": [
+    0.9305987678923748,
+    0.9921201569333284
+   ]
+  },
+  {
+   "id": "string",
+   "lane": "sync-public",
+   "logRatioMean": -0.03604625017747769,
+   "ratio": 0.9645956797300522,
+   "ci95": [
+    0.9468203884470441,
+    0.9827046784237278
+   ]
+  },
+  {
+   "id": "pair",
+   "lane": "sync-public",
+   "logRatioMean": -0.08296908753393022,
+   "ratio": 0.9203795979834748,
+   "ci95": [
+    0.8970721789871817,
+    0.9442925822765115
+   ]
+  },
+  {
+   "id": "buffer64",
+   "lane": "sync-public",
+   "logRatioMean": -0.16750836925970156,
+   "ratio": 0.8457695387943055,
+   "ci95": [
+    0.7954189095762827,
+    0.8993074015972091
+   ]
+  },
+  {
+   "id": "buffer65536",
+   "lane": "sync-public",
+   "logRatioMean": -0.17142432352599304,
+   "ratio": 0.8424640203142545,
+   "ci95": [
+    0.675299501279098,
+    1.051008662348652
+   ]
+  },
+  {
+   "id": "buffer1048571",
+   "lane": "sync-public",
+   "logRatioMean": 0.08964534819189164,
+   "ratio": 1.0937863016204492,
+   "ci95": [
+    0.8610173248355681,
+    1.3894824634812262
+   ]
+  },
+  {
+   "id": "balanced255/echo",
+   "lane": "sync-public",
+   "logRatioMean": -0.02469881824675935,
+   "ratio": 0.9756037018174314,
+   "ci95": [
+    0.9629332278757826,
+    0.9884408964674933
+   ]
+  },
+  {
+   "id": "balanced255/input-dfs",
+   "lane": "sync-public",
+   "logRatioMean": -0.020344260767966922,
+   "ratio": 0.9798612874364141,
+   "ci95": [
+    0.9538908180545849,
+    1.0065388244062174
+   ]
+  },
+  {
+   "id": "balanced255/resident-dfs",
+   "lane": "sync-public",
+   "logRatioMean": -0.06863530979944603,
+   "ratio": 0.9336671172456183,
+   "ci95": [
+    0.904569393155176,
+    0.9637008419941088
+   ]
+  },
+  {
+   "id": "balanced255/indexed",
+   "lane": "sync-public",
+   "logRatioMean": -0.1687560712654213,
+   "ratio": 0.8447149285008789,
+   "ci95": [
+    0.8161717533134424,
+    0.8742563161925747
+   ]
+  },
+  {
+   "id": "balanced255/setup",
+   "lane": "sync-public",
+   "logRatioMean": -0.01136871033643393,
+   "ratio": 0.9886956692490092,
+   "ci95": [
+    0.9555379000570093,
+    1.023004033993236
+   ]
+  },
+  {
+   "id": "balanced255/update",
+   "lane": "sync-public",
+   "logRatioMean": -0.006356137576013778,
+   "ratio": 0.9936640199358441,
+   "ci95": [
+    0.9621839192016602,
+    1.0261740659044656
+   ]
+  },
+  {
+   "id": "balanced1023/echo",
+   "lane": "sync-public",
+   "logRatioMean": -0.0014897879355686796,
+   "ratio": 0.9985113212475936,
+   "ci95": [
+    0.9379790336175152,
+    1.062950047843156
+   ]
+  },
+  {
+   "id": "balanced1023/input-dfs",
+   "lane": "sync-public",
+   "logRatioMean": -0.03040470300558686,
+   "ratio": 0.9700528707855822,
+   "ci95": [
+    0.8964342183394166,
+    1.0497173723047886
+   ]
+  },
+  {
+   "id": "balanced1023/resident-dfs",
+   "lane": "sync-public",
+   "logRatioMean": 0.00753367426462836,
+   "ratio": 1.0075621237868606,
+   "ci95": [
+    0.971792396967989,
+    1.0446484624260024
+   ]
+  },
+  {
+   "id": "balanced1023/indexed",
+   "lane": "sync-public",
+   "logRatioMean": -0.15971245989130284,
+   "ratio": 0.8523888497146249,
+   "ci95": [
+    0.8365795176968343,
+    0.8684969399180533
+   ]
+  },
+  {
+   "id": "balanced1023/setup",
+   "lane": "sync-public",
+   "logRatioMean": -0.005295051962938649,
+   "ratio": 0.9947189421140232,
+   "ci95": [
+    0.9382960465349316,
+    1.0545347360830053
+   ]
+  },
+  {
+   "id": "balanced1023/update",
+   "lane": "sync-public",
+   "logRatioMean": -0.003746065694352521,
+   "ratio": 0.9962609420565113,
+   "ci95": [
+    0.9289651632884354,
+    1.068431738768178
+   ]
+  },
+  {
+   "id": "balanced8191/echo",
+   "lane": "sync-public",
+   "logRatioMean": -0.0027566732790645426,
+   "ratio": 0.9972471228556836,
+   "ci95": [
+    0.9718599187683695,
+    1.0232974987838406
+   ]
+  },
+  {
+   "id": "balanced8191/input-dfs",
+   "lane": "sync-public",
+   "logRatioMean": -0.010212286254639266,
+   "ratio": 0.9898396820849993,
+   "ci95": [
+    0.9570852111009065,
+    1.0237151142510266
+   ]
+  },
+  {
+   "id": "balanced8191/resident-dfs",
+   "lane": "sync-public",
+   "logRatioMean": 0.012934795038892524,
+   "ratio": 1.0130188113540475,
+   "ci95": [
+    0.9520887019537146,
+    1.077848219447788
+   ]
+  },
+  {
+   "id": "balanced8191/indexed",
+   "lane": "sync-public",
+   "logRatioMean": -0.1624935839570901,
+   "ratio": 0.8500215439826029,
+   "ci95": [
+    0.8037936759433256,
+    0.8989080741231326
+   ]
+  },
+  {
+   "id": "balanced8191/setup",
+   "lane": "sync-public",
+   "logRatioMean": -0.005868679006515797,
+   "ratio": 0.9941485080519121,
+   "ci95": [
+    0.9662681036395242,
+    1.0228333651283903
+   ]
+  },
+  {
+   "id": "balanced8191/update",
+   "lane": "sync-public",
+   "logRatioMean": -0.017377994397564895,
+   "ratio": 0.9827721320569367,
+   "ci95": [
+    0.9561126286707443,
+    1.0101749883698512
+   ]
+  },
+  {
+   "id": "wide1025/echo",
+   "lane": "sync-public",
+   "logRatioMean": 0.014934446809063414,
+   "ratio": 1.015046522896207,
+   "ci95": [
+    0.9616120215469839,
+    1.0714502528641057
+   ]
+  },
+  {
+   "id": "wide1025/input-dfs",
+   "lane": "sync-public",
+   "logRatioMean": 0.021762861717076587,
+   "ratio": 1.0220014000751052,
+   "ci95": [
+    0.9633594545813238,
+    1.0842130180882583
+   ]
+  },
+  {
+   "id": "wide1025/resident-dfs",
+   "lane": "sync-public",
+   "logRatioMean": -0.04996491037335861,
+   "ratio": 0.9512628033716927,
+   "ci95": [
+    0.8961609577146953,
+    1.0097526714242988
+   ]
+  },
+  {
+   "id": "wide1025/indexed",
+   "lane": "sync-public",
+   "logRatioMean": -0.1351111307468042,
+   "ratio": 0.8736188203812885,
+   "ci95": [
+    0.8345505388915965,
+    0.9145160271995592
+   ]
+  },
+  {
+   "id": "wide1025/setup",
+   "lane": "sync-public",
+   "logRatioMean": 0.026133678828782692,
+   "ratio": 1.0264781577001458,
+   "ci95": [
+    0.9401775877216211,
+    1.1207004102159737
+   ]
+  },
+  {
+   "id": "wide1025/update",
+   "lane": "sync-public",
+   "logRatioMean": 0.009374587588890709,
+   "ratio": 1.0094186666685132,
+   "ci95": [
+    0.9479184412135159,
+    1.0749089798426328
+   ]
+  }
+ ]
+}

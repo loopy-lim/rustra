@@ -93,8 +93,17 @@ public class RustraCalculatorModule: Module {
     // Benchmark-only receipt export. The stable filename lets a Bun host
     // runner resolve the app data container with simctl and collect the exact
     // JSON without scraping console output or screenshots.
+    // Benchmark-only receipt export. The stable filename lets a Bun host
+    // runner resolve the app data container with simctl and collect the exact
+    // JSON without scraping console output or screenshots.
     Function("writeBenchmarkReceipt") { (receipt: String) throws -> String in
-      try self.writeReceipt(receipt, filename: "rustra-benchmark-receipt.json")
+      let documents = try FileManager.default.url(
+        for: .documentDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+      )
+      return try BenchmarkReceiptWriter.write(receipt, to: documents)
     }
 
     Function("writeFunctionReceipt") { (receipt: String) throws -> String in
