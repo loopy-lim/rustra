@@ -29,23 +29,14 @@ async function manifestFor(arm: 'C' | 'L') {
   return { manifest, restore: () => writeFileSync(hpp, original) };
 }
 
-const out: Record<string, unknown>[] = [];
+const out: Array<{ arm: string; runs: number[]; cases: ReturnType<typeof aggregate> }> = [];
 for (const [arm, runs] of [
   ['C', C_RUNS],
   ['L', L_RUNS],
 ] as const) {
   const receipts = loadArm(runs);
   const { manifest, restore } = await manifestFor(arm);
-  const agg = aggregate(receipts, manifest) as Array<{
-    id: string;
-    lane: string;
-    nodes: number;
-    inputBytes: number;
-    rustra: { mean: number; median?: number };
-    nitro: { mean: number };
-    ratios: number[];
-    confidence95: [number, number];
-  }>;
+  const agg = aggregate(receipts, manifest);
   restore();
   out.push({ arm, runs, cases: agg });
 }
