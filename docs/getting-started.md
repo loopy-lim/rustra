@@ -65,7 +65,7 @@ bunx --bun @rustra/cli@0.11.0 init my-project --force
 
 ```toml
 [dependencies]
-rustra = "0.10.2"
+rustra = "0.11.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
