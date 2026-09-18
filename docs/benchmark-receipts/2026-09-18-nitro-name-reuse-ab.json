@@ -69,7 +69,7 @@
    "sync-internal-diagnostic": 0.9961
   },
   "significantlyFaster": 12,
-  "significantlySlower": 0,
+  "significantlySlower": 1,
   "keyWins": {
    "sync-public/balanced255/indexed": 0.8445,
    "sync-public/buffer65536": 0.8406,
@@ -81,7 +81,7 @@
    "sync-public/add": 0.9608,
    "sync-public/string": 0.9646
   },
-  "watchItem": "sync-public/buffer1048571 ratio 1.094 but CI [0.861,1.389] crosses 1 — not significant"
+  "watchItem": "sync-internal-diagnostic/balanced255/indexed ratio 1.021 [1.0000,1.0423] — marginally significant (2.1%); sync-public/buffer1048571 ratio 1.094 but CI [0.861,1.389] crosses 1 — not significant"
  },
  "cases": [
   {
