@@ -32,7 +32,7 @@ postcard.workspace = true
 libloading = { version = "0.9", optional = true }
 # The bounded IPC channel uses the verified direct-delivery threshold in this
 # version. Review that boundary before accepting a different Tauri release.
-tauri = { version = "=2.11.1", optional = true }
+tauri = { version = "=2.11.5", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
