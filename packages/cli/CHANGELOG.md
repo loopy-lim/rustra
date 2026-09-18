@@ -1,5 +1,34 @@
 # @rustra/cli
 
+## 0.11.0
+
+### Minor Changes
+
+- 7e2f543: Generate positional TypeScript clients for ordinary Rust functions registered with
+  `PackageBuilder::function` and `try_function`. Support zero through twelve arguments,
+  plain and unit returns, and explicit domain-error mapping without a Rustra command macro.
+
+  Align root tuple/scalar/collection binary codecs with Rust, preserve unit return values,
+  and reuse cursor request encoding and Rust caller-provided response buffers. Function
+  commands use the verified binary fallback when native static codecs do not support
+  their root shape. Use matching Rust development source until the coordinated release.
+
+  Reuse exact transport buffers for stable-length frame requests and isolate buffers
+  during synchronous reentry. Positional facades preserve ordinary function wrappers.
+
+### Patch Changes
+
+- 53d3656: First-run and error-surface DX polish. `rustra init` next steps now include
+  `bun run doctor`. The missing-config error names the default that was tried and
+  the recovery path; `--format` errors echo the rejected value; value-flag errors
+  point at `--help`. `generate --watch` prints that Rust sources are not watched
+  and names `rustra dev`; `dev --inspect` hints are English; top-level help fixes
+  option alignment and lists `dev --inspect`. Release coherence failures print the
+  version-PR remediation path.
+- 5fec893: Preserve exact compatible host dependency pins during code generation. Use independently versioned Node, Bun and Tauri compatibility ranges so a CLI-only patch does not require unpublished adapter versions, and keep those defaults synchronized during versioning. The init renderer accepts an optional Node compatibility range while preserving existing callers. Includes the previously unreleased watch regeneration fix.
+- Updated dependencies [7e2f543]
+  - @rustra/types@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes

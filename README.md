@@ -178,12 +178,12 @@ Installation versions follow the current Rust and npm manifests. Adapters have i
 ### TypeScript adapters (only the environments you need)
 
 ```bash
-bun add @rustra/node@0.10.0      # Node.js
-bun add @rustra/bun@0.10.0       # Bun
-bun add @rustra/tauri@0.9.0     # Tauri
-bun add @rustra/react-native@0.9.0  # React Native
-bun add @rustra/testing@0.7.0       # Mock engine (tests)
-bun add @rustra/devtools@0.7.0      # Invocation observability (dev)
+bun add @rustra/node@0.10.1      # Node.js
+bun add @rustra/bun@0.10.1       # Bun
+bun add @rustra/tauri@0.9.1     # Tauri
+bun add @rustra/react-native@0.9.1  # React Native
+bun add @rustra/testing@0.7.1       # Mock engine (tests)
+bun add @rustra/devtools@0.7.1      # Invocation observability (dev)
 ```
 
 ## Quick Example
@@ -240,7 +240,7 @@ Specifying the Rust generator in `rustra.json` processes schema generation throu
 Then run:
 
 ```bash
-bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
 ```
 
 If you only need to re-render an existing schema, use `generate --config`
@@ -277,10 +277,10 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native@0.9.0 @rustra/types@0.10.0
-bun add -d @rustra/cli@0.10.0
-bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
+bun add @rustra/react-native@0.9.1 @rustra/types@0.11.0
+bun add -d @rustra/cli@0.11.0
+bunx --bun @rustra/cli@0.11.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
 bun install
 ```
 
@@ -790,16 +790,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # Diagnose the dev environment
-bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.0 doctor --config rustra.json
 
 # Generate Rust schema + TS/C++/RN in one shot
-bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
 
 # Generated-file sync CI gate (TS/C++/RN excluded)
-bunx --bun @rustra/cli@0.10.0 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.11.0 generate --config rustra.json --check
 
 # Watch Rust sources + re-run integrated codegen automatically
-bunx --bun @rustra/cli@0.10.0 dev --config rustra.json
+bunx --bun @rustra/cli@0.11.0 dev --config rustra.json
 ```
 
 ## Documentation

@@ -157,12 +157,12 @@ schemars = { version = "0.8", features = ["derive"] }
 ### TypeScript 어댑터 (필요한 환경만)
 
 ```bash
-bun add @rustra/node@0.10.0      # Node.js
-bun add @rustra/bun@0.10.0       # Bun
-bun add @rustra/tauri@0.9.0     # Tauri
-bun add @rustra/react-native@0.9.0  # React Native
-bun add @rustra/testing@0.7.0       # Mock 엔진 (테스트)
-bun add @rustra/devtools@0.7.0      # 호출 관측성 (개발)
+bun add @rustra/node@0.10.1      # Node.js
+bun add @rustra/bun@0.10.1       # Bun
+bun add @rustra/tauri@0.9.1     # Tauri
+bun add @rustra/react-native@0.9.1  # React Native
+bun add @rustra/testing@0.7.1       # Mock 엔진 (테스트)
+bun add @rustra/devtools@0.7.1      # 호출 관측성 (개발)
 ```
 
 ## 빠른 예제
@@ -219,7 +219,7 @@ fn main() -> Result<()> {
 그리고 실행한다:
 
 ```bash
-bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
 ```
 
 기존 schema만 다시 렌더링해야 하는 경우에는 `generate --config`를 직접 사용할 수
@@ -255,10 +255,10 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native@0.9.0 @rustra/types@0.10.0
-bun add -d @rustra/cli@0.10.0
-bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
+bun add @rustra/react-native@0.9.1 @rustra/types@0.11.0
+bun add -d @rustra/cli@0.11.0
+bunx --bun @rustra/cli@0.11.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
 bun install
 ```
 
@@ -740,16 +740,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # 개발 환경 진단
-bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.0 doctor --config rustra.json
 
 # Rust schema + TS/C++/RN을 한 번에 생성
-bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
 
 # generated 파일 동기화 CI 게이트 (TS/C++/RN은 쓰지 않음)
-bunx --bun @rustra/cli@0.10.0 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.11.0 generate --config rustra.json --check
 
 # Rust 소스 감시 + 통합 codegen 자동 재실행
-bunx --bun @rustra/cli@0.10.0 dev --config rustra.json
+bunx --bun @rustra/cli@0.11.0 dev --config rustra.json
 ```
 
 ## 문서

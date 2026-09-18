@@ -115,19 +115,20 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 
 <!-- release:versions:begin -->
 
-| Package                | Manifest version |
-| ---------------------- | ---------------- |
-| Rust workspace crates  | 0.10.2           |
-| `@rustra/bun`          | 0.10.0           |
-| `@rustra/cli`          | 0.10.0           |
-| `@rustra/devtools`     | 0.7.0            |
-| `@rustra/node`         | 0.10.0           |
-| `@rustra/react`        | 0.8.0            |
-| `@rustra/react-native` | 0.9.0            |
-| `@rustra/tauri`        | 0.9.0            |
-| `@rustra/testing`      | 0.7.0            |
-| `@rustra/types`        | 0.10.0           |
+| Package | Manifest version |
+| --- | --- |
+| Rust workspace crates | 0.10.2 |
+| `@rustra/bun` | 0.10.1 |
+| `@rustra/cli` | 0.11.0 |
+| `@rustra/devtools` | 0.7.1 |
+| `@rustra/node` | 0.10.1 |
+| `@rustra/react` | 0.8.1 |
+| `@rustra/react-native` | 0.9.1 |
+| `@rustra/tauri` | 0.9.1 |
+| `@rustra/testing` | 0.7.1 |
+| `@rustra/types` | 0.11.0 |
 
+<!-- release:versions:end -->
 <!-- release:versions:end -->
 
 JS가 생성하는 Tauri 채널은 발급한 물리 WebView에 귀속된 네이티브
