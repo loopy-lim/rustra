@@ -1,5 +1,12 @@
 # @rustra/react-native
 
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [7e2f543]
+  - @rustra/types@0.11.0
+
 ## 0.9.0
 
 ### Minor Changes
