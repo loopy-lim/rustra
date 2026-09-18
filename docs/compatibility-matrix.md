@@ -58,19 +58,20 @@ Every host exposes the same `{ handle, close() }` contract; only the issuer (tra
 
 <!-- release:versions:begin -->
 
-| Package                | Manifest version |
-| ---------------------- | ---------------- |
-| Rust workspace crates  | 0.10.2           |
-| `@rustra/bun`          | 0.10.0           |
-| `@rustra/cli`          | 0.10.0           |
-| `@rustra/devtools`     | 0.7.0            |
-| `@rustra/node`         | 0.10.0           |
-| `@rustra/react`        | 0.8.0            |
-| `@rustra/react-native` | 0.9.0            |
-| `@rustra/tauri`        | 0.9.0            |
-| `@rustra/testing`      | 0.7.0            |
-| `@rustra/types`        | 0.10.0           |
+| Package | Manifest version |
+| --- | --- |
+| Rust workspace crates | 0.10.2 |
+| `@rustra/bun` | 0.10.1 |
+| `@rustra/cli` | 0.11.0 |
+| `@rustra/devtools` | 0.7.1 |
+| `@rustra/node` | 0.10.1 |
+| `@rustra/react` | 0.8.1 |
+| `@rustra/react-native` | 0.9.1 |
+| `@rustra/tauri` | 0.9.1 |
+| `@rustra/testing` | 0.7.1 |
+| `@rustra/types` | 0.11.0 |
 
+<!-- release:versions:end -->
 <!-- release:versions:end -->
 
 JS-created Tauri channels use a native `Channel<InvokeResponseBody>` tied to the
