@@ -168,7 +168,7 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.10.2"
+rustra = "0.11.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -621,7 +621,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.10.2", features = ["tauri"] }
+rustra = { version = "0.11.0", features = ["tauri"] }
 ```
 
 Rust side:

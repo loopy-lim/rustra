@@ -147,7 +147,7 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.10.2"
+rustra = "0.11.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -580,7 +580,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.10.2", features = ["tauri"] }
+rustra = { version = "0.11.0", features = ["tauri"] }
 ```
 
 Rust 측:
