@@ -62,7 +62,37 @@ artifact, so exercise the full swap loop manually with the two terminals above.
 The same hot mode runs inside a simulator app. The layout is the standard
 Tauri 2 mobile split (`src/lib.rs` holds `run()` under
 `tauri::mobile_entry_point`; `main.rs` is the desktop wrapper), so
-`tauri ios init` / `android init` work on this example:
+`tauri ios init` / `android init` work on this example.
+
+Fast path — `scripts/hot-swap-ios.sh` collapses the four manual steps below
+into one command. It resolves a booted iPhone simulator, installs the built
+app, re-resolves the app data container path on every run (reinstalls change
+it — the caveat that made the manual loop painful), stages the hot-core
+artifact into the container by atomic rename, and launches the app with
+`SIMCTL_CHILD_RUSTRA_HOT_CORE` pointed at the final absolute path, which it
+echoes:
+
+```bash
+# install + stage + launch against a booted iPhone simulator
+../../scripts/hot-swap-ios.sh
+
+# run the documented build steps first (frontend, app, simulator cdylib)
+../../scripts/hot-swap-ios.sh --build
+
+# print every command that would run without executing them
+../../scripts/hot-swap-ios.sh --dry-run
+
+# after a Rust rebuild: re-stage the dylib without reinstalling the app
+RUSTRA_HOT_IOS_SKIP_INSTALL=1 ../../scripts/hot-swap-ios.sh
+```
+
+The artifact source follows the `packages/cli/src/dev-dylib.ts` publish
+naming (`-hot-live` gated publish preferred, then the plain cdylib cargo
+emits) under `target/aarch64-apple-ios-sim/<profile>/`. Every path, id, and
+UDID is parameterized with `RUSTRA_HOT_IOS_*` environment variables — see
+`../../scripts/hot-swap-ios.sh --help`.
+
+Manual steps (reference / fallback):
 
 ```bash
 # 1. build the app for the simulator (after `bunx tauri ios init`)

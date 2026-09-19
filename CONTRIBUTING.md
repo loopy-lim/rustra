@@ -10,10 +10,18 @@ This guide describes how to contribute to rustra.
 
 ### Requirements
 
-- Rust (edition 2024, resolver 3)
-- Node.js 18+
-- Bun
-- Cargo workspace support
+The user-facing prerequisites table in
+[getting started](docs/getting-started.md#prerequisites) is the single source of
+truth (Rust 1.88+ MSRV, Bun 1.4+, Node.js 22.x, plus the per-host native
+toolchains). Only repo-development specifics are added here:
+
+- Rust 1.88+ — the workspace MSRV (`rust-version` in the root `Cargo.toml`,
+  edition 2024, resolver 3)
+- Bun 1.4.0 — the exact version pinned by the root `package.json`
+  `packageManager` field and installed by CI
+- Node.js — published packages declare `engines.node >= 18` as the minimum
+  supported runtime, while CI runs Node 22 (`setup-node` in
+  `.github/workflows/ci.yml`); use 22.x locally to match CI
 
 ### Initial Setup
 
@@ -21,7 +29,7 @@ This guide describes how to contribute to rustra.
 git clone <repo-url> && cd rustra-bridge
 bun install                 # workspace deps
 
-bun run test:fast           # first signal in minutes: cargo check + calculator tsc + cli unit tests
+bun run test:fast           # first signal in ~15 s warm (first run is longer): cargo check + calculator tsc + cli unit tests
 
 # Full battery (slower; --workspace also builds the macOS-only tauri-calculator)
 cargo build --workspace
@@ -289,10 +297,10 @@ staged files are auto-formatted:
 - `*.{ts,js,json,yml,md}` → `prettier --write`
 - `*.rs` → `rustfmt`
 
-The hook **does not restage**, so files that were formatted must be included
-right after the commit with `git add -A <paths> && git commit --amend --no-edit`.
-If you made a commit and prettier/rustfmt changes remain in the working tree,
-you forgot to amend.
+All three commands run with `stage_fixed: true`, so formatting fixes are
+re-staged automatically and land in the same commit. If a hook modified files
+(lefthook reports it), simply re-attempt the commit — there is no
+`git add -A && git commit --amend --no-edit` ritual anymore.
 
 ### Version Management (changesets)
 

@@ -168,6 +168,8 @@ export const RustraErrorCode = {
   RegistryFrozen: 'registry.frozen',
   /** command_id 공간 고갈. */
   RegistryIdExhausted: 'registry.id_exhausted',
+  /** 런타임 라우트 교체(`replace`)의 와이어 시그니처 가드 거부 — registry.rs 발급. */
+  SignatureMismatch: 'signature.mismatch',
   /** FFI 전역 패키지 미등록. */
   FfiNotRegistered: 'ffi.not_registered',
   /** invoke 일반 실패(JS 폴백 기본 코드). */
@@ -176,6 +178,11 @@ export const RustraErrorCode = {
   InvokeMalformed: 'invoke.malformed',
   /** 페이로드가 헤더보다 짧음. */
   InvokeTooShort: 'invoke.too_short',
+  /**
+   * 비동기 FFI 워커 큐 포화(ffi_async_entries.rs) — 메시지로 "retry after drain"을
+   * 권고하지만 프레임에 retryable 플래그는 없고 isRetryableCode 추론 대상도 아니다.
+   */
+  InvokeBackpressure: 'invoke.backpressure',
   /** 스키마 조회 실패. */
   SchemaUnavailable: 'schema.unavailable',
   /**

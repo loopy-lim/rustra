@@ -2,8 +2,9 @@
 
 # rustra
 
-Frame 전환과 감사 수정은 Rust 0.10.2과 아래 패키지 버전을 대상으로 한다.
-네이티브 라이브러리·JS 어댑터·생성물을 함께 갱신한다. 소비자 검증과 롤백은
+현재 릴리스 라인은 Rust crate 0.11.0과 아래 패키지 버전(`@rustra/types`·`@rustra/cli`
+0.11.0, 어댑터는 각자의 버전)을 대상으로 한다. 네이티브 라이브러리·JS 어댑터·생성물을
+함께 갱신한다. 소비자 검증과 롤백은
 [마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)

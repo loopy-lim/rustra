@@ -1,0 +1,458 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1262ADF95EDD9DB9DC932E42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 04A68D3E5D2F7163B35B4B0F /* Assets.xcassets */; };
+		1B63E60073DC8AE14B74DD3C /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = D0FCB70D1289621961F6D222 /* main.mm */; };
+		297DE2068867A8EB18E6824A /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE46B9FF76EAAF73227B4EF2 /* QuartzCore.framework */; };
+		3FD109C48F2F3BAFA9862437 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 666AC497A604AB04FD6A40C2 /* Metal.framework */; };
+		598E742874589B91398E9B3B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 32BC6604B0E18759F6AF79F4 /* LaunchScreen.storyboard */; };
+		6A71D196734038B53DBC686E /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AC52948A9110301C93DFA8DE /* UIKit.framework */; };
+		757907714DBA6B028915476D /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 72454CF0ED7E88345EA414BE /* libapp.a */; };
+		830AD901504105E670DB1F63 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = EEB6EA159B01460B7F7E2B69 /* assets */; };
+		AB35078BCC7D5F16DAB5661D /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 97112C880622B31992D18FE2 /* WebKit.framework */; };
+		B2D9813B1DE0B8F976C1D2C7 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E6BCDD387A952F9927C3748F /* MetalKit.framework */; };
+		DA8ECA24732141F7A20848E3 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6FA1E9671B4B0DA0C4FB8F5E /* Security.framework */; };
+		EB056DA2B8DB6046C7BAC214 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1304F4FA2ABBDD84B2AFBBEE /* CoreGraphics.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		04A68D3E5D2F7163B35B4B0F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1304F4FA2ABBDD84B2AFBBEE /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		32BC6604B0E18759F6AF79F4 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		331D59F5CB9DAFE2BB60DFAD /* rustra-tauri-calculator_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "rustra-tauri-calculator_iOS.entitlements"; sourceTree = "<group>"; };
+		666AC497A604AB04FD6A40C2 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		6FA1E9671B4B0DA0C4FB8F5E /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		72454CF0ED7E88345EA414BE /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		8A150C789D83709EB7A6FCEB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		97112C880622B31992D18FE2 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		AB75BC6749AB9699DB213A89 /* rustra-tauri-calculator_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "rustra-tauri-calculator_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC52948A9110301C93DFA8DE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		CF11EA024C4208F19B402808 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		D0FCB70D1289621961F6D222 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		DE46B9FF76EAAF73227B4EF2 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		E6BCDD387A952F9927C3748F /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		EEB6EA159B01460B7F7E2B69 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		FAB10278AD41AA82B10032C6 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C5A735EE17EC8FA6C8FE7F98 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				757907714DBA6B028915476D /* libapp.a in Frameworks */,
+				EB056DA2B8DB6046C7BAC214 /* CoreGraphics.framework in Frameworks */,
+				3FD109C48F2F3BAFA9862437 /* Metal.framework in Frameworks */,
+				B2D9813B1DE0B8F976C1D2C7 /* MetalKit.framework in Frameworks */,
+				297DE2068867A8EB18E6824A /* QuartzCore.framework in Frameworks */,
+				DA8ECA24732141F7A20848E3 /* Security.framework in Frameworks */,
+				6A71D196734038B53DBC686E /* UIKit.framework in Frameworks */,
+				AB35078BCC7D5F16DAB5661D /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		03D1CF7DCE9E8D8ACA46701E /* rustra-tauri-calculator_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				8A150C789D83709EB7A6FCEB /* Info.plist */,
+				331D59F5CB9DAFE2BB60DFAD /* rustra-tauri-calculator_iOS.entitlements */,
+			);
+			path = "rustra-tauri-calculator_iOS";
+			sourceTree = "<group>";
+		};
+		208A3EEF04F8EB89500A0902 /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		4ED843D7FB086715E9BCE98A /* src */ = {
+			isa = PBXGroup;
+			children = (
+				CF11EA024C4208F19B402808 /* main.rs */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		59273EB10FA3BF612FB74EEB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1304F4FA2ABBDD84B2AFBBEE /* CoreGraphics.framework */,
+				72454CF0ED7E88345EA414BE /* libapp.a */,
+				666AC497A604AB04FD6A40C2 /* Metal.framework */,
+				E6BCDD387A952F9927C3748F /* MetalKit.framework */,
+				DE46B9FF76EAAF73227B4EF2 /* QuartzCore.framework */,
+				6FA1E9671B4B0DA0C4FB8F5E /* Security.framework */,
+				AC52948A9110301C93DFA8DE /* UIKit.framework */,
+				97112C880622B31992D18FE2 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		9C4251D3C417C3ACC2C7AD60 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AB75BC6749AB9699DB213A89 /* rustra-tauri-calculator_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DEC8FC8498729BA5C7C87CEF = {
+			isa = PBXGroup;
+			children = (
+				EEB6EA159B01460B7F7E2B69 /* assets */,
+				04A68D3E5D2F7163B35B4B0F /* Assets.xcassets */,
+				32BC6604B0E18759F6AF79F4 /* LaunchScreen.storyboard */,
+				208A3EEF04F8EB89500A0902 /* Externals */,
+				03D1CF7DCE9E8D8ACA46701E /* rustra-tauri-calculator_iOS */,
+				FC8EEA935D56F57F66541D0F /* Sources */,
+				4ED843D7FB086715E9BCE98A /* src */,
+				59273EB10FA3BF612FB74EEB /* Frameworks */,
+				9C4251D3C417C3ACC2C7AD60 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EAF6385ED1BA762994E3AD44 /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				FAB10278AD41AA82B10032C6 /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		FC8EEA935D56F57F66541D0F /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				FCA2208B3C2AEACF836A76E5 /* rustra-tauri-calculator */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		FCA2208B3C2AEACF836A76E5 /* rustra-tauri-calculator */ = {
+			isa = PBXGroup;
+			children = (
+				D0FCB70D1289621961F6D222 /* main.mm */,
+				EAF6385ED1BA762994E3AD44 /* bindings */,
+			);
+			path = "rustra-tauri-calculator";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		7D14A2C9353316B9342E57DD /* rustra-tauri-calculator_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 058C3F18DE40513911E6BE82 /* Build configuration list for PBXNativeTarget "rustra-tauri-calculator_iOS" */;
+			buildPhases = (
+				1AAF291028C2FABEA0E94B67 /* Build Rust Code */,
+				E0E4F391EEE844702E71F60C /* Sources */,
+				8E5FA183142DDED7FAFBAE18 /* Resources */,
+				C5A735EE17EC8FA6C8FE7F98 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "rustra-tauri-calculator_iOS";
+			packageProductDependencies = (
+			);
+			productName = "rustra-tauri-calculator_iOS";
+			productReference = AB75BC6749AB9699DB213A89 /* rustra-tauri-calculator_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B79A018BE5BA17A9DA29ACFF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 13E4AD7B0554305C68019E8D /* Build configuration list for PBXProject "rustra-tauri-calculator" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = DEC8FC8498729BA5C7C87CEF;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9C4251D3C417C3ACC2C7AD60 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				7D14A2C9353316B9342E57DD /* rustra-tauri-calculator_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8E5FA183142DDED7FAFBAE18 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1262ADF95EDD9DB9DC932E42 /* Assets.xcassets in Resources */,
+				598E742874589B91398E9B3B /* LaunchScreen.storyboard in Resources */,
+				830AD901504105E670DB1F63 /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		1AAF291028C2FABEA0E94B67 /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "bun tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E0E4F391EEE844702E71F60C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B63E60073DC8AE14B74DD3C /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3EB765A0EE7FD031465552A7 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "rustra-tauri-calculator_iOS/rustra-tauri-calculator_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "rustra-tauri-calculator_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rustra.calculator;
+				PRODUCT_NAME = "Rustra Tauri Calculator";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+		97D9C8AD117D6A172D3F2C7F /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+		ADAE9001F65076AF5851D097 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "rustra-tauri-calculator_iOS/rustra-tauri-calculator_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "rustra-tauri-calculator_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rustra.calculator;
+				PRODUCT_NAME = "Rustra Tauri Calculator";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+		C93F88DF7B37326BE35FE1F1 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		058C3F18DE40513911E6BE82 /* Build configuration list for PBXNativeTarget "rustra-tauri-calculator_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3EB765A0EE7FD031465552A7 /* debug */,
+				ADAE9001F65076AF5851D097 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		13E4AD7B0554305C68019E8D /* Build configuration list for PBXProject "rustra-tauri-calculator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C93F88DF7B37326BE35FE1F1 /* debug */,
+				97D9C8AD117D6A172D3F2C7F /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B79A018BE5BA17A9DA29ACFF /* Project object */;
+}
