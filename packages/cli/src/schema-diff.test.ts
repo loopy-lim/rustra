@@ -540,3 +540,27 @@ test('runDiff reports the offending file path and a regenerate hint for invalid 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('runDiff wraps a missing schema file instead of leaking raw ENOENT', async () => {
+  // generate·codegen·dev 경로와 동일 수준 — 파일 부재는 프로젝트 상태 오류로
+  // 경로·재생성 힌트를 붙여 노출한다(Node 원문 ENOENT 금지).
+  const { runDiff } = await import('./cli-diff.js');
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'rustra-diff-missing-'));
+  try {
+    const good = join(root, 'good.json');
+    const missing = join(root, 'missing.json');
+    writeFileSync(good, JSON.stringify(baseSchema));
+    await assert.rejects(runDiff(['--old', missing, '--new', good]), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Schema file not found: .*missing\.json/);
+      assert.match(error.message, /Pass existing schema files via --old\/--new/);
+      assert.doesNotMatch(error.message, /ENOENT/);
+      return true;
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
