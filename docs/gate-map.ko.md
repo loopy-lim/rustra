@@ -131,7 +131,7 @@
 | `rust-deny`       | 라이선스/밴/출처 정책(`deny.toml`, cargo-deny)                                                                                                                                                                         | 필수 아님                                                                            | `cargo deny check`                                                                                  |
 | `rust` (매트릭스) | rustfmt + clippy + `cargo test --workspace`(+ `--release`, hot-core)는 Linux, 코어 크레이트는 macOS/Windows, 릴리스 cdylib 빌드                                                                                        | **필수 ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
 | `rust-msrv`       | MSRV 1.88 계약: 코어 크레이트를 Rust 1.88에서 check + lib 테스트                                                                                                                                                       | 필수 아님                                                                            | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
-| `rust-wasm32`     | `rustra`가 `wasm32-unknown-unknown`으로 컴파일됨                                                                                                                                                                       | 필수 아님(아래 드리프트 참고)                                                        | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
+| `rust-wasm32`     | `rustra`가 `wasm32-unknown-unknown`으로 컴파일됨                                                                                                                                                                       | 필수 아님                                                                            | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
 | `napi`            | napi 디버그 애드온 빌드 + Node napi 앱 실행(무검증이던 transport 경로)                                                                                                                                                 | 필수 아님                                                                            | `bun run test:runtime:node-napi`                                                                    |
 | `typescript`      | TS/JS 표면: 빌드, 린트, 포맷, react-doctor(100/100), `audit:prod`, tsc, 예제/어댑터/CLI 테스트, codegen + bindings + api-surface + architecture + docs 게이트, `test:compat`, 패키지 단위, C++ 코덱 테스트, onboarding | **필수** (`typescript`)                                                              | `bun run test:local` (위 참고)                                                                      |
 | `rn-android`      | RN Android Release APK 빌드 + 에뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                                                              | **필수** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (NDK + 에뮬레이터 필요)                               |
@@ -213,9 +213,9 @@ gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_ch
   대신 `gate`만 요구하는 것은 선택 가능한 오너 결정이다; 등록/변경 절차(같은
   `gh api` 엔드포인트, `PUT`)는 [릴리스 절차](./release-procedure.ko.md)
   Step 3.5에 문서화돼 있다.
-- 드리프트 참고: `release-procedure.md` Step 3.5에는 아직 9개 컨텍스트
-  (`rust-wasm32` 포함)가 적혀 있다; 2026-09-20 라이브 목록은 위 8개다. 이
-  문서가 라이브 상태 기준이며, 절차 문서는 아직 따라잡지 못했다.
+- 정합 노트: `release-procedure.md` Step 3.5는 2026-09-20에 라이브 8개
+  컨텍스트 목록으로 정합됐다; 이 지도와 절차 문서가 이제 일치한다. 이 지도는
+  향후 감사를 위한 라이브 상태 기준으로 유지된다.
 - docs 전용 PR에서는 필수 체크 `rn-android`/`rn-ios`가 `skipped` 상태로 끝난다
   (`changes` 경로 필터); GitHub은 스킵 상태의 필수 체크를 요건 충족으로
   보므로 docs 전용 PR도 머지된다. 이는 설계된 동작이지 보호 설정의
