@@ -152,7 +152,8 @@
   스킵은 여전히 gate를 실패시킨다 — 예컨대 `typescript` 실패로 인한
   `consumer-smoke` 스킵은 그대로 red다. GitHub은 스킵 상태로 끝난 필수 체크를
   요건 충족으로 보므로 docs 전용 스킵이 머지를 막지 않는다. 라이브 보호는
-  애초에 `gate`를 쓰지 않는다 — [현재 필수 체크](#현재-필수-체크) 참고.
+  2026-09-20 부터 정확히 `gate` 하나를 요구한다 —
+  [현재 필수 체크](#현재-필수-체크) 참고.
 
 ### 기타 워크플로
 
@@ -188,37 +189,34 @@
 
 ## 현재 필수 체크
 
-**2026-09-20**, `main` 브랜치 보호를 라이브로 조회해 검증했다:
+**2026-09-20 (적용됨):** `main` 브랜치 보호는 정확히 하나의 컨텍스트 —
+`["gate"]` — 만 필수로 요구한다. 같은 날 오전 감사가 이전 상태를 기록한 뒤
+전환을 적용했으므로 두 상태 모두 이 문서에 남는다:
+
+- **전환 전(2026-09-20 오전):** 8개 개별 컨텍스트 — `rust-audit`,
+  `rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`,
+  `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`. 이 체계에서는 위
+  ci.yml 표의 "필수" 표기가 곧 머지 블로커였다.
+- **전환 후(2026-09-20 적용, `strict: false` 유지):** 필수 컨텍스트는 `gate`
+  하나. `gate`가 12개 잡 전부를 `needs`로 요구하므로 머지 조건 집합은
+  **넓어졌다** — 구 required 밖이던 `rust-msrv`, `rust-wasm32`, `rust-deny`,
+  `napi`, `uniffi` 2잡이 포함된다. 위 표의 "필수" 열은 이력으로 읽고, 모든 잡은
+  **집계를 경유해** 머지를 막는다.
+
+한 단계 재검증:
 
 ```bash
 gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_checks.contexts'
 ```
 
-출력은 정확히 아래 8개 컨텍스트였다:
-
-| #   | 컨텍스트                | CI 잡            | red의 의미                                                        |
-| --- | ----------------------- | ---------------- | ----------------------------------------------------------------- |
-| 1   | `rust-audit`            | `rust-audit`     | 문서화된 예외 외 신규 RUSTSEC 권고                                |
-| 2   | `rust (ubuntu-latest)`  | `rust` 매트릭스  | fmt/clippy/워크스페이스 테스트(release + hot-core 포함) Linux red |
-| 3   | `rust (macos-latest)`   | `rust` 매트릭스  | 코어 크레이트 빌드/테스트 macOS red                               |
-| 4   | `rust (windows-latest)` | `rust` 매트릭스  | 코어 크레이트 빌드/테스트 Windows red                             |
-| 5   | `typescript`            | `typescript`     | TS/JS/패키지/docs 표면 red                                        |
-| 6   | `rn-android`            | `rn-android`     | Android Release 빌드 또는 에뮬레이터 스모크 red                   |
-| 7   | `rn-ios`                | `rn-ios`         | iOS Release 빌드 또는 시뮬레이터 스모크 red                       |
-| 8   | `consumer-smoke`        | `consumer-smoke` | packed tarball 컨슈머 설치/CLI 스모크 red                         |
-
 향후 감사가 알아야 할 사실:
 
-- `gate` 집계 잡은 **필수 체크가 아니다**(같은 명령으로 확인). 개별 컨텍스트
-  대신 `gate`만 요구하는 것은 선택 가능한 오너 결정이다; 등록/변경 절차(같은
-  `gh api` 엔드포인트, `PUT`)는 [릴리스 절차](./release-procedure.ko.md)
-  Step 3.5에 문서화돼 있다.
-- 정합 노트: `release-procedure.md` Step 3.5는 2026-09-20에 라이브 8개
-  컨텍스트 목록으로 정합됐다; 이 지도와 절차 문서가 이제 일치한다. 이 지도는
-  향후 감사를 위한 라이브 상태 기준으로 유지된다.
-- docs 전용 PR에서는 필수 체크 `rn-android`/`rn-ios`가 `skipped` 상태로 끝난다
-  (`changes` 경로 필터); GitHub은 스킵 상태의 필수 체크를 요건 충족으로
-  보므로 docs 전용 PR도 머지된다. 이는 설계된 동작이지 보호 설정의
-  regression이 아니다.
-- 한 단계 재검증은 위 `gh api` 명령을 다시 돌려 이 표와 diff하면 된다. CI
-  잡을 추가/제거할 때는 이 맵과 브랜치 보호 목록을 함께 갱신한다.
+- 8개 개별 컨텍스트로의 롤백과 변경 절차는
+  [릴리스 절차](./release-procedure.ko.md) Step 3.5에 문서화돼 있다.
+- docs 전용 PR에서는 모바일 에뮬레이터 잡(`rn-android`, `rn-ios`,
+  `uniffi-android`, `uniffi-ios`)이 `skipped` 상태로 끝난다(`changes` 경로
+  필터); `gate`는 정확히 이 스킵만 통과로 인정해 green을 유지하고 머지 요건도
+  충족된다. docs 전용 PR도 머지된다 — 설계된 동작이지 보호 설정의 regression이
+  아니다.
+- CI 잡을 추가/제거할 때는 이 맵과 `gate`의 `needs`(+ `scripts/ci-gate.sh`)를
+  함께 갱신한다 — 이제 집계 잡이 곧 머지 계약이다.

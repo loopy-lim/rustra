@@ -152,8 +152,8 @@ Notes:
   receives the event name and filter output) accepts exactly those skips. Any
   other skip still fails the gate — e.g. `consumer-smoke` skipping because
   `typescript` failed stays red. GitHub treats a skipped required check as
-  satisfied, so the docs-only skip does not block merges. The live protection
-  does not use `gate` at all — see
+  satisfied, so the docs-only skip does not block merges. Since 2026-09-20 the
+  live protection requires exactly `gate` — see
   [Currently required checks](#currently-required-checks).
 
 ### Other workflows
@@ -190,39 +190,36 @@ comfortable local equivalent; rely on CI for them.
 
 ## Currently required checks
 
-Verified **2026-09-20** against live branch protection on `main` with:
+**2026-09-20 (applied):** the live branch protection on `main` requires exactly
+one context — `["gate"]`. It was applied on the same day the morning audit
+recorded the previous state, so both states are documented here:
+
+- **Before the switch (2026-09-20 morning):** 8 individual contexts —
+  `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
+  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`,
+  `consumer-smoke`. Under that scheme the table's "required" annotations below
+  described the merge blockers directly.
+- **After the switch (applied 2026-09-20, `strict: false` kept):** the single
+  required context is `gate`. Because `gate` needs all 12 jobs, the
+  merge-blocking set **widened** to include the previously-unrequired
+  `rust-msrv`, `rust-wasm32`, `rust-deny`, `napi`, and the two `uniffi` jobs.
+  The "required" column in the ci.yml table above now reads as history; every
+  job in it blocks merges **through the aggregate**.
+
+Re-verify in one step:
 
 ```bash
 gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_checks.contexts'
 ```
 
-The output was exactly these 8 contexts:
-
-| #   | Context                 | CI job           | What a red means                                                   |
-| --- | ----------------------- | ---------------- | ------------------------------------------------------------------ |
-| 1   | `rust-audit`            | `rust-audit`     | A new RUSTSEC advisory beyond the documented exceptions            |
-| 2   | `rust (ubuntu-latest)`  | `rust` matrix    | fmt/clippy/workspace tests (incl. release + hot-core) red on Linux |
-| 3   | `rust (macos-latest)`   | `rust` matrix    | Core crates build/test red on macOS                                |
-| 4   | `rust (windows-latest)` | `rust` matrix    | Core crates build/test red on Windows                              |
-| 5   | `typescript`            | `typescript`     | The TS/JS/packages/docs surface red                                |
-| 6   | `rn-android`            | `rn-android`     | Android Release build or emulator smoke red                        |
-| 7   | `rn-ios`                | `rn-ios`         | iOS Release build or simulator smoke red                           |
-| 8   | `consumer-smoke`        | `consumer-smoke` | Packed-tarball consumer install/CLI smoke red                      |
-
 Facts future audits should know:
 
-- The `gate` aggregate job is **not** a required check (confirmed by the same
-  command). Requiring only `gate` instead of the individual contexts is an
-  optional owner decision; the registration/change procedure (same `gh api`
-  endpoint, `PUT`) is documented in [release procedure](./release-procedure.md)
-  Step 3.5.
-- Alignment note: `release-procedure.md` Step 3.5 was aligned to the live
-  8-context list on 2026-09-20; this map and the procedure doc now agree. This
-  map stays the live-state reference for future audits.
-- On docs-only PRs the required `rn-android`/`rn-ios` checks end in the
-  `skipped` state (the `changes` path filter); GitHub counts a skipped required
-  check as satisfied, so docs-only PRs still merge. This is by design, not a
+- Rollback to the 8 individual contexts and the change procedure are documented
+  in [release procedure](./release-procedure.md) Step 3.5.
+- On docs-only PRs the mobile emulator jobs (`rn-android`, `rn-ios`,
+  `uniffi-android`, `uniffi-ios`) end in the `skipped` state (the `changes`
+  path filter); `gate` accepts exactly those skips, stays green, and the merge
+  requirement is satisfied. Docs-only PRs still merge — by design, not a
   protection regression.
-- To re-verify in one step, rerun the `gh api` command above and diff against
-  this table. When a CI job is added or removed, update this map **and** the
-  branch protection list together.
+- When a CI job is added or removed, update this map **and** `gate`'s `needs`
+  (plus `scripts/ci-gate.sh`) together — the aggregate is the merge contract.
