@@ -18,10 +18,24 @@ export async function runDiff(args: string[]): Promise<void> {
   const newPath = options.values.get('new');
   if (!oldPath || !newPath)
     throw new UsageError('Provide --old and --new. Usage: rustra diff --old v1.json --new v2.json');
-  const [oldRaw, newRaw] = await Promise.all([
-    readFile(resolve(oldPath), 'utf-8'),
-    readFile(resolve(newPath), 'utf-8'),
-  ]);
+  // 파일 부재도 파싱 실패와 같은 계약 — 경로와 재생성 힌트를 붙인다(감사 A7
+  // 후속). ENOENT 는 프로젝트 상태 오류로 exit 1, UsageError(exit 2)가 아니다.
+  const readSchemaArg = async (path: string): Promise<string> => {
+    try {
+      return await readFile(resolve(path), 'utf-8');
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code === 'ENOENT') {
+        throw new Error(
+          `Schema file not found: ${resolve(path)}. Pass existing schema files via --old/--new, ` +
+            `or regenerate them with "cargo run" (the package's generate bin).`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+  };
+  const [oldRaw, newRaw] = await Promise.all([readSchemaArg(oldPath), readSchemaArg(newPath)]);
   // 입력 JSON 파싱 실패를 경로·재생성 힌트와 함께 래핑 — generate 경로
   // (cli-generate-files.ts)와 동일한 패턴. 무경로 JSON.parse 는 "어느 파일을
   // 고쳐야 하는지"를 알려주지 않는다(감사 A7).
