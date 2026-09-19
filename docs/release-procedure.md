@@ -2,7 +2,8 @@ English | [한국어](./release-procedure.ko.md)
 
 # Release procedure (canary → stable → rollback)
 
-The Frame rename and audit fixes target the coordinated 0.10 release. Do not
+The current release line targets the coordinated 0.11 release (Rust crates
+0.11.0, `@rustra/types`/`@rustra/cli` 0.11.0). Do not
 reuse the already published 0.9.0; see the [release preparation guide](migrations/post-0.9-frame-and-audit.md)
 for target versions, consumer checks, and rollback.
 
@@ -124,20 +125,23 @@ or `changeset publish` does not execute GitHub job dependencies and is not the
 stable publishing path in this procedure. Keep the Release run and its artifacts
 as the publication evidence.
 
-## Step 3.5 — main branch protection (applied 2026-08-21)
+## Step 3.5 — main branch protection (contexts as of 2026-09-20)
 
-- Required checks: `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
-  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`,
-  `rust-wasm32`. Updating this document alone does not change the live branch
-  protection — the required-checks registration is a separate manual step via the
-  `gh api` below.
+- Required checks (verified via the read-only `gh api` below on 2026-09-20) are
+  exactly these 8 contexts: `rust-audit`, `rust (ubuntu-latest)`,
+  `rust (macos-latest)`, `rust (windows-latest)`, `typescript`, `rn-android`,
+  `rn-ios`, `consumer-smoke`. Updating this document alone does not change the
+  live branch protection — the required-checks registration is a separate
+  manual step via the `gh api` below.
+- The aggregate `gate` job in `ci.yml` exists but is **not** currently a
+  required check.
 - Direct pushes are allowed (efficiency for a one-person project); force pushes and
   deletions are blocked.
 - When adding a new CI job, add it to the required list as well — the list is
   verified/changed with the API below:
   ```bash
   gh api repos/loopy-lim/rustra/branches/main/protection
-  gh api -X PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
   {
     "required_status_checks": {
       "strict": false,
@@ -149,9 +153,29 @@ as the publication evidence.
         "typescript",
         "rn-android",
         "rn-ios",
-        "consumer-smoke",
-        "rust-wasm32"
+        "consumer-smoke"
       ]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  EOF
+  ```
+- **Optional — repo-owner decision, not a step of the normal release run.**
+  Branch protection can be switched to the `gate` aggregate job alone. `gate`
+  needs every release-relevant CI job, so gate-only keeps the same coverage with
+  a single context, and `strict: true` (strict required status checks)
+  additionally requires branches to be up to date before merging. Apply it only
+  deliberately:
+  ```bash
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": ["gate"]
     },
     "enforce_admins": false,
     "required_pull_request_reviews": null,
