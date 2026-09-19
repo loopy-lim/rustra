@@ -4,9 +4,12 @@ pre-commit:
     eslint:
       glob: 'packages/*/src/**/*.ts'
       run: bunx eslint --fix {staged_files}
+      stage_fixed: true
     prettier:
       glob: '*.{ts,js,json,yml,md}'
       run: bunx prettier --write {staged_files}
+      stage_fixed: true
     rustfmt:
       glob: '*.rs'
       run: rustfmt --edition 2024 -- {staged_files}
+      stage_fixed: true
