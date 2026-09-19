@@ -2,7 +2,8 @@
 
 # 발행 절차 (canary → stable → rollback)
 
-Frame 전환과 감사 수정은 0.10 동시 업그레이드 대상이다. 이미 사용한 0.9.0을
+현재 릴리스 라인은 0.11 동시 업그레이드 대상이다(Rust crate 0.11.0,
+`@rustra/types`·`@rustra/cli` 0.11.0). 이미 사용한 0.9.0을
 재사용하지 않으며, 대상 버전·소비자 검증·롤백은 [릴리스 준비 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
 감사 항목 8의 "canary 배포와 rollback 검증" 절차. 실제 실행은 별도 승인 후 진행한다.
@@ -114,17 +115,19 @@ crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 
 `changeset publish`는 GitHub의 의존 job을 실행하지 않으므로 이 절차의 승인된
 stable 발행 경로가 아니다. 원본 결과는 Release run과 각 artifact에 보관한다.
 
-## 3.5단계 — main 브랜치 보호 (2026-08-21 적용 완료)
+## 3.5단계 — main 브랜치 보호 (컨텍스트 기준일: 2026-09-20)
 
-- 필수 체크(required checks): `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
-  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`,
-  `rust-wasm32`. 이 문서의 목록 갱신만으로 실제 브랜치 보호가 바뀌지는 않는다 —
-  required-checks 등록은 별도이며 아래 `gh api`로 수동 적용한다.
+- 필수 체크(required checks)는 2026-09-20 기준 아래 읽기 전용 `gh api`로 확인한
+  정확히 이 8개 컨텍스트다: `rust-audit`, `rust (ubuntu-latest)`,
+  `rust (macos-latest)`, `rust (windows-latest)`, `typescript`, `rn-android`,
+  `rn-ios`, `consumer-smoke`. 이 문서의 목록 갱신만으로 실제 브랜치 보호가
+  바뀌지는 않는다 — required-checks 등록은 별도이며 아래 `gh api`로 수동 적용한다.
+- `ci.yml`의 `gate` 통합 job은 존재하지만 현재는 필수 체크가 **아니다**.
 - 직접 push는 허용(1인 프로젝트 효율), force push/삭제는 차단.
 - 새 CI 잡을 추가할 때 required 목록에도 함께 넣는다 — 목록은 아래 API로 확인/변경:
   ```bash
   gh api repos/loopy-lim/rustra/branches/main/protection
-  gh api -X PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
   {
     "required_status_checks": {
       "strict": false,
@@ -136,9 +139,28 @@ stable 발행 경로가 아니다. 원본 결과는 Release run과 각 artifact�
         "typescript",
         "rn-android",
         "rn-ios",
-        "consumer-smoke",
-        "rust-wasm32"
+        "consumer-smoke"
       ]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  EOF
+  ```
+- **선택 사항 — 저장소 소유자의 결정이며 일반 릴리스 절차의 단계가 아니다.**
+  브랜치 보호를 `gate` 통합 job 단일 컨텍스트로 전환할 수 있다. `gate`는
+  릴리스 관련 전 CI 잡을 `needs`로 요구하므로 gate-only도 같은 커버리지를
+  컨텍스트 하나로 유지하고, `strict: true`(strict required status checks)로
+  머지 전 브랜치 최신성 요구를 추가할 수 있다. 신중히 판단한 경우에만 적용한다:
+  ```bash
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": ["gate"]
     },
     "enforce_admins": false,
     "required_pull_request_reviews": null,
