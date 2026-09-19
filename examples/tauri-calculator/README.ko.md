@@ -59,7 +59,36 @@ RUSTRA_HOT_CORE=../../target/debug/librustra_calculator_example-hot-live.dylib b
 같은 핫 모드가 시뮬레이터 앱 안에서도 동작합니다. 레이아웃은 Tauri 2 모바일
 표준 분리(`src/lib.rs` 가 `tauri::mobile_entry_point` 의 `run()` 보유,
 `main.rs` 는 데스크톱 래퍼)라 이 예제에 `tauri ios init` / `android init` 이
-그대로 먹힙니다:
+그대로 먹힙니다.
+
+빠른 경로 — `scripts/hot-swap-ios.sh` 가 아래 수동 4단계를 커맨드 하나로
+묶어줍니다. 부팅된 iPhone 시뮬레이터를 해석하고, 빌드된 앱을 설치하고, 앱 데이터
+컨테이너 경로를 매 실행 다시 해석하며(재설치마다 바뀌는 — 수동 루프를 괴롭히던
+주의사항), 핫코어 아티팩트를 컨테이너로 원자적 rename 으로 스테이징한 뒤, 최종
+절대 경로를 `SIMCTL_CHILD_RUSTRA_HOT_CORE` 에 지정해 앱을 실행하고 그 경로를
+출력합니다:
+
+```bash
+# 부팅된 iPhone 시뮬레이터에 설치 + 스테이징 + 실행
+../../scripts/hot-swap-ios.sh
+
+# 문서화된 빌드 단계(프론트엔드, 앱, 시뮬레이터 cdylib)를 먼저 실행
+../../scripts/hot-swap-ios.sh --build
+
+# 실행될 커맨드를 실행 없이 모두 출력
+../../scripts/hot-swap-ios.sh --dry-run
+
+# Rust 재빌드 뒤: 앱 재설치 없이 dylib 만 다시 스테이징
+RUSTRA_HOT_IOS_SKIP_INSTALL=1 ../../scripts/hot-swap-ios.sh
+```
+
+아티팩트 소스는 `packages/cli/src/dev-dylib.ts` 의 발행 이름 계약을 따릅니다
+(`-hot-live` 게이트 발행을 우선하고, 없으면 cargo 가 내놓는 평범한 cdylib) —
+`target/aarch64-apple-ios-sim/<profile>/` 아래에서 찾습니다. 경로·id·UDID 는
+모두 `RUSTRA_HOT_IOS_*` 환경변수로 겹쳐 쓸 수 있습니다 —
+`../../scripts/hot-swap-ios.sh --help` 참고.
+
+수동 단계(참고/폴백):
 
 ```bash
 # 1. 시뮬레이터용 앱 빌드 (`bunx tauri ios init` 이후)
