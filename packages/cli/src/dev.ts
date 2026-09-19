@@ -92,7 +92,23 @@ export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string>
  * onReload)이 주입하는 영역이라 여기서는 undefined 다.
  */
 async function captureSchemaParity(schemaPath: string): Promise<ParitySnapshot> {
-  const schema = await readFile(schemaPath, 'utf8');
+  let schema: string;
+  try {
+    schema = await readFile(schemaPath, 'utf8');
+  } catch (error) {
+    // ENOENT 를 날로 노출하지 않는다 — parity 게이트는 capture 실패를 fail-closed
+    // 불일치로 처리하므로 이 메시지가 "[dev] reload rejected" 사유로 그대로 보인다.
+    // cli-generate-files.ts 의 schema ENOENT 랩과 같은 모양을 유지한다.
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT') {
+      throw new Error(
+        `Schema file not found: ${resolve(schemaPath)} — the codegen stage did not produce it. ` +
+          `Check codegen.schema in rustra.json, then re-run "rustra codegen --config <config>".`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
   return { contractHash: sha256(schema) };
 }
 
