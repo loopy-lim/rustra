@@ -125,22 +125,45 @@ or `changeset publish` does not execute GitHub job dependencies and is not the
 stable publishing path in this procedure. Keep the Release run and its artifacts
 as the publication evidence.
 
-## Step 3.5 — main branch protection (contexts as of 2026-09-20)
+## Step 3.5 — main branch protection (gate-only since 2026-09-20)
 
-- Required checks (verified via the read-only `gh api` below on 2026-09-20) are
-  exactly these 8 contexts: `rust-audit`, `rust (ubuntu-latest)`,
-  `rust (macos-latest)`, `rust (windows-latest)`, `typescript`, `rn-android`,
-  `rn-ios`, `consumer-smoke`. Updating this document alone does not change the
-  live branch protection — the required-checks registration is a separate
-  manual step via the `gh api` below.
-- The aggregate `gate` job in `ci.yml` exists but is **not** currently a
-  required check.
+- The single required check is the `gate` aggregate job — applied via the `gh api`
+  below on 2026-09-20 and re-verified with the read-only form of the same call.
+  Before the switch (same day) the required contexts were 8 individuals:
+  `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
+  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`.
+- `gate` requires every CI job it aggregates (`rust`, `rust-msrv`, `rust-wasm32`,
+  `rust-audit`, `rust-deny`, `napi`, `typescript`, `rn-android`, `rn-ios`,
+  `uniffi-android`, `uniffi-ios`, `consumer-smoke` — see `ci.yml` and the
+  [gate map](./gate-map.md)), so the switch **widened** the merge-blocking set to
+  include the previously-unrequired `rust-msrv`, `rust-wasm32`, `rust-deny`,
+  `napi`, and the two `uniffi` jobs. `strict` remains `false` (no branch
+  staleness requirement); setting it to `true` would additionally require the
+  branch to be up to date before merging.
 - Direct pushes are allowed (efficiency for a one-person project); force pushes and
   deletions are blocked.
-- When adding a new CI job, add it to the required list as well — the list is
-  verified/changed with the API below:
+- When adding a new CI job, add it to `gate`'s `needs` in `ci.yml` and to
+  `scripts/ci-gate.sh` — the aggregate is the merge contract now. Verify or
+  restore the protection with:
   ```bash
-  gh api repos/loopy-lim/rustra/branches/main/protection
+  gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_checks.contexts'
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  {
+    "required_status_checks": {
+      "strict": false,
+      "contexts": ["gate"]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  EOF
+  ```
+- **Rollback — restore the pre-2026-09-20 individual contexts** (the state
+  documented by the 2026-09-20 morning audit):
+  ```bash
   gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
   {
     "required_status_checks": {
@@ -155,27 +178,6 @@ as the publication evidence.
         "rn-ios",
         "consumer-smoke"
       ]
-    },
-    "enforce_admins": false,
-    "required_pull_request_reviews": null,
-    "restrictions": null,
-    "allow_force_pushes": false,
-    "allow_deletions": false
-  }
-  EOF
-  ```
-- **Optional — repo-owner decision, not a step of the normal release run.**
-  Branch protection can be switched to the `gate` aggregate job alone. `gate`
-  needs every release-relevant CI job, so gate-only keeps the same coverage with
-  a single context, and `strict: true` (strict required status checks)
-  additionally requires branches to be up to date before merging. Apply it only
-  deliberately:
-  ```bash
-  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
-  {
-    "required_status_checks": {
-      "strict": true,
-      "contexts": ["gate"]
     },
     "enforce_admins": false,
     "required_pull_request_reviews": null,
