@@ -4,8 +4,9 @@ English | [한국어](./getting-started.ko.md)
 
 For ordinary functions with multiple arguments and plain returns, see [function registration](./function-registration.md).
 
-> **Frame migration:** this guide targets Rust 0.10.2 and shared packages 0.10.0 with the
-> adapter versions listed below. Release 0.9.0 does not include the Frame rename.
+> **Frame migration:** this guide targets Rust crates 0.11.0 and shared packages
+> (`@rustra/types`, `@rustra/cli`) 0.11.0 with the adapter versions listed below.
+> Release 0.9.0 does not include the Frame rename.
 > Upgrade native libraries, JS packages, and generated output together; see the
 > [migration guide](migrations/post-0.9-frame-and-audit.md) for versions and steps.
 
