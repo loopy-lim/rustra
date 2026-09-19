@@ -11,12 +11,13 @@
  *  3. 선언 신선도: `OUTSIDE_ERROR_RS` 에 낡은 항목(이제 error.rs 에 존재하는 코드,
  *     또는 TS 에 없는 코드)이 남으면 실패한다.
  *
- * 의도적 비대칭: TS 레지스트리(27개)는 어댑터 전용 코드까지 담는 반면 error.rs 는
+ * 의도적 비대칭: TS 레지스트리(29개)는 어댑터 전용 코드까지 담는 반면 error.rs 는
  * 프레임워크 팩토리(9개)만 가진다. 원시 집합 등비교는 항상 실패하므로, 이 게이트는
  * "Rust 팩토리 ⊆ TS ⊆ Rust 팩토리 ∪ 문서화된 스코프 밖 선언"이라는 참을 강제한다.
- * 스코프 밖 Rust 발급 코드(registry.rs 의 `registry.*`, FFI 엔트리의
- * `ffi.not_registered`, `signature.mismatch`·`invoke.backpressure` 등)는 게이트
- * 대상이 아니다 — 문서는 docs/error-codes.md 를 본다.
+ * 스코프 밖 Rust 발급 코드(registry.rs 의 `registry.*`·`signature.mismatch`, FFI
+ * 엔트리의 `ffi.not_registered`·`invoke.backpressure` 등)는 error.rs 스캔 밖이고,
+ * 이 중 TS 상수가 있는 것은 OUTSIDE_ERROR_RS 에 사유와 함께 선언된다 — 문서는
+ * docs/error-codes.md 를 본다.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -55,6 +56,10 @@ const OUTSIDE_ERROR_RS: Record<string, string> = {
   'registry.frozen': 'Rust registry.rs 가 RustraError::custom 으로 발급 — error.rs 팩토리 없음',
   'registry.id_exhausted':
     'Rust registry.rs 가 RustraError::custom 으로 발급 — error.rs 팩토리 없음',
+  'signature.mismatch':
+    'Rust registry.rs replace_runtime_route 가 RustraError::custom 으로 발급 — error.rs 팩토리 없음',
+  'invoke.backpressure':
+    'Rust ffi_async_entries.rs 가 err_frame Display 문자열로 발급 — error.rs 팩토리 없음',
   'ffi.not_registered':
     'Rust FFI 엔트리(ffi_typed_entries/buffer, ffi_hot_reload) 발급 — 팩토리 없음',
   'invoke.failed':

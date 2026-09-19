@@ -8,8 +8,8 @@
 (`docs/rust-api-guide.md`는 Rust 팩토리 코드만, `docs/architecture.md`는 `registry.*`만).
 이 문서가 전체 테이블이며 각 코드의 실제 발급 주처를 기록한다.
 
-현재 개수: `RustraErrorCode` 에 **27개 코드**. 이 중 9개는 `error.rs` 에 전용 팩토리가
-있고, 5개는 다른 Rust 파일에서 발급되거나(또는 양측 공용 폴백)이며, 13개는
+현재 개수: `RustraErrorCode` 에 **29개 코드**. 이 중 9개는 `error.rs` 에 전용 팩토리가
+있고, 7개는 다른 Rust 파일에서 발급되거나(또는 양측 공용 폴백)이며, 13개는
 JS/어댑터 측 전용이다. 모든 코드의 주처를 아래 표에 표시한다 — 한쪽 전용 코드가
 조용히 숨겨지는 일은 없다.
 
@@ -51,10 +51,12 @@ JS/어댑터 측 전용이다. 모든 코드의 주처를 아래 표에 표시�
 | `internal`                   | Rust 내부 오류(직렬화, I/O, 패닉 정규화)                                                                             | Rust(`RustraError::internal`, `From<std::io::Error>`)                                                        | 양측 — `error.rs` 팩토리             | no        |
 | `registry.frozen`            | 동결 레지스트리의 구조 mutation 거부                                                                                 | Rust 레지스트리(`registry.rs`, `RustraError::custom` 경유)                                                   | Rust 런타임 — `error.rs` 팩토리 없음 | no        |
 | `registry.id_exhausted`      | `command_id` u16 공간 고갈(최대 65534)                                                                               | Rust 레지스트리(`registry.rs`, `RustraError::custom` 경유)                                                   | Rust 런타임 — `error.rs` 팩토리 없음 | no        |
+| `signature.mismatch`         | 런타임 라우트 교체(`replace`) 거부 — 기대 와이어 시그니처가 라이브 명령과 다름                                       | Rust 레지스트리(`registry.rs` `replace_runtime_route`, `RustraError::custom` 경유)                           | Rust 런타임 — `error.rs` 팩토리 없음 | no        |
 | `ffi.not_registered`         | 호출 전 FFI 전역 패키지 미등록                                                                                       | Rust FFI 엔트리(`ffi_typed_entries.rs`, `ffi_typed_buffer.rs`, `ffi_hot_reload.rs`)                          | Rust 런타임 — `error.rs` 팩토리 없음 | no        |
 | `invoke.failed`              | invoke 일반 실패 — 폴백 코드                                                                                         | 코드 토큰 아닌 문자열의 JS `parseRustraErrorString`; Rust 폴백(`hot_core_dylib.rs`, `ffi_schema_entries.rs`) | 양측 — 폴백, 팩토리 없음             | no        |
 | `invoke.malformed`           | 와이어 프레임 파싱 실패                                                                                              | JS 코덱 레이어(`complex-codec.ts`, `json-wire.ts`)                                                           | JS/어댑터 전용                       | no        |
 | `invoke.too_short`           | 페이로드가 프레임 헤더보다 짧음                                                                                      | JS 코덱 레이어(complex 코덱, 생성된 postcard 코덱)                                                           | JS/어댑터 전용                       | no        |
+| `invoke.backpressure`        | 비동기 FFI 워커 큐 포화 — 메시지가 "retry after drain" 을 권고하지만 프레임에 `retryable` 플래그는 없음              | Rust FFI(`ffi_async_entries.rs` — Display 문자열로 전달 후 `parseRustraErrorString` 이 재분리)               | Rust 런타임 — `error.rs` 팩토리 없음 | no        |
 | `schema.unavailable`         | 스키마 조회 실패                                                                                                     | JS 어댑터(`live-schema.ts`)                                                                                  | JS/어댑터 전용                       | no        |
 | `event.unavailable`          | 이벤트 전달 불가 — `drainEvents`/`onPushEvent` 미노출, 폴링 간격 env 오류, RN 모듈 `onEvent` 부재                    | JS 어댑터(`node-events.ts`, `react-native-events.ts`)                                                        | JS/어댑터 전용                       | no        |
 | `channel.unavailable`        | 채널 발급/해제 불가                                                                                                  | JS 어댑터(`react-native-events.ts`, `tauri-channels.ts`)                                                     | JS/어댑터 전용                       | no        |
@@ -71,8 +73,9 @@ JS/어댑터 측 전용이다. 모든 코드의 주처를 아래 표에 표시�
 - **`error.rs` Rust 팩토리(9개):** `command.not_found`, `command.invalid_args`,
   `capability.denied`, `platform.unavailable`, `payload.too_large`, `transport.error`,
   `transport.timeout`, `cancelled`, `internal`.
-- **`error.rs` 팩토리 없이 Rust 가 발급(3개):** `registry.frozen`,
-  `registry.id_exhausted`(`registry.rs`), `ffi.not_registered`(FFI 엔트리).
+- **`error.rs` 팩토리 없이 Rust 가 발급(5개):** `registry.frozen`,
+  `registry.id_exhausted`, `signature.mismatch`(`registry.rs`), `ffi.not_registered`
+  (FFI 엔트리), `invoke.backpressure`(`ffi_async_entries.rs`).
 - **팩토리 없는 양측 공용 폴백(2개):** `invoke.failed`, `unknown` — 양쪽 모두 최후
   폴백 값으로 발급한다.
 - **JS/어댑터 측 전용(13개):** `sync.unavailable`, `transport.unavailable`,
@@ -100,10 +103,10 @@ JS/어댑터 측 전용이다. 모든 코드의 주처를 아래 표에 표시�
 TS 코드는 `error.rs` 팩토리 코드이거나 테스트의 스코프 밖 선언에 사유와 함께
 등록되어야 하며, 낡은 선언도 양방향으로 실패한다.
 
-게이트는 `error.rs` 만 스캔하므로 다른 파일에 사는 Rust 발급 코드는 스코프 밖이다.
-현재 두 개가 알려져 있으며 의도적으로 `RustraErrorCode` 상수가 없다:
-`signature.mismatch`(`registry.rs` `replace()` 와이어 시그니처 가드)와
-`invoke.backpressure`(비동기 FFI 워커 큐 포화 — Display 문자열로 전달되고
+게이트는 `error.rs` 만 스캔하므로 다른 파일에 사는 Rust 발급 코드는 자동 스캔 밖이다.
+현재 두 개가 있다 — `signature.mismatch`(`registry.rs` `replace()` 와이어 시그니처
+가드)와 `invoke.backpressure`(비동기 FFI 워커 큐 포화 — Display 문자열로 전달되고
 `parseRustraErrorString` 이 코드로 재분리한다; 메시지는 "retry after drain" 이라
-말하지만 `retryable` 플래그는 없다). 이들 상수 추가는 저절로 생기는 게 아니라
-별도의 후속 결정이다.
+말하지만 `retryable` 플래그는 없다). 둘 다 2026-09-20 에 `RustraErrorCode` 상수를
+얻었고 동기화 테스트의 스코프 밖 선언에 발급 주처와 함께 등록되어 있다. `error.rs`
+밖에서 새 코드가 나타나면 상수와 이 문서의 선언 행을 함께 추가한다.
