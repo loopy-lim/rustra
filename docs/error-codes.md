@@ -9,8 +9,8 @@ subsets on purpose (`docs/rust-api-guide.md` lists the Rust-factory codes only,
 `docs/architecture.md` covers `registry.*`); this page is the full table and records
 where each code actually comes from.
 
-Counts today: **27 codes** in `RustraErrorCode`. 9 have a dedicated factory in
-`error.rs`; 5 more are Rust-emitted from other files (or are shared fallbacks); 13
+Counts today: **29 codes** in `RustraErrorCode`. 9 have a dedicated factory in
+`error.rs`; 7 more are Rust-emitted from other files (or are shared fallbacks); 13
 exist only on the JS/adapter side. The provenance of every code is marked below —
 nothing is silently one-sided.
 
@@ -54,10 +54,12 @@ nothing is silently one-sided.
 | `internal`                   | Rust internal failure (serialization, I/O, panic normalization)                                                                                 | Rust (`RustraError::internal`, `From<std::io::Error>`)                                                                | Both — `error.rs` factory            | no        |
 | `registry.frozen`            | Structural mutation of a frozen registry rejected                                                                                               | Rust registry (`registry.rs`, via `RustraError::custom`)                                                              | Rust runtime — no `error.rs` factory | no        |
 | `registry.id_exhausted`      | `command_id` u16 space exhausted (max 65534)                                                                                                    | Rust registry (`registry.rs`, via `RustraError::custom`)                                                              | Rust runtime — no `error.rs` factory | no        |
+| `signature.mismatch`         | Runtime route replacement (`replace`) rejected — expected wire signature differs from the live command                                          | Rust registry (`registry.rs` `replace_runtime_route`, via `RustraError::custom`)                                      | Rust runtime — no `error.rs` factory | no        |
 | `ffi.not_registered`         | Global FFI package not registered before the call                                                                                               | Rust FFI entries (`ffi_typed_entries.rs`, `ffi_typed_buffer.rs`, `ffi_hot_reload.rs`)                                 | Rust runtime — no `error.rs` factory | no        |
 | `invoke.failed`              | Generic invoke failure — the fallback code                                                                                                      | JS `parseRustraErrorString` for non-code-token strings; Rust fallbacks (`hot_core_dylib.rs`, `ffi_schema_entries.rs`) | Both — fallback, no factory          | no        |
 | `invoke.malformed`           | Wire frame parsing failed                                                                                                                       | JS codec layer (`complex-codec.ts`, `json-wire.ts`)                                                                   | JS/adapter only                      | no        |
 | `invoke.too_short`           | Payload shorter than the frame header                                                                                                           | JS codec layer (complex codecs, generated postcard codecs)                                                            | JS/adapter only                      | no        |
+| `invoke.backpressure`        | Async FFI worker queue full — the message advises "retry after drain", but the frame carries no `retryable` flag                                | Rust FFI (`ffi_async_entries.rs`, delivered as a Display string and re-split by `parseRustraErrorString`)             | Rust runtime — no `error.rs` factory | no        |
 | `schema.unavailable`         | Schema lookup failed                                                                                                                            | JS adapter (`live-schema.ts`)                                                                                         | JS/adapter only                      | no        |
 | `event.unavailable`          | Events undeliverable — no `drainEvents`/`onPushEvent` pair, invalid poll-interval env, or RN module without `onEvent`                           | JS adapters (`node-events.ts`, `react-native-events.ts`)                                                              | JS/adapter only                      | no        |
 | `channel.unavailable`        | Channel cannot be issued or released                                                                                                            | JS adapters (`react-native-events.ts`, `tauri-channels.ts`)                                                           | JS/adapter only                      | no        |
@@ -74,8 +76,9 @@ nothing is silently one-sided.
 - **Rust factory in `error.rs` (9):** `command.not_found`, `command.invalid_args`,
   `capability.denied`, `platform.unavailable`, `payload.too_large`, `transport.error`,
   `transport.timeout`, `cancelled`, `internal`.
-- **Rust-emitted without an `error.rs` factory (3):** `registry.frozen`,
-  `registry.id_exhausted` (`registry.rs`), `ffi.not_registered` (FFI entries).
+- **Rust-emitted without an `error.rs` factory (5):** `registry.frozen`,
+  `registry.id_exhausted`, `signature.mismatch` (`registry.rs`), `ffi.not_registered`
+  (FFI entries), `invoke.backpressure` (`ffi_async_entries.rs`).
 - **Shared fallback codes without a factory (2):** `invoke.failed`, `unknown` — both
   sides emit them as last-resort values.
 - **JS/adapter-side only (13):** `sync.unavailable`, `transport.unavailable`,
@@ -106,10 +109,11 @@ codes), every TS code must be either an `error.rs` factory code or explicitly de
 in the test's out-of-scope manifest with a reason, and stale manifest entries fail in
 both directions.
 
-The gate scans `error.rs` only, so Rust-emitted codes living elsewhere are outside it.
-Two are known today and intentionally have no `RustraErrorCode` constant:
-`signature.mismatch` (`registry.rs` `replace()` wire-signature guard) and
-`invoke.backpressure` (async FFI worker queue full — delivered as a Display string and
-re-split into a code by `parseRustraErrorString`; its message says "retry after drain"
-but it carries no `retryable` flag). Adding constants for them is a deliberate
-follow-up, not something this page assumes.
+The gate scans `error.rs` only, so Rust-emitted codes living elsewhere are outside its
+automatic scan. Two such codes exist today — `signature.mismatch` (`registry.rs`
+`replace()` wire-signature guard) and `invoke.backpressure` (async FFI worker queue
+full — delivered as a Display string and re-split into a code by
+`parseRustraErrorString`; its message says "retry after drain" but it carries no
+`retryable` flag). Both gained `RustraErrorCode` constants on 2026-09-20 and are
+declared with their issuance sites in the sync test's out-of-scope manifest; if a new
+code appears outside `error.rs`, add the constant and a manifest row here.
