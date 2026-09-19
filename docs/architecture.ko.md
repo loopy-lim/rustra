@@ -126,6 +126,48 @@ configure(engine); // 글로벌 invoke 에 엔진 설치
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
+### 글로벌 엔진 슬롯과 `EngineRegistration`
+
+`configure()`와 `configureLazy()`는 하나의 글로벌 엔진 슬롯에 기록하며, 둘 다 그
+등록을 소유하는 `EngineRegistration` 핸들을 반환한다
+(`packages/types/src/global-config.ts`):
+
+```ts
+// packages/types/src/global-config.ts
+/** Releases only this registration, even after lazy initialization or replacement. */
+export type EngineRegistration = (() => void) & { isCurrent(): boolean };
+```
+
+이 파일에 구현된 라이프사이클 계약:
+
+- **토큰 클레임**: 각 등록은 새 `Symbol('engine registration')` 토큰을 클레임해
+  현재 토큰으로 저장한다 (`getEngineRegistrationToken()`이 불투명한 값으로 노출).
+  `isCurrent()`는 "내 토큰이 아직 슬롯의 토큰인가?"에 답한다 — 그리고 lazy
+  초기화를 넘어서도 `true`로 유지된다: pending initializer 의 엔진이 설치될 때
+  설치가 그 등록의 토큰을 보존하므로, `configureLazy()`가 반환한 핸들은 셋업
+  이후에도 계약 당사자로 남는다.
+- **해제는 current 전용**: `isCurrent()`가 `false`인 상태에서 핸들을 호출하면
+  조용한 no-op 이다 — 시대에 뒤처진 등록이 더 이상 소유하지 않는 슬롯을 해체할
+  수는 없다. current일 때는 슬롯 전체(엔진, pending initializer, 초기화
+  프라미스, owner id, 토큰)를 지우고 설정된 라우트를 리셋해 브리지를 미설정
+  상태로 되돌린다.
+- **이중 configure**: `configure()`를 두 번 호출해도 던지지 않는다 — 두 번째가
+  조용히 슬롯을 인수하고 첫 핸들의 `isCurrent()`가 `false`로 바뀐다(그 해제는
+  no-op 이 된다). 시끄러운 경우는 경쟁하는 lazy 등록이다: fresh lazy 등록이
+  pending인 동안(엔진 미설치, 소비 미시작) 다른 initializer 로 두 번째
+  `configureLazy()`를 호출하면 양쪽 주체를 이름으로 보고하며 `registry.frozen`을
+  던진다 — 슬롯 보유자와 들어오는 등록의 `options.ownerId` (진단 용도일 뿐;
+  owner id 는 인증되지 않는다). 같은 initializer 의 재등록(모듈 리로드)은
+  허용되고, 첫 initializer 의 소비가 시작된 뒤에는 거부 대신 기존의
+  newer-wins 계약이 적용된다.
+- **누가 슬롯을 클레임할 수 있나**: `configure`/`configureLazy`를 쥔 코드라면
+  누구나 — capability 검사는 없다. 슬롯은 의도적으로 단일 엔진이다(멀티 엔진은
+  미지원), 따라서 호스트와 생성 엔트리는 각자 엔진을 설치하는 대신 이 핸들들로
+  조율해야 한다.
+
+`configure()` 호출 방법 자체는 위 예시와 [getting-started](getting-started.ko.md)를
+참고하라; 이 절은 라이프사이클 계약만 고정한다.
+
 ---
 
 ## crate 및 패키지 관계
