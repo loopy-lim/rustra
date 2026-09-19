@@ -6,6 +6,8 @@
     "strict": true,
     "rootDir": "../..",
     "outDir": "../../dist-ts",
+    "tsBuildInfoFile": "../../dist-ts/calculator.tsbuildinfo",
+    "incremental": true,
     "skipLibCheck": true
   },
   "include": ["generated/**/*.ts", "ts/**/*.ts", "apps/**/*.ts", "../../packages/**/*.ts"],
