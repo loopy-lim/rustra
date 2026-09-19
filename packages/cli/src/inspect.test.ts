@@ -194,6 +194,15 @@ test('inspect --help stays silent internally; cli-help owns the usage text', asy
   });
 });
 
+test('generate help documents --watch like the top-level help', async () => {
+  // cli-main 은 generate --watch 을 runWatch 로 분기하지만(cli-main.ts --watch 필터),
+  // 서브커맨드 help 가 이를 누락해 최상위 help 와 drift 난 적이 있다 — 표현까지
+  // 최상위 항목과 동일하게 고정한다.
+  const usage = (await captureConsoleLog(() => printHelp('generate'))).join('\n');
+  assert.match(usage, /Usage: rustra generate --schema <path> --output <dir>/);
+  assert.match(usage, /--watch\s+Watch schema file for changes and regenerate/);
+});
+
 test('inspect rejects unknown flags with the arg-parser hint', async () => {
   await withTempDir(async (root) => {
     const file = join(root, 'dump.hex');
