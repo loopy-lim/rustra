@@ -4,9 +4,10 @@
 
 여러 인자와 일반 반환값을 사용하는 API는 [일반 함수 등록](./function-registration.ko.md)을 참고하세요.
 
-> **Frame 마이그레이션:** 이 문서는 Rust 0.10.2, 공통 패키지 0.10.0 및 아래 어댑터 버전을
-> 대상으로 한다. 0.9.0에는 Frame 이름 전환이 포함되지 않는다. 네이티브 라이브러리·
-> JS 패키지·생성물을 함께 갱신한다. 버전과 절차는
+> **Frame 마이그레이션:** 이 문서는 Rust crate 0.11.0, 공통 패키지(`@rustra/types`,
+> `@rustra/cli`) 0.11.0 및 아래 어댑터 버전을 대상으로 한다. 0.9.0에는 Frame 이름
+> 전환이 포함되지 않는다. 네이티브 라이브러리·JS 패키지·생성물을 함께 갱신한다.
+> 버전과 절차는
 > [마이그레이션 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
 rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 어디에서나 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.
