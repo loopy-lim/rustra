@@ -172,6 +172,9 @@ Rust `#[command]` 로직을 고치면 호스트별로 전부 정체 상태가 �
   PR #5779 미머지), cranelift unwinding 미지원 지속 + macOS ctor 버그
   (rustc_codegen_cranelift#1588 — `native_entry!` 생성자와 충돌)로 조건
   미충족. 두 트랙 모두 대기 유지.
+  - **추기 (2026-09-20)** — #1588 은 종결됐다. 남는 블로커는 dioxus#5778
+    미머지와 cranelift unwinding(#1567, WIP·기본 비활성). 재평가 트리거
+    전문은 `docs/plans/2026-09-20-warm-loop-approaches.md` §(e).
 
 ### 스왑 시나리오 실측 (2026-09-09, `examples/hot-core-variant`)
 
