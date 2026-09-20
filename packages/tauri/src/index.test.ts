@@ -938,6 +938,111 @@ test('global IPC Channel callback is unregistered on failure and close', async (
   }
 });
 
+// ── 감사 2026-09-13 항목 2 — 구버전 Channel 생성자의 무음 콜백 드롭 가드 ──
+// @tauri-apps/api 2.4 의 compiled 생성자는 `constructor()`(Channel.length === 0,
+// 인자 무시)이고 2.5+ 는 `constructor(onmessage)`(기본값 없음 → length 1)다.
+// 스텁도 같은 arity 를 갖도록 만들어 감지 경로를 문서처럼 고정한다.
+
+/** requireTauriIpcChannel 이 읽는 두 전역 슬롯을 교체하고 복구기를 돌려준다. */
+function installChannelGlobals(Channel: unknown) {
+  const root = globalThis as typeof globalThis & {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
+  };
+  const previous = { tauri: root.__TAURI__, internals: root.__TAURI_INTERNALS__ };
+  const unregistered: number[] = [];
+  root.__TAURI__ = { core: { Channel } };
+  root.__TAURI_INTERNALS__ = { unregisterCallback: (id: number) => unregistered.push(id) };
+  return {
+    unregistered,
+    restore: () => {
+      root.__TAURI__ = previous.tauri;
+      root.__TAURI_INTERNALS__ = previous.internals;
+    },
+  };
+}
+
+test('IPC Channel arity guard: a 2.5-style constructor (length 1) receives the callback and delivers', async () => {
+  const { requireTauriIpcChannel } = await import('./tauri-globals.js');
+  const received: unknown[] = [];
+  const onMessage = (payload: unknown) => received.push(payload);
+  let constructedWith: ((payload: unknown) => void) | null = null;
+  class Channel {
+    id = 61;
+    constructor(public onmessage: (payload: unknown) => void) {
+      constructedWith = onmessage;
+    }
+  }
+  assert.equal(Channel.length, 1, 'stub mirrors the 2.5+ compiled constructor(onmessage)');
+  const globals = installChannelGlobals(Channel);
+  try {
+    const ipc = requireTauriIpcChannel(onMessage, 'transport.unavailable');
+    assert.equal(constructedWith, onMessage, 'callback is passed through to the constructor');
+    assert.deepEqual((ipc.value as { id: number }).id, 61);
+    // 생성자 콜백 배선 — 실제 채널 프레임이 이 경로로 도달한다.
+    (ipc.value as { onmessage: (payload: unknown) => void }).onmessage({ value: 42 });
+    assert.deepEqual(received, [{ value: 42 }]);
+    ipc.dispose();
+    assert.deepEqual(globals.unregistered, [61], 'dispose wiring unchanged');
+  } finally {
+    globals.restore();
+  }
+});
+
+test('IPC Channel arity guard: callback-style use on a pre-2.5 constructor (length 0) fails loudly with the upgrade command', async () => {
+  const { requireTauriIpcChannel } = await import('./tauri-globals.js');
+  let constructed = 0;
+  class Channel {
+    id = 62;
+    onmessage: (payload: unknown) => void = () => {};
+    constructor() {
+      constructed += 1;
+    } // 2.4: 인자가 없어 new Channel(cb) 의 cb 는 버려진다
+  }
+  assert.equal(Channel.length, 0, 'stub mirrors the 2.4 compiled constructor()');
+  const globals = installChannelGlobals(Channel);
+  try {
+    assert.throws(
+      () => requireTauriIpcChannel(() => {}, 'transport.unavailable'),
+      (error: unknown) => {
+        if (!(error instanceof RustraCommandError)) return false;
+        assert.equal(error.code, 'transport.unavailable');
+        assert.match(error.message, /@tauri-apps\/api is too old/);
+        assert.match(error.message, /requires @tauri-apps\/api 2\.5\+/);
+        assert.match(error.message, /bun add @tauri-apps\/api@\^2\.5\.0/);
+        assert.match(error.message, /npm install @tauri-apps\/api@\^2\.5\.0/);
+        return true;
+      },
+    );
+    assert.equal(constructed, 0, 'the guard fires before any Channel allocation');
+  } finally {
+    globals.restore();
+  }
+});
+
+test('IPC Channel arity guard: callback-less construction on a length-0 constructor keeps existing behavior', async () => {
+  // 콜백을 넘기지 않는(구식 onmessage 후행 할당 스타일) 호출은 가드 대상이
+  // 아니다 — 생성은 예전처럼 진행되고 dispose 배선도 동일하다.
+  const { requireTauriIpcChannel } = await import('./tauri-globals.js');
+  class Channel {
+    id = 63;
+    onmessage: (payload: unknown) => void = () => {};
+    constructor() {}
+  }
+  const globals = installChannelGlobals(Channel);
+  try {
+    const ipc = requireTauriIpcChannel(
+      undefined as unknown as (payload: unknown) => void,
+      'transport.unavailable',
+    );
+    assert.deepEqual((ipc.value as { id: number }).id, 63, 'constructed as before, no throw');
+    ipc.dispose();
+    assert.deepEqual(globals.unregistered, [63]);
+  } finally {
+    globals.restore();
+  }
+});
+
 // ── 핫코어 스왑 보고 구독 (예약 채널 rustra://hot-core/swapped) ──
 // Rust 측 tauri_support::register_dispatch_with_swap_events 가 emit 하는
 // 스왑 보고 채널의 래퍼 계약. 예약 세그먼트 이름('hot-core/swapped')은 치환
