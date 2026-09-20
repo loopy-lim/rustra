@@ -41,6 +41,27 @@ rustra init my-app
 공유 config는 기본 `native` 타깃을 유지합니다(tauri-calculator 예제가 쓰는
 패턴).
 
+**웜 루프 속도**: `rustra dev`는 자신이 도리는 cargo 단계(스키마 `generate`
+bin, dylib 빌드)에 한해 증분 컴파일을 켭니다 — 해당 스폰에만
+`CARGO_INCREMENTAL=1`을 주입하며, env는 프로필을 우선하므로
+`incremental = false` 설정을 무시합니다. 직접 실행하는 `cargo build`/`test`는
+워크스페이스 프로필을 그대로 따르고, 사용자가 `CARGO_INCREMENTAL`을 세팅하면
+언제나 그 값이 이깁니다(`0`이면 target 트리가 늘지 않습니다 — rust-cache 같은
+CI 캐시 액션은 자동으로 0을 세팅합니다). 증분 캐시는 `target/` 아래 디스크를
+추가로 씁니다. 큰 코어에서 사이클 단가를 더 줄이는 프로필 레버 두 가지 —
+워크스페이스 `Cargo.toml`에:
+
+```toml
+[profile.dev]
+debug = 1 # 기본 debug = 2: 산출물이 커서 빌드·링크·dlopen이 느리다
+[profile.dev.package."*"]
+debug = 0 # 의존성 debuginfo 끄기 — 디스크·시간 절감이 가장 큰 지점
+```
+
+코어 크레이트가 여러 crate-type(`rlib`, `staticlib`에 `cdylib` 까지)을 가지면
+편집마다 전부 재링크합니다 — 다른 산출물이 필요 없다면 `cdylib` 단일이 가장
+빠른 핫 루프입니다.
+
 ## 라이브러리 API
 
 CLI와 동일한 생성기를 프로그램에서 직접 사용할 수 있습니다:

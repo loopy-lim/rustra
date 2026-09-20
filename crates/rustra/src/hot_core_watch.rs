@@ -1,8 +1,8 @@
 // ── dylib 아티팩트 감시 (experimental, hot-core feature) ─────────────────────
 //
-// sha256 폴링으로 아티팩트 재빌드를 감시하고 버전 카피 → open → swap 을
-// 조율하는 층. notify 같은 파일 감시 의존을 두지 않는다 — dev 루프 요구는
-// 폴링 간격(기본 300ms)+빌드 시간이면 충분하다(design: 0.5~2초 warm).
+// stat 지문 + sha256 폴링으로 아티팩트 재빌드를 감시하고 버전 카피 → open →
+// swap 을 조율하는 층. notify 같은 파일 감시 의존을 두지 않는다 — dev 루프
+// 요구는 폴링 간격(기본 100ms)+빌드 시간이면 충분하다(design: 0.5~2초 warm).
 // 상위 파사드는 `hot_core.rs`, 결합 층은 `hot_core_dylib.rs`.
 
 use super::dylib::{DylibCore, DylibCoreError, HotCoreHandle, prepare_swap_copy};
@@ -16,11 +16,12 @@ pub type SwapOutcome = Result<(String, String), DylibCoreError>;
 /// 스왑 결과 콜백 타입 — [`DylibWatchConfig::on_swap`] 의 원형.
 pub type SwapCallback = Arc<dyn Fn(SwapOutcome) + Send + Sync>;
 
-/// 감시 스레드 설정 — `poll` 기본값은 300ms, `on_swap` 기본값은 no-op.
+/// 감시 스레드 설정 — `poll` 기본값은 100ms, `on_swap` 기본값은 no-op.
 pub struct DylibWatchConfig {
     /// 감시 대상 cdylib 아티팩트 경로(예: `target/debug/lib*.dylib`).
     pub artifact: PathBuf,
-    /// 폴링 간격. 기본 300ms.
+    /// 폴링 간격. 기본 100ms. 매 틱은 stat 지문 사전 검사이므로 아티팩트
+    /// 바이트가 변한 틱에서만 sha256 을 계산한다(유휴 비용 무시 수준).
     pub poll: Duration,
     /// 스왑을 적용할 핸들 — 호스트가 open 해서 넘긴다.
     pub handle: Arc<HotCoreHandle>,
@@ -29,11 +30,11 @@ pub struct DylibWatchConfig {
 }
 
 impl DylibWatchConfig {
-    /// 기본값(300ms 폴링, no-op 콜백)으로 설정을 만든다.
+    /// 기본값(100ms 폴링, no-op 콜백)으로 설정을 만든다.
     pub fn new(artifact: impl Into<PathBuf>, handle: Arc<HotCoreHandle>) -> Self {
         Self {
             artifact: artifact.into(),
-            poll: Duration::from_millis(300),
+            poll: Duration::from_millis(100),
             handle,
             on_swap: Arc::new(|_| {}),
         }
@@ -51,7 +52,7 @@ pub fn spawn_dylib_watch(config: DylibWatchConfig) -> std::thread::JoinHandle<()
 
 /// 같은 아티팩트 바이트(sha256)에 대한 연속 스왑 실패 허용치 — 초과하면 그
 /// 바이트 상태를 "포이즌"으로 표시해 바이트가 바뀔 때까지 재시도하지 않는다.
-/// 실패 재시도 자체는 폴링 주기(300ms)마다 `prepare_swap_copy`(macOS 에서는
+/// 실패 재시도 자체는 폴링 주기(기본 100ms)마다 `prepare_swap_copy`(macOS 에서는
 /// codesign spawn)와 `on_swap(Err)` 콜백을 반복하므로, 열리지 않는 아티팩트가
 /// 이벤트 폭주·서브프로세스 낭비로 퇴화하지 않게 하는 상한이다. 포이즌은
 /// 바이트(해시) 단위로 판정된다 — 새 바이트는 언제나 새 재시도 창을 갖는다.
@@ -98,24 +99,83 @@ impl FailureTracker {
     }
 }
 
-/// 변경 감지는 sha256(파일 바이트) 기준이다. 실패한 스왑은 last_hash 를
-/// 갱신하지 않으므로(같은 바이트 상태를 다음 폴링에서 재시도 — 빌드 중
-/// 반쯤 쓰인 아티팩트가 스레드를 죽이지 않는다) 성공한 바이트 상태만
-/// 기준선이 된다. 단 같은 바이트의 연속 실패가 [`MAX_SWAP_FAILURES_PER_BYTES`]
-/// 에 도달하면 그 바이트를 포이즌으로 표시하고 바이트가 바뀔 때까지 재시도를
-/// 멈춘다(실패 폭주 방지).
+/// stat 지문 — 아티팩트를 다시 읽기 전에 바이트 변화 가능성을 걸러내는
+/// 사전 검사(precheck) 값. 폴링이 100ms 로 짧아진 만큼 매 틱 sha256(수 MB
+/// 산출물)을 도는 비용을 없애기 위해, stat 이 변한 틱에서만 해시를 계산한다.
+/// CLI 측 감시(watch.ts)와 같은 `ino:size:mtime:ctime` 지문 계열이다 — CLI
+/// 발행이 tmp+rename 이라 inode 가 반드시 바뀌고, unix 에서는 쓰기마다
+/// mtime/ctime 이 갱신되므로 바이트가 변했는데 지문이 못 변하는 창이 없다.
+/// 지문은 어디까지나 해시 계산을 건너뛰는 필터다 — 변경 판정 자체는 여전히
+/// sha256(파일 바이트) 기준이므로 지문 재사용은 false-positive(불필요한 재해시)
+/// 만 낼 수 있고 false-negative(변경 누락)는 내지 않는다.
+/// private 모듈 안의 `pub` 다 — test cfg 재수출 경로로만 보인다.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StatFingerprint(String);
+
+/// 아티팩트의 stat 지문을 뽑는다. 파일이 없으면 None(다음 폴링에서 재시도).
+/// private 모듈 안의 `pub` 다 — test cfg 재수출 경로로만 보인다.
+pub fn stat_fingerprint(path: &Path) -> Option<StatFingerprint> {
+    let metadata = std::fs::metadata(path).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some(StatFingerprint(format!(
+            "{}:{}:{}:{}:{}:{}",
+            metadata.ino(),
+            metadata.len(),
+            metadata.mtime(),
+            metadata.mtime_nsec(),
+            metadata.ctime(),
+            metadata.ctime_nsec(),
+        )))
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows 는 inode 가 없다 — size+mtime(NTFS 100ns 해상도) 지문.
+        // 발행 경로가 tmp+rename 이라 mtime 이 매 발행마다 갱신된다.
+        let modified = metadata.modified().ok()?;
+        let since_epoch = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+        Some(StatFingerprint(format!(
+            "{}:{}:{}",
+            metadata.len(),
+            since_epoch.as_secs(),
+            since_epoch.subsec_nanos(),
+        )))
+    }
+}
+
+/// 변경 감지는 sha256(파일 바이트) 기준이며, stat 지문은 해시 계산을 건너뛰는
+/// 사전 검사다. 실패한 스왑은 last_hash 를 갱신하지 않으므로(같은 바이트 상태를
+/// 다음 폴링에서 재시도 — 빌드 중 반쯤 쓰인 아티팩트가 스레드를 죽이지 않는다)
+/// 성공한 바이트 상태만 기준선이 된다. 단 같은 바이트의 연속 실패가
+/// [`MAX_SWAP_FAILURES_PER_BYTES`] 에 도달하면 그 바이트를 포이즌으로 표시하고
+/// 바이트가 바뀔 때까지 재시도를 멈춘다(실패 폭주 방지).
 fn run_watch_loop(config: DylibWatchConfig) {
     let mut counter: u64 = 0;
+    // 초기 기준선 — 아티팩트가 이미 있으면(호스트가 live 경로를 열은 상태) 초기
+    // 바이트는 스왑 대상이 아니다. 없으면(None) 첫 발행을 스왑으로 보고한다.
+    let mut last_stat = stat_fingerprint(&config.artifact);
     let mut last_hash = file_sha256_hex(&config.artifact).ok();
     let mut failures = FailureTracker::default();
     loop {
         std::thread::sleep(config.poll);
+        // 사전 검사 — 지문이 기준선과 같으면 바이트도 같으므로 읽지 않는다.
+        let fingerprint = match stat_fingerprint(&config.artifact) {
+            Some(fingerprint) => fingerprint,
+            // 아직 빌드 전이거나 잠깐 사라진 상태 — 다음 폴링에서 재시도.
+            None => continue,
+        };
+        if last_stat.as_ref() == Some(&fingerprint) {
+            continue;
+        }
         let hash = match file_sha256_hex(&config.artifact) {
             Ok(hash) => hash,
-            // 아직 빌드 전이거나 잠깐 사라진 상태 — 다음 폴링에서 재시도.
+            // 지문은 잡았지만 읽기 순간 사라진 상태(rename 직후 등) — 재시도.
             Err(_) => continue,
         };
         if last_hash.as_deref() == Some(hash.as_str()) {
+            // 같은 바이트의 새 stat(재발행·터치) — 기준선만 갱신하고 넘어간다.
+            last_stat = Some(fingerprint);
             continue;
         }
         if failures.is_poisoned(&hash) {
@@ -126,6 +186,7 @@ fn run_watch_loop(config: DylibWatchConfig) {
         match attempt_swap(&config, counter) {
             Ok((old, new)) => {
                 last_hash = Some(hash);
+                last_stat = Some(fingerprint);
                 failures.note_success();
                 (config.on_swap)(Ok((old, new)));
             }

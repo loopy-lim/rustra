@@ -49,9 +49,9 @@ fn prepare_swap_copy_handles_extension_less_artifacts() {
 
 // ── FailureTracker: 같은 바이트 연속 실패 포이즌 정책 ──────────
 //
-// 열리지 않는 아티팩트가 폴링 주기(300ms)마다 prepare_swap_copy(macOS codesign
-// spawn)와 on_swap(Err)을 무한 반복하는 폭주로 퇴화하지 않게 하는 상한이다.
-// 순수 상태 조각이라 스레드 없이 결정적으로 검증한다.
+// 열리지 않는 아티팩트가 폴링 주기(기본 100ms)마다 prepare_swap_copy(macOS
+// codesign spawn)와 on_swap(Err)을 무한 반복하는 폭주로 퇴화하지 않게 하는
+// 상한이다. 순수 상태 조각이라 스레드 없이 결정적으로 검증한다.
 
 #[test]
 fn failure_tracker_poisons_after_cap_and_waits_for_new_bytes() {
@@ -132,6 +132,65 @@ fn failure_tracker_streak_is_per_bytes() {
     );
     assert!(failures.is_poisoned(&b));
     assert!(!failures.is_poisoned(&a));
+}
+
+// ── stat 지문: 해시 스킵 필터의 건전성 ──────────
+//
+// run_watch_loop 는 폴링 매 틱 sha256 대신 stat 지문(ino:size:mtime:ctime 계열)
+// 으로 건너뛴다. 필터의 계약은 "지문이 같으면 바이트도 같다"(변경 누락 없음)
+// 이므로, 재발행 경로(tmp+rename → inode 교체)와 재작성 경로(mtime 갱신) 모두
+// 에서 지문이 반드시 변하는지를 결정적으로 검증한다.
+
+#[test]
+fn stat_fingerprint_is_stable_while_untouched_and_none_when_missing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let artifact = dir.path().join("libdemo.dylib");
+    assert!(
+        stat_fingerprint(&artifact).is_none(),
+        "아직 없는 아티팩트의 지문은 None — 다음 폴링 재시도 경로"
+    );
+
+    std::fs::write(&artifact, b"v1").expect("artifact write");
+    let first = stat_fingerprint(&artifact).expect("fingerprint after write");
+    assert_eq!(
+        stat_fingerprint(&artifact),
+        Some(first.clone()),
+        "건드리지 않은 파일의 지문은 안정적이다 — 이 틱이 해시를 건너뛴다"
+    );
+}
+
+#[test]
+fn stat_fingerprint_changes_on_rewrite_and_rename_republish() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let artifact = dir.path().join("libdemo.dylib");
+    std::fs::write(&artifact, b"v1").expect("artifact write");
+    let baseline = stat_fingerprint(&artifact).expect("baseline fingerprint");
+
+    // 같은 바이트 제자리 재작성 — mtime 갱신으로 지문이 변한다(재해시 유발,
+    // 해시 동일 → 스왑 없음 경로). 타임스탬프 해상도 이상으로 쉰다.
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    std::fs::write(&artifact, b"v1").expect("same-bytes rewrite");
+    assert_ne!(
+        stat_fingerprint(&artifact),
+        Some(baseline.clone()),
+        "같은 바이트 재작성도 지문은 변한다 — 놓치면 안 된다"
+    );
+
+    // 다른 바이트 재작성.
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    std::fs::write(&artifact, b"v2-longer-bytes").expect("new-bytes rewrite");
+    let after_rewrite = stat_fingerprint(&artifact).expect("fingerprint");
+
+    // CLI 발행 경로 복제 — tmp+rename. 같은 바이트를 재발행해도 inode 가
+    // 바뀌므로 지문이 변한다(발행 감지의 주 경로).
+    let tmp = dir.path().join("libdemo.dylib.tmp");
+    std::fs::write(&tmp, b"v2-longer-bytes").expect("tmp write");
+    std::fs::rename(&tmp, &artifact).expect("rename republish");
+    assert_ne!(
+        stat_fingerprint(&artifact),
+        Some(after_rewrite),
+        "rename 재발행(동일 바이트)도 inode 교체로 지문이 변한다"
+    );
 }
 
 // ── JsonDispatch for Package — rustra_dispatch 의 에러 매핑 동일성 ──
