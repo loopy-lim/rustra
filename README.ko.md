@@ -220,7 +220,7 @@ fn main() -> Result<()> {
 그리고 실행한다:
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 ```
 
 기존 schema만 다시 렌더링해야 하는 경우에는 `generate --config`를 직접 사용할 수
@@ -257,9 +257,9 @@ rustra::native_entry!(my_package);
 
 ```bash
 bun add @rustra/react-native@0.9.2 @rustra/types@0.12.0
-bun add -d @rustra/cli@0.11.2
-bunx --bun @rustra/cli@0.11.2 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bun add -d @rustra/cli@0.11.3
+bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 bun install
 ```
 
@@ -741,16 +741,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # 개발 환경 진단
-bunx --bun @rustra/cli@0.11.2 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
 
 # Rust schema + TS/C++/RN을 한 번에 생성
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 
 # generated 파일 동기화 CI 게이트 (TS/C++/RN은 쓰지 않음)
-bunx --bun @rustra/cli@0.11.2 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.11.3 generate --config rustra.json --check
 
 # Rust 소스 감시 + 통합 codegen 자동 재실행
-bunx --bun @rustra/cli@0.11.2 dev --config rustra.json
+bunx --bun @rustra/cli@0.11.3 dev --config rustra.json
 ```
 
 ## 문서

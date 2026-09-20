@@ -241,7 +241,7 @@ Specifying the Rust generator in `rustra.json` processes schema generation throu
 Then run:
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 ```
 
 If you only need to re-render an existing schema, use `generate --config`
@@ -279,9 +279,9 @@ rustra::native_entry!(my_package);
 
 ```bash
 bun add @rustra/react-native@0.9.2 @rustra/types@0.12.0
-bun add -d @rustra/cli@0.11.2
-bunx --bun @rustra/cli@0.11.2 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bun add -d @rustra/cli@0.11.3
+bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 bun install
 ```
 
@@ -791,16 +791,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # Diagnose the dev environment
-bunx --bun @rustra/cli@0.11.2 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
 
 # Generate Rust schema + TS/C++/RN in one shot
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 
 # Generated-file sync CI gate (TS/C++/RN excluded)
-bunx --bun @rustra/cli@0.11.2 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.11.3 generate --config rustra.json --check
 
 # Watch Rust sources + re-run integrated codegen automatically
-bunx --bun @rustra/cli@0.11.2 dev --config rustra.json
+bunx --bun @rustra/cli@0.11.3 dev --config rustra.json
 ```
 
 ## Documentation
