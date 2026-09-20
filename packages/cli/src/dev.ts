@@ -310,6 +310,9 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
         lastGeneratedSchema = undefined;
         if (!disposed) subscribe();
       }
+      // 이 틱에서 codegen 이전에 arm 했는지 — 수행 지역 변수라서 pipeline 이
+      // 중간에 실패하면 다음 틱으로 이어지지 않는다(끼인 기준의 무음 채택 금지).
+      let armedPreCodegen = false;
       const gateEnabled =
         (config.dev?.target === 'wasm' && config.dev?.wasm?.parityGate) ||
         (config.dev?.target === 'dylib' && config.dev?.dylib?.parityGate);
@@ -323,6 +326,7 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
         if (gate && existsSync(config.schemaPath)) {
           await gate.arm();
           gateArmed = true;
+          armedPreCodegen = true;
         }
       }
       const { runCodegen } = await import('./cli-codegen.js');
@@ -340,7 +344,12 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       }
       if (disposed) return;
       if (gate) {
-        if (!gateArmed) {
+        if (!gateArmed || armedPreCodegen) {
+          // codegen 이전 기준(시작 시 stale schema.json 포함 — 리스크 감사
+          // 2026-09-13 #7)은 방금 재생성된 계약과 무관하므로 재생성 직후 기준을
+          // 다시 잡는다. 실패로 끼인 틱의 기준은 여기에 못 미친다(지역 변수) —
+          // 다음 틱은 마지막 기준 대비 실제 드리프트 검증을 거친다(fail-closed
+          // 불변). 이 재-arm 이 드리프트 허용이 아니다.
           await gate.arm();
           gateArmed = true;
         } else {
