@@ -114,7 +114,7 @@ Swift·Kotlin·헤더·modulemap과 오래된 추가 파일까지 검사하고 �
 Cargo 타깃 디렉터리에 빌드 산출물은 쓸 수 있으며, 네이티브 빌드와 bindgen 실행 비용이 든다.
 
 오케스트레이션 구현은 `packages/cli/src/cli-uniffi.ts`, 미러 렌더러는
-`examples/calculator/src/uniffi_render.rs`(단위 테스트 11개 — 미러로
+`examples/calculator/src/uniffi_render.rs`(단위 테스트 28개 — 미러로
 표현 불가능한 타입을 만나면 스키마 경로를 밝히며 실패한다, 조용한 skip
 없음)이다.
 

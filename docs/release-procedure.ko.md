@@ -19,6 +19,9 @@
 3. 검사 범위: Miri의 lib/frame_wire/field_order_drift, Linux x86_64 ASan+LSan lib,
    Fuzz의 invoke_frame/invoke_complex_value/invoke_complex_serde 각각 seed 재생 및
    600초. 주간 안전성 실행은 별도로 유지하며 PR required check와 구분한다.
+4. `bun run test:api-surface` — 공개 TS/Rust export 표면을
+   `api-surface/snapshot.json` 과 비교한다. 드리프트는 게이트 실패이며, 의도적
+   변경은 `--update` 로 갱신한 새 스냅샷을 PR 에 포함해야 한다.
 
 Linux x86_64 sanitizer job은 교차 플랫폼 메모리 안전성 게이트다. 호환성
 매트릭스의 실제 Tauri WebView·수명주기·패키지 설치 수용 기록을 확보하기 전까지

@@ -44,8 +44,8 @@ pre-1.0 규칙: 이전 릴리즈에서 폐기되었던 항목은 마이너 릴�
 
 최근 제거: `RendererHost`(`HostMessage`, `MessageKind`, `RendererCapabilities`,
 `Size`, `SurfaceOptions`, `host_supports_eval` 포함)는 0.6.0부터 deprecated로
-위 pre-1.0 규칙에 따라 제거된다 — npm 패키지는 0.7.0에서(changeset),
-Rust crate는 다음 발행에서 제거된다(crates.io 발행은 수동이라 crate 버전은
+위 pre-1.0 규칙에 따라 제거됐다 — npm 패키지는 0.7.0에서(changeset),
+`rustra` crate 는 0.9.0 발행에서 제거됐다(crates.io 발행은 수동이라 crate 버전은
 npm 라인을 따라간다). 대체재는 호스트별 어댑터 경계다 — 각 임베딩 호스트는
 공개된 채널·FFI 표면으로 자체 렌더러/이벤트를 연결한다.
 
@@ -55,14 +55,19 @@ npm 라인을 따라간다). 대체재는 호스트별 어댑터 경계다 — �
 `subscribeEvent(name, callback[, listen])`과 `subscribeEvent(name, callback[, options])`만
 남고, React Native는 native 모듈을 `globalThis.__rustraNative`에서 해결한다.
 
-`main`에 착지했고 다음 npm 릴리스에 실리는 것(changeset 대기): 생성 모듈의
-`RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` 빌드 플래그와 함께
-`reactNative.legacyBenchmarks` 설정 키(`@rustra/cli`), 그리고 `RustraNative`와 JSI
-호스트 객체의 calculator 전용 레거시 와이어 함수 — `invokeMsgpack`, `invokeBincode`,
-`invokePostcard`, `invokeHybrid`, `invokeRaw`, JSI 측의 `invokeBytes`와
-`invokeLegacyPostcard`(`@rustra/types`, `@rustra/react-native`). 대체재는 제네릭
-transport(`invoke`, `invokeFrame`)와 타입드 고속 경로(`invokeTyped*`,
-`getCodecCapabilities`)이며 이들은 변경되지 않았다.
+0.9.0 라인(2026-09-10, changeset `1f99eca`)에서 발행된 것: `@rustra/cli` 0.9.0은
+생성 모듈에서 `reactNative.legacyBenchmarks` 설정 키와
+`RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` 빌드 플래그를
+제거했고, `@rustra/react-native` 0.8.0은 JSI 호스트 객체에서 calculator 전용
+레거시 와이어 함수 — `invokeBytes`, `invokeMsgpack`, `invokeBincode`,
+`invokePostcard`, `invokeLegacyPostcard`, `invokeHybrid`, `invokeRaw` — 를
+떨어냈다. 같은 changeset 의 타입 절반은 반영되지 않았다: 발행된 `RustraNative`
+(`@rustra/types`)에는 `invokeMsgpack`, `invokeBincode`, `invokePostcard`,
+`invokeHybrid`, `invokeRaw`가 여전히 선언되어 있다 — RN 호스트 객체가 더 이상
+노출하지 않아도 TS 타입 멤버는 남는다. `invokeRkyv` 만은 확실히 사라졌다:
+0.10.0 Frame 리네임이 구현이 없던 죽은 멤버를 부활 없이 제거했다. 대체재인
+제네릭 transport(`invoke`, `invokeFrame`)와 타입드 고속 경로(`invokeTyped*`,
+`getCodecCapabilities`)는 변경되지 않았다.
 
 ## 실험 표면
 

@@ -9,16 +9,23 @@ When the contract (schema) shared by the Rust backend and TypeScript clients cha
 - **From 0.3.x** — follow [migrating from 0.3 to 0.4](migrations/0.3-to-0.4.md) first, then use this guide.
 - **From 0.5.x** — follow [migrating from 0.5 to 0.6](migrations/0.5-to-0.6.md) first. Old schemas may also fail CLI validation with a "generic type name" error (see the [Rust API guide — user-defined generics](rust-api-guide.md#user-defined-generic-types)); rebuild `schema.json` with the current rustra before running `rustra diff`.
 - **0.6 and later (incl. 0.8)** — no migration note needed; the recipes below apply directly.
-- **0.9-series rename (rkyv V2 → Frame)** — see [the rename table](#09-rename-rkyv-v2--frame) below; a pure rename, the wire format is unchanged.
+- **The rkyv V2 → Frame rename (0.10.0 release)** — see [the rename table](#frame-rename-rkyv-v2--frame) below; a pure rename, the wire format is unchanged.
 
-## 0.9 rename: rkyv V2 → Frame
+<a id="09-rename-rkyv-v2--frame"></a>
 
-The 0.9 series renames the binary protocol formerly called "rkyv V2" to
-**Frame** across all APIs. This is a naming change only — the wire bytes,
-framing, and postcard payload codec are unchanged, so old and new builds stay
-interoperable. Update the identifiers you reference:
+## Frame rename: rkyv V2 → Frame
 
-| Old (≤0.8)                             | New (0.9+)                           |
+The 0.10.0 release (2026-09-12) renames the binary protocol formerly called
+"rkyv V2" to **Frame** across all APIs. This is a naming change only — the wire
+bytes, framing, and postcard payload codec are unchanged, so old and new builds
+stay interoperable. Package versions are independent, so the rename belongs to
+the release, not to one version number: the Rust workspace and
+`@rustra/types`/`@rustra/node`/`@rustra/bun`/`@rustra/cli` shipped it as 0.10.0,
+while `@rustra/tauri` and `@rustra/react-native` carried the same rename in
+their own 0.9.0 — a 0.9.x adapter version alone therefore does not mean
+pre-rename. Update the identifiers you reference:
+
+| Old (pre-rename)                       | New (rename release)                 |
 | -------------------------------------- | ------------------------------------ |
 | `createRkyvV2Engine`                   | `createFrameEngine`                  |
 | `RkyvV2Engine`                         | `FrameEngine`                        |
