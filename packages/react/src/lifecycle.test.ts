@@ -347,7 +347,15 @@ test('tagged identities distinguish records, undefined, special numbers, binary 
   const cycle: { self?: unknown } = {};
   cycle.self = cycle;
   assert.throws(() => inputKey(cycle), /cycles/);
-  assert.throws(() => inputKey({ callback: () => {} }), /functions/);
+  // Functions and class instances no longer throw; they get a stable
+  // per-instance identity key (same instance → same key, distinct → distinct).
+  const callback = () => {};
+  assert.equal(inputKey({ callback }), inputKey({ callback }));
+  assert.notEqual(inputKey({ callback }), inputKey({ callback: () => {} }));
+  class Point {
+    constructor(public x: number) {}
+  }
+  assert.notEqual(inputKey(new Point(1)), inputKey({ x: 1 }));
 });
 
 test('mutation error keeps invocation callbacks and cannot overwrite replacement state', async () => {

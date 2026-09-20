@@ -68,6 +68,77 @@ test('inputKey supports bigint values without throwing', () => {
   assert.notEqual(inputKey({ value: 42n }), inputKey({ value: { $rustraBigInt: '42' } }));
 });
 
+class Repo {
+  constructor(public name: string) {}
+}
+
+test('inputKey keys class instances, functions, and symbols stably without throwing', () => {
+  // 같은 인스턴스/함수/심볼 → 매 렌더 같은 키 (WeakMap 인스턴스 id, String(symbol))
+  const instance = new Repo('stable');
+  const fn = () => {};
+  const symbol = Symbol('tag');
+  assert.equal(inputKey(instance), inputKey(instance));
+  assert.equal(inputKey(fn), inputKey(fn));
+  assert.equal(inputKey(symbol), inputKey(symbol));
+  assert.equal(inputKey({ repo: instance, fn, symbol }), inputKey({ repo: instance, fn, symbol }));
+
+  // 같은 클래스의 서로 다른 인스턴스 → 서로 다른 키
+  assert.notEqual(inputKey(new Repo('a')), inputKey(new Repo('a')));
+  assert.notEqual(
+    inputKey(() => {}),
+    inputKey(() => {}),
+  );
+  // 심볼은 description 을 포함한 String(symbol) 에서 파생된다
+  assert.notEqual(inputKey(Symbol('a')), inputKey(Symbol('b')));
+  // description 없는 심볼은 한 버킷을 공유한다 (문서화된 동작)
+  assert.equal(inputKey(Symbol()), inputKey(Symbol()));
+  // 인스턴스는 구조적으로 같은 plain record 와도 구별된다
+  assert.notEqual(inputKey(new Repo('a')), inputKey({ name: 'a' }));
+});
+
+test('inputKey warns once per key for identity-keyed inputs', () => {
+  const original = console.warn;
+  let warnings = 0;
+  console.warn = () => {
+    warnings += 1;
+  };
+  try {
+    const instance = new Repo('warn-once');
+    // 같은 파생 키(같은 인스턴스)라면 재경고하지 않는다 — 렌더 스팸 방지
+    inputKey(instance);
+    inputKey(instance);
+    inputKey(instance);
+    assert.equal(warnings, 1);
+  } finally {
+    console.warn = original;
+  }
+});
+
+test('useCommand render path no longer crashes on class instance, function, or symbol inputs', () => {
+  async function load(_input: unknown): Promise<string> {
+    return 'ok';
+  }
+  const engine = createTestEngine({});
+  function render(input: unknown): string {
+    const hookResult: { current: UseCommandResult<string> | null } = { current: null };
+    function TestComponent() {
+      hookResult.current = useCommand(load, input, { enabled: false });
+      return createElement('div', null, 'ready');
+    }
+    const html = renderToString(
+      createElement(RustraProvider, { engine }, createElement(TestComponent)),
+    );
+    const result = hookResult.current;
+    assert.ok(result);
+    assert.equal(result.loading, false);
+    return html;
+  }
+  // 0.7 → 0.8 업그레이드에서 TypeError 로 크래시하던 입력들 — 렌더가 살아있어야 한다
+  assert.match(render(new Repo('render')), /ready/);
+  assert.match(render({ save: () => {} }), /ready/);
+  assert.match(render(Symbol('render')), /ready/);
+});
+
 test('useMutation hook contract and execution', async () => {
   async function updateItem(_input: { id: string }): Promise<{ updated: boolean }> {
     return { updated: true };
