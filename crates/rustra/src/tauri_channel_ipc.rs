@@ -50,6 +50,19 @@ impl Sender {
         let mut offset = 0;
         loop {
             if !self.active.load(Ordering::Acquire) {
+                // 채널이 멀티프레임 전송 도중 해제됐다(웹뷰 네비게이션/종료,
+                // JS close). 남은 조각의 수신자는 이미 사라졌으므로 버리는 게
+                // 맞고, 조각 스트림은 이 Sender 인스턴스의 `Channel` 락과
+                // per-packet (len, offset) 헤더로만 구성되어 다른 채널을
+                // 오염시킬 수 없다. 다만 유실은 관측 가능해야 하므로 잔여
+                // 바이트와 함께 진단을 남긴다(무음 중단 금지 — 채널 유실점
+                // 정비 2026-09-20).
+                let undelivered = payload.len() - offset;
+                let total = payload.len();
+                let handle = self.handle;
+                eprintln!(
+                    "rustra: tauri channel deactivated mid-delivery — {undelivered} of {total} bytes undelivered (handle {handle})"
+                );
                 return;
             }
             let end = (offset + CHUNK_BYTES).min(payload.len());
