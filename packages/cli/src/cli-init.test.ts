@@ -293,6 +293,29 @@ test('pre-existing rustra.json still blocks init with the overwrite guidance', a
   });
 });
 
+test('a missing schema file gets an actionable hint instead of a raw ENOENT', async () => {
+  await withTempDir(async (root) => {
+    // ENOENT 랩 계약 — 스키마 부재는 프로젝트 상태 오류라 힌트를 붙이고 exit 1 이다
+    // (UsageError 아님 — cli-usage-error.ts 의 exit-2 경계 밖).
+    const missing = join(root, 'generated', 'schema.json');
+    await assert.rejects(
+      () =>
+        runGenerate(['--schema', missing, '--output', join(root, 'out')], undefined, {
+          quiet: true,
+        }),
+      (error: unknown) => {
+        assert.ok(!(error instanceof UsageError));
+        const message = error instanceof Error ? error.message : String(error);
+        assert.match(message, /Schema file not found/);
+        assert.match(message, /Rust contract probe/);
+        assert.match(message, /rustra generate/);
+        assert.ok(!/ENOENT/.test(message), 'raw ENOENT must not leak to users');
+        return true;
+      },
+    );
+  });
+});
+
 /** codegen 게이트용 최소 스키마 — 실제 Rust generate 출력의 필수 형태만 갖춘다. */
 function writeMinimalSchema(project: string): void {
   mkdirSync(join(project, 'generated'), { recursive: true });

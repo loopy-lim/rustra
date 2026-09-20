@@ -8,10 +8,17 @@ rustra에 기여하는 방법을 정리한다.
 
 ### 요구사항
 
-- Rust (edition 2024, resolver 3)
-- Node.js 18+
-- Bun
-- Cargo 워크스페이스 지원
+사용자용 전제 조건은 [시작하기](docs/getting-started.ko.md#전제-조건)의 표가 단일
+원천이다(Rust 1.88+ MSRV, Bun 1.4+, Node.js 22.x, 호스트별 네이티브 툴체인).
+여기에는 저장소 개발 관련 사항만 덧붙인다:
+
+- Rust 1.88+ — workspace MSRV(루트 `Cargo.toml`의 `rust-version`, edition 2024,
+  resolver 3)
+- Bun 1.4.0 — 루트 `package.json`의 `packageManager` 필드가 고정하고 CI가
+  설치하는 정확한 버전
+- Node.js — 배포 패키지는 최소 지원 런타임으로 `engines.node >= 18`을 선언하지만,
+  CI는 Node 22를 사용한다(`.github/workflows/ci.yml`의 `setup-node`). CI와
+  맞추려면 로컬에서도 22.x를 사용한다
 
 ### 초기 설정
 
@@ -19,7 +26,7 @@ rustra에 기여하는 방법을 정리한다.
 git clone <repo-url> && cd rustra-bridge
 bun install                 # 워크스페이스 의존성
 
-bun run test:fast           # 몇 분 안에 첫 신호: cargo check + calculator tsc + cli 유닛 테스트
+bun run test:fast           # 웜 기준 약 15초의 첫 신호(첫 실행은 더 김): cargo check + calculator tsc + cli 유닛 테스트
 
 # 전체 배터리(느림; --workspace 는 macOS 전용 tauri-calculator 까지 빌드한다)
 cargo build --workspace
@@ -182,6 +189,8 @@ bun run test:runtime:tauri
   위반은 게이트가 실패로 보고한다.
 - 스캔 범위는 `docs/`뿐(`docs/plans/` 제외)이므로 이 규약을 `CONTRIBUTING.ko.md`
   에 인용해도 오탐이 없다.
+- 게이트는 **en/ko 미러 완전성**도 강제한다 — 스코프 내 모든 `X.md`에는 `X.ko.md`
+  쌍이(그 반대도) 있어야 한다. 같은 PR에서 양쪽을 함께 편집한다.
 - 로컬 실행: `bun run test:docs`.
 
 ---
@@ -265,7 +274,11 @@ Tauri 앱이 `rustra_dispatch`에서 에러를 반환할 때:
 
 ### React Native 관련
 
-- RN 런타임 테스트는 시뮬레이터/디바이스가 필요하므로 CI에서는 제외됨
+- RN 런타임 smoke은 CI에 **포함되어 있다**: `rn-android`/`rn-ios` 잡이 Release
+  APK/app을 빌드하고 에뮬레이터/시뮬레이터를 부팅해 설치한 뒤 통합 로그에서 앱이
+  계산한 결과를 단언한다(`scripts/ci-android-runtime-smoke.sh`,
+  `scripts/ci-ios-runtime-smoke.sh`). `uniffi-android`/`uniffi-ios` 잡은
+  UniFFI 바인딩(`examples/uniffi-*-smoke`)에 대해 같은 작업을 한다
 - `test:adapter:react-native`는 모킹 transport로 검증 (실제 FFI 아님)
 - FFI 문제 시 Swift 모듈에서 `@_silgen_name` 함수명과 Rust `#[unsafe(no_mangle)]` 함수명이 일치하는지 확인
 
@@ -282,9 +295,10 @@ Tauri 앱이 `rustra_dispatch`에서 에러를 반환할 때:
 - `*.{ts,js,json,yml,md}` → `prettier --write`
 - `*.rs` → `rustfmt`
 
-훅은 **재스테이징을 하지 않으므로**, 포맷이 적용된 파일은 커밋 직후
-`git add -A <paths> && git commit --amend --no-edit` 로 포함해야 한다. 커밋을
-만들었는데 워킹 트리에 prettier/rustfmt 변경이 남아 있으면 amend를 잊은 것이다.
+세 명령 모두 `stage_fixed: true`로 실행되므로, 포맷 수정은 자동으로 재스테이징되어
+같은 커밋에 포함된다. 훅이 파일을 수정했다고(lefthook이 보고하면) 커밋을 다시
+시도하면 끝이다 — 예전의
+`git add -A && git commit --amend --no-edit` 의식은 더 이상 필요 없다.
 
 ### 버전 관리 (changesets)
 

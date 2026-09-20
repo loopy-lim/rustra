@@ -1343,6 +1343,49 @@ assert!(pkg.is_frozen());
 **스키마/버전** — `pkg.schema()` (전체 스키마 JSON), `pkg.live_schema()`
 (동적 명령 포함), `.schema_version(v)` 빌더 (T2/OTA 협상).
 
+### 페이로드 크기 제한 (요청과 응답)
+
+하나의 동적 게이트가 호출의 양방향을 모두 한정한다 (`crates/rustra/src/limits.rs`):
+
+```rust
+// crates/rustra/src/limits.rs
+/// Default maximum encoded request/response size: 1 MiB.
+pub const DEFAULT_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+```
+
+- **요청 측**: 인코딩된 요청 프레임은 핸들러가 실행되기 전 디스패치 진입에서
+  검사된다; 한도를 넘는 요청은 `payload.too_large`로 거부되고 핸들러는 실행되지
+  않는다 (불변식과 검증은 [안전 계약 §S4](safety-contract.ko.md)에 고정돼 있다).
+- **응답 측**: 같은 한도가 8바이트 응답 프레임 헤더를 **포함한 응답 총량**에
+  적용된다. 모든 디스패치 경로가 이를 강제한다: postcard fast path는 반환 전에
+  `8 + body`를 한도와 비교하고 (`crates/rustra/src/command_handlers.rs`의
+  `checked_frame_response_len`), complex 코덱 경로는 완전히 인코딩된 프레임을
+  재검사하며(같은 파일의 `complex_encode_response`), JSON 폴백 경로는 인코딩된
+  응답을 검사한다 (`crates/rustra/src/invoke_dispatch.rs`). caller 버퍼 직접 응답
+  경로도 헤더를 포함해 계산하고, 총량이 한도를 넘으면 버퍼드 경로로 폴백해 두
+  경로가 같은 에러를 표면화한다 (`crates/rustra/src/command_into.rs`).
+
+한도를 넘게 인코딩되는 출력은 한도를 넘는 요청과 같은 코드로 실패한다 — 경로와
+무관하게 하나의 원인, 하나의 코드다:
+
+```
+payload.too_large: payload NB exceeds max payload MB   // retryable: false
+```
+
+(`crates/rustra/src/error.rs`의 `RustraError::payload_too_large`. non-retryable —
+값의 결정론적 성질이므로 같은 출력을 내는 명령을 다시 실행해도 들어가지 않는다.)
+
+**조정 노브**: 노브는 하나이고, 양방향을 함께 움직인다.
+`rustra_ffi_set_max_payload(bytes)` / `rustra_ffi_get_max_payload()`
+(`crates/rustra/src/ffi_lifecycle_entries.rs`)가 공유 아토믹을 다시 쓰므로, 한도를
+올리면 요청 한도와 응답 한도가 함께 올라간다 (동시 set은 last-writer-wins; 새 값은
+그 이후의 호출에 적용). JS 측에서는 엔진 옵션 `maxPayloadBytes`가 인코딩 직후
+**요청** 바이트를 사전 검사해 네이티브 왕복 전에 조기 실패시킨다 — 네이티브 동적
+한도가 최종 게이트로 남으며, typed(C++ fast path) 경로는 JS 측 인코딩이 없어 JS
+사전 검사를 건너뛴다. **별도의 응답 전용 한도는 없고 이를 설정할 노브도 없다**:
+더 큰 응답을 전달하는 유일한 방법은 공유 한도를 올리거나 더 적은 데이터를
+반환하는 것이다.
+
 ### 계산기 예제
 
 ```rust

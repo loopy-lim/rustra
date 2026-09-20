@@ -1363,6 +1363,53 @@ assert!(pkg.is_frozen());
 **Schema/version** — `pkg.schema()` (the full schema JSON), `pkg.live_schema()`
 (including dynamic commands), the `.schema_version(v)` builder (T2/OTA negotiation).
 
+### Payload Size Limits (request and response)
+
+One dynamic gate bounds both directions of a call (`crates/rustra/src/limits.rs`):
+
+```rust
+// crates/rustra/src/limits.rs
+/// Default maximum encoded request/response size: 1 MiB.
+pub const DEFAULT_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+```
+
+- **Request side**: the encoded request frame is checked at the dispatch entry before a
+  handler runs; an oversized request is rejected as `payload.too_large` and the handler
+  never executes (the invariant and its tests are pinned in the
+  [safety contract §S4](safety-contract.md#s4-payload-limits-the-max_payload-gate)).
+- **Response side**: the same limit applies to the **total encoded response**, including
+  the 8-byte response frame header. Every dispatch path enforces it: the postcard fast
+  path checks `8 + body` against the limit before returning
+  (`checked_frame_response_len` in `crates/rustra/src/command_handlers.rs`), the
+  complex-codec path re-checks the fully encoded frame (`complex_encode_response`, same
+  file), and the JSON fallback path checks the encoded response
+  (`crates/rustra/src/invoke_dispatch.rs`). The caller-buffer direct-response path
+  counts the header too and, when the total exceeds the limit, falls through to the
+  buffered path so both routes surface the same error
+  (`crates/rustra/src/command_into.rs`).
+
+A command whose output encodes beyond the limit fails with the same code an oversized
+request produces — one cause, one code, regardless of path:
+
+```
+payload.too_large: payload NB exceeds max payload MB   // retryable: false
+```
+
+(`RustraError::payload_too_large` in `crates/rustra/src/error.rs`. Non-retryable — it is
+a deterministic property of the value, so re-running the command cannot fit the same
+output.)
+
+**Adjustment knobs**: there is a single knob, and it moves both directions together.
+`rustra_ffi_set_max_payload(bytes)` / `rustra_ffi_get_max_payload()`
+(`crates/rustra/src/ffi_lifecycle_entries.rs`) rewrite the shared atomic, so raising the
+cap raises the request and the response limit alike (concurrent sets are
+last-writer-wins; the new value applies to calls made after the change). On the JS side,
+the engine option `maxPayloadBytes` pre-checks **request** bytes right after encoding to
+fail fast before the native round trip — the native dynamic limit stays the final gate,
+and the typed (C++ fast path) route skips the JS pre-check because there is no JS-side
+encoding. There is **no separate response-only limit and no knob to set one**: the only
+ways to deliver a larger response are raising the shared limit or returning less data.
+
 ### Calculator Example
 
 ```rust

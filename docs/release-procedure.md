@@ -2,7 +2,8 @@ English | [한국어](./release-procedure.ko.md)
 
 # Release procedure (canary → stable → rollback)
 
-The Frame rename and audit fixes target the coordinated 0.10 release. Do not
+The current release line targets the coordinated 0.11 release (Rust crates
+0.11.0, `@rustra/types`/`@rustra/cli` 0.11.0). Do not
 reuse the already published 0.9.0; see the [release preparation guide](migrations/post-0.9-frame-and-audit.md)
 for target versions, consumer checks, and rollback.
 
@@ -124,20 +125,46 @@ or `changeset publish` does not execute GitHub job dependencies and is not the
 stable publishing path in this procedure. Keep the Release run and its artifacts
 as the publication evidence.
 
-## Step 3.5 — main branch protection (applied 2026-08-21)
+## Step 3.5 — main branch protection (gate-only since 2026-09-20)
 
-- Required checks: `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
-  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`,
-  `rust-wasm32`. Updating this document alone does not change the live branch
-  protection — the required-checks registration is a separate manual step via the
-  `gh api` below.
+- The single required check is the `gate` aggregate job — applied via the `gh api`
+  below on 2026-09-20 and re-verified with the read-only form of the same call.
+  Before the switch (same day) the required contexts were 8 individuals:
+  `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
+  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`.
+- `gate` requires every CI job it aggregates (`rust`, `rust-msrv`, `rust-wasm32`,
+  `rust-audit`, `rust-deny`, `napi`, `typescript`, `rn-android`, `rn-ios`,
+  `uniffi-android`, `uniffi-ios`, `consumer-smoke` — see `ci.yml` and the
+  [gate map](./gate-map.md)), so the switch **widened** the merge-blocking set to
+  include the previously-unrequired `rust-msrv`, `rust-wasm32`, `rust-deny`,
+  `napi`, and the two `uniffi` jobs. `strict` remains `false` (no branch
+  staleness requirement); setting it to `true` would additionally require the
+  branch to be up to date before merging.
 - Direct pushes are allowed (efficiency for a one-person project); force pushes and
   deletions are blocked.
-- When adding a new CI job, add it to the required list as well — the list is
-  verified/changed with the API below:
+- When adding a new CI job, add it to `gate`'s `needs` in `ci.yml` and to
+  `scripts/ci-gate.sh` — the aggregate is the merge contract now. Verify or
+  restore the protection with:
   ```bash
-  gh api repos/loopy-lim/rustra/branches/main/protection
-  gh api -X PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_checks.contexts'
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  {
+    "required_status_checks": {
+      "strict": false,
+      "contexts": ["gate"]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  EOF
+  ```
+- **Rollback — restore the pre-2026-09-20 individual contexts** (the state
+  documented by the 2026-09-20 morning audit):
+  ```bash
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
   {
     "required_status_checks": {
       "strict": false,
@@ -149,8 +176,7 @@ as the publication evidence.
         "typescript",
         "rn-android",
         "rn-ios",
-        "consumer-smoke",
-        "rust-wasm32"
+        "consumer-smoke"
       ]
     },
     "enforce_admins": false,

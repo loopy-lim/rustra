@@ -60,7 +60,26 @@ export async function generateFromSchema(
   hostEntries?: HostEntries,
   check = false,
 ): Promise<string[]> {
-  const schemaContent = await readFile(schemaPath, 'utf-8');
+  let schemaContent: string;
+  try {
+    schemaContent = await readFile(schemaPath, 'utf-8');
+  } catch (error) {
+    // ENOENT 를 날로 노출하지 않는다 — schema.json 은 Rust 프로브의 산출물이므로
+    // "먼저 프로브를 돌려라" 힌트를 붙인다. config.ts 의 rustra.json ENOENT 랩과
+    // 같은 모양이며, 아래의 JSON 파싱 랩과 쌍을 이룬다. 이 호출부엔 config 경로나
+    // 바이너리 이름이 없으므로 힌트는 스키마 경로와 공용 플래그만으로 쾅 꾸민다.
+    // 파일 부재는 프로젝트 상태 오류 → exit 1 (UsageError 아님 — exit-2 계약 밖).
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT') {
+      throw new Error(
+        `Schema file not found: ${resolve(schemaPath)}. Run the Rust contract probe first ` +
+          `(e.g. "cargo run" with the package's generate bin) or point --schema/--config at the ` +
+          `right file in rustra.json, then re-run "rustra generate".`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
   // schema.json 은 Rust 프로브의 산출물 — 파싱 실패를 파일 경로·재생성 명령 없이
   // 날로 노출하면 사용자가 어디를 고쳐야 하는지 알 수 없다. 파일명과 cargo run
   // 힌트를 붙이되, 하위 파서(parsePackageSchema)의 세부 메시지는 그대로 살린다.
