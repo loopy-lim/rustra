@@ -1,6 +1,6 @@
 {
   "name": "@rustra/tauri",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Tauri adapter for rustra-bridge",
   "license": "MIT",
   "type": "module",

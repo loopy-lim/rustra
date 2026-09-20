@@ -1,6 +1,6 @@
 {
   "name": "@rustra/react",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "React and React Native bindings and hooks for rustra-bridge",
   "license": "MIT",
   "type": "module",
