@@ -67,6 +67,33 @@ test('runDev fails fast instead of silently watching a missing layout', async ()
   }
 });
 
+// dev 루프의 cargo 스폰 증분 기본값 — 루프 진입 시점에 프로세스 env 로 주입되며
+// 사용자가 이미 세팅한 CARGO_INCREMENTAL 이 있으면 존중한다(디스크 방어,
+// rust-cache CI 의 0 포함). env 누수가 이후 테스트에 번지지 않게 복원한다.
+test('runDev enables incremental compilation for its cargo spawns unless the user set it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-incremental-'));
+  const hadBefore = process.env.CARGO_INCREMENTAL;
+  try {
+    delete process.env.CARGO_INCREMENTAL;
+    await assert.rejects(
+      () => runDev(['--backend', join(dir, 'backend'), '--app', join(dir, 'app')]),
+      /requires backend/,
+    );
+    assert.equal(process.env.CARGO_INCREMENTAL, '1');
+
+    process.env.CARGO_INCREMENTAL = '0';
+    await assert.rejects(
+      () => runDev(['--backend', join(dir, 'backend'), '--app', join(dir, 'app')]),
+      /requires backend/,
+    );
+    assert.equal(process.env.CARGO_INCREMENTAL, '0', '사용자 값은 덮지 않는다');
+  } finally {
+    if (hadBefore === undefined) delete process.env.CARGO_INCREMENTAL;
+    else process.env.CARGO_INCREMENTAL = hadBefore;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ── runDev reload orchestration (Task A1) ────────────────────────────────────
 //
 // runDev 의 파이프라인은 실제 cargo/node 를 spawn 하므로, 훅 계약은 watch 루프의
