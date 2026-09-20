@@ -38,7 +38,7 @@ This guide aims to get a developer new to rustra building their first package an
 ### The Fastest Start — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli@0.11.0 init my-project
+bunx --bun @rustra/cli@0.11.1 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -59,7 +59,7 @@ Re-running init in a directory with existing files blocks overwriting. Add `--fo
 to replace them:
 
 ```bash
-bunx --bun @rustra/cli@0.11.0 init my-project --force
+bunx --bun @rustra/cli@0.11.1 init my-project --force
 ```
 
 ### Using in an External Project
@@ -76,10 +76,10 @@ Installation versions follow the current Rust and npm manifests. Adapters have i
 For the TypeScript adapters, install only the environment you use:
 
 ```bash
-bun add @rustra/node@0.10.1      # Node.js
-bun add @rustra/bun@0.10.1       # Bun
-bun add @rustra/tauri@0.9.1     # Tauri
-bun add @rustra/react-native@0.9.1  # React Native
+bun add @rustra/node@0.10.2      # Node.js
+bun add @rustra/bun@0.10.2       # Bun
+bun add @rustra/tauri@0.9.2     # Tauri
+bun add @rustra/react-native@0.9.2  # React Native
 ```
 
 ### Using in a Monorepo / Workspace
@@ -936,8 +936,8 @@ commands whose input has 0–3 fields are published as field-positional helpers
 outside that shape keep the object-input `commands.ts` path.
 
 ```bash
-bunx --bun @rustra/cli@0.11.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.1 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.1 codegen --config rustra.json
 ```
 
 **TypeScript-side usage:**

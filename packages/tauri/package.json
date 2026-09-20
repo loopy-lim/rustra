@@ -1,6 +1,6 @@
 {
   "name": "@rustra/tauri",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Tauri adapter for rustra-bridge",
   "license": "MIT",
   "type": "module",
@@ -27,7 +27,7 @@
     "test:compile": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@rustra/types": "^0.11.0"
+    "@rustra/types": "^0.12.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0"

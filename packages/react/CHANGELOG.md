@@ -1,5 +1,12 @@
 # @rustra/react
 
+## 0.8.2
+
+### Patch Changes
+
+- Updated dependencies [8669395]
+  - @rustra/types@0.12.0
+
 ## 0.8.1
 
 ### Patch Changes
