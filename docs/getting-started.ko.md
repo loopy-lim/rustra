@@ -37,7 +37,7 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 init my-project
+bunx --bun @rustra/cli@0.11.3 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -57,7 +57,7 @@ package.json(doctor/codegen/codegen:check/dev/demo 스크립트), `.gitignore`
 `--force`를 붙인다:
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 init my-project --force
+bunx --bun @rustra/cli@0.11.3 init my-project --force
 ```
 
 ### 외부 프로젝트에서 사용
@@ -926,8 +926,8 @@ RN JSI `invokeTyped` 진입을 직접 호출한다. 해당 형태 밖의 명령�
 `commands.ts` 경로를 유지한다.
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 ```
 
 **TypeScript 측 사용:**

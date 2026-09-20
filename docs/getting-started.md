@@ -38,7 +38,7 @@ This guide aims to get a developer new to rustra building their first package an
 ### The Fastest Start — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 init my-project
+bunx --bun @rustra/cli@0.11.3 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -59,7 +59,7 @@ Re-running init in a directory with existing files blocks overwriting. Add `--fo
 to replace them:
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 init my-project --force
+bunx --bun @rustra/cli@0.11.3 init my-project --force
 ```
 
 ### Using in an External Project
@@ -936,8 +936,8 @@ commands whose input has 0–3 fields are published as field-positional helpers
 outside that shape keep the object-input `commands.ts` path.
 
 ```bash
-bunx --bun @rustra/cli@0.11.2 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.2 codegen --config rustra.json
+bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
+bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
 ```
 
 **TypeScript-side usage:**
