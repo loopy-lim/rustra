@@ -166,8 +166,16 @@ during the drain or re-initialization aborts the reload instead of resurrecting
 the bootstrap, and a failed re-initialization restores `initializing` (the
 original error propagates) rather than bricking the bootstrap as `disposed`.
 A `draining` state is deliberately not modeled: drain is transparent to the
-three-state lifecycle. See the hot-swap section below for the reload contract
-this builds on.
+three-state lifecycle. Independent of the per-adapter state, the global engine
+slot guards its own lifecycle: while an unconsumed lazy setup is pending, an
+alternate `configureLazy` registration (a different initializer closure) throws
+`registry.frozen` naming both parties (holder vs incoming `ownerId`, anonymous
+fallback) — same-closure `reload()` and replacement after consumption started
+keep the existing contracts. `EngineRegistration` releases only its own
+registration (`isCurrent()`), and `getEngineRegistrationToken()` exposes the
+current registration's opaque identity, stable across lazy setup
+(`packages/types/src/global-config.ts`). See the hot-swap section below for the
+reload contract this builds on.
 
 ## UniFFI bindings (Track B1): typed Kotlin/Swift surface
 

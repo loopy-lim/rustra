@@ -72,6 +72,20 @@ export function requireTauriIpcChannel(
       'Tauri core.Channel and callback cleanup are required. Enable app.withGlobalTauri, or pass createIpcChannel.',
     );
   }
+  // 감사(2026-09-13) 항목 2 — @tauri-apps/api 2.4 까지는 Channel 생성자가 콜백
+  // 인자를 선언하지 않는다(compiled `constructor()`, Channel.length === 0). 그래서
+  // new Channel(onMessage) 의 콜백이 조용히 버려지고 채널 메시지가 끝까지
+  // 도달하지 않는다. 2.5 부터 compiled `constructor(onmessage)` (기본값 없음 →
+  // length 1, latest 2.11.1 까지 동일)라 arity 가 정확히 변별한다. 이 저장소에는
+  // api 가 설치되지 않아(onmessage 후행 할당 듀얼 패스의 양버전 신뢰성 검증 불가)
+  // 콜백을 넘기는 호출에서는 조용한 실패 대신 loud-fail 한다. 콜백 없이 구식
+  // 스타일로 Channel 을 다루는 경로는 기존 동작을 그대로 유지한다.
+  if (typeof onMessage === 'function' && Channel.length === 0) {
+    throw new RustraCommandError(
+      code,
+      'The installed @tauri-apps/api is too old for callback-style channels: its Channel constructor ignores the onMessage callback (requires @tauri-apps/api 2.5+), so channel messages would silently never arrive. Upgrade @tauri-apps/api and rebuild the app: bun add @tauri-apps/api@^2.5.0 (or npm install @tauri-apps/api@^2.5.0).',
+    );
+  }
   const channel = new Channel(onMessage);
   let disposed = false;
   return {

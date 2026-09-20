@@ -1209,6 +1209,25 @@ feature는 `libloading` 의존을 추가할 뿐 나머지는 움직이지 않는
   std 스레드(notify 계열 파일 감시 의존 없음). 아티팩트 sha256 을 폴링하고
   스왑을 원자적으로 적용한다.
 
+### 리텐션 진단 (`hot-core` feature)
+
+스왑으로 밀려난 코어는 의도적으로 절대 `dlclose` 하지 않는다 — macOS는 어차피
+언로드가 불가능(std TLS 때문에 `dlclose` 가 no-op)하고 Linux 는 해서는 안 된다
+(스왑 전부터 살아있던 구 심볼 포인터가 use-after-unload 된다). 따라서 모든
+`DylibCore::open` 은 라이브러리 매핑을 프로세스 수명 동안 유지하며 open 시점에
+한 번 계수된다 — 이후 심볼 바인딩이 실패한 로드도 포함한다. `rustra::hot_core` 는
+이를 보고하는 세 항목을 노출한다:
+
+- `retained_library_stats()` — 프로세스 전체 `RetainedLibraryStats` 스냅샷.
+  다른 스레드가 로드 중인 동안 카운터가 독립적으로 움직일 수 있다.
+- `RetainedLibraryStats` — `libraries`(누적 유지 로드 수. 코어를 드랍해도
+  심볼은 언로드되지 않는다)와 `artifact_bytes`(로드된 아티팩트 **파일 크기**의
+  합 — 상주 메모리 아님). `.restart_recommended()` 는 아래 간격에 도달하면
+  `true` 를 반환한다.
+- `RETAINED_LIBRARY_RESTART_INTERVAL` (`= 32`) — 유지된 매핑을 해제하려면 이
+  로드 횟수에 도달하면 개발 호스트를 재시작해야 한다는 기준값이다. 32번째
+  로드마다 stderr 로 안내를 출력한다.
+
 ### 재시도 상한
 
 같은 아티팩트 바이트가 연속 5회 스왑에 실패하면 포이즌으로 표시되어 다른 바이트가
@@ -1549,4 +1568,5 @@ fn main() -> Result<()> {
 모든 자사 어댑터(`createNodeBootstrap`, `createBunBootstrap`,
 `createTauriBootstrap`, RN `createRustraBootstrap`)가 같은 슬롯 경로를
 공유하므로 가드가 자동으로 함께 적용된다. 현재 `ownerId` 를 전달하는 어댑터는
-Node 뿐이라 — 나머지 어댑터의 충돌 진단은 익명 주체로 보고된다.
+Node(`node-bootstrap.ts`)와 Bun(`bun-ffi.ts`)이고 — 나머지 어댑터의 충돌 진단은
+익명 주체로 보고된다.

@@ -130,8 +130,8 @@ diagnostic, or a gate rejection.
 - **Evidence**: `crates/rustra/src/hot_core_watch.rs:58` (`MAX_SWAP_FAILURES_PER_BYTES = 5`),
   `crates/rustra/src/hot_core_watch.rs:64-99` (`FailureTracker` — per-byte poison),
   `crates/rustra/src/hot_core_watch.rs:147-177` (`attempt_swap` catch_unwind),
-  `packages/cli/src/dev.ts:244-316` (gate rejection → no reload emit, live untouched;
-  `publishGatedArtifact` only on pass), `packages/cli/src/dev-dylib.ts:191-207`
+  `packages/cli/src/dev.ts` `runConfigDev` (gate rejection → no reload emit, live
+  untouched; `publishGatedArtifact` only on pass), `packages/cli/src/dev-dylib.ts:191-207`
   (the `-hot-live` path convention), `crates/rustra/src/hot_core_dylib.rs:6-13,125`
   (the no-dlclose leak contract), `crates/rustra/src/hot_core_dylib.rs:309-330`
   (macOS ad-hoc re-sign — failures propagate loudly).
@@ -186,7 +186,7 @@ diagnostic, or a gate rejection.
 - **Evidence**: `packages/types/src/frame-engine-contract.ts:61-163`
   (`validateFrameEngineOptions` — mismatch/unenforceable),
   `packages/types/src/frame-engine-options.ts:64` (the `contractVerification` policy
-  knob), `packages/cli/src/dev.ts:233-330`
+  knob), `packages/cli/src/dev.ts` `runConfigDev`
   (parity-gate fail-closed publish), Android gate:
   `examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt:35`
   (iOS is symmetric via the `RUSTRA_HOT_CORE_DIR` env gate), `scripts/docs-gate.mjs`.

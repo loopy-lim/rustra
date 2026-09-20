@@ -118,8 +118,8 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
 - **근거 코드**: `crates/rustra/src/hot_core_watch.rs:58` (`MAX_SWAP_FAILURES_PER_BYTES = 5`),
   `crates/rustra/src/hot_core_watch.rs:64-99` (`FailureTracker` — 바이트 단위 포이즌),
   `crates/rustra/src/hot_core_watch.rs:147-177` (`attempt_swap` catch_unwind),
-  `packages/cli/src/dev.ts:244-316` (게이트 거부 → reload 미방출·라이브 무변경, 통과 시에만
-  `publishGatedArtifact`), `packages/cli/src/dev-dylib.ts:191-207` (`-hot-live` 경로 규약),
+  `packages/cli/src/dev.ts` `runConfigDev` (게이트 거부 → reload 미방출·라이브 무변경,
+  통과 시에만 `publishGatedArtifact`), `packages/cli/src/dev-dylib.ts:191-207` (`-hot-live` 경로 규약),
   `crates/rustra/src/hot_core_dylib.rs:6-13,125` (dlclose 금지·leak 계약),
   `crates/rustra/src/hot_core_dylib.rs:309-330` (macOS ad-hoc 재서명 — 실패는 loud 전파).
 - **위반 시 동작**: 포이즌 상태의 바이트는 조용히 대기(로그 1회), 새 바이트에 재개. 게이트
@@ -167,7 +167,7 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
 - **근거 코드**: `packages/types/src/frame-engine-contract.ts:61-163`
   (`validateFrameEngineOptions` — mismatch/unenforceable),
   `packages/types/src/frame-engine-options.ts:64` (`contractVerification` 정책 노브),
-  `packages/cli/src/dev.ts:233-330`
+  `packages/cli/src/dev.ts` `runConfigDev`
   (parity 게이트 fail-closed 발행), Android 게이트:
   `examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt:35`
   (iOS 는 `RUSTRA_HOT_CORE_DIR` env 게이트와 대칭), `scripts/docs-gate.mjs`.

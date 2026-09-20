@@ -215,8 +215,15 @@ reload 만 중단)하고, 없으면 즉시 진행한다(원샷 stdio transport �
 `reload()` 는 await 경계마다 상태를 재검사한다 — drain·재초기화 중 `dispose()`
 하면 reload 는 부활 없이 중단되고, 재초기화 실패는 `disposed` 벽돌 대신
 `initializing`(원본 에러 전파)으로 남는다. `draining` 상태는 의도적으로
-모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다. reload 계약의 기반은
-아래 핫스왑 절 참고.
+모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다. 어댑터별 상태와 별개로
+글로벌 엔진 슬롯은 자체 수명 가드를 둔다: 소비되지 않은 lazy 셋업이 pending 중일 때
+다른 initializer 클로저의 `configureLazy` 등록은 `registry.frozen` 으로
+loud-fail 하며 양쪽 주체(슬롯 보유자 vs 새 등록의 `ownerId`, 익명 폴백)를
+보고한다 — 같은 클로저의 `reload()` 와 소비 시작 뒤의 교체는 기존 계약을
+유지한다. `EngineRegistration` 은 자기 등록만 해제하고(`isCurrent()`),
+`getEngineRegistrationToken()` 은 현재 등록의 불투명 식별자를 노출한다 —
+lazy 셋업 전후로 안정적이다(`packages/types/src/global-config.ts`). reload
+계약의 기반은 아래 핫스왑 절 참고.
 
 ## UniFFI 바인딩 (Track B1): 타입 Kotlin/Swift 표면
 

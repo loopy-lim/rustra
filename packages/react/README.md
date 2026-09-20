@@ -91,6 +91,12 @@ are captured at invocation time and still belong to that invocation, including
 when it settles after a reset or scope change. Overlapping calls keep `loading`
 true until all current-scope calls settle; only the latest call updates data/error.
 
+**Engine identity.** Engines are keyed by object identity (a `WeakMap`), not by
+value. Pass a stable engine to `RustraProvider` — a module-level constant or a
+`useMemo` result; an unstable `engine` prop (a new object every render) is
+observed as an engine swap and resets `useMutation` state on every render.
+Intentional swaps resetting state are by design.
+
 `useEvent` accepts synchronous or asynchronous unsubscribe registration. Replacing
 an event/subscriber or unmounting immediately disables delivery from the old
 subscription. A cleanup function that arrives afterward is invoked once.

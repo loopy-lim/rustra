@@ -145,6 +145,37 @@ The entry installs the engine lazily on first call — there is no
 `configure()`, no invoke plumbing in app code. Build and run the app as usual
 (`tauri dev` / `tauri build`).
 
+## 7. Mobile (iOS/Android) — the lib/bin split
+
+Desktop-only apps can stop at step 6. Tauri 2 mobile builds the app body as a
+**library target** that the platform shell (Xcode project / Gradle project)
+loads — a bin-only layout fails with `no library targets found`. The
+[tauri-calculator example](../../examples/tauri-calculator/) is the reference
+layout:
+
+1. `src-tauri/Cargo.toml` declares the library target — `staticlib` for iOS,
+   `cdylib` for Android, `rlib` so the desktop bin and tests keep linking:
+
+   ```toml
+   [lib]
+   name = "rustra_tauri_calculator_lib"
+   crate-type = ["staticlib", "cdylib", "rlib"]
+   ```
+
+2. Move the app body (the `register_with_events` call and everything around
+   it) into a shared entry in the library, marked with Tauri's mobile entry
+   attribute — `#[cfg_attr(mobile, tauri::mobile_entry_point)] pub fn run()`.
+3. `src-tauri/src/main.rs` becomes a thin desktop wrapper that only calls
+   `run()`; mobile boots through the same `run()` via the mobile entry point.
+4. Scaffold the platform shells with `bunx tauri ios init` /
+   `bunx tauri android init` (generated under `src-tauri/gen/`), then build
+   with `tauri ios build` / `tauri android build`.
+
+The rustra side needs nothing extra on mobile — the same
+`tauri_support::register_with_events` registration runs inside the shared
+entry. (`rustra::native_entry!` is the **React Native** path's
+`rustra_mobile_init` contract; a Tauri mobile app does not use it.)
+
 ## Verify and troubleshoot
 
 - `bunx --bun @rustra/cli doctor --config rustra.json` — checks the toolchain,

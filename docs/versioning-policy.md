@@ -47,7 +47,7 @@ Per-version migration notes live in
 Recent removal: `RendererHost` (with `HostMessage`, `MessageKind`,
 `RendererCapabilities`, `Size`, `SurfaceOptions`, `host_supports_eval`) is
 deprecated as of 0.6.0 and removed under the pre-1.0 rule above — in the
-0.7.0 npm packages (changesets) and in the next `rustra` crate release
+0.7.0 npm packages (changesets) and in the `rustra` crate 0.9.0 release
 (crates.io publishing is manual, so crate versions trail the npm line). The
 replacement is a host-specific adapter boundary — each embedding host
 bridges its own renderer/events via the published channel and FFI surfaces.
@@ -59,15 +59,21 @@ overloads, deprecated in 0.6.0. Only `subscribeEvent(name, callback[, listen])` 
 `subscribeEvent(name, callback[, options])` remain; React Native resolves the native
 module from `globalThis.__rustraNative`.
 
-Landed on `main` and shipping with the next npm release (pending changesets):
-the `reactNative.legacyBenchmarks` config key together with the
-`RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` build flags in
-generated modules (`@rustra/cli`), and the calculator-only legacy wire functions
-on `RustraNative` and the JSI host object — `invokeMsgpack`, `invokeBincode`,
-`invokePostcard`, `invokeHybrid`, `invokeRaw`, plus `invokeBytes` and
-`invokeLegacyPostcard` on the JSI side (`@rustra/types`, `@rustra/react-native`).
-The generic transport (`invoke`, `invokeFrame`) and the typed fast paths
-(`invokeTyped*`, `getCodecCapabilities`) are the replacement and are unchanged.
+Shipped in the 0.9.0 release line (2026-09-10, changeset `1f99eca`):
+`@rustra/cli` 0.9.0 removed the `reactNative.legacyBenchmarks` config key
+together with the `RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS`
+build flags from generated modules, and `@rustra/react-native` 0.8.0 dropped
+the calculator-only legacy wire functions from the JSI host object —
+`invokeBytes`, `invokeMsgpack`, `invokeBincode`, `invokePostcard`,
+`invokeLegacyPostcard`, `invokeHybrid`, `invokeRaw`. The type-level half of
+the same changeset was not carried through: the published `RustraNative`
+(`@rustra/types`) still declares `invokeMsgpack`, `invokeBincode`,
+`invokePostcard`, `invokeHybrid`, and `invokeRaw` — the TS type keeps the
+members even though the RN host object no longer exposes them. Only
+`invokeRkyv` is gone for good: the 0.10.0 Frame rename removed the dead
+member without revival. The generic transport (`invoke`, `invokeFrame`) and
+the typed fast paths (`invokeTyped*`, `getCodecCapabilities`) are the
+replacement and are unchanged.
 
 ## Experimental surface
 
