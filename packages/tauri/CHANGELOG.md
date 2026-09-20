@@ -1,5 +1,12 @@
 # @rustra/tauri
 
+## 0.9.2
+
+### Patch Changes
+
+- Updated dependencies [8669395]
+  - @rustra/types@0.12.0
+
 ## 0.9.1
 
 ### Patch Changes
