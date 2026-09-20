@@ -135,22 +135,33 @@ export function resolveSuspenseEntry<O>(
     clearTimeout(timeout);
     // Invalidated requests still settle for their callers but never reinsert.
     if (cache.entries.get(key) !== record) return;
+    if (record.expiry) clearTimeout(record.expiry);
     record.expiresAt = Date.now() + cache.policy.ttlMs;
     record.expiry = setTimeout(() => remove(cache, key), cache.policy.ttlMs);
     // Node SSR must not remain alive solely for cache retention.
     (record.expiry as { unref?: () => void }).unref?.();
   }
-  promise.then(
-    (value) => {
-      entry.status = 'fulfilled';
-      entry.value = value;
-      settled();
-    },
-    (error: unknown) => {
-      entry.status = 'rejected';
-      entry.error = error instanceof Error ? error : new Error(String(error));
-      settled();
-    },
-  );
+  function recordFailure(error: unknown): void {
+    entry.status = 'rejected';
+    entry.error = error instanceof Error ? error : new Error(String(error));
+    settled();
+  }
+  // The pending timeout is only a UI-state signal, not an abandonment: the
+  // Suspense caller still observes the timeout rejection, but the entry keeps
+  // following the original in-flight invocation so its eventual result or
+  // rejection still lands in the cache — the next render then sees the real
+  // outcome without a duplicate re-invoke.
+  deadline.catch((error: unknown) => {
+    if (entry.status !== 'pending') return; // the real outcome already landed
+    recordFailure(error);
+  });
+  // Callers may never attach to the raced promise; swallow its mirrored
+  // rejection here — outcomes are recorded from the source promises below.
+  promise.catch(() => {});
+  invocation.then((value) => {
+    entry.status = 'fulfilled';
+    entry.value = value;
+    settled();
+  }, recordFailure);
   return entry;
 }

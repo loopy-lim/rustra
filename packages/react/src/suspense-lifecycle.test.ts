@@ -111,6 +111,92 @@ test('cache expires settled values and times out requests that never settle', as
   hooks.invalidateCommands(undefined, owner);
 });
 
+test('pending timeout stays a UI signal but the late result still lands in the cache', async () => {
+  const owner = engine('unused');
+  hooks.configureSuspenseCache({ pendingTimeoutMs: 15, ttlMs: 4000 }, owner);
+  let invocations = 0;
+  let finish!: (value: string) => void;
+  const slow = new Promise<string>((resolve) => {
+    finish = resolve;
+  });
+  const entry = resolveSuspenseEntry(
+    'late-value',
+    'profile',
+    () => {
+      invocations += 1;
+      return slow;
+    },
+    owner,
+  );
+
+  // 타임아웃은 기존 UI 계약대로 호출자에게 timeout rejection 으로 전달된다
+  await assert.rejects(entry.promise, /timed out/i);
+  assert.equal(entry.status, 'rejected');
+
+  // 그러나 캐시는 원래 in-flight promise 를 계속 추적해 실제 결과를 기록한다
+  finish('slow-but-real');
+  await slow;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(entry.status, 'fulfilled');
+  assert.equal(entry.value, 'slow-but-real');
+
+  // 다음 렌더는 재호출 없이 같은 entry 로 실제 데이터를 본다
+  const nextRender = resolveSuspenseEntry(
+    'late-value',
+    'profile',
+    () => {
+      invocations += 1;
+      return Promise.resolve('should-not-run');
+    },
+    owner,
+  );
+  assert.equal(nextRender, entry);
+  assert.equal(nextRender.value, 'slow-but-real');
+  assert.equal(invocations, 1);
+  hooks.invalidateCommands(undefined, owner);
+});
+
+test('pending timeout keeps following the in-flight promise so a late rejection lands too', async () => {
+  const owner = engine('unused');
+  hooks.configureSuspenseCache({ pendingTimeoutMs: 15, ttlMs: 4000 }, owner);
+  let invocations = 0;
+  let fail!: (error: Error) => void;
+  const slow = new Promise<string>((_, reject) => {
+    fail = reject;
+  });
+  const entry = resolveSuspenseEntry(
+    'late-error',
+    'profile',
+    () => {
+      invocations += 1;
+      return slow;
+    },
+    owner,
+  );
+
+  await assert.rejects(entry.promise, /timed out/i);
+  const realFailure = new Error('real engine failure');
+  fail(realFailure);
+  await assert.rejects(slow);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  // timeout 에러가 아닌 실제 에러로 치환된다 — 다음 렌더가 실제 에러를 본다
+  assert.equal(entry.status, 'rejected');
+  assert.equal(entry.error, realFailure);
+  const nextRender = resolveSuspenseEntry(
+    'late-error',
+    'profile',
+    () => {
+      invocations += 1;
+      return Promise.resolve('should-not-run');
+    },
+    owner,
+  );
+  assert.equal(nextRender, entry);
+  assert.equal(invocations, 1);
+  hooks.invalidateCommands(undefined, owner);
+});
+
 test('cache refuses excess pending requests without evicting their promises', async () => {
   const owner = engine('unused');
   hooks.configureSuspenseCache({ maxEntries: 1 }, owner);
