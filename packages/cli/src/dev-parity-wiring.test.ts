@@ -843,6 +843,81 @@ test(
 );
 
 test(
+  'runConfigDev dylib target re-arms past a stale startup schema instead of a forced first rejection',
+  { timeout: 30_000 },
+  async () => {
+    // 리스크 감사 2026-09-13 #7 — 시작 시 존재하던 stale schema.json 으로 게이트가
+    // 먼저 arm 되면, 같은 틱의 codegen 이 새 계약을 만들더라도 첫 판정은 stale
+    // 기준과의 비교라 반드시 오탐 거부로 시작했다(verify 의 재무장으로 두 번째
+    // 틱부터 회복되지만 첫 발행은 항상 밀렸다). codegen 이전 arm 은 재생성 직후
+    // 기준으로 다시 잡아 첫 틱이 바로 발행해야 하고, 이후 틱의 실제 드리프트는
+    // 기존과 같이 거부되어야 한다(fail-closed 불변).
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-stale-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      // 시작 시점의 stale 계약 — fake cargo 가 만들 계약(string)과 다른 바이트.
+      writeSchema(join(project, 'generated', 'schema.json'), 'integer');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      writeSchema(join(root, 'schema-integer.json'), 'integer');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        // 첫 틱 — stale 시작 기준이 첫 발행을 막아서는 안 된다.
+        const liveAbs = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'fake dylib core',
+          'the stale startup baseline must not force a spurious first-tick rejection — the gate re-arms on the regenerated schema',
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev] reload rejected')),
+          `the stale startup baseline must not reject the first tick, got:\n${errors.join('\n')}`,
+        );
+
+        // 이후 틱 — 실제 드리프트는 기존 계약대로 거부된다(재-arm 이 허용이 아님).
+        process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
+        process.env.FAKE_DYLIB_CONTENT = 'drifted core bytes';
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () =>
+            errors.some(
+              (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
+            ),
+          'the loud drift rejection after the stale-start recovery',
+        );
+        handle.dispose();
+        assert.deepEqual(
+          reloads,
+          [],
+          'a drifted dylib swap must not emit reload — the host keeps the old core',
+        );
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'fake dylib core',
+          'the drifted build must not reach the live path',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_CONTENT;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   'runConfigDev dylib target publishes the new core once the re-armed baseline accepts the settled state',
   { timeout: 30_000 },
   async () => {

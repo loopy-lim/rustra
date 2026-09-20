@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFileWatch, createSourceWatch, createWatchLoop } from './watch.js';
@@ -31,6 +31,31 @@ test('source watch follows directories created after startup and recreated roots
     mkdirSync(join(src, 'new', 'nested'), { recursive: true });
     writeFileSync(file, 'two');
     await until(() => events.includes(file));
+  } finally {
+    handle.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('source watch follows a symlinked root and reports original-namespace paths', async () => {
+  // 리스크 감사 2026-09-13 #6 — lstat 기반 스냅샷은 심링크 루트를 파일로 기록해
+  // 서브트리를 걷지 못했다(이벤트 0). 루트는 realpath 로 걷고, 보고 경로는
+  // 사용자가 건 네임스페이스(link 기준)를 유지한다.
+  const root = mkdtempSync(join(tmpdir(), 'rustra-watch-symlink-'));
+  const real = join(root, 'real', 'src');
+  mkdirSync(real, { recursive: true });
+  const link = join(root, 'link');
+  symlinkSync(real, link, 'dir');
+  const events: string[] = [];
+  const handle = createSourceWatch(link, (path) => events.push(path));
+  try {
+    const file = join(link, 'lib.rs');
+    writeFileSync(file, 'one');
+    await until(() => events.includes(file));
+    events.length = 0;
+    const nestedViaLink = join(link, 'nested.txt');
+    writeFileSync(nestedViaLink, 'two');
+    await until(() => events.includes(nestedViaLink));
   } finally {
     handle.dispose();
     rmSync(root, { recursive: true, force: true });
