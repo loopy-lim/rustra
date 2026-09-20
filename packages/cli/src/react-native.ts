@@ -118,10 +118,17 @@ export function renderReactNativeModule(
   options: ReactNativeScaffoldOptions,
 ): Record<string, string> {
   const moduleRoot = resolve(options.moduleDir);
-  const adapterNative = resolveReactNativeAdapterNative(options.appRoot, options.adapterRange);
-  const adapterFromIos = portableRelative(moduleRoot, adapterNative);
+  // 버전·네이티브 파일 검증은 상향 탐색(설치된 어댑터를 찾아 loud 검증)으로
+  // 하지만, 파일에 박히는 경로는 앱 레이아웃 기준의 결정적 값이다 — 어댑터가
+  // 발견된 위치(워크스페이스 호이스팅 상태)를 따라가면 동일 커밋이 환경마다
+  // 다른 바이트를 낸다(코드젠 신선도 게이트가 CI 잡의 설치 상태에 따라
+  // 깜빡임 — 2026-09-20 CI ts-checks 분할에서 적발). 문서화된 설치 위치는
+  // 앱 자체의 node_modules다.
+  resolveReactNativeAdapterNative(options.appRoot, options.adapterRange);
+  const adapterInstallRoot = resolve(options.appRoot, 'node_modules/@rustra/react-native/native');
+  const adapterFromIos = portableRelative(moduleRoot, adapterInstallRoot);
   const generatedFromIos = portableRelative(moduleRoot, options.cppOutputPath);
-  const adapterFromAndroid = portableRelative(resolve(moduleRoot, 'android'), adapterNative);
+  const adapterFromAndroid = portableRelative(resolve(moduleRoot, 'android'), adapterInstallRoot);
   const generatedFromAndroid = portableRelative(
     resolve(moduleRoot, 'android'),
     options.cppOutputPath,

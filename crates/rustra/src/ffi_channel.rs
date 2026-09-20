@@ -62,7 +62,19 @@ impl FfiChannelSink {
         }
         let _active = FfiActivityGuard { gate: &self.0.gate };
         let Ok(payload_c) = std::ffi::CString::new(payload) else {
-            return; // 내부 NUL — 이벤트 싱크와 동일하게 소실(로그 없음, 채널은 유니캐스트)
+            // 내부 NUL 은 NUL 종결 C 문자열 계약으로 온전히 표현할 수 없다 —
+            // 잘라 보내면 조용한 데이터 오염이 되므로 프레임을 통째로 드롭하고
+            // 진단을 남긴다(수정 전에는 무음 소실이었다 — 채널 유실점 정비
+            // 2026-09-20). sender 클로저 계약이 `Fn(&str)` 라 실패를 되돌려줄
+            // 수 없어 `ChannelHost::send` 는 이 경우에도 true 를 반환하므로,
+            // 이 손실의 관측점은 이 로그와 콜백 미도달뿐이다(ipc::Sender 의
+            // 2차 방어선 eprintln 과 동일 스타일).
+            let len = payload.len();
+            let handle = self.0.handle;
+            eprintln!(
+                "rustra: channel frame payload contains interior NUL ({len} bytes, handle {handle}) — send failed"
+            );
+            return;
         };
         unsafe { (self.0.callback)(self.0.user_data, self.0.handle, payload_c.as_ptr()) };
     }
