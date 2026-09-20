@@ -42,7 +42,7 @@
 
 | 스크립트                       | 그룹           | 지키는 것                                                                                                                   | 비용            | 로컬 실행 참고                                             |
 | ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------- |
-| `test`                         | umbrella       | release-tools, types, ts:bun, packages, cli, complex-codec-bench, bench-gate, functions 단위/E2E 묶음                       | 느림            | CI 미러가 아님 — CI `typescript` 잡이 상위집합이다         |
+| `test`                         | umbrella       | release-tools, types, ts:bun, packages, cli, complex-codec-bench, bench-gate, functions 단위/E2E 묶음                       | 느림            | CI 미러가 아님 — CI TS 잡들이 상위집합이다                 |
 | `test:fast`                    | umbrella       | 첫 신호: 워크스페이스 컴파일, calculator 타입 체크, CLI 단위 테스트                                                         | 빠름 (웜 ≈15초) | 대부분 `cargo check --workspace` 웜 ≈8.4초                 |
 | `test:compat`                  | 호환 체인      | 전체 Rust↔TS 호환 매트릭스(ts:node + ts:bun + adapters + runtime)                                                           | 느림            | PR 전 최소 기준(CONTRIBUTING)                              |
 | `test:ts:node`                 | 호환 체인      | 컴파일된 `dist-ts` 예제 테스트(calculator + crud)가 Node `--test`로 통과                                                    | 중간            | 두 예제에 `tsc` 먼저 실행                                  |
@@ -81,8 +81,8 @@
 | `test:app:auth`                | 예제 앱        | 인증 예제 빌드 + 앱 실행                                                                                                    | 느림            | 내부에 cargo 빌드                                          |
 | `test:app:reference`           | 예제 앱        | 레퍼런스 앱이 crud 예제 크레이트로 실행                                                                                     | 느림            | 내부에 cargo 빌드                                          |
 | `test:functions`               | functions      | 일반 함수 등록 엔드투엔드 통합                                                                                              | 중간            |                                                            |
-| `lint`                         | aux (CI 스텝)  | `packages/*/src` ESLint 통과                                                                                                | 빠름            | CI `typescript` 잡이 실행                                  |
-| `format:check`                 | aux (CI 스텝)  | `packages/*/src`에 prettier 차이 없음                                                                                       | 빠름            | CI `typescript` 잡이 실행                                  |
+| `lint`                         | aux (CI 스텝)  | `packages/*/src` ESLint 통과                                                                                                | 빠름            | CI `ts-checks` 잡이 실행                                   |
+| `format:check`                 | aux (CI 스텝)  | `packages/*/src`에 prettier 차이 없음                                                                                       | 빠름            | CI `ts-checks` 잡이 실행                                   |
 | `lint:rust`                    | aux (CI 스텝)  | 전 타깃 clippy 경고 0(`-D warnings`)                                                                                        | 중간            | CI `rust` 잡(Linux leg)이 실행                             |
 | `fmt:rust:check`               | aux (CI 스텝)  | `cargo fmt` 차이 없음                                                                                                       | 빠름            | CI `rust` 잡(Linux leg)이 실행                             |
 | `coverage:rust`                | aux (참고용)   | `rustra` + `rustra-macros` 커버리지 가시화                                                                                  | 느림            | `coverage.yml` 미러(게이트 아님)                           |
@@ -99,8 +99,9 @@
 
 ### `test:local` — "CI가 도는 것을 로컬에서 도린다" umbrella
 
-`test:local`은 CI `typescript` 잡의 로컬 실행 가능 스텝을 한 명령으로 미러링한다
-(2026-09-20 추가):
+`test:local`은 CI TS 잡들(`ts-checks` + `ts-tests` + `ts-runtime` — 구
+`typescript` 메가잡의 2026-09-20 분할)의 로컬 실행 가능 스텝을 한 명령으로
+미러링한다 (2026-09-20 추가):
 
 > `bun run build` → `test:release-coherence` → `lint` → `format:check` →
 > `audit:prod` → `test:ts:node` → `test:ts:bun` → `test:adapters` →
@@ -117,29 +118,31 @@
 
 ## 계층 3 — GitHub Actions
 
-### `ci.yml` — 14개 잡
+### `ci.yml` — 16개 잡
 
 트리거: `main`으로의 push와 PR, 그리고 주간 월요일 cron(이때 `rust-audit`만
 실행 — 다른 잡은 전부 `github.event_name != 'schedule'`으로 스킵, `gate`
 집계 잡 포함). PR 실행은 같은 ref의 진행 중 실행을 취소한다; main push는
 절대 취소하지 않는다.
 
-| 잡                | 지키는 것                                                                                                                                                                                                              | 필수 체크 (2026-09-20)                                                               | 로컬 등가물                                                                                         |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `changes`         | 경로 필터(dorny/paths-filter): docs 전용 PR에서만 `code=false` 출력, 그 외 이벤트는 `code=true` 강제                                                                                                                   | 필수 아님(모바일 잡 `if`와 `gate`에 전달)                                            | —                                                                                                   |
-| `rust-audit`      | 실행 가능한 RUSTSEC 권고 없음(`scripts/audit-rust.sh`; 문서화된 Tauri 2/GTK3 예외만 허용)                                                                                                                              | **필수** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (`cargo-audit` 필요)                                                   |
-| `rust-deny`       | 라이선스/밴/출처 정책(`deny.toml`, cargo-deny)                                                                                                                                                                         | 필수 아님                                                                            | `cargo deny check`                                                                                  |
-| `rust` (매트릭스) | rustfmt + clippy + `cargo test --workspace`(+ `--release`, hot-core)는 Linux, 코어 크레이트는 macOS/Windows, 릴리스 cdylib 빌드                                                                                        | **필수 ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
-| `rust-msrv`       | MSRV 1.88 계약: 코어 크레이트를 Rust 1.88에서 check + lib 테스트                                                                                                                                                       | 필수 아님                                                                            | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
-| `rust-wasm32`     | `rustra`가 `wasm32-unknown-unknown`으로 컴파일됨                                                                                                                                                                       | 필수 아님                                                                            | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
-| `napi`            | napi 디버그 애드온 빌드 + Node napi 앱 실행(무검증이던 transport 경로)                                                                                                                                                 | 필수 아님                                                                            | `bun run test:runtime:node-napi`                                                                    |
-| `typescript`      | TS/JS 표면: 빌드, 린트, 포맷, react-doctor(100/100), `audit:prod`, tsc, 예제/어댑터/CLI 테스트, codegen + bindings + api-surface + architecture + docs 게이트, `test:compat`, 패키지 단위, C++ 코덱 테스트, onboarding | **필수** (`typescript`)                                                              | `bun run test:local` (위 참고)                                                                      |
-| `rn-android`      | RN Android Release APK 빌드 + 에뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                                                              | **필수** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (NDK + 에뮬레이터 필요)                               |
-| `rn-ios`          | RN iOS Release 빌드 + 시뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                                                                      | **필수** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, 시뮬레이터)                                          |
-| `uniffi-android`  | UniFFI Kotlin 바인딩이 에뮬레이터에서 로드·실행(행복 + divide-by-zero 에러 경로); docs 전용 PR에서는 스킵                                                                                                              | 필수 아님                                                                            | `examples/uniffi-android-smoke` 흐름(단일 명령 등가물 없음)                                         |
-| `uniffi-ios`      | UniFFI Swift 바인딩이 iOS 시뮬레이터에서 실행(동일 마커 계약); docs 전용 PR에서는 스킵                                                                                                                                 | 필수 아님                                                                            | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
-| `consumer-smoke`  | packed tarball이 클린 컨슈머에 설치·로드(ESM)되고 CLI `init`→codegen→run 흐름 동작                                                                                                                                     | **필수** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (일부)                |
-| `gate`            | 집계: 위 13개 잡이 전부 정확히 `success`여야 함; `skipped`는 실패(무음 green 방지) — 단, 네 모바일 잡의 스킵이 경로 필터 기인(docs 전용 PR)일 때만 예외                                                                | **필수 아님** (2026-09-20 검증)                                                      | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
+| 잡                | 지키는 것                                                                                                                                                            | 필수 체크 (2026-09-20)                                                               | 로컬 등가물                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `changes`         | 경로 필터(dorny/paths-filter): docs 전용 PR에서만 `code=false` 출력, 그 외 이벤트는 `code=true` 강제                                                                 | 필수 아님(모바일 잡 `if`와 `gate`에 전달)                                            | —                                                                                                   |
+| `rust-audit`      | 실행 가능한 RUSTSEC 권고 없음(`scripts/audit-rust.sh`; 문서화된 Tauri 2/GTK3 예외만 허용)                                                                            | **필수** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (`cargo-audit` 필요)                                                   |
+| `rust-deny`       | 라이선스/밴/출처 정책(`deny.toml`, cargo-deny)                                                                                                                       | 필수 아님                                                                            | `cargo deny check`                                                                                  |
+| `rust` (매트릭스) | rustfmt + clippy + `cargo test --workspace`(+ `--release`, hot-core)는 Linux, 코어 크레이트는 macOS/Windows, 릴리스 cdylib 빌드                                      | **필수 ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
+| `rust-msrv`       | MSRV 1.88 계약: 코어 크레이트를 Rust 1.88에서 check + lib 테스트                                                                                                     | 필수 아님                                                                            | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
+| `rust-wasm32`     | `rustra`가 `wasm32-unknown-unknown`으로 컴파일됨                                                                                                                     | 필수 아님                                                                            | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
+| `napi`            | napi 디버그 애드온 빌드 + Node napi 앱 실행(무검증이던 transport 경로)                                                                                               | 필수 아님                                                                            | `bun run test:runtime:node-napi`                                                                    |
+| `ts-checks`       | 정적 TS 게이트: 빌드, 린트, 포맷, react-doctor(100/100), `audit:prod`, tsc, api-surface + codegen-fresh + bindings-fresh + architecture + docs + onboarding 게이트   | `gate` 경유 (구 `typescript`)                                                        | `bun run test:local` (검사 부분)                                                                    |
+| `ts-tests`        | 빌드 산출을 소비하는 테스트: ts:node + ts:bun + adapters + CLI, 패키지 단위, bench-gate/release-tools/registry-consumer 게이트 유닛, C++ 코덱 테스트, bare RN 픽스처 | `gate` 경유 (구 `typescript`)                                                        | `bun run test:local` (테스트 부분)                                                                  |
+| `ts-runtime`      | 실제 Rust↔TS 실행: 릴리스 빌드 기반 node + bun + tauri 예제 앱(구 `test:compat` 체인의 `test:runtime` 구간)                                                          | `gate` 경유 (구 `typescript`)                                                        | `bun run test:runtime`                                                                              |
+| `rn-android`      | RN Android Release APK 빌드 + 에뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                            | **필수** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (NDK + 에뮬레이터 필요)                               |
+| `rn-ios`          | RN iOS Release 빌드 + 시뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                    | **필수** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, 시뮬레이터)                                          |
+| `uniffi-android`  | UniFFI Kotlin 바인딩이 에뮬레이터에서 로드·실행(행복 + divide-by-zero 에러 경로); docs 전용 PR에서는 스킵                                                            | 필수 아님                                                                            | `examples/uniffi-android-smoke` 흐름(단일 명령 등가물 없음)                                         |
+| `uniffi-ios`      | UniFFI Swift 바인딩이 iOS 시뮬레이터에서 실행(동일 마커 계약); docs 전용 PR에서는 스킵                                                                               | 필수 아님                                                                            | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
+| `consumer-smoke`  | packed tarball이 클린 컨슈머에 설치·로드(ESM)되고 CLI `init`→codegen→run 흐름 동작                                                                                   | **필수** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (일부)                |
+| `gate`            | 집계: 위 14개 잡이 전부 정확히 `success`여야 함; `skipped`는 실패(무음 green 방지) — 단, 네 모바일 잡의 스킵이 경로 필터 기인(docs 전용 PR)일 때만 예외              | **필수 아님** (2026-09-20 검증)                                                      | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
 
 참고:
 
@@ -149,10 +152,10 @@
   (`rn-android`, `rn-ios`, `uniffi-android`, `uniffi-ios`)이 `changes` 경로
   필터로 스킵되며, `gate`(이벤트 이름과 필터 출력을 받는
   `scripts/ci-gate.sh` 경유)는 정확히 이 스킵만 통과로 인정한다. 그 외 모든
-  스킵은 여전히 gate를 실패시킨다 — 예컨대 `typescript` 실패로 인한
-  `consumer-smoke` 스킵은 그대로 red다. GitHub은 스킵 상태로 끝난 필수 체크를
-  요건 충족으로 보므로 docs 전용 스킵이 머지를 막지 않는다. 라이브 보호는
-  2026-09-20 부터 정확히 `gate` 하나를 요구한다 —
+  스킵은 여전히 gate를 실패시킨다 — 예컨대 `ts-checks`/`ts-tests`/`ts-runtime`
+  잡 실패로 인한 `consumer-smoke` 스킵은 그대로 red다. GitHub은 스킵 상태로 끝난
+  필수 체크를 요건 충족으로 보므로 docs 전용 스킵이 머지를 막지 않는다. 라이브
+  보호는 2026-09-20 부터 정확히 `gate` 하나를 요구한다 —
   [현재 필수 체크](#현재-필수-체크) 참고.
 
 ### 기타 워크플로
@@ -202,6 +205,12 @@
   **넓어졌다** — 구 required 밖이던 `rust-msrv`, `rust-wasm32`, `rust-deny`,
   `napi`, `uniffi` 2잡이 포함된다. 위 표의 "필수" 열은 이력으로 읽고, 모든 잡은
   **집계를 경유해** 머지를 막는다.
+- **2026-09-20 (같은 날, 이후):** `typescript` 메가잡을 `ts-checks`,
+  `ts-tests`, `ts-runtime` 3잡으로 분할했다(gate `needs`: 코드 잡 12 → 14개).
+  분할이 안전한 이유는 필수 체크가 `gate` 하나뿐이기 때문이다 — `gate`의
+  `needs`와 `scripts/ci-gate.sh`가 함께 갱신되는 한(`scripts/ci-gate.test.ts`가
+  양쪽 일치를 loud 하게 검증) 잡 이름은 자유롭게 바꿀 수 있다. TS 잡들은 docs
+  전용 PR에서 스킵되지 않는 구 계약도 그대로 유지한다.
 
 한 단계 재검증:
 

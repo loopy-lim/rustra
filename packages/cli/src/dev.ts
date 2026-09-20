@@ -13,76 +13,14 @@ import {
   type WatchHandle,
 } from './watch.js';
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
-import type { ResolvedDevWasm } from './dev-config.js';
 import { buildDylibCore, liveArtifactPath, publishGatedArtifact } from './dev-dylib.js';
+import { buildWasmEngine } from './dev-wasm.js';
 import { captureSchemaParity } from './dev-schema-capture.js';
+import { rustInputFingerprint } from './dev-fingerprint.js';
 import { detectDirty, planPipeline, runOnce } from './dev-support.js';
 import { createParityGate } from './parity-gate.js';
 import { readCargoMetadata, selectHostPackage, requireTargetDirectory } from './cargo-metadata.js';
 import { readFile } from 'node:fs/promises';
-
-/** cargo 규약 — cdylib wasm32 릴리스 산출물 이름(lib 타깃 이름의 `-` → `_`). */
-function wasmArtifactName(libName: string): string {
-  return `${libName.replaceAll('-', '_')}.wasm`;
-}
-
-/**
- * wasm32 엔진 아티팩트 경로 — A0 스파이크(`scripts/build-backend.sh`)가 실제로
- * 생산하는 레이아웃을 그대로 따른다:
- * `<target_directory>/wasm32-unknown-unknown/release/<crate_name>.wasm`
- * 이름 근원은 패키지가 아니라 **lib 타깃** 이름이다 — cargo 는 cdylib 산출물
- * 이름을 `[lib] name`(지정 없으면 패키지 이름)에서 가져온다. 이 저장소의 RN
- * 관례(`lib${rustLibrary}.a`)와 같은 근원이다.
- */
-export function wasmEngineArtifactPath(
-  manifestPath: string,
-  libName: string,
-  metadata = readCargoMetadata(manifestPath),
-): string {
-  return join(
-    requireTargetDirectory(metadata),
-    'wasm32-unknown-unknown',
-    'release',
-    wasmArtifactName(libName),
-  );
-}
-
-/**
- * wasm dev 타깃(Task A3)의 rust 재빌드 단계 — 엔진 crate 의 cdylib 를
- * wasm32-unknown-unknown 으로 빌드하고 산출물 경로를 돌려준다. 매니페스트의
- * 패키지 중 cdylib 타깃을 가진 것을 고른다(reactNative.rustPackage 지정 시 그
- * 패키지로 한정). 릴리스 프로필(`--release`)은 A0 스파이크가 검증한 구성
- * (opt-level "s", panic=abort)과 동일하다 — dev 편의 프로필을 새로 발명하지 않는다.
- */
-export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string> {
-  const manifestPath = devWasm.manifestPath;
-  const metadata = readCargoMetadata(manifestPath);
-  const cargoPackage = selectHostPackage(metadata, manifestPath, devWasm.rustPackage);
-  const cdylibs = cargoPackage.targets.filter((target) => target.crate_types.includes('cdylib'));
-  if (cdylibs.length !== 1) {
-    throw new Error(
-      `wasm engine build requires exactly one cdylib target in package ${cargoPackage.name}, found ${cdylibs.length}. ` +
-        `Add crate-type = ["rlib", "cdylib"] to ${manifestPath}` +
-        (devWasm.rustPackage ? '' : `, or set reactNative.rustPackage in rustra.json`),
-    );
-  }
-  const artifactPath = wasmEngineArtifactPath(manifestPath, cdylibs[0]!.name, metadata);
-  await spawnInherit(
-    'cargo',
-    ['build', '--manifest-path', manifestPath, '--target', 'wasm32-unknown-unknown', '--release'],
-    dirname(manifestPath),
-    {
-      progressLabel: `wasm32 engine build (${cargoPackage.name})`,
-      childOutput: 'inherit',
-    },
-  );
-  if (!existsSync(artifactPath)) {
-    throw new Error(
-      `wasm32 build did not produce ${artifactPath} — the cdylib target must compile for wasm32-unknown-unknown`,
-    );
-  }
-  return artifactPath;
-}
 
 export { createWatchLoop, createReloadHooks } from './watch.js';
 export type { WatchLoop } from './watch.js';
@@ -216,6 +154,12 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   let configText = '';
   let regenerating = false;
   let lastGeneratedSchema: string | undefined;
+  // warm-loop Stage 1(§(b)) — 마지막 **성공** 파이프라인이 소비한 Rust 입력 지문.
+  // 프로세스 메모리에만 산다(디스크 상태 없음) — 시작 후 첫 틱은 항상 전체
+  // 파이프라인을 돈다. 채택은 성공 틱에서만(아래), 실패·게이트 거부 틱은 이
+  // 값을 건드리지 못한다 — 실패 상태의 지문이 다음 틱의 스킵 근거가 되는
+  // fail-open 을 막는다.
+  let lastSuccessfulFingerprint: string | undefined;
   let subscriptions: WatchHandle[] = [];
   let disposed = false;
   let gate: ReturnType<typeof createParityGate> | undefined;
@@ -280,6 +224,10 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
         manifestDir = dirname(config.manifestPath);
         configText = nextText;
         lastGeneratedSchema = undefined;
+        // 설정이 바뀌면 지문의 대상(매니페스트·스키마 경로)도 바뀐다 — 이전
+        // 설정 시대의 지문은 비교 근거가 아니므로 버리고, 이 틱부터 전체
+        // 파이프라인으로 재기준을 잡는다.
+        lastSuccessfulFingerprint = undefined;
         if (!disposed) subscribe();
       }
       // 이 틱에서 codegen 이전에 arm 했는지 — 수행 지역 변수라서 pipeline 이
@@ -301,18 +249,45 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
           armedPreCodegen = true;
         }
       }
-      const { runCodegen } = await import('./cli-codegen.js');
-      await runCodegen(['--config', configPath]);
-      lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
-      if (config.devWasm) {
-        const artifact = await buildWasmEngine(config.devWasm);
-        console.log(`[dev:wasm] engine artifact: ${artifact}`);
+      // warm-loop Stage 1(§(b)) — 지문 스킵 판정. 감시 대상 Rust 입력(src 트리 +
+      // Cargo.toml + Cargo.lock — 감시 등록과 정확히 같은 루트)이 마지막 성공
+      // 파이프라인과 바이트 동일하고 생성된 schema.json 이 살아 있으면, 이 틱의
+      // cargo 프로브(≈2.1s)와 엔진 재빌드는 생략한다 — 바뀐 것이 없으므로
+      // 갈아끼울 것도 없다. 지문은 감시 이벤트를 믿지 않고 **판정 시점에 디스크에서
+      // 재계산**한다. 계산 실패·첫 틱(지문 미채택)·schema 부재는 전부 전체
+      // 파이프라인이다(fail-safe — 불확실할 때 스킵하지 않는다).
+      const fingerprintRoots = [
+        join(manifestDir, 'src'),
+        config.manifestPath,
+        join(manifestDir, 'Cargo.lock'),
+      ];
+      let decisionFingerprint: string | undefined;
+      try {
+        decisionFingerprint = rustInputFingerprint(fingerprintRoots);
+      } catch {
+        // throw = 불확실 — 스킵 근거로 쓰지 않는다(dev-fingerprint.ts 계약).
+        decisionFingerprint = undefined;
       }
+      const skippedCargoStage =
+        decisionFingerprint !== undefined &&
+        decisionFingerprint === lastSuccessfulFingerprint &&
+        existsSync(config.schemaPath);
       let dylibPublish: { artifact: string; livePath: string } | undefined;
-      if (config.devDylib) {
-        const artifact = await buildDylibCore(config.devDylib);
-        console.log(`[dev:dylib] core artifact: ${artifact}`);
-        dylibPublish = { artifact, livePath: liveArtifactPath(artifact) };
+      if (skippedCargoStage) {
+        console.log('[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)');
+      } else {
+        const { runCodegen } = await import('./cli-codegen.js');
+        await runCodegen(['--config', configPath]);
+        lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
+        if (config.devWasm) {
+          const artifact = await buildWasmEngine(config.devWasm);
+          console.log(`[dev:wasm] engine artifact: ${artifact}`);
+        }
+        if (config.devDylib) {
+          const artifact = await buildDylibCore(config.devDylib);
+          console.log(`[dev:dylib] core artifact: ${artifact}`);
+          dylibPublish = { artifact, livePath: liveArtifactPath(artifact) };
+        }
       }
       if (disposed) return;
       if (gate) {
@@ -343,6 +318,12 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
         const livePath = publishGatedArtifact(dylibPublish.artifact, dylibPublish.livePath);
         console.log(`[dev:dylib] launch the host with RUSTRA_HOT_CORE=${livePath}`);
       }
+      // 지문 채택 — 성공 틱 한정(게이트 거부는 위에서 return, 빌드 실패는 catch 로
+      // 가므로 여기에 못 미친다). 코드젠이 **소비한** 입력의 판정 시점 지문을
+      // 채택한다: 코드젠 도중의 편집은 다음 틱 지문을 바꿔놓았을 것이므로, 채택값이
+      // 코드젠 뒤 디스크 재계산값이라면 그 편집이 스킵에 삼켜지는 구멍이 생긴다.
+      // 계산 실패(undefined) 틱은 채택을 보류 — 다음 틱도 전체 파이프라인을 돈다.
+      lastSuccessfulFingerprint = decisionFingerprint;
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
       await reload.emitReload(reason);

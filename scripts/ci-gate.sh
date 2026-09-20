@@ -2,12 +2,13 @@
 set -u
 
 # CI 필수 잡 집계 gate — .github/workflows/ci.yml 의 `gate` 잡이 호출한다.
-# 스크립트는 <job>=<result> 인자 13개를 받아 전부 정확히 "success"일 때만 0으로
+# 스크립트는 <job>=<result> 인자 15개를 받아 전부 정확히 "success"일 때만 0으로
 # 종료한다. 유일한 예외는 모바일 4잡(rn-android/rn-ios/uniffi-android/uniffi-ios)의
 # "skipped" 다: 경로 필터 기인일 때만 통과로 인정한다 —
 #   GATE_EVENT_NAME == "pull_request" && GATE_CHANGES_CODE == "false"
 # (docs 전용 PR 에서 dorny/paths-filter 가 모바일 잡을 건너뛰는 설계된 skip).
-# 그 외 모든 skipped/cancelled 는 실패로 취급한다: consumer-smoke 는 typescript
+# 그 외 모든 skipped/cancelled 는 실패로 취급한다: consumer-smoke 는 TS 계열
+# 3잡(ts-checks/ts-tests/ts-runtime — 구 typescript 메가잡 분할, 2026-09-20)
 # 실패 시 skip 되므로, skip 을 무조건 통과로 치면 체인 실패를 gate 가 놓친다.
 # 컨텍스트 env 가 비어 있으면(구식 호출자) skip 은 절대 통과하지 않는 fail-safe 다.
 #
@@ -21,7 +22,7 @@ usage() {
 ci-gate.sh — CI 필수 잡 집계 gate
 
 사용법:
-  ci-gate.sh <job>=<result> ...   (필수 13개 인자)
+  ci-gate.sh <job>=<result> ...   (필수 15개 인자)
 
 <result> 값은 GitHub Actions needs.<job_id>.result 값 중 하나여야 한다:
   success | failure | cancelled | skipped
@@ -45,7 +46,9 @@ expected_jobs=(
   rust-audit
   rust-deny
   napi
-  typescript
+  ts-checks
+  ts-tests
+  ts-runtime
   rn-android
   rn-ios
   uniffi-android
@@ -53,7 +56,7 @@ expected_jobs=(
   consumer-smoke
 )
 
-expected_count=13
+expected_count=15
 
 # 경로 필터 skip 이 허용되는 잡 — ci.yml 의 모바일 4잡과 정확히 일치해야 한다.
 filter_skippable_jobs=" rn-android rn-ios uniffi-android uniffi-ios "
@@ -76,7 +79,7 @@ is_filter_skip() {
 }
 
 if [ "$#" -ne "$expected_count" ]; then
-  echo "ci-gate.sh: exactly 13 job=result arguments required, got $#" >&2
+  echo "ci-gate.sh: exactly 15 job=result arguments required, got $#" >&2
   usage
   exit 2
 fi
@@ -113,7 +116,7 @@ for arg in "$@"; do
     exit 2
   fi
 
-  # 중복 금지 — 13개 인자가 중복을 포함하면 어떤 필수 잡이 검사되지 않은 채
+  # 중복 금지 — 15개 인자가 중복을 포함하면 어떤 필수 잡이 검사되지 않은 채
   # PASS 로 빠진다(전부 success 여도 계약 위반이다).
   case $seen_jobs in
     *" $job "*)
@@ -134,7 +137,7 @@ for arg in "$@"; do
   fi
 done
 
-# 누락 금지 — 인자 개수가 13개여도 중복 없이 잡이 빠지는 조합은 없지만, 스크립트
+# 누락 금지 — 인자 개수가 15개여도 중복 없이 잡이 빠지는 조합은 없지만, 스크립트
 # 계약을 자체 완결적으로 유지하기 위해 커버리지를 다시 단언한다.
 for j in "${expected_jobs[@]}"; do
   case $seen_jobs in
@@ -147,7 +150,7 @@ for j in "${expected_jobs[@]}"; do
 done
 
 if [ -z "$violations" ]; then
-  echo "gate: PASS — 모든 필수 잡 success (13/13)"
+  echo "gate: PASS — 모든 필수 잡 success (15/15)"
   for arg in "$@"; do
     job=${arg%%=*}
     result=${arg#*=}
