@@ -197,7 +197,10 @@ Tauri's callback-cleanup API; without globals, pass an explicit
 Raw fragments are at most 968 bytes, below Tauri's 1,024-byte direct IPC threshold.
 Native messages are capped at the smaller of the runtime payload limit and 16 MiB.
 The core defaults to a **1 MiB** payload limit, so an unconfigured native path is
-also limited to 1 MiB. JS reassembly has a 16 MiB ceiling and expires incomplete
+also limited to 1 MiB. On the Rust emit side, a frame above the payload limit
+(default 1 MiB, adjustable via `rustra_ffi_set_max_payload`) makes channel
+`send`/`send_bytes` return `false` — emit-side code must check the return value,
+mirroring invoke's `payload.too_large`. JS reassembly has a 16 MiB ceiling and expires incomplete
 messages after 30 seconds.
 JSON is decoded once after final reassembly, preserving JSON strings as strings;
 binary callbacks receive `Uint8Array`. Ordinary event subscriptions still broadcast.

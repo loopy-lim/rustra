@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, lstatSync } from 'node:fs';
+import { existsSync, readdirSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
 export type WatchLoop = {
@@ -197,17 +197,46 @@ function snapshotPath(path: string, files: Map<string, string>, recursive: boole
 }
 
 /** Watches immediate children of directories, or individual pathnames. */
+/**
+ * 감시 루트가 디렉터리 심링크여도 감시가 무효가 되지 않게 실제 경로로 해석한다
+ * (리스크 감사 2026-09-13 #6 — lstat 루트는 링크 자체를 파일로 기록해 서브트리를
+ * 걷지 못한다). 루트만 realpath 로 풀어 걷고, 중첩 항목의 lstat·제외 규칙은
+ * 기존대로 유지해 트리 밖 추종·사이클 진입 방어를 그대로 둔다. onChange 는
+ * resolved→원본 역매핑으로 사용자가 건 네임스페이스의 경로를 유지한다 — isWithin
+ * 등 소비자의 비교 대상이 바뀌지 않는다. 해석 실패(없는 루트)는 원문자열 유지 —
+ * "다음 틱에서 발견" 동작을 보존한다.
+ */
+function resolveWatchRoot(root: string): { real: string; original: string } {
+  const original = resolve(root);
+  try {
+    return { real: realpathSync(original), original };
+  } catch {
+    return { real: original, original };
+  }
+}
+
+function remapWatchPath(root: { real: string; original: string }, path: string): string {
+  if (root.real === root.original) return path;
+  const rel = relative(root.real, path);
+  if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..')) {
+    return rel === '' ? root.original : join(root.original, rel);
+  }
+  return path;
+}
+
 export function createFileWatch(specs: readonly FileWatchSpec[]): WatchHandle {
-  const handles = specs.map((spec) =>
-    pollPaths(
+  const handles = specs.map((spec) => {
+    const watchRoot = resolveWatchRoot(spec.path);
+    return pollPaths(
       () => {
         const snapshot = new Map<string, string>();
-        snapshotPath(resolve(spec.path), snapshot, false);
+        snapshotPath(watchRoot.real, snapshot, false);
         return snapshot;
       },
-      (path) => spec.onChange(path, relative(resolve(spec.path), path) || undefined),
-    ),
-  );
+      (path) =>
+        spec.onChange(remapWatchPath(watchRoot, path), relative(watchRoot.real, path) || undefined),
+    );
+  });
   return {
     dispose() {
       for (const handle of handles) handle.dispose();
@@ -235,9 +264,13 @@ export function createSourceWatch(
   root: string,
   onChange: (changedPath: string) => void,
 ): WatchHandle {
-  return pollPaths(() => {
-    const snapshot = new Map<string, string>();
-    snapshotPath(resolve(root), snapshot, true);
-    return snapshot;
-  }, onChange);
+  const watchRoot = resolveWatchRoot(root);
+  return pollPaths(
+    () => {
+      const snapshot = new Map<string, string>();
+      snapshotPath(watchRoot.real, snapshot, true);
+      return snapshot;
+    },
+    (path) => onChange(remapWatchPath(watchRoot, path)),
+  );
 }

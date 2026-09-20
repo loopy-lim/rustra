@@ -58,6 +58,14 @@ const RUST_KEYWORDS: &[&str] = &[
     "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ];
 
+/// 생성 모듈(`pub mod uniffi_api`)이 고정으로 선언하는 식별자 — 생성 코드의
+/// 선언 순서대로 [`Renderer::emit_package_access`] 의 `package` 헬퍼와
+/// [`Renderer::emit_generic_surface`] 의 `invokeJson`/`getSchema`/`contractHash`
+/// export. 커맨드/일반 함수 이름이 여기와 충돌하면 같은 모듈에 같은 이름의
+/// 아이템이 둘 선언되어 rustc 가 코드젠 "성공" 이후에야 모호한/중복된 이름으로
+/// 실패한다 — 렌더 경계에서 fail-closed 로 가려낸다.
+const RESERVED_SURFACE_IDENTS: &[&str] = &["package", "invokeJson", "getSchema", "contractHash"];
+
 /// 스키마에서 온 이름이 미러가 선언할 수 있는 Rust 식별자인지 검증한다.
 /// 이름은 코드젠 산출물 안에서 rustc 보다 먼저 — 정확한 스키마 경로와 함께 —
 /// 실패시키기 위한 것이다(유효 스키마의 출력은 바뀌지 않는다).
@@ -89,6 +97,30 @@ fn ensure_rust_ident(kind: &str, name: &str, path: &str) -> Result<(), RenderErr
     })
 }
 
+/// 커맨드/일반 함수 이름이 제네릭 표면 고정 식별자와 충돌하지 않는지 검증한다.
+/// 수집이 끝난 전체 커맨드 목록에서 충돌을 모두 모아 한 번에 보고한다 — 같은
+/// 이름의 래퍼가 생성 소스에 이중 선언되면 rustc 는 이후에야 실패하므로, 렌더
+/// 시점에 스키마를 가리키며 막는다(fail-closed, 유효 스키마 출력 불변).
+fn ensure_no_reserved_surface_collision(commands: &[CommandIr]) -> Result<(), RenderError> {
+    let collisions: Vec<&str> = commands
+        .iter()
+        .map(|command| command.name.as_str())
+        .filter(|name| RESERVED_SURFACE_IDENTS.contains(name))
+        .collect();
+    if collisions.is_empty() {
+        return Ok(());
+    }
+    Err(RenderError {
+        path: "$.commands".to_string(),
+        reason: format!(
+            "command/function names {collisions:?} collide with the reserved UniFFI \
+             surface identifiers {RESERVED_SURFACE_IDENTS:?} — the generated module \
+             would declare the same names twice and the mirror would not compile; \
+             rename the command(s) on the Rust side"
+        ),
+    })
+}
+
 /// 렌더 엔트리 포인트 — schema_json 을 미러 Rust 소스로 바꾼다.
 ///
 /// 반환 소스는 `src/uniffi_generated.rs` 로 쓰이고 `#[cfg(feature = "uniffi")]`
@@ -110,6 +142,7 @@ pub fn render_uniffi_generated(schema_json: &str) -> Result<String, RenderError>
     for command in commands {
         renderer.collect_command(command)?;
     }
+    ensure_no_reserved_surface_collision(&renderer.commands)?;
     Ok(renderer.emit())
 }
 
@@ -2289,5 +2322,85 @@ mod tests {
             "path: {}",
             error.path
         );
+    }
+
+    // ── 제네릭 표면 예약 이름 — 충돌은 rustc 가 아니라 렌더 시점에 실패 ──────
+
+    #[test]
+    fn reserved_surface_command_name_fails_closed() {
+        let error = render_uniffi_generated(&doc(serde_json::json!([object_command(
+            "invokeJson",
+            r#"{"title":"InvokeJsonInput","type":"object","required":["value"],
+                "properties":{"value":{"type":"string"}}}"#,
+            r#"{"title":"InvokeJsonOutput","type":"object","required":["value"],
+                "properties":{"value":{"type":"string"}}}"#
+        )])))
+        .unwrap_err();
+        assert!(error.path.ends_with("$.commands"), "path: {}", error.path);
+        assert!(error.reason.contains("\"invokeJson\""), "{error}");
+        // 메시지가 전체 예약 집합을 함께 알려준다.
+        for reserved in RESERVED_SURFACE_IDENTS {
+            assert!(error.reason.contains(reserved), "{error}");
+        }
+        assert!(error.reason.contains("rename"), "{error}");
+    }
+
+    #[test]
+    fn reserved_surface_collisions_are_all_reported() {
+        let error = render_uniffi_generated(&doc(serde_json::json!([
+            function_command(
+                "getSchema",
+                0,
+                serde_json::json!({"title": "Null", "type": "null"}),
+                serde_json::json!({"title": "String", "type": "string"})
+            ),
+            function_command(
+                "package",
+                0,
+                serde_json::json!({"title": "Null", "type": "null"}),
+                serde_json::json!({"title": "Null", "type": "null"})
+            ),
+        ])))
+        .unwrap_err();
+        // 스키마 등록 순서 그대로 모든 충돌 이름이 한 에러에 나열된다.
+        assert!(
+            error.reason.contains("[\"getSchema\", \"package\"]"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn near_miss_surface_names_still_render() {
+        let source = render_uniffi_generated(&doc(serde_json::json!([
+            object_command(
+                "invoke_json",
+                r#"{"title":"InvokeJsonInput","type":"object","required":["value"],
+                    "properties":{"value":{"type":"string"}}}"#,
+                r#"{"title":"InvokeJsonOutput","type":"object","required":["value"],
+                    "properties":{"value":{"type":"string"}}}"#
+            ),
+            object_command(
+                "invokeJsonX",
+                r#"{"title":"InvokeJsonXInput","type":"object","required":["value"],
+                    "properties":{"value":{"type":"string"}}}"#,
+                r#"{"title":"InvokeJsonXOutput","type":"object","required":["value"],
+                    "properties":{"value":{"type":"string"}}}"#
+            ),
+            object_command(
+                "packageInfo",
+                r#"{"title":"PackageInfoInput","type":"object","required":["value"],
+                    "properties":{"value":{"type":"string"}}}"#,
+                r#"{"title":"PackageInfoOutput","type":"object","required":["value"],
+                    "properties":{"value":{"type":"string"}}}"#
+            ),
+        ])))
+        .unwrap();
+        assert!(source.contains("pub fn invoke_json("), "{source}");
+        assert!(source.contains("pub fn invokeJsonX("), "{source}");
+        assert!(source.contains("pub fn packageInfo("), "{source}");
+        // 제네릭 표면은 여전히 정확히 한 번 선언된다.
+        assert_eq!(source.matches("pub fn invokeJson(command").count(), 1);
+        assert_eq!(source.matches("pub fn getSchema()").count(), 1);
+        assert_eq!(source.matches("pub fn contractHash()").count(), 1);
     }
 }

@@ -143,6 +143,36 @@ const result = await addNumbers({ a: 20, b: 22 }); // 42
 엔트리가 첫 호출 때 엔진을 lazy 설치한다 — 앱 코드에 `configure()`도 invoke
 배관도 없다. 평소처럼 앱을 빌드/실행한다(`tauri dev` / `tauri build`).
 
+## 7. 모바일(iOS/Android) — lib/bin 분리
+
+데스크톱 전용 앱은 6까지면 충분하다. Tauri 2 모바일은 앱 본체를 플랫폼 셸(Xcode
+프로젝트/Gradle 프로젝트)이 로드하는 **라이브러리 타깃**으로 빌드한다 — bin 전용
+레이아웃이면 `no library targets found` 로 실패한다.
+[tauri-calculator 예제](../../examples/tauri-calculator/)가 기준 레이아웃이다:
+
+1. `src-tauri/Cargo.toml` 이 라이브러리 타깃을 선언한다 — iOS 용 `staticlib`,
+   Android 용 `cdylib`, 데스크톱 bin 과 테스트가 링크를 유지하도록 `rlib`:
+
+   ```toml
+   [lib]
+   name = "rustra_tauri_calculator_lib"
+   crate-type = ["staticlib", "cdylib", "rlib"]
+   ```
+
+2. 앱 본체(`register_with_events` 호출과 그 주변 전체)를 라이브러리의 공유
+   엔트리로 옮기고 Tauri 모바일 엔트리 attribute 를 붙인다 —
+   `#[cfg_attr(mobile, tauri::mobile_entry_point)] pub fn run()`.
+3. `src-tauri/src/main.rs` 는 `run()` 만 호출하는 얇은 데스크톱 래퍼가 된다.
+   모바일은 모바일 엔트리 포인트를 통해 같은 `run()` 으로 부팅한다.
+4. `bunx tauri ios init` / `bunx tauri android init` 으로 플랫폼 셸을
+   스캐폴딩하고(`src-tauri/gen/` 아래 생성), `tauri ios build` /
+   `tauri android build` 로 빌드한다.
+
+rustra 쪽은 모바일에서 추가 작업이 없다 — 같은
+`tauri_support::register_with_events` 등록이 공유 엔트리 안에서 실행된다.
+(`rustra::native_entry!` 는 **React Native** 경로의 `rustra_mobile_init`
+계약이다. Tauri 모바일 앱은 쓰지 않는다.)
+
 ## 검증과 트러블슈팅
 
 - `bunx --bun @rustra/cli doctor --config rustra.json` — 툴체인, manifest 배선,

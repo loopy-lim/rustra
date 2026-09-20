@@ -53,7 +53,7 @@ schema walk.
 - `Package::invoke_typed<I, O>(name, &input)`
   (`crates/rustra/src/invoke_typed.rs`) — name→commandId lookup, postcard
   request, the single dispatch path of `invoke_frame` (renamed from
-  `invoke_rkyv_v2` in the 0.9 Frame rename). No second JSON
+  `invoke_rkyv_v2` in the 0.10.0 Frame rename). No second JSON
   execution path is forked, so Rust↔TS binary compatibility is preserved
   without code duplication.
 - `decode_frame_response`/`decode_frame_error_parts`
@@ -70,7 +70,7 @@ landing — see the plan's addendum.)
 
 The mirror layer is not hand-written — the probe renders
 `uniffi_generated.rs` from the schema (fail-closed renderer, no silent skips,
-11 unit tests), the file is committed, and a freshness gate (the
+28 unit tests), the file is committed, and a freshness gate (the
 `codegen --check` byte comparison — the build is deliberately skipped in check
 mode) guards it. The mechanical divergences of types the mirror cannot express
 are documented: sets → `Vec` mirrors collected into real `BTreeSet`s on
