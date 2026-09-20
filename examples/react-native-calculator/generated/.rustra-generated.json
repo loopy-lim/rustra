@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaHash": "e70c24c62944ff78fb6ca58b5658d85bb5cff49af4acc96b3a78bedcbdfb0a58",
-  "generatorVersion": "0.11.0",
+  "generatorVersion": "0.11.1",
   "files": [
     {
       "path": "../modules/rustra-jsi/android/build-rust-android.sh",
