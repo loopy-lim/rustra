@@ -92,6 +92,15 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
   // reload 루프가 세팅 전이므로 no-op 이 계약상 정확하다(초기 강제 재생성도
   // 관찰되지 않는다).
   if (options.help) return { dispose() {}, onReload: () => {} };
+  // dev 루프의 cargo 스폰(스키마 generate bin, dylib 빌드)은 프로필과 무관하게
+  // 증분 컴파일을 켠다 — env 는 프로필을 양방향으로 우선하고(2026-09-21 실측),
+  // 증분 여부는 cargo 핑거프린트에 없어 직접 실행하는 cargo 빌드와의 전환 재컴
+  // 파일도 없다. 비증분 재컴파일이 웜 루프를 지배하는 것(합성 150 커맨드 크레이트
+  // 6.6s → 1.5s)을 루프 스폰에만 끊는다. 사용자가 CARGO_INCREMENTAL 을 이미
+  // 세팅했다면(디스크 방어, rust-cache CI 의 0 포함) 그 값을 존중한다.
+  if (process.env.CARGO_INCREMENTAL === undefined) {
+    process.env.CARGO_INCREMENTAL = '1';
+  }
   if (options.configPath) return runConfigDev(options.configPath, options.inspect);
   const backendDir = resolve(options.backendDir);
   const appDir = resolve(options.appDir);

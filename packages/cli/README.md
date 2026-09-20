@@ -51,6 +51,27 @@ the dylib loop in its own config file (for example `rustra.hot.json` with
 shared config keeps its default `native` target — the pattern the
 tauri-calculator example uses.
 
+**Warm-loop speed**: `rustra dev` compiles its own cargo steps (the schema
+`generate` bin and the dylib build) with incremental compilation enabled —
+`CARGO_INCREMENTAL=1` is set for those spawns only, and the env wins over the
+profile even where `incremental = false` is set. Your own `cargo build`/`test`
+runs keep the workspace profile untouched, and setting `CARGO_INCREMENTAL`
+yourself always wins (`0` keeps the target tree lean; CI cache actions such as
+`rust-cache` set it automatically). Incremental caches do add disk under
+`target/`. Two optional profile levers shrink the per-cycle cost for large
+cores further — in the workspace `Cargo.toml`:
+
+```toml
+[profile.dev]
+debug = 1 # default debug = 2: bigger artifacts → slower build, link, and dlopen
+[profile.dev.package."*"]
+debug = 0 # dependency debug info off — the largest disk/time saver
+```
+
+If the core crate lists several crate-types (`rlib`, `staticlib` alongside
+`cdylib`), every edit relinks all of them; keeping `cdylib` alone is the fastest
+hot loop when nothing else needs the other artifacts.
+
 ## Library API
 
 The same generators as the CLI can be used directly in a program:
