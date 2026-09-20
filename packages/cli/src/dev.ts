@@ -15,10 +15,10 @@ import {
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
 import type { ResolvedDevWasm } from './dev-config.js';
 import { buildDylibCore, liveArtifactPath, publishGatedArtifact } from './dev-dylib.js';
+import { captureSchemaParity } from './dev-schema-capture.js';
 import { detectDirty, planPipeline, runOnce } from './dev-support.js';
-import { createParityGate, type ParitySnapshot } from './parity-gate.js';
+import { createParityGate } from './parity-gate.js';
 import { readCargoMetadata, selectHostPackage, requireTargetDirectory } from './cargo-metadata.js';
-import { sha256 } from './hash.js';
 import { readFile } from 'node:fs/promises';
 
 /** cargo 규약 — cdylib wasm32 릴리스 산출물 이름(lib 타깃 이름의 `-` → `_`). */
@@ -82,34 +82,6 @@ export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string>
     );
   }
   return artifactPath;
-}
-
-/**
- * 빌드타임 parity 캡처 — schema.json 의 SHA-256. cd243cec 단일 소싱 계약상 이
- * 해시는 `rustra_ffi_contract_hash` 및 생성물 `GENERATED_CONTRACT_HASH` 와 같은
- * 원본(schema 직렬화)을 해시하므로, dev 루프는 라이브 엔진 없이도 "reload 전후
- * 계약이 갈라졌는가"를 판정할 수 있다. golden wire 상태는 호스트 훅(A1
- * onReload)이 주입하는 영역이라 여기서는 undefined 다.
- */
-async function captureSchemaParity(schemaPath: string): Promise<ParitySnapshot> {
-  let schema: string;
-  try {
-    schema = await readFile(schemaPath, 'utf8');
-  } catch (error) {
-    // ENOENT 를 날로 노출하지 않는다 — parity 게이트는 capture 실패를 fail-closed
-    // 불일치로 처리하므로 이 메시지가 "[dev] reload rejected" 사유로 그대로 보인다.
-    // cli-generate-files.ts 의 schema ENOENT 랩과 같은 모양을 유지한다.
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    if (code === 'ENOENT') {
-      throw new Error(
-        `Schema file not found: ${resolve(schemaPath)} — the codegen stage did not produce it. ` +
-          `Check codegen.schema in rustra.json, then re-run "rustra codegen --config <config>".`,
-        { cause: error },
-      );
-    }
-    throw error;
-  }
-  return { contractHash: sha256(schema) };
 }
 
 export { createWatchLoop, createReloadHooks } from './watch.js';
