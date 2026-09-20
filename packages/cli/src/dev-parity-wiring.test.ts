@@ -795,8 +795,13 @@ test(
             ),
           'the loud drift rejection on the dylib target',
         );
-        await sleep(300);
+        // 거부 관찰 즉시 dispose — verify 는 거부 시 관찴된(코드젠된) 상태를
+        // 기준으로 채택하므로(설계된 회복 — 다음 테스트가 보증), 대기 중이던
+        // 후속 틱은 같은 드리프트를 다시 실행해 통과·발행할 수 있다. 이 테스트의
+        // 계약은 "드리프트 틱 자체가 reload 를 내지 않는다"이므로, 후속 틱이
+        // 끼어들기 전에 루프를 닫아 결정론적으로 고정한다.
         handle.dispose();
+        await sleep(300);
         assert.deepEqual(
           reloads,
           [],
