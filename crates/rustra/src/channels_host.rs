@@ -67,10 +67,27 @@ impl ChannelHost {
     /// Rust→JS 로 채널에 데이터를 흘린다. 핸들이 없으면 `false`
     /// (stale/만료 — 호출자가 에러로 취급할지 무시할지 결정한다).
     ///
+    /// 프레임이 현재 최대 페이로드 한도([`crate::limits::max_payload_bytes`] —
+    /// `rustra_ffi_set_max_payload` 로 조정, 기본 1 MiB)를 초과하면 조용한
+    /// 유실 대신 `false` 를 반환한다 — invoke 의 `payload.too_large` 와
+    /// 대칭(리스크 감사 2026-09-13 #1). 진단은 eprintln 으로 남기고, 한도
+    /// 이하 send 의 동작은 변경 전과 바이트 단위로 동일하다.
+    ///
     /// 호스트 콜백 패닉은 잡아서 무시한다 — `emit` 의 싱크 패닉 격리와
     /// 동일 계약이지만 채널은 호출 귀속이라 "sink stays installed" 대신
     /// 그냥 이번 send 만 건너뛴다.
     pub fn send(&self, handle: u32, payload: &str) -> bool {
+        // 크기와 한도를 함께 볼 수 있는 계층이 이 테이블이다 — sender 클로저
+        // (`ChannelSender`)는 `Fn(&str)` 라 실패를 되돌려줄 수 없으므로, 호출
+        // 전에 잘라내고 `false` 로 보고한다.
+        let len = payload.len();
+        let limit = crate::limits::max_payload_bytes();
+        if len > limit {
+            eprintln!(
+                "rustra: channel frame payload {len} bytes exceeds limit {limit} bytes (handle {handle}) — send failed"
+            );
+            return false;
+        }
         let sender = {
             let channels = self.channels.lock().unwrap_or_else(|p| p.into_inner());
             channels.get(&handle).cloned()
@@ -108,8 +125,17 @@ impl ChannelHost {
     }
 
     /// Rust→JS 로 바이너리 페이로드를 흘린다. 계약은 [`ChannelHost::send`] 와
-    /// 동일(없는 핸들 `false`, 콜백 패닉 무시).
+    /// 동일(없는 핸들 `false`, 콜백 패닉 무시, 한도 초과 프레임은 유실 대신
+    /// `false` — 위 doc 참고).
     pub fn send_bytes(&self, handle: u32, payload: &[u8]) -> bool {
+        let len = payload.len();
+        let limit = crate::limits::max_payload_bytes();
+        if len > limit {
+            eprintln!(
+                "rustra: channel bytes frame payload {len} bytes exceeds limit {limit} bytes (handle {handle}) — send failed"
+            );
+            return false;
+        }
         let sender = {
             let channels = self
                 .bytes_channels
