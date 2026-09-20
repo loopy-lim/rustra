@@ -1202,12 +1202,13 @@ feature는 `libloading` 의존을 추가할 뿐 나머지는 움직이지 않는
 - `SwapOutcome = Result<(String, String), DylibCoreError>` — Ok 는
   `(old_contract_hash, new_contract_hash)` 를 실운다. 콜백 타입은
   `Arc<dyn Fn(SwapOutcome) + Send + Sync>` (`on_swap` 의 원형).
-- `DylibWatchConfig` — 필드 `artifact: PathBuf`, `poll: Duration`(기본 300ms),
+- `DylibWatchConfig` — 필드 `artifact: PathBuf`, `poll: Duration`(기본 100ms),
   `handle: Arc<HotCoreHandle>`, `on_swap: SwapCallback`(기본 no-op); 생성자는
   `DylibWatchConfig::new(artifact, handle)`.
 - `spawn_dylib_watch(config) -> std::thread::JoinHandle<()>` — sleep 폴링을 하는
-  std 스레드(notify 계열 파일 감시 의존 없음). 아티팩트 sha256 을 폴링하고
-  스왑을 원자적으로 적용한다.
+  std 스레드(notify 계열 파일 감시 의존 없음). 매 틱은 stat 지문 사전 검사이며
+  지문이 변한 틱에서만 아티팩트를 다시 읽어 sha256 을 계산하고, 스왑을 원자적으로
+  적용한다.
 
 ### 리텐션 진단 (`hot-core` feature)
 

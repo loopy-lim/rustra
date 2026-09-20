@@ -1220,10 +1220,11 @@ contracts may break before 1.0.
   `(old_contract_hash, new_contract_hash)`; the `on_swap` callback type
   (`SwapCallback`) is `Arc<dyn Fn(SwapOutcome) + Send + Sync>`.
 - `DylibWatchConfig` — fields `artifact: PathBuf`, `poll: Duration` (default
-  300ms), `handle: Arc<HotCoreHandle>`, `on_swap: SwapCallback` (default no-op);
+  100ms), `handle: Arc<HotCoreHandle>`, `on_swap: SwapCallback` (default no-op);
   constructor `DylibWatchConfig::new(artifact, handle)`.
 - `spawn_dylib_watch(config) -> std::thread::JoinHandle<()>` — a std thread with
-  sleep polling (no notify-style dependency); polls the artifact sha256 and
+  sleep polling (no notify-style dependency); each tick stats the artifact and
+  only re-reads + re-hashes (sha256) when the stat fingerprint changed, then
   applies swaps atomically.
 
 ### Retention diagnostics (`hot-core` feature)

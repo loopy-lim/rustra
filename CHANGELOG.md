@@ -5,6 +5,15 @@
 
 ## Unreleased
 
+### Changed
+
+- hot-core 감시 스레드(dylib watch)의 폴링을 300ms 전체 sha256 조사에서 **100ms
+  stat 지문 사전 검사**로 전환한다 — stat(ino:size:mtime:ctime 계열)이 변한 틱에서만
+  아티팩트를 다시 읽어 해시한다. 스왑 감지 지연 p50 929ms → 468–492ms, 유휴 호스트
+  CPU 0.0%로 판정 기준(swap p50 ≤0.8s·CPU <2%)을 통과했다(2026-09-21, 2 run × 20
+  사이클 + 30초 유휴 샘플 실측). `DylibWatchConfig::poll` 기본값이 300ms → 100ms로
+  바뀐다(필드 오버라이드는 그대로 지원).
+
 ## 0.11.0 (2026-09-18)
 
 ### Added

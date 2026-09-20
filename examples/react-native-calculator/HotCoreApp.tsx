@@ -8,7 +8,7 @@ import { getRustraNative, installRustraJSI } from '@rustra/generated-react-nativ
 
 const LOG_PREFIX = '[RustraHotCore]';
 const ADD_NUMBERS_NAME = 'addNumbers';
-// 1초 주기 프로브 — 스왑 감지(코어 300ms 폴링)보다 느리므로 스왑 후 첫 틱에서
+// 1초 주기 프로브 — 스왑 감지(코어 100ms 폴링)보다 느리므로 스왑 후 첫 틱에서
 // 값이 바뀐다. 로그 관측 계약: baseline addNumbers=5 → behavior 스왑 후 105.
 const PROBE_INTERVAL_MS = 1_000;
 
@@ -59,7 +59,7 @@ function summarizeSnapshot(snapshot: HotCoreSnapshot | null): string | undefined
  *
  * 설치 직후 JSI positional 진입으로 addNumbers(2,3)=5 를 1초마다 호출한다.
  * 외부 스크립트(scripts/hot-core-push-android.mjs)가 behavior 변형 cdylib
- * (a+b+100)을 <filesDir>/rustra/hot 로 원자 전달하면, 코어의 300ms 폴링이
+ * (a+b+100)을 <filesDir>/rustra/hot 로 원자 전달하면, 코어의 100ms 폴링이
  * 스왑하고 **JS 재로드 없이** 같은 로그 시퀀스에서 105 로 바뀌는지 관측한다.
  * Metro reload 가 끼면 관측이 무효가 되므로 이 앱은 reload 트리거를 갖지 않는다.
  */

@@ -1962,17 +1962,20 @@
     "rustra::hot_core::use:serde_json :: { Value , json }": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  use serde_json :: { Value , json } ;"
     ],
-    "rustra::hot_core::use:watch :: FailureTracker": [
-      "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (all (test , feature = \"hot-core\"))] pub use watch :: FailureTracker ;"
-    ],
     "rustra::hot_core::use:watch :: { DylibWatchConfig , SwapCallback , SwapOutcome , spawn_dylib_watch }": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] pub use watch :: { DylibWatchConfig , SwapCallback , SwapOutcome , spawn_dylib_watch } ;"
+    ],
+    "rustra::hot_core::use:watch :: { FailureTracker , stat_fingerprint }": [
+      "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (all (test , feature = \"hot-core\"))] pub use watch :: { FailureTracker , stat_fingerprint } ;"
     ],
     "rustra::hot_core::watch::const:MAX_SWAP_FAILURES_PER_BYTES": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]  const MAX_SWAP_FAILURES_PER_BYTES : u32 = 5 ;"
     ],
     "rustra::hot_core::watch::fn:spawn_dylib_watch": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]   pub fn spawn_dylib_watch (config : DylibWatchConfig) -> std :: thread :: JoinHandle < () >"
+    ],
+    "rustra::hot_core::watch::fn:stat_fingerprint": [
+      "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]   pub fn stat_fingerprint (path : & Path) -> Option < StatFingerprint >"
     ],
     "rustra::hot_core::watch::impl DylibWatchConfig { }::fn:new": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]   pub fn new (artifact : impl Into < PathBuf > , handle : Arc < HotCoreHandle >) -> Self"
@@ -1982,6 +1985,9 @@
     ],
     "rustra::hot_core::watch::struct:FailureTracker": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]  # [derive (Default)] pub struct FailureTracker { } opaque_fields=true"
+    ],
+    "rustra::hot_core::watch::struct:StatFingerprint": [
+      "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]  # [derive (Clone , PartialEq , Eq , Debug)] pub struct StatFingerprint (_) ; opaque_fields=true"
     ],
     "rustra::hot_core::watch::type:SwapCallback": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_watch.rs\"]  pub type SwapCallback = Arc < dyn Fn (SwapOutcome) + Send + Sync > ;"

@@ -43,12 +43,11 @@ const PUBLISH_TIMEOUT_MS = 240_000;
 const SWAP_TIMEOUT_MS = 90_000;
 const PROBE_WATCH_SECONDS = 900;
 
-// 기본 config 는 예제 전용 rustra.hot.json 이다. 이 브랜치에서는 그 config 의
-// node/bun 섹션이 appRoot(examples/tauri-calculator)에서 Cargo.toml 을 찾지 못해
-// codegen 이 실패하는 기존 버그가 있다("Host setup found 0 Cargo packages") —
-// BENCH_CONFIG 로 동일 설정을 절대경로+명시 rustManifest 로 표현한 임시 config
-// (/tmp/rustra-hot-bench/rustra-hot-bench.json)를 건네면 같은 파이프라인이
-// 동작한다(생성 바이트 동일성은 하니스가 지문으로 검증한다).
+// 기본 config 는 예제 전용 rustra.hot.json 이다(옆의 package.json 이 node/bun
+// 호스트 셋업을 만족한다). 과거 "Host setup found 0 Cargo packages" 버그 우회로
+// BENCH_CONFIG 임시 config 를 건네던 시기가 있으나 버그 수정 후 기본 경로가
+// 정상 동작한다 — BENCH_CONFIG 는 측정 환경 오버라이드로만 남긴다(생성 바이트
+// 동일성은 하니스가 지문으로 검증한다).
 const configPath = resolve(
   process.env.BENCH_CONFIG ?? join(root, 'examples/tauri-calculator/rustra.hot.json'),
 );
@@ -555,12 +554,12 @@ try {
         config: {
           warmup: WARMUP,
           measured: MEASURED,
-          pollMsHost: 300,
+          pollMsHost: 100,
           pollMsHarness: POLL_MS,
           liveArtifact: livePath,
           benchConfig: configPath,
           mutation: 'add_numbers body + std::hint::black_box(0) toggle (schema-invariant)',
-          host: 'examples/hot-core-probe --watch (spawn_dylib_watch, 300ms sha256 polling)',
+          host: 'examples/hot-core-probe --watch (spawn_dylib_watch, 100ms stat-precheck polling)',
           initialBuild,
         },
         cycles,
