@@ -125,7 +125,7 @@ without replacing committed output. Build artifacts may be written to Cargo's
 target directory. This costs a native build and bindgen run.
 
 The orchestration lives in `packages/cli/src/cli-uniffi.ts`; the mirror
-renderer is `examples/calculator/src/uniffi_render.rs` (11 unit tests — meeting
+renderer is `examples/calculator/src/uniffi_render.rs` (28 unit tests — meeting
 a type the mirror cannot express fails while naming the schema path; there is
 no silent skip).
 

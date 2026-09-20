@@ -1226,6 +1226,25 @@ contracts may break before 1.0.
   sleep polling (no notify-style dependency); polls the artifact sha256 and
   applies swaps atomically.
 
+### Retention diagnostics (`hot-core` feature)
+
+A core pushed out by a swap is deliberately never `dlclose`d — macOS cannot
+unload it anyway (std TLS makes `dlclose` a no-op) and Linux must not (old
+symbol pointers alive from before the swap would use-after-unload). Every
+`DylibCore::open` therefore retains its library mapping for the rest of the
+process and is counted once at open time — including loads whose symbol
+binding fails afterwards. Three items behind `rustra::hot_core` report this:
+
+- `retained_library_stats()` — a process-wide `RetainedLibraryStats` snapshot;
+  counters may advance independently while another thread is mid-load.
+- `RetainedLibraryStats` — `libraries` (cumulative retained loads; dropping a
+  core does not unload its symbols) and `artifact_bytes` (the sum of loaded
+  artifact **file sizes**, not resident memory); `.restart_recommended()`
+  returns `true` at the interval below.
+- `RETAINED_LIBRARY_RESTART_INTERVAL` (`= 32`) — the load count after which a
+  development session should restart the host to release the retained
+  mappings; every 32nd load also prints a stderr reminder.
+
 ### Retry cap
 
 The same artifact bytes failing 5 consecutive swaps are poisoned and skipped
@@ -1573,6 +1592,6 @@ Current policy (R08 — early guard):
 
 All first-party adapters (`createNodeBootstrap`, `createBunBootstrap`,
 `createTauriBootstrap`, RN `createRustraBootstrap`) share the same slot path,
-so the guard covers them automatically. Only the Node adapter passes `ownerId`
-today — conflicts from the other adapters report the anonymous party in the
-diagnostics.
+so the guard covers them automatically. The Node adapter (`node-bootstrap.ts`)
+and the Bun adapter (`bun-ffi.ts`) pass `ownerId`; conflicts from the other
+adapters report the anonymous party in the diagnostics.

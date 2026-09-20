@@ -48,7 +48,7 @@ blob 전송 표면(JSI/Tauri/Bun/Node)에만 스코프가 머문다. B2 를 기�
 
 - `Package::invoke_typed<I, O>(name, &input)`
   (`crates/rustra/src/invoke_typed.rs`) — 이름→commandId 조회, postcard 요청,
-  `invoke_frame` 단일 dispatch 경로(0.9 Frame 리네임에서 `invoke_rkyv_v2` 에서
+  `invoke_frame` 단일 dispatch 경로(0.10.0 Frame 리네임에서 `invoke_rkyv_v2`에서
   개명). JSON 실행 경로를 이원화하지 않아
   Rust↔TS 바이너리 호환이 코드 중복 없이 유지된다.
 - `decode_frame_response`/`decode_frame_error_parts`
@@ -63,7 +63,7 @@ uniffi derive 는 전부 **앱 크레이트 쪽 생성 미러 계층**
 
 미러 계층은 손으로 쓰지 않는다 — 프로브가 스키마에서
 `uniffi_generated.rs` 를 렌더링하고(렌더러 fail-closed, 조용한 skip 없음,
-단위 테스트 11개), 커밋해 신선도 게이트(`codegen --check` 의 바이트 비교
+단위 테스트 28개), 커밋해 신선도 게이트(`codegen --check` 의 바이트 비교
 — 빌드는 check 모드에서 의도적으로 생략)가 지킨다. 미러로 표현 불가능한
 타입의 기계적 갈림은 문서화된다: set→`Vec` 미러 + 변환 시 실제 `BTreeSet`
 수집, 고정 튜플→합성 record(`SpanInputPair`), map→추론 기반 collect,

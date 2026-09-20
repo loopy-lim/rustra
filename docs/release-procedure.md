@@ -23,6 +23,10 @@ proceeds only after separate approval.
    seed replay and 600 seconds for each Fuzz target invoke_frame,
    invoke_complex_value and invoke_complex_serde. Weekly checks remain separate
    from PR required checks.
+4. `bun run test:api-surface` — the public TS/Rust export surface is diffed
+   against `api-surface/snapshot.json`; any drift fails the gate, and
+   intentional changes require `--update` (the new snapshot is accepted into
+   the PR).
 
 The Linux x86_64 sanitizer job is a cross-platform memory-safety gate. Linux
 remains **Alpha** until the separate real Tauri WebView, lifecycle, and packaged
