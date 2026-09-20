@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runDev } from './dev.js';
+import { runDev, type DevWatchHandle } from './dev.js';
 import { cliManifest } from './cli-runtime.js';
 
 // ── runConfigDev × parity gate 배선 계약 (Task A2) ──────────────────────────
@@ -589,6 +589,11 @@ function seedDylibProject(root: string): string {
   mkdirSync(join(project, 'generated'), { recursive: true });
   mkdirSync(join(root, FAKE_BIN), { recursive: true });
   writeFileSync(join(project, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+  // 지문 루트의 하나(warm-loop Stage 1) — 실제 cargo run 은 첫 프로브에서 Cargo.lock
+  // 을 만드므로 락이 있는 정상 상태(steady state)를 시드한다. 락 부재는 지문 계약상
+  // 실패(fail-safe)로 전체 파이프라인을 강제하므로, 스킵 계약을 검증하려면 이 시드가
+  // 필요하다.
+  writeFileSync(join(project, 'Cargo.lock'), '# fake lock — seeded steady state\n');
   writeFileSync(join(project, 'src', 'lib.rs'), 'fn main() {}\n');
   writeFileSync(
     join(project, 'package.json'),
@@ -615,6 +620,7 @@ function seedDylibProject(root: string): string {
     '  exit 0',
     'fi',
     'if [ "$1" = "run" ]; then',
+    '  [ -n "$FAKE_CARGO_LOG" ] && printf \'%s\\n\' "$*" >> "$FAKE_CARGO_LOG"',
     '  manifest=""; prev=""',
     '  for a in "$@"; do [ "$prev" = "--manifest-path" ] && manifest="$a"; prev="$a"; done',
     '  dir=$(dirname "$manifest")',
@@ -1123,6 +1129,284 @@ test(
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_NO_ARTIFACT;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+// ── warm-loop Stage 1 — 지문 스킵(§(b)) ──────────────────────────────────────
+//
+// 마지막 성공 파이프라인 이후 감시 대상 Rust 입력이 바이트 동일하면 틱은 cargo
+// 프로브(runCodegen)와 엔진 재빌드를 건너뛰고, 게이트·reload 훅은 오늘과 같이
+// 돈다. 프로브 호출 수는 fake cargo 가 $FAKE_CARGO_LOG 에 한 줄씩 기록하므로
+// 로그 행 수로 집계한다($FAKE_DYLIB_LOG 은 엔진 빌드 수).
+
+const SKIP_LINE = '[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)';
+
+function logLineCount(path: string): number {
+  return existsSync(path)
+    ? readFileSync(path, 'utf8')
+        .split('\n')
+        .filter((line) => line.trim() !== '').length
+    : 0;
+}
+
+test(
+  'runConfigDev skips the cargo stage when a trigger fires with byte-identical rust inputs',
+  { timeout: 30_000 },
+  async () => {
+    // 내용 불변 트리거 — 설정 파일을 같은 바이트로 다시 쓴다(mtime 만 변한다).
+    // 감시는 이벤트 자체를 dirty 로 취급하므로 틱은 돌지만, 지문이 일치하면
+    // cargo 프로브·엔진 빌드 없이 게이트 검증만 통과해야 한다. 스킵 틱의 계약:
+    // (i) cargo run/build 호출 수 불변, (ii) 게이트 desync 없음(스킵 틱에는
+    // schema 바이트가 불변 → verify 통과 — 거부도 재무장도 없음), (iii) reload 훅
+    // 은 계속 방출(호스트 관찰 행동 불변), (iv) 라이브 발행물 무손상.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-fp-skip-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      const cargoLog = join(root, 'cargo-run.log');
+      const dylibLog = join(root, 'dylib-build.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_CARGO_LOG = cargoLog;
+      process.env.FAKE_DYLIB_LOG = dylibLog;
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
+      try {
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        const liveAbs = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+        assert.equal(readFileSync(liveAbs, 'utf8'), 'fake dylib core');
+        const runsAfterInitial = logLineCount(cargoLog);
+        assert.equal(runsAfterInitial, 1, 'the initial tick must run the cargo probe once');
+
+        const configPath = join(project, 'rustra.json');
+        const originalConfig = readFileSync(configPath, 'utf8');
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(configPath, originalConfig),
+          () => errors.some((line) => line.includes(SKIP_LINE)),
+          'the fingerprint skip line',
+        );
+        await sleep(300);
+        assert.equal(
+          logLineCount(cargoLog),
+          runsAfterInitial,
+          `the skip tick must not invoke the cargo probe, got:\n${errors.join('\n')}`,
+        );
+        assert.equal(
+          logLineCount(dylibLog),
+          1,
+          `the skip tick must not rebuild the engine, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev] reload rejected')),
+          `the skip tick must not desync the parity gate — the schema bytes are ` +
+            `unchanged, so verify passes, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev] regeneration failed')),
+          `the skip tick must not fail, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          reloads.length >= 1,
+          `the skip tick must still emit reload hooks, captured:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          reloads.every((reason) => reason === 'config change'),
+          `only the no-op trigger may have reloaded, got: ${reloads.join(', ')}`,
+        );
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'fake dylib core',
+          'the skip tick must not touch the published live artifact',
+        );
+      } finally {
+        handle?.dispose();
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_CARGO_LOG;
+        delete process.env.FAKE_DYLIB_LOG;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev reruns the full pipeline when a schema-relevant change dirties the rust inputs',
+  { timeout: 30_000 },
+  async () => {
+    // 오염 시나리오의 e2e 절반 — src 필드 **타입 변경**은 지문을 바꾸므로 전체
+    // 파이프라인(프로브 + 엔진 빌드)이 다시 돌아야 하고, 그 뒤 같은 내용의
+    // 재트리거는 스킵으로 돌아가야 한다(스킵과 재실행의 대조를 한 흐름에서 증명).
+    // 나머지 네 오염 시나리오(필드 추가/필드명/attribute/derive)는 지문 단위
+    // 테스트(dev-fingerprint.test.ts)가 담당한다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-fp-rerun-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      const cargoLog = join(root, 'cargo-run.log');
+      const dylibLog = join(root, 'dylib-build.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_CARGO_LOG = cargoLog;
+      process.env.FAKE_DYLIB_LOG = dylibLog;
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
+      try {
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        assert.equal(logLineCount(cargoLog), 1, 'the initial tick must run the cargo probe once');
+
+        // 오염 — 시드 코드를 같은 구조체의 필드 타입 변경으로 쓴다 → 지문 불일치
+        // → cargo 프로브가 다시 돈다.
+        const libPath = join(project, 'src', 'lib.rs');
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(libPath, 'pub struct EchoInput { pub message: String }\n'),
+          () => logLineCount(cargoLog) >= 2,
+          'the contaminated full pipeline run',
+        );
+
+        // 대조 — 이제 같은 내용의 재트리거는 스킵으로 돌아간다(재실행이 오염에만
+        // 반응했다는 증명).
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(libPath, 'pub struct EchoInput { pub message: String }\n'),
+          () => errors.some((line) => line.includes(SKIP_LINE)),
+          'the skip line after the contamination settled',
+        );
+        await sleep(300);
+        assert.equal(
+          logLineCount(cargoLog),
+          2,
+          `the contamination must rerun the cargo probe exactly once more, got:\n${errors.join('\n')}`,
+        );
+        assert.equal(
+          logLineCount(dylibLog),
+          2,
+          `the contamination must rebuild the engine, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          reloads.some((reason) => reason === 'Rust change'),
+          `the rerun must emit reload hooks, captured:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev] reload rejected')),
+          `the rerun keeps the same contract, so the gate must pass, got:\n${errors.join('\n')}`,
+        );
+        assert.equal(
+          readFileSync(
+            join(project, 'target', 'debug', liveDylibFileName('rustra_bridge')),
+            'utf8',
+          ),
+          'fake dylib core',
+          'the rerun must republish the gated live artifact',
+        );
+      } finally {
+        handle?.dispose();
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_CARGO_LOG;
+        delete process.env.FAKE_DYLIB_LOG;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev reruns the full pipeline when the generated schema is missing despite a fingerprint match',
+  { timeout: 30_000 },
+  async () => {
+    // fail-safe — 지문이 일치해도 생성물(schema.json)이 없으면 스킵 금지다.
+    // 프로브를 다시 돌려 생성물을 복구하는 것까지가 이 틱의 일이다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-fp-noschema-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      const schemaPath = join(project, 'generated', 'schema.json');
+      writeSchema(schemaPath, 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      const cargoLog = join(root, 'cargo-run.log');
+      const dylibLog = join(root, 'dylib-build.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_CARGO_LOG = cargoLog;
+      process.env.FAKE_DYLIB_LOG = dylibLog;
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
+      try {
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        assert.equal(logLineCount(cargoLog), 1, 'the initial tick must run the cargo probe once');
+
+        // schema.json 삭제 — 생성물 감시가 스스로 틱을 깬다(쓰기 불필요).
+        rmSync(schemaPath);
+        await triggerUntil(
+          () => errors,
+          () => {},
+          () => reloads.length >= 1,
+          'the fail-safe full pipeline run',
+        );
+        await sleep(300);
+        assert.equal(
+          logLineCount(cargoLog),
+          2,
+          `the missing schema must defeat the fingerprint match and rerun the probe, ` +
+            `got:\n${errors.join('\n')}`,
+        );
+        assert.equal(
+          logLineCount(dylibLog),
+          2,
+          `the fail-safe tick must rebuild the engine, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes(SKIP_LINE)),
+          `no tick may log the skip line while the generated schema is gone, ` +
+            `got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev] reload rejected')),
+          `the restored schema matches the armed baseline, so verify passes, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(existsSync(schemaPath), 'the fail-safe run must restore the generated schema');
+        assert.equal(
+          readFileSync(
+            join(project, 'target', 'debug', liveDylibFileName('rustra_bridge')),
+            'utf8',
+          ),
+          'fake dylib core',
+          'the fail-safe run must republish the gated live artifact',
+        );
+      } finally {
+        handle?.dispose();
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_CARGO_LOG;
+        delete process.env.FAKE_DYLIB_LOG;
       }
     } finally {
       process.env.PATH = originalPath;
