@@ -60,10 +60,11 @@ pub fn run() {
                 }
             })
         };
+        let poll = config.poll;
         hot_core::spawn_dylib_watch(config);
         eprintln!(
-            "rustra hot-core: watching {} (poll 300ms) — rebuild the artifact to swap; \
-             in-core state (channels/events) resets on each swap",
+            "rustra hot-core: watching {} (poll {poll:?}, stat-precheck) — rebuild the \
+             artifact to swap; in-core state (channels/events) resets on each swap",
             artifact.display()
         );
         tauri_support::register_dispatch_with_swap_events(
