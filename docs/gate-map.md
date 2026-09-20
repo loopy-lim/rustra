@@ -43,7 +43,7 @@ describes the invariant that fails when the script fails.
 
 | Script                         | Group             | Protects                                                                                                                     | Cost              | Local run notes                                               |
 | ------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------- |
-| `test`                         | umbrella          | Aggregate of release-tools, types, ts:bun, packages, cli, complex-codec-bench, bench-gate, functions unit/E2E suites         | Slow              | Not a 1:1 CI mirror — the `typescript` CI job is a superset   |
+| `test`                         | umbrella          | Aggregate of release-tools, types, ts:bun, packages, cli, complex-codec-bench, bench-gate, functions unit/E2E suites         | Slow              | Not a 1:1 CI mirror — the TS CI jobs are a superset           |
 | `test:fast`                    | umbrella          | First signal: workspace compiles, calculator types check, CLI units pass                                                     | Fast (≈15 s warm) | `cargo check --workspace` ≈ 8.4 s warm is most of it          |
 | `test:compat`                  | compat chain      | Full Rust↔TS compatibility matrix (ts:node + ts:bun + adapters + runtime)                                                    | Slow              | Minimum bar before opening a PR (CONTRIBUTING)                |
 | `test:ts:node`                 | compat chain      | Compiled `dist-ts` example tests (calculator + crud) pass under Node `--test`                                                | Medium            | Runs `tsc` on both examples first                             |
@@ -82,8 +82,8 @@ describes the invariant that fails when the script fails.
 | `test:app:auth`                | example apps      | Auth example builds and its app runs                                                                                         | Slow              | Cargo build inside                                            |
 | `test:app:reference`           | example apps      | Reference app runs against the crud example crate                                                                            | Slow              | Cargo build inside                                            |
 | `test:functions`               | functions         | End-to-end ordinary-function registration integration                                                                        | Medium            |                                                               |
-| `lint`                         | aux (CI step)     | ESLint passes for `packages/*/src`                                                                                           | Fast              | Run by the CI `typescript` job                                |
-| `format:check`                 | aux (CI step)     | Prettier reports no diffs under `packages/*/src`                                                                             | Fast              | Run by the CI `typescript` job                                |
+| `lint`                         | aux (CI step)     | ESLint passes for `packages/*/src`                                                                                           | Fast              | Run by the CI `ts-checks` job                                 |
+| `format:check`                 | aux (CI step)     | Prettier reports no diffs under `packages/*/src`                                                                             | Fast              | Run by the CI `ts-checks` job                                 |
 | `lint:rust`                    | aux (CI step)     | Clippy is warning-free (`-D warnings`) for all targets                                                                       | Medium            | Run by the CI `rust` job (Linux leg)                          |
 | `fmt:rust:check`               | aux (CI step)     | `cargo fmt` reports no diffs                                                                                                 | Fast              | Run by the CI `rust` job (Linux leg)                          |
 | `coverage:rust`                | aux (advisory)    | Coverage visibility for `rustra` + `rustra-macros`                                                                           | Slow              | Mirrors `coverage.yml` (not a gate)                           |
@@ -100,8 +100,9 @@ Not gates (excluded above): `build`, `build:napi`, the fixers (`lint:fix`,
 
 ### `test:local` — the "run what CI runs locally" umbrella
 
-`test:local` mirrors the locally-runnable steps of the CI `typescript` job in
-one command (added 2026-09-20):
+`test:local` mirrors the locally-runnable steps of the CI TS jobs (`ts-checks` +
+`ts-tests` + `ts-runtime` — the 2026-09-20 split of the former `typescript`
+mega-job) in one command (added 2026-09-20):
 
 > `bun run build` → `test:release-coherence` → `lint` → `format:check` →
 > `audit:prod` → `test:ts:node` → `test:ts:bun` → `test:adapters` →
@@ -118,29 +119,31 @@ builds (`test:runtime:node`, `test:runtime:bun`).
 
 ## Layer 3 — GitHub Actions
 
-### `ci.yml` — 14 jobs
+### `ci.yml` — 16 jobs
 
 Triggers: push and PRs to `main`, plus a weekly Monday cron that runs only
 `rust-audit` (every other job skips via `github.event_name != 'schedule'`,
 including the `gate` aggregate). PR runs cancel in-progress runs of the same
 ref; main pushes never cancel.
 
-| Job              | Protects                                                                                                                                                                                                                               | Required check (2026-09-20)                                                              | Local equivalent                                                                                    |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `changes`        | Path filter (dorny/paths-filter): outputs `code=false` only for docs-only PRs; forced `code=true` on every other event                                                                                                                 | not required (feeds the mobile jobs' `if` and `gate`)                                    | —                                                                                                   |
-| `rust-audit`     | No actionable RUSTSEC advisories (`scripts/audit-rust.sh`; only the documented Tauri 2/GTK3 exceptions pass)                                                                                                                           | **required** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (needs `cargo-audit`)                                                  |
-| `rust-deny`      | License/ban/source policy (`deny.toml` via cargo-deny)                                                                                                                                                                                 | not required                                                                             | `cargo deny check`                                                                                  |
-| `rust` (matrix)  | rustfmt + clippy + `cargo test --workspace` (+ `--release`, hot-core) on Linux; core crates on macOS/Windows; release cdylib builds                                                                                                    | **required ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
-| `rust-msrv`      | MSRV 1.88 contract: core crates check + lib tests on Rust 1.88                                                                                                                                                                         | not required                                                                             | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
-| `rust-wasm32`    | `rustra` compiles for `wasm32-unknown-unknown`                                                                                                                                                                                         | not required                                                                             | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
-| `napi`           | napi debug addon builds and the Node napi app runs (previously untested transport path)                                                                                                                                                | not required                                                                             | `bun run test:runtime:node-napi`                                                                    |
-| `typescript`     | The TS/JS surface: build, lint, format, react-doctor (100/100), `audit:prod`, tsc, example/adapters/CLI tests, codegen + bindings + api-surface + architecture + docs gates, `test:compat`, package units, C++ codec tests, onboarding | **required** (`typescript`)                                                              | `bun run test:local` (see above)                                                                    |
-| `rn-android`     | RN Android Release APK builds and the emulator smoke asserts the engine marker; skips on docs-only PRs                                                                                                                                 | **required** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (needs NDK + emulator)                                |
-| `rn-ios`         | RN iOS Release build and the simulator smoke asserts the engine marker; skips on docs-only PRs                                                                                                                                         | **required** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, simulator)                                           |
-| `uniffi-android` | UniFFI Kotlin bindings load and run on an emulator (happy + divide-by-zero error paths); skips on docs-only PRs                                                                                                                        | not required                                                                             | `examples/uniffi-android-smoke` flow (no one-command equivalent)                                    |
-| `uniffi-ios`     | UniFFI Swift bindings run on an iOS simulator (same marker contract); skips on docs-only PRs                                                                                                                                           | not required                                                                             | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
-| `consumer-smoke` | Packed tarballs install into a clean consumer, load (ESM), and the CLI `init`→codegen→run flow works                                                                                                                                   | **required** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (subset)              |
-| `gate`           | Aggregate: all 13 jobs above must be exactly `success`; `skipped` fails (anti silent-green) **except** the four mobile jobs' skips when path-filter-originated (docs-only PR)                                                          | **not required** (verified 2026-09-20)                                                   | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
+| Job              | Protects                                                                                                                                                                      | Required check (2026-09-20)                                                              | Local equivalent                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `changes`        | Path filter (dorny/paths-filter): outputs `code=false` only for docs-only PRs; forced `code=true` on every other event                                                        | not required (feeds the mobile jobs' `if` and `gate`)                                    | —                                                                                                   |
+| `rust-audit`     | No actionable RUSTSEC advisories (`scripts/audit-rust.sh`; only the documented Tauri 2/GTK3 exceptions pass)                                                                  | **required** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (needs `cargo-audit`)                                                  |
+| `rust-deny`      | License/ban/source policy (`deny.toml` via cargo-deny)                                                                                                                        | not required                                                                             | `cargo deny check`                                                                                  |
+| `rust` (matrix)  | rustfmt + clippy + `cargo test --workspace` (+ `--release`, hot-core) on Linux; core crates on macOS/Windows; release cdylib builds                                           | **required ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
+| `rust-msrv`      | MSRV 1.88 contract: core crates check + lib tests on Rust 1.88                                                                                                                | not required                                                                             | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
+| `rust-wasm32`    | `rustra` compiles for `wasm32-unknown-unknown`                                                                                                                                | not required                                                                             | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
+| `napi`           | napi debug addon builds and the Node napi app runs (previously untested transport path)                                                                                       | not required                                                                             | `bun run test:runtime:node-napi`                                                                    |
+| `ts-checks`      | Static TS gates: build, lint, format, react-doctor (100/100), `audit:prod`, tsc, api-surface + codegen-fresh + bindings-fresh + architecture + docs + onboarding gates        | via `gate` (ex-`typescript`)                                                             | `bun run test:local` (checks subset)                                                                |
+| `ts-tests`       | Build-consuming tests: ts:node + ts:bun + adapters + CLI, package units, bench-gate/release-tools/registry-consumer unit gates, C++ codec tests, bare RN fixture              | via `gate` (ex-`typescript`)                                                             | `bun run test:local` (tests subset)                                                                 |
+| `ts-runtime`     | Real Rust↔TS execution: node + bun + tauri example apps on release builds (the `test:runtime` legs of the old `test:compat` chain)                                            | via `gate` (ex-`typescript`)                                                             | `bun run test:runtime`                                                                              |
+| `rn-android`     | RN Android Release APK builds and the emulator smoke asserts the engine marker; skips on docs-only PRs                                                                        | **required** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (needs NDK + emulator)                                |
+| `rn-ios`         | RN iOS Release build and the simulator smoke asserts the engine marker; skips on docs-only PRs                                                                                | **required** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, simulator)                                           |
+| `uniffi-android` | UniFFI Kotlin bindings load and run on an emulator (happy + divide-by-zero error paths); skips on docs-only PRs                                                               | not required                                                                             | `examples/uniffi-android-smoke` flow (no one-command equivalent)                                    |
+| `uniffi-ios`     | UniFFI Swift bindings run on an iOS simulator (same marker contract); skips on docs-only PRs                                                                                  | not required                                                                             | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
+| `consumer-smoke` | Packed tarballs install into a clean consumer, load (ESM), and the CLI `init`→codegen→run flow works                                                                          | **required** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (subset)              |
+| `gate`           | Aggregate: all 14 jobs above must be exactly `success`; `skipped` fails (anti silent-green) **except** the four mobile jobs' skips when path-filter-originated (docs-only PR) | **not required** (verified 2026-09-20)                                                   | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
 
 Notes:
 
@@ -150,10 +153,10 @@ Notes:
   emulator jobs (`rn-android`, `rn-ios`, `uniffi-android`, `uniffi-ios`) skip
   by the `changes` path filter, and `gate` (via `scripts/ci-gate.sh`, which
   receives the event name and filter output) accepts exactly those skips. Any
-  other skip still fails the gate — e.g. `consumer-smoke` skipping because
-  `typescript` failed stays red. GitHub treats a skipped required check as
-  satisfied, so the docs-only skip does not block merges. Since 2026-09-20 the
-  live protection requires exactly `gate` — see
+  other skip still fails the gate — e.g. `consumer-smoke` skipping because a
+  `ts-checks`/`ts-tests`/`ts-runtime` job failed stays red. GitHub treats a
+  skipped required check as satisfied, so the docs-only skip does not block
+  merges. Since 2026-09-20 the live protection requires exactly `gate` — see
   [Currently required checks](#currently-required-checks).
 
 ### Other workflows
@@ -205,6 +208,12 @@ recorded the previous state, so both states are documented here:
   `rust-msrv`, `rust-wasm32`, `rust-deny`, `napi`, and the two `uniffi` jobs.
   The "required" column in the ci.yml table above now reads as history; every
   job in it blocks merges **through the aggregate**.
+- **2026-09-20 (same day, later):** the `typescript` mega-job split into
+  `ts-checks`, `ts-tests`, and `ts-runtime` (gate `needs`: 12 → 14 code jobs).
+  The split is safe precisely because only `gate` is required — job names may
+  change freely as long as `gate`'s `needs` and `scripts/ci-gate.sh` move in
+  lockstep (enforced loudly by `scripts/ci-gate.test.ts`). The TS jobs also
+  keep the old contract of never skipping on docs-only PRs.
 
 Re-verify in one step:
 

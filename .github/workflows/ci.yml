@@ -224,22 +224,39 @@ jobs:
       - name: napi runtime smoke
         run: node dist-ts/examples/calculator/apps/node-napi-app.js
 
-  typescript:
+  # ── TypeScript 계열 잡 3개 (구 typescript 메가잡 분할, 2026-09-20) ────────────
+  # 직렬 ~30스텝이던 typescript 잡을 책임 기준으로 3개 병렬 잡으로 나눴다:
+  #   ts-checks  — 정적 검사/게이트: lint·format·audit·tsc·api-surface·codegen/
+  #                bindings freshness·architecture·onboarding·docs·react-doctor
+  #   ts-tests   — 빌드 산출을 소비하는 테스트: ts:node/ts:bun·adapters·CLI·
+  #                패키지 유닛·bench/release-tools/registry-consumer 게이트 유닛·
+  #                C++ 코덱 테스트
+  #   ts-runtime — cargo release 빌드가 필요한 런타임 스모크: node/bun/tauri
+  # 구 test:compat 우산은 ts:bun·adapters 를 standalone 스텝으로 실행한 뒤 우산
+  # 안에서 재실행(2회)했지만, 분할은 우산을 잡 경계로 분해해 각 검증이 정확히
+  # 1회 실행되도록 정리한다(ts:node 는 ts-tests 의 명시 스텝, runtime:* 은
+  # ts-runtime 으로 이동).
+  # 세 잡 모두 생성 코드가 @rustra/* 를 import 하고 package exports 가 dist 를
+  # 가리키므로 checkout + bun install + workspace 빌드를 각 잡이 재복제한다
+  # (cargo 를 쓰는 잡은 Rust 툴체인/rust-cache 도 재복제). gtk/webkit apt 의존은
+  # test:runtime:tauri 를 돌리는 ts-runtime 만 필요하다.
+  # 잡 이름을 개명/분할할 수 있는 근거: branch protection 이 개별 잡 컨텍스트가
+  # 아닌 `gate` 집계 하나만 필수로 요구한다 — gate needs + scripts/ci-gate.sh 의
+  # 잡 목록을 항상 함께 갱신한다(ci-gate.test.ts 가 양쪽 일치를 loud 하게
+  # 검증한다). docs 전용 PR 경로 필터로도 skip 되지 않는다(구 typescript 와
+  # 동일 계약 — 이 계열은 schedule 스킵 if 만으로 상시 실행).
+  ts-checks:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     needs: [rust, rust-audit]
     steps:
       - uses: actions/checkout@v7
+      # api-surface parser 의 fmt/clippy 와 codegen-fresh 의 cargo run 이 Rust
+      # 툴체인을 요구한다 (rust 잡과 별도 캐시 재사용).
       - uses: dtolnay/rust-toolchain@1.95.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # test:compat 의 test:runtime:tauri 가 tauri-calculator release 빌드를
-      # 돌린다 — gtk/webkit 시스템 의존이 필요하다 (rust 잡과 동일 목록).
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -252,6 +269,8 @@ jobs:
       - name: Build @rustra/types first
         run: bun run --cwd packages/types build
       - name: Build all packages
+        # tsc --noEmit 이 package exports 의 dist 타입 선언을 소비하고
+        # onboarding 게이트가 repo CLI dist 를 소비하므로 검사 전에 빌드한다.
         run: bun run build
       - name: Release version coherence
         run: bun run test:release-coherence
@@ -270,31 +289,6 @@ jobs:
       - name: Type check crud
         shell: bash
         run: set -o pipefail && bunx tsc --noEmit -p examples/crud/tsconfig.json 2>&1 | tee "$RUNNER_TEMP/rustra-tsc-crud.log"
-      - name: Test TypeScript (Bun 1.4)
-        run: bun run test:ts:bun
-      - name: Install react-native example deps
-        # test:adapters 체인의 test:app:react-native 이 예제 의존성(react,
-        # react-native, nitro)을 필요로 하므로 루트 workspace와 별도로 앱
-        # node_modules를 설치한다.
-        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
-      - name: Verify bare React Native zero-config fixture
-        run: |
-          bun install --cwd examples/react-native-bare-calculator --frozen-lockfile
-          bun run --cwd examples/react-native-bare-calculator codegen
-          bun run --cwd examples/react-native-bare-calculator typecheck
-          bun run --cwd examples/react-native-bare-calculator test:autolink
-      - name: Install Tauri example deps
-        run: bun install --cwd examples/tauri-calculator --frozen-lockfile
-      - name: Test adapters
-        run: bun run test:adapters
-      - name: Test CLI
-        run: bun run --cwd packages/cli test
-      - name: Test complex codec receipt
-        run: bun run test:complex-codec-bench
-      - name: Bench regression gate unit tests
-        # check-criterion-regression.mjs 로직의 단위 테스트 — umbrella `test`
-        # 스크립트에만 포함돼 CI가 놓치고 있었다.
-        run: bun run test:bench-gate
       - name: Format and lint private Rust API parser
         run: |
           cargo fmt --manifest-path scripts/api-surface-rust/Cargo.toml -- --check
@@ -308,13 +302,96 @@ jobs:
         # 일치하는지 단언한다 — 드리프트는 예제 디렉터리에서 `bun run codegen` 으로
         # 갱신 후 커밋. Rust schema 발행(cargo run)이 필요해 잡 상단의 Rust
         # 툴체인/rust-cache 를 재사용하므로 "Build all packages" 이후에 둔다.
-        # typescript 잡 자체가 gate 필수 잡이라 별도 gate 편입은 불필요하다.
+        # 이 잡(ts-checks) 자체가 gate 필수 잡이라 별도 gate 편입은 불필요하다.
         run: bun run test:codegen-fresh
       - name: UniFFI Swift and Kotlin binding freshness
         run: bun run test:bindings-fresh
       - name: Architecture boundaries gate
         # 모듈 경계/파일 라인 상한 위반을 게이트한다.
         run: bun run test:architecture
+      - name: Onboarding gate (init → doctor → codegen → demo)
+        # 신규 사용자 여정을 임시 디렉토리에서 실동행 검증 — 산문이 아니라
+        # 게이트로 계약한다. init 스캐폴드가 repo CLI의 dist를 소비하므로
+        # bun run build 이후 실행되어야 한다.
+        run: bun run test:onboarding
+      - name: Docs sync gate (docs:sync 마커 ↔ 생성물)
+        # 문서에 붙여 넣은 생성 코드 샘플이 현실과 갈라지는 반복 패턴을
+        # 게이트로 종결한다. 마커 영역을 참조 파일과 byte-for-byte 대조한다.
+        run: bun run test:docs
+
+      # 실패 로그 보존 — tsc/react-doctor 는 콘솔 전용이라 잡 로그 retention 이
+      # 지나면 사라진다(tee 로 파일로 남긴다). bun 설치 실패는 bun-debug.log 를
+      # 남기므로 함께 보존한다.
+      - name: Upload failure logs (ts-checks)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-ts-checks
+          path: |
+            ${{ runner.temp }}/rustra-tsc-calculator.log
+            ${{ runner.temp }}/rustra-tsc-crud.log
+            ${{ runner.temp }}/rustra-react-doctor.log
+            bun-debug.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  ts-tests:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    needs: [rust, rust-audit]
+    steps:
+      - uses: actions/checkout@v7
+      # test:ts:bun 과 packages/bun dylib 테스트가 rustra-calculator-example
+      # 바이너리를 요구해 Rust 툴체인이 필요하다 (rust 잡과 별도 캐시 재사용).
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build @rustra/types first
+        run: bun run --cwd packages/types build
+      - name: Build all packages
+        # 예제 테스트/앱이 @rustra/* 를 package name 으로 import 하고 exports 가
+        # dist 를 가리키므로 테스트 전에 workspace 를 빌드한다.
+        run: bun run build
+      - name: Test TypeScript (Bun 1.4)
+        run: bun run test:ts:bun
+      - name: Test TypeScript on Node (test:ts:node)
+        # 구 test:compat 우산의 ts:node 구간을 명시 스텝으로 승격 — tsc emit 후
+        # node --test 로 calculator/crud dist-ts 테스트를 돌린다. ts:bun 과
+        # adapters 는 원래 standalone 스텝이 있어 우산이 재실행(2회)했지만,
+        # 분할 후 각 검증은 정확히 1회 실행된다.
+        run: bun run test:ts:node
+      - name: Install react-native example deps
+        # test:adapters 체인의 test:app:react-native 이 예제 의존성(react,
+        # react-native, nitro)을 필요로 하므로 루트 workspace와 별도로 앱
+        # node_modules를 설치한다.
+        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
+      - name: Verify bare React Native zero-config fixture
+        run: |
+          bun install --cwd examples/react-native-bare-calculator --frozen-lockfile
+          bun run --cwd examples/react-native-bare-calculator codegen
+          bun run --cwd examples/react-native-bare-calculator typecheck
+          bun run --cwd examples/react-native-bare-calculator test:autolink
+      - name: Test adapters
+        # test:adapter:tauri 는 examples/calculator 의 mock __TAURI__ 로 돌므로
+        # examples/tauri-calculator 의존성이 필요 없다(실제 tauri 빌드 스모크는
+        # ts-runtime 의 test:runtime:tauri).
+        run: bun run test:adapters
+      - name: Test CLI
+        run: bun run --cwd packages/cli test
+      - name: Test complex codec receipt
+        run: bun run test:complex-codec-bench
+      - name: Bench regression gate unit tests
+        # check-criterion-regression.mjs 로직의 단위 테스트 — umbrella `test`
+        # 스크립트에만 포함돼 CI가 놓치고 있었다.
+        run: bun run test:bench-gate
       - name: Release tools unit tests
         # release coherence·packed consumer·api-surface 스크립트 자체의 단위
         # 테스트 — npm 발행은 버전 PR 승인 후 자동 진행되므로 머지 전에 걸러야
@@ -322,11 +399,6 @@ jobs:
         run: bun run test:release-tools
       - name: Registry consumer gate unit tests
         run: bun run test:registry-consumer
-      - name: Full compatibility matrix (test:compat)
-        # test:compat — ts:node/ts:bun/adapters/runtime 전체 체인. test:ts:bun 과
-        # test:runtime:* 이 rustra-calculator-example 바이너리를 요구해 Rust
-        # 툴체인이 필요하다 (rust 잡과 별도 캐시 재사용).
-        run: bun run test:compat
       - name: Build calculator example dylib
         # packages/bun 의 into-binding 테스트가 release dylib 를 로드한다 —
         # register! id 는 등록 순서이므로 dylib 가 stale 이면 테스트도 stale
@@ -364,31 +436,77 @@ jobs:
         # TS/Rust/C++ 3면 PINNED hex 게이트의 C++ 다리 — shim 테스트가 실제로
         # 실행돼야 생성 코덱과 fixture 간 드리프트를 PR 단계에서 잡는다.
         run: bash examples/react-native-calculator/modules/rustra-jsi/ios/run-cpp-codec-tests.sh
-      - name: Onboarding gate (init → doctor → codegen → demo)
-        # 신규 사용자 여정을 임시 디렉토리에서 실동행 검증 — 산문이 아니라
-        # 게이트로 계약한다. init 스캐폴드가 repo CLI의 dist를 소비하므로
-        # bun run build 이후 실행되어야 한다.
-        run: bun run test:onboarding
-      - name: Docs sync gate (docs:sync 마커 ↔ 생성물)
-        # 문서에 붙여 넣은 생성 코드 샘플이 현실과 갈라지는 반복 패턴을
-        # 게이트로 종결한다. 마커 영역을 참조 파일과 byte-for-byte 대조한다.
-        run: bun run test:docs
 
-      # 실패 로그 보존 — tsc/react-doctor 는 콘솔 전용이라 잡 로그 retention 이
-      # 지나면 사라진다(tee 로 파일로 남긴다). bun 설치 실패는 bun-debug.log 를
-      # 남기므로 함께 보존한다.
-      - name: Upload failure logs (TypeScript)
+      # 실패 로그 보존 — bun 설치/테스트 실패는 bun-debug.log 를 남기므로
+      # 보존한다(예제/패키지 node_modules 설치 실패 포함).
+      - name: Upload failure logs (ts-tests)
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: failure-logs-typescript
+          name: failure-logs-ts-tests
           path: |
-            ${{ runner.temp }}/rustra-tsc-calculator.log
-            ${{ runner.temp }}/rustra-tsc-crud.log
-            ${{ runner.temp }}/rustra-react-doctor.log
             bun-debug.log
             examples/**/bun-debug.log
             packages/**/bun-debug.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  ts-runtime:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    needs: [rust, rust-audit]
+    steps:
+      - uses: actions/checkout@v7
+      # test:runtime:* 이 rustra-calculator-example release 바이너리를 빌드하므로
+      # Rust 툴체인이 필요하다 (rust 잡과 별도 캐시 재사용).
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      # test:runtime:tauri 가 tauri-calculator release 빌드를 돌린다 — gtk/webkit
+      # 시스템 의존이 필요하다 (rust 잡과 동일 목록). TS 계열 3잡 중 이 apt 스텝을
+      # 가지는 잡은 ts-runtime 뿐이다.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build @rustra/types first
+        run: bun run --cwd packages/types build
+      - name: Build all packages
+        # 컴파일된 예제 앱이 @rustra/* 를 package name 으로 import 하므로 실행
+        # 전에 dist 를 만둔다.
+        run: bun run build
+      - name: Install Tauri example deps
+        # dist 빌드 "이후"에 설치해 file: 의존성 스냅샷에 dist 가 포함된다(구
+        # typescript 잡과 동일 순서 계약). @tauri-apps/cli 는 test:runtime:tauri
+        # 의 `tauri build` 에 필요하다.
+        run: bun install --cwd examples/tauri-calculator --frozen-lockfile
+      - name: Runtime smoke on Node (test:runtime:node)
+        # 구 test:compat → test:runtime 의 node 구간 — release FFI 바이너리를
+        # 빌드해 실제 예제 앱을 구동한다.
+        run: bun run test:runtime:node
+      - name: Runtime smoke on Bun (test:runtime:bun)
+        run: bun run test:runtime:bun
+      - name: Runtime smoke on Tauri (test:runtime:tauri)
+        run: bun run test:runtime:tauri
+
+      # 실패 로그 보존 — bun 설치 실패는 bun-debug.log 를 남기므로 보존한다
+      # (examples/tauri-calculator 설치 실패 포함).
+      - name: Upload failure logs (ts-runtime)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-ts-runtime
+          path: |
+            bun-debug.log
+            examples/**/bun-debug.log
           if-no-files-found: ignore
           retention-days: 14
 
@@ -700,7 +818,9 @@ jobs:
   # 스스로 동작하는지 검증 (감사: '소비자 설치 후 smoke test' 없음).
   consumer-smoke:
     runs-on: ubuntu-latest
-    needs: typescript
+    # 구 typescript 잡 전체 통과 후 실행 계약을 유지한다 — TS 계열 3잡
+    # (ts-checks/ts-tests/ts-runtime)이 모두 green 해야 실행된다.
+    needs: [ts-checks, ts-tests, ts-runtime]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -784,15 +904,18 @@ jobs:
   # 만 필수로 요구한다(같은 날 앞서 실측했던 개별 8개 컨텍스트 — rust-audit,
   # rust (ubuntu/macos/windows-latest), typescript, rn-android, rn-ios,
   # consumer-smoke — 에서 전환, 이력은 docs/gate-map.md 기록). gate 가 needs 로
-  # 묶는 12개 잡 전부가 머지 조건이므로 전환은 커버리지를 늘렸다 — 구 required
+  # 묶는 14개 잡 전부가 머지 조건이므로 전환은 커버리지를 늘렸다 — 구 required
   # 밖이던 rust-msrv·rust-deny·rust-wasm32·napi·uniffi-android·uniffi-ios 포함.
+  # 같은 날 typescript 메가잡을 ts-checks/ts-tests/ts-runtime 3잡으로 분할했다
+  # (gate 전용 보호 덕에 개명/분할이 자유 — needs 와 scripts/ci-gate.sh 를 함께
+  # 갱신).
   #
   # needs.*.result 의 공식 값은 success/failure/cancelled/skipped 4종이며(Actions
   # contexts 레퍼런스), contains(needs.*.result, ...) 배열 필터도 표현식으로
   # 가능하다. 그럼에도 env-var fan-out 을 쓰는 이유: (1) 판정 로직을 유닛테스트된
   # 셸 스크립트(scripts/ci-gate.test.ts)로 추출해야 한다 — if: 표현식은 로컬
   # 단위 테스트가 불가능하다. (2) rust 는 매트릭스 job 이라 per-leg outputs 노출
-  # 자체가 불가능하다. 잡은 13개 result 와 경로 필터 컨텍스트를 그대로 전달만 한다.
+  # 자체가 불가능하다. 잡은 15개 result 와 경로 필터 컨텍스트를 그대로 전달만 한다.
   #
   # if: always() 필수 — 선행 잡이 실패하면 기본 조건에서는 gate 자체가 skip 되어
   # "gate green = 전체 green" 계약이 깨진다. always() 로 항상 실행해 판정한다.
@@ -802,7 +925,8 @@ jobs:
   # docs 전용 PR)일 때만 통과로 인정한다. GitHub 은 필수 체크가 skip 상태로 끝나도
   # merge 요건 충족으로 보므로 이 skip 이 머지를 막지 않는다(경로 기반 skip 이
   # 안전한 근거). 그 외 모든 skipped 는 기존 설계대로 실패로 친다 — consumer-smoke
-  # 는 typescript 실패 시 skip 되는 체인이라 skip 통과는 조용한 green 이 된다.
+  # 는 ts-checks/ts-tests/ts-runtime 실패 시 skip 되는 체인이라 skip 통과는
+  # 조용한 green 이 된다.
   # 컨텍스트는 GATE_EVENT_NAME/GATE_CHANGES_CODE env 로 전달되며 판정은
   # scripts/ci-gate.sh (계약 테스트: ci-gate.test.ts)가 수행한다.
   #
@@ -820,7 +944,9 @@ jobs:
         rust-audit,
         rust-deny,
         napi,
-        typescript,
+        ts-checks,
+        ts-tests,
+        ts-runtime,
         rn-android,
         rn-ios,
         uniffi-android,
@@ -847,7 +973,9 @@ jobs:
           GATE_RUST_AUDIT: ${{ needs.rust-audit.result }}
           GATE_RUST_DENY: ${{ needs.rust-deny.result }}
           GATE_NAPI: ${{ needs.napi.result }}
-          GATE_TYPESCRIPT: ${{ needs.typescript.result }}
+          GATE_TS_CHECKS: ${{ needs.ts-checks.result }}
+          GATE_TS_TESTS: ${{ needs.ts-tests.result }}
+          GATE_TS_RUNTIME: ${{ needs.ts-runtime.result }}
           GATE_RN_ANDROID: ${{ needs.rn-android.result }}
           GATE_RN_IOS: ${{ needs.rn-ios.result }}
           GATE_UNIFFI_ANDROID: ${{ needs.uniffi-android.result }}
@@ -865,7 +993,9 @@ jobs:
             "rust-audit=$GATE_RUST_AUDIT" \
             "rust-deny=$GATE_RUST_DENY" \
             "napi=$GATE_NAPI" \
-            "typescript=$GATE_TYPESCRIPT" \
+            "ts-checks=$GATE_TS_CHECKS" \
+            "ts-tests=$GATE_TS_TESTS" \
+            "ts-runtime=$GATE_TS_RUNTIME" \
             "rn-android=$GATE_RN_ANDROID" \
             "rn-ios=$GATE_RN_IOS" \
             "uniffi-android=$GATE_UNIFFI_ANDROID" \

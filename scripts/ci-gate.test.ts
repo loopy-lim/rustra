@@ -13,6 +13,7 @@ const gatePath = resolve(dirname(fileURLToPath(import.meta.url)), 'ci-gate.sh');
 const ciYmlPath = join(dirname(fileURLToPath(import.meta.url)), '..', '.github/workflows/ci.yml');
 
 // .github/workflows/ci.yml gate 잡의 needs 순서와 정확히 일치해야 한다.
+// ts-checks/ts-tests/ts-runtime 은 구 typescript 메가잡 분할(2026-09-20)이다.
 const MANDATORY_JOBS = [
   'changes',
   'rust',
@@ -21,7 +22,9 @@ const MANDATORY_JOBS = [
   'rust-audit',
   'rust-deny',
   'napi',
-  'typescript',
+  'ts-checks',
+  'ts-tests',
+  'ts-runtime',
   'rn-android',
   'rn-ios',
   'uniffi-android',
@@ -62,25 +65,25 @@ const success: Record<string, string> = Object.fromEntries(
   MANDATORY_JOBS.map((job) => [job, 'success']),
 );
 
-test('all thirteen jobs success exits 0 with a green summary', () => {
+test('all fifteen jobs success exits 0 with a green summary', () => {
   const r = runGate(success);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /gate: PASS/);
-  // 통과 요약은 13개 잡을 전부 나열한다 — 사람이 매트릭스를 눈으로 대조하지 않게.
+  // 통과 요약은 15개 잡을 전부 나열한다 — 사람이 매트릭스를 눈으로 대조하지 않게.
   for (const job of MANDATORY_JOBS) {
     assert.ok(r.stdout.includes(job), `summary must list ${job}`);
   }
 });
 
 test('a single failure exits nonzero and names the offending job', () => {
-  const r = runGate({ ...success, typescript: 'failure' });
+  const r = runGate({ ...success, 'ts-tests': 'failure' });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /typescript/);
+  assert.match(r.stderr, /ts-tests/);
   assert.match(r.stderr, /failure/);
 });
 
 test('skipped is treated as failure (consumer-smoke skip chain preserved)', () => {
-  // typescript 실패 → consumer-smoke 스킵 체인을 게이트가 놓치면 안 된다.
+  // ts-tests 실패 → consumer-smoke 스킵 체인을 게이트가 놓치면 안 된다.
   const r = runGate({ ...success, 'consumer-smoke': 'skipped' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /consumer-smoke/);
@@ -188,7 +191,7 @@ test('an unknown result value fails loudly instead of passing silently', () => {
 test('wrong argument count is a hard error, not a pass', () => {
   const r = spawnSync('bash', [gatePath, 'rust=success'], { encoding: 'utf8' });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /exactly 13/);
+  assert.match(r.stderr, /exactly 15/);
 });
 
 test('malformed argument (no = separator) is a hard error', () => {
@@ -206,7 +209,7 @@ test('unknown job name is a hard error, not a silent pass', () => {
     'bash',
     [
       gatePath,
-      ...MANDATORY_JOBS.slice(0, 12).map((j) => `${j}=success`),
+      ...MANDATORY_JOBS.slice(0, 14).map((j) => `${j}=success`),
       'nonexistent-job=success',
     ],
     { encoding: 'utf8' },
@@ -216,13 +219,13 @@ test('unknown job name is a hard error, not a silent pass', () => {
 });
 
 test('duplicate job argument is a hard error even when all results are success', () => {
-  // 13개 인자가 중복을 포함하면(consumer-smoke 대신 rust 2회) 한 잡이 검사되지
+  // 15개 인자가 중복을 포함하면(consumer-smoke 대신 rust 2회) 한 잡이 검사되지
   // 않은 채 PASS 로 빠진다 — 전부 success 여도 계약 위반이다.
   const r = spawnSync(
     'bash',
     [
       gatePath,
-      ...MANDATORY_JOBS.slice(0, 12).map((j) => `${j}=success`), // consumer-smoke 누락
+      ...MANDATORY_JOBS.slice(0, 14).map((j) => `${j}=success`), // consumer-smoke 누락
       'rust=success', // rust 중복
     ],
     { encoding: 'utf8' },
