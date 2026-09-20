@@ -119,7 +119,7 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 | ---------------------- | ---------------- |
 | Rust workspace crates  | 0.11.0           |
 | `@rustra/bun`          | 0.10.2           |
-| `@rustra/cli`          | 0.11.2           |
+| `@rustra/cli`          | 0.11.3           |
 | `@rustra/devtools`     | 0.7.2            |
 | `@rustra/node`         | 0.10.2           |
 | `@rustra/react`        | 0.8.3            |
