@@ -2,8 +2,9 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
-The Frame rename and audit fixes target Rust 0.10.2 and the coordinated package
-versions below. Upgrade native libraries, JS adapters, and generated output together;
+The current release line targets Rust crates 0.11.0 and the coordinated package
+versions below (`@rustra/types`/`@rustra/cli` 0.11.0, adapters at their own
+versions). Upgrade native libraries, JS adapters, and generated output together;
 see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
 checks and rollback.
 

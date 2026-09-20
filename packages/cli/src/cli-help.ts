@@ -1,7 +1,7 @@
 export function printHelp(command?: string): void {
   if (command === 'generate') {
     console.log(
-      'Usage: rustra generate --schema <path> --output <dir> [options]\n\nOptions:\n  --config <path>     Read schema/output and host settings from rustra.json\n  --schema <path>     Path to schema.json\n  --output <dir>      Generated TypeScript output directory\n  --cpp-output <dir>  Optional C++ codec output directory\n  --positional        Also emit positional-facade.ts\n  --check             Verify generated files without writing\n  --format <fmt>      text (default) or json\n  --help, -h          Show this help message',
+      'Usage: rustra generate --schema <path> --output <dir> [options]\n\nOptions:\n  --config <path>     Read schema/output and host settings from rustra.json\n  --schema <path>     Path to schema.json\n  --output <dir>      Generated TypeScript output directory\n  --cpp-output <dir>  Optional C++ codec output directory\n  --positional        Also emit positional-facade.ts\n  --watch             Watch schema file for changes and regenerate\n  --check             Verify generated files without writing\n  --format <fmt>      text (default) or json\n  --help, -h          Show this help message',
     );
     return;
   }

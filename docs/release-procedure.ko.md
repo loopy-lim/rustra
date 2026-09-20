@@ -2,7 +2,8 @@
 
 # 발행 절차 (canary → stable → rollback)
 
-Frame 전환과 감사 수정은 0.10 동시 업그레이드 대상이다. 이미 사용한 0.9.0을
+현재 릴리스 라인은 0.11 동시 업그레이드 대상이다(Rust crate 0.11.0,
+`@rustra/types`·`@rustra/cli` 0.11.0). 이미 사용한 0.9.0을
 재사용하지 않으며, 대상 버전·소비자 검증·롤백은 [릴리스 준비 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
 감사 항목 8의 "canary 배포와 rollback 검증" 절차. 실제 실행은 별도 승인 후 진행한다.
@@ -114,17 +115,43 @@ crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 
 `changeset publish`는 GitHub의 의존 job을 실행하지 않으므로 이 절차의 승인된
 stable 발행 경로가 아니다. 원본 결과는 Release run과 각 artifact에 보관한다.
 
-## 3.5단계 — main 브랜치 보호 (2026-08-21 적용 완료)
+## 3.5단계 — main 브랜치 보호 (2026-09-20 부터 gate 단일 체크)
 
-- 필수 체크(required checks): `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
-  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`,
-  `rust-wasm32`. 이 문서의 목록 갱신만으로 실제 브랜치 보호가 바뀌지는 않는다 —
-  required-checks 등록은 별도이며 아래 `gh api`로 수동 적용한다.
+- 필수 체크는 `gate` 통합 job 하나다 — 2026-09-20 에 아래 `gh api`로 적용하고
+  같은 엔드포인트의 읽기 전용 호출로 재검증했다. 전환 직전(같은 날)의 필수
+  컨텍스트는 8개 개별 항목이었다: `rust-audit`, `rust (ubuntu-latest)`,
+  `rust (macos-latest)`, `rust (windows-latest)`, `typescript`, `rn-android`,
+  `rn-ios`, `consumer-smoke`.
+- `gate`는 자신이 `needs`로 묶는 전 CI 잡(`rust`, `rust-msrv`, `rust-wasm32`,
+  `rust-audit`, `rust-deny`, `napi`, `typescript`, `rn-android`, `rn-ios`,
+  `uniffi-android`, `uniffi-ios`, `consumer-smoke` — `ci.yml`과
+  [게이트 지도](./gate-map.ko.md) 참고)를 요구하므로, 전환은 머지 조건 집합을
+  **넓혔다** — 구 required 밖이던 `rust-msrv`, `rust-wasm32`, `rust-deny`,
+  `napi`, `uniffi` 2잡이 포함된다. `strict`는 `false` 유지(브랜치 최신성 요구
+  없음)이며 `true`로 바꾸면 머지 전 최신성 요구가 추가된다.
 - 직접 push는 허용(1인 프로젝트 효율), force push/삭제는 차단.
-- 새 CI 잡을 추가할 때 required 목록에도 함께 넣는다 — 목록은 아래 API로 확인/변경:
+- 새 CI 잡을 추가할 때는 `ci.yml`의 `gate` `needs`와 `scripts/ci-gate.sh`에 함께
+  넣는다 — 이제 집계 잡이 곧 머지 계약이다. 보호 설정은 아래 API로 확인/복원한다:
   ```bash
-  gh api repos/loopy-lim/rustra/branches/main/protection
-  gh api -X PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_checks.contexts'
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  {
+    "required_status_checks": {
+      "strict": false,
+      "contexts": ["gate"]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  EOF
+  ```
+- **롤백 — 2026-09-20 이전 개별 컨텍스트 8개로 복원**(같은 날 오전 감사가
+  기록한 상태):
+  ```bash
+  gh api --method PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
   {
     "required_status_checks": {
       "strict": false,
@@ -136,8 +163,7 @@ stable 발행 경로가 아니다. 원본 결과는 Release run과 각 artifact�
         "typescript",
         "rn-android",
         "rn-ios",
-        "consumer-smoke",
-        "rust-wasm32"
+        "consumer-smoke"
       ]
     },
     "enforce_admins": false,

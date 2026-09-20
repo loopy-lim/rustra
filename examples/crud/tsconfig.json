@@ -6,6 +6,8 @@
     "strict": true,
     "rootDir": "../..",
     "outDir": "../../dist-ts",
+    "tsBuildInfoFile": "../../dist-ts/crud.tsbuildinfo",
+    "incremental": true,
     "skipLibCheck": true
   },
   "include": ["generated/**/*.ts", "ts/**/*.ts", "../../packages/**/*.ts"]

@@ -2,9 +2,14 @@
 set -u
 
 # CI 필수 잡 집계 gate — .github/workflows/ci.yml 의 `gate` 잡이 호출한다.
-# 스크립트는 <job>=<result> 인자 12개를 받아 전부 정확히 "success"일 때만 0으로
-# 종료한다. skipped/cancelled 는 실패로 취급한다: consumer-smoke 는 typescript
-# 실패 시 skip 되므로, skip 을 통과로 치면 체인 실패를 gate 가 놓친다.
+# 스크립트는 <job>=<result> 인자 13개를 받아 전부 정확히 "success"일 때만 0으로
+# 종료한다. 유일한 예외는 모바일 4잡(rn-android/rn-ios/uniffi-android/uniffi-ios)의
+# "skipped" 다: 경로 필터 기인일 때만 통과로 인정한다 —
+#   GATE_EVENT_NAME == "pull_request" && GATE_CHANGES_CODE == "false"
+# (docs 전용 PR 에서 dorny/paths-filter 가 모바일 잡을 건너뛰는 설계된 skip).
+# 그 외 모든 skipped/cancelled 는 실패로 취급한다: consumer-smoke 는 typescript
+# 실패 시 skip 되므로, skip 을 무조건 통과로 치면 체인 실패를 gate 가 놓친다.
+# 컨텍스트 env 가 비어 있으면(구식 호출자) skip 은 절대 통과하지 않는 fail-safe 다.
 #
 # 판정 로직은 이 스크립트 하나로 추출돼 있다(scripts/ci-gate.test.ts 가 계약을
 # 검증한다). 워크플로 잡은 판정 없이 needs.*.result 만 전달한다 — gate 로직의
@@ -16,19 +21,24 @@ usage() {
 ci-gate.sh — CI 필수 잡 집계 gate
 
 사용법:
-  ci-gate.sh <job>=<result> ...   (필수 12개 인자)
+  ci-gate.sh <job>=<result> ...   (필수 13개 인자)
 
 <result> 값은 GitHub Actions needs.<job_id>.result 값 중 하나여야 한다:
   success | failure | cancelled | skipped
 
+환경 변수(모바일 잡 skip 판정에 사용, 미설정 시 skip 은 항상 실패):
+  GATE_EVENT_NAME    트리거 이벤트 (github.event_name, 예: pull_request, push)
+  GATE_CHANGES_CODE  changes 잡의 경로 필터 출력 ("true" | "false")
+
 예시:
-  ci-gate.sh rust=success rust-msrv=success ... uniffi-ios=success
+  ci-gate.sh changes=success rust=success ... uniffi-ios=success
 EOF
 }
 
 # ── 인자 파싱 ────────────────────────────────────────────────────────────────
 # needs 순서는 ci.yml gate 잡의 needs 리스트와 정확히 일치해야 한다.
 expected_jobs=(
+  changes
   rust
   rust-msrv
   rust-wasm32
@@ -43,8 +53,30 @@ expected_jobs=(
   consumer-smoke
 )
 
-if [ "$#" -ne 12 ]; then
-  echo "ci-gate.sh: exactly 12 job=result arguments required, got $#" >&2
+expected_count=13
+
+# 경로 필터 skip 이 허용되는 잡 — ci.yml 의 모바일 4잡과 정확히 일치해야 한다.
+filter_skippable_jobs=" rn-android rn-ios uniffi-android uniffi-ios "
+
+gate_event_name=${GATE_EVENT_NAME:-}
+gate_changes_code=${GATE_CHANGES_CODE:-}
+
+# 모바일 잡의 skipped 가 경로 필터 기인인지 판정한다: pull_request 이벤트이고
+# changes.code 가 정확히 "false"(필터가 code 변경 없음을 확정)일 때만 참.
+# "true"(코드가 바뀌었는데 skip — 이상 신호)도 빈 값(changes 잡 실패/구식
+# 호출자)도 허용하지 않는 fail-safe 설계다.
+is_filter_skip() {
+  case $filter_skippable_jobs in
+    *" $1 "*) ;;
+    *) return 1 ;;
+  esac
+  [ "$gate_event_name" = "pull_request" ] || return 1
+  [ "$gate_changes_code" = "false" ] || return 1
+  return 0
+}
+
+if [ "$#" -ne "$expected_count" ]; then
+  echo "ci-gate.sh: exactly 13 job=result arguments required, got $#" >&2
   usage
   exit 2
 fi
@@ -81,7 +113,7 @@ for arg in "$@"; do
     exit 2
   fi
 
-  # 중복 금지 — 12개 인자가 중복을 포함하면 어떤 필수 잡이 검사되지 않은 채
+  # 중복 금지 — 13개 인자가 중복을 포함하면 어떤 필수 잡이 검사되지 않은 채
   # PASS 로 빠진다(전부 success 여도 계약 위반이다).
   case $seen_jobs in
     *" $job "*)
@@ -92,11 +124,17 @@ for arg in "$@"; do
   seen_jobs="$seen_jobs$job "
 
   if [ "$result" != "success" ]; then
-    violations="$violations  fail  $job: $result\n"
+    if [ "$result" = "skipped" ] && is_filter_skip "$job"; then
+      # 경로 필터에 의한 설계된 skip — GitHub 이 필수 체크의 skipped 를 merge
+      # 요건 충족으로 보므로 gate 도 통과로 인정한다.
+      :
+    else
+      violations="$violations  fail  $job: $result\n"
+    fi
   fi
 done
 
-# 누락 금지 — 인자 개수가 12개여도 중복 없이 잡이 빠지는 조합은 없지만, 스크립트
+# 누락 금지 — 인자 개수가 13개여도 중복 없이 잡이 빠지는 조합은 없지만, 스크립트
 # 계약을 자체 완결적으로 유지하기 위해 커버리지를 다시 단언한다.
 for j in "${expected_jobs[@]}"; do
   case $seen_jobs in
@@ -109,9 +147,16 @@ for j in "${expected_jobs[@]}"; do
 done
 
 if [ -z "$violations" ]; then
-  echo "gate: PASS — 모든 필수 잡 success (12/12)"
-  for job in "$@"; do
-    echo "  ok   ${job%%=*}"
+  echo "gate: PASS — 모든 필수 잡 success (13/13)"
+  for arg in "$@"; do
+    job=${arg%%=*}
+    result=${arg#*=}
+    # PASS 분기에 skipped 가 남아 있다면 is_filter_skip 을 통과한 것뿐이다.
+    if [ "$result" = "skipped" ]; then
+      echo "  skip $job (경로 필터 — code 무관 변경, docs 전용 PR)"
+    else
+      echo "  ok   $job"
+    fi
   done
   exit 0
 fi

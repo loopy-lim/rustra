@@ -127,6 +127,48 @@ configure(engine); // installs the engine into the global invoke
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
+### The Global Engine Slot and `EngineRegistration`
+
+`configure()` and `configureLazy()` both write a single global engine slot and both
+return an `EngineRegistration` handle that owns that registration
+(`packages/types/src/global-config.ts`):
+
+```ts
+// packages/types/src/global-config.ts
+/** Releases only this registration, even after lazy initialization or replacement. */
+export type EngineRegistration = (() => void) & { isCurrent(): boolean };
+```
+
+The lifecycle contract, as implemented there:
+
+- **Token claim**: each registration claims a fresh `Symbol('engine registration')`
+  token and stores it as the current one (`getEngineRegistrationToken()` exposes it as
+  an opaque value). `isCurrent()` answers "is my token still the one in the slot?" —
+  and it stays `true` across lazy initialization: when the pending initializer's engine
+  is installed, the installation preserves that registration's token, so the handle
+  returned by `configureLazy()` remains authoritative after setup.
+- **Release is current-only**: calling the handle while `isCurrent()` is `false` is a
+  silent no-op — an outdated registration cannot tear down a slot it no longer owns.
+  When current, it clears the whole slot (engine, pending initializer, initialization
+  promise, owner id, token) and resets configured routes, returning the bridge to the
+  unconfigured state.
+- **Double-configure**: two `configure()` calls never throw — the second silently takes
+  over the slot and the first handle's `isCurrent()` flips to `false` (its release
+  becomes a no-op). The loud case is competing lazy registrations: while a fresh lazy
+  registration is pending (engine not yet installed and consumption not started), a
+  second `configureLazy()` with a different initializer throws `registry.frozen` naming
+  both parties — the slot holder and the incoming registration's `options.ownerId`
+  (diagnostic only; the owner id is not authenticated). Re-registering the same
+  initializer (module reload) is allowed, and once consumption of the first initializer
+  has started, the existing newer-wins contract applies instead of the rejection.
+- **Who may claim the slot**: any code holding `configure`/`configureLazy` — there is no
+  capability check. The slot is deliberately single-engine (multi-engine is not
+  supported), so hosts and generated entries must coordinate through these handles
+  rather than each installing their own engine.
+
+How to call `configure()` is covered in the example above and in
+[getting-started](getting-started.md); this section fixes the lifecycle contract only.
+
 ---
 
 ## Crate and Package Relationships
