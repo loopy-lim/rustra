@@ -16,8 +16,9 @@ function nativeInstaller(): Installer {
   if (!current) {
     throw new Error(
       '[rustra:autolink] RustraBridge was not linked. Run ' +
-        '`bunx --bun react-native config` to inspect bare RN autolinking, then ' +
-        '`cd ios && pod install` or rebuild Android. Expo Go cannot load JSI; Expo apps need a development build.',
+        '`npx react-native config` (or `bunx --bun react-native config`) to inspect bare RN ' +
+        'autolinking, then `cd ios && pod install` or rebuild Android. Expo Go cannot load JSI; ' +
+        'Expo apps need a development build.',
     );
   }
   return current;
