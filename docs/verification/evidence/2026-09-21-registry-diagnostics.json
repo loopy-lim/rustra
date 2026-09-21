@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "gate": "rustra-public-registry-diagnostics",
+  "ok": true,
+  "startedAt": "2026-09-21T05:58:52.559Z",
+  "evidenceBoundary": "failure-input diagnostics for the published CLI on a Node consumer; does not close G1 or G2",
+  "scenarios": [
+    {
+      "scenario": "stale-generated",
+      "given": "lib.rs 필드 추가 후 재생성 없이 codegen --check 실행",
+      "observed": {
+        "status": 1,
+        "stdout": "[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/Cargo.toml --package rustra-app --bin generate\n[rustra] ⠋ Rust schema generation (rustra-app/generate)...\n/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-check-P19Jj8/schema.json written\n[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.5s\n[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/rustra.json --check\n",
+        "stderr": "   Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s\n     Running `target/debug/generate`\nError: TypeScript/C++ generation check failed for /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/rustra.json (schema /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-check-P19Jj8/schema.json): Generated drift (schema changed): schema.json\n"
+      },
+      "verdict": {
+        "rejected": true,
+        "identifiesDrift": true,
+        "rawOutput": "[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/Cargo.toml --package rustra-app --bin generate\n[rustra] ⠋ Rust schema generation (rustra-app/generate)...\n/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-check-P19Jj8/schema.json written\n[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.5s\n[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/rustra.json --check\n\n   Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s\n     Running `target/debug/generate`\nError: TypeScript/C++ generation check failed for /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/rustra.json (schema /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-check-P19Jj8/schema.json): Generated drift (schema changed): schema.json\n"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "contract-mismatch",
+      "given": "변형 전 생성 클라이언트로 변형 후 바이너리 호출",
+      "observed": {
+        "status": 0,
+        "stdout": "__RUSTRA_DIAG_RESULT__{\"rejected\":true,\"code\":\"contract.mismatch\",\"message\":\"contract hash mismatch: native=\\\"c38315195c5f0aa6…\\\" vs expected=\\\"eb582ca278c8c422…\\\" — generated client and native binary are out of sync; regenerate the TypeScript and native codecs, rebuild the Rust archive, then rebuild the native app Tried 1 runtime candidate (newest first): /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/cargo-target/debug/rustra-app (modified 2026-09-21T05:59:11.210Z): contract.mismatch.\"}\n",
+        "stderr": ""
+      },
+      "verdict": {
+        "failedLoudly": true,
+        "mentionsContract": true,
+        "noSilentSuccess": true,
+        "rawOutput": "__RUSTRA_DIAG_RESULT__{\"rejected\":true,\"code\":\"contract.mismatch\",\"message\":\"contract hash mismatch: native=\\\"c38315195c5f0aa6…\\\" vs expected=\\\"eb582ca278c8c422…\\\" — generated client and native binary are out of sync; regenerate the TypeScript and native codecs, rebuild the Rust archive, then rebuild the native app Tried 1 runtime candidate (newest first): /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/cargo-target/debug/rustra-app (modified 2026-09-21T05:59:11.210Z): contract.mismatch.\"}\n\n"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "native-missing",
+      "given": "RUSTRA_NODE_BINARY 를 부재 경로로 지정 후 호출",
+      "observed": {
+        "status": 0,
+        "stdout": "__RUSTRA_DIAG_RESULT__{\"rejected\":true,\"code\":\"contract.unenforceable\",\"message\":\"Node runtime does not expose the __rustra_contract endpoint; rebuild the Rust host with the current Rustra scaffold. Tried 1 runtime candidate (newest first): /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/does-not-exist/rustra-app (modified unknown): contract.unenforceable.\"}\n",
+        "stderr": ""
+      },
+      "verdict": {
+        "failedLoudly": true,
+        "mentionsTarget": true,
+        "actionable": true,
+        "reported": {
+          "rejected": true,
+          "code": "contract.unenforceable",
+          "message": "Node runtime does not expose the __rustra_contract endpoint; rebuild the Rust host with the current Rustra scaffold. Tried 1 runtime candidate (newest first): /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/does-not-exist/rustra-app (modified unknown): contract.unenforceable."
+        },
+        "rawOutput": "__RUSTRA_DIAG_RESULT__{\"rejected\":true,\"code\":\"contract.unenforceable\",\"message\":\"Node runtime does not expose the __rustra_contract endpoint; rebuild the Rust host with the current Rustra scaffold. Tried 1 runtime candidate (newest first): /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/does-not-exist/rustra-app (modified unknown): contract.unenforceable.\"}\n\n"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "doctor-sdk-missing",
+      "given": "PATH 미제공 환경에서 doctor 실행(rustc/cargo 부재 시뮬레이션)",
+      "observed": {
+        "status": 1,
+        "stdout": "cks\": [\n    {\n      \"id\": \"config.file\",\n      \"status\": \"pass\",\n      \"required\": true,\n      \"summary\": \"Config file is readable: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/rustra.json\"\n    },\n    {\n      \"id\": \"rustc.present\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"rustc is unavailable\",\n      \"detail\": \"spawn rustc ENOENT\",\n      \"fix\": [\n        \"Install Rust with https://rustup.rs\"\n      ]\n    },\n    {\n      \"id\": \"rustc.msrv\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"Rust 1.88 or newer is required\",\n      \"detail\": \"spawn rustc ENOENT\",\n      \"fix\": [\n        \"rustup toolchain install 1.88.0\",\n        \"rustup default 1.88.0\"\n      ]\n    },\n    {\n      \"id\": \"cargo.present\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"cargo is unavailable\",\n      \"detail\": \"spawn cargo ENOENT\",\n      \"fix\": [\n        \"Install Cargo with https://rustup.rs\"\n      ]\n    },\n    {\n      \"id\": \"registry.reachability\",\n      \"status\": \"skip\",\n      \"required\": false,\n      \"summary\": \"Skipped registry reachability because cargo is unavailable\"\n    },\n    {\n      \"id\": \"js.runtime\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"Node.js or Bun is unavailable\",\n      \"detail\": \"spawn node ENOENT\",\n      \"fix\": [\n        \"Install Node.js 18+ or Bun 1.4+\"\n      ]\n    },\n    {\n      \"id\": \"toolchain.cpp\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"C/C++ compiler is unavailable\",\n      \"detail\": \"spawn c++ ENOENT\",\n      \"fix\": [\n        \"Install the platform C++ compiler (Xcode Command Line Tools or build-essential)\"\n      ]\n    },\n    {\n      \"id\": \"toolchain.cmake\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"CMake is unavailable\",\n      \"detail\": \"spawn cmake ENOENT\",\n      \"fix\": [\n        \"Install CMake and ensure it is on PATH\"\n      ]\n    },\n    {\n      \"id\": \"section.node.build\",\n      \"status\": \"fail\",\n      \"required\": true,\n      \"summary\": \"node: cargo metadata failed for /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/Cargo.toml\",\n      \"detail\": \"spawn cargo ENOENT\",\n      \"fix\": [\n        \"Run cargo metadata manually and fix the Cargo manifest\"\n      ]\n    },\n    {\n      \"id\": \"codegen.rust_manifest\",\n      \"status\": \"pass\",\n      \"required\": true,\n      \"summary\": \"Cargo manifest: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/Cargo.toml\"\n    },\n    {\n      \"id\": \"codegen.rust_binary\",\n      \"status\": \"skip\",\n      \"required\": true,\n      \"summary\": \"Skipped Cargo binary selection because the manifest or cargo is unavailable\"\n    },\n    {\n      \"id\": \"codegen.schema_output\",\n      \"status\": \"pass\",\n      \"required\": true,\n      \"summary\": \"Schema exists and is readable: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/generated/schema.json\"\n    },\n    {\n      \"id\": \"codegen.output_directory\",\n      \"status\": \"pass\",\n      \"required\": true,\n      \"summary\": \"Generated output directory is writable: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-diagnostics-MR4smh/registry-diagnostics-consumer/src/generated\"\n    },\n    {\n      \"id\": \"codegen.generated_freshness\",\n      \"status\": \"pass\",\n      \"required\": false,\n      \"summary\": \"Generated output matches the schema probe (schema and generator match the manifest)\",\n      \"detail\": \"This verifies the schema probe only — the runtime binary is not rebuilt by code generation; run cargo build after regeneration or invokes may fail with contract.mismatch.\"\n    },\n    {\n      \"id\": \"codegen.device_catalog\",\n      \"status\": \"skip\",\n      \"required\": false,\n      \"summary\": \"No device declarations — catalog check not applicable\"\n    }\n  ]\n}\n",
+        "stderr": ""
+      },
+      "verdict": {
+        "parsed": true,
+        "failedLoudly": true,
+        "failingChecks": ["rustc.present", "cargo.present"],
+        "failingWithFix": ["rustc.present", "cargo.present"],
+        "allConditionsMet": true
+      },
+      "pass": true
+    },
+    {
+      "scenario": "invalid-payload",
+      "given": "계약에 없는 surpriseField 를 실어 echo 호출 — 생성 클라이언트는 선언 필드만 전송(입력 화이트리스트). 초과 필드 loud 거부는 없음: S4 강화 후보",
+      "observed": {
+        "status": 0,
+        "stdout": "__RUSTRA_DIAG_RESULT__{\"rejected\":false,\"value\":{\"message\":\"diag\"}}\n",
+        "stderr": ""
+      },
+      "verdict": {
+        "reported": true,
+        "wireStaysClean": true,
+        "loudlyRejected": false,
+        "rawOutput": "{\"rejected\":false,\"value\":{\"message\":\"diag\"}}"
+      },
+      "pass": true
+    }
+  ],
+  "steps": [],
+  "completedAt": "2026-09-21T05:59:12.457Z",
+  "durationMs": 19898,
+  "versions": {
+    "@rustra/cli": "0.11.3",
+    "@rustra/types": "0.12.0",
+    "@rustra/node": "0.10.2",
+    "@rustra/bun": "0.10.2"
+  }
+}
