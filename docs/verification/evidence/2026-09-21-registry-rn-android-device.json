@@ -1,0 +1,557 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "startedAt": "2026-09-21T06:18:18.720Z",
+  "completedAt": "2026-09-21T06:20:34.541Z",
+  "durationMs": 135821,
+  "evidenceBoundary": "automated public-registry React Native consumer cycle on a real Android device; does not close G1 or G2",
+  "gate": "rustra-public-registry-rn-android-consumer",
+  "configuration": {
+    "manifestPath": "/Users/loopy/dev/ll3/rustra-bridge/scripts/registry-consumer/versions.json",
+    "versions": {
+      "npm": {
+        "@rustra/cli": "0.11.3",
+        "@rustra/types": "0.12.0",
+        "@rustra/react-native": "0.9.2"
+      },
+      "rust": {
+        "rustra": "0.11.0",
+        "rustra-macros": "0.11.0",
+        "rustra-naming": "0.11.0"
+      },
+      "reactNativeTemplate": "0.81.5",
+      "communityCli": "20.2.0"
+    }
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osRelease": "25.6.0",
+    "osVersion": "Darwin Kernel Version 25.6.0: Fri Jul 31 19:18:49 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6000",
+    "node": "v22.21.1",
+    "npm": "11.18.0",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "adb": "Android Debug Bridge version 1.0.41",
+    "device": {
+      "serial": "HA2D6EMP",
+      "evidenceLevel": "physical-device",
+      "model": "TB710FU",
+      "androidSdk": "36",
+      "androidRelease": "16"
+    }
+  },
+  "runner": {
+    "gitHead": "4b736f84dc0124b16284e178403a2712947c90ea"
+  },
+  "journey": {
+    "scaffold": [
+      "public RN community template (no Expo)",
+      "exact-pin npm install of CLI/types/react-native adapter",
+      "codegen renders rustra-bridge module (gradle/cmake/podspec) + generated client",
+      "cargo-ndk staticlib + gradle assembleDebug",
+      "standalone JS bundle (no metro at runtime)",
+      "physical-device launch via adb"
+    ],
+    "verified": {
+      "a2FirstCall": "echo through generated strict-contract entry on a real Android device",
+      "a3FieldChange": "repeat field added → regen → rebuild → repeat=3 returned on device",
+      "a3DomainError": "failEcho invalid_args message crossed the JSI bridge intact",
+      "a3Events": "not asserted on this leg — see findings rn-android-event-push-deadlock; covered by the Tauri real-WebView journey",
+      "a1Combination": "RN/Android physical-device receipt (TB710FU, SDK 36)"
+    },
+    "findings": [
+      {
+        "id": "rn-android-event-push-deadlock",
+        "summary": "emitting from a command over the bridge deadlocks the JS thread on a physical Android device: the invoke returns, then the JS event loop stops before the next macrotask",
+        "reproduction": "subscribeEvent (push, and pollMs too — the JSI sink is installed at install time) followed by any Package::emit; breadcrumbs sub-emit-ok -> freeze, repro 3/3 on TB710FU / RN 0.81.5 / adapter 0.9.2 / rustra 0.11.0",
+        "consequence": "a3Events for this leg is intentionally not asserted; the Tauri real-WebView journey covers event subscribe/unsubscribe on its push path"
+      }
+    ],
+    "excluded": [
+      {
+        "segment": "RN/iOS and existing-app integration",
+        "reason": "separate journeys; this receipt is the RN/Android leg only"
+      },
+      {
+        "segment": "two successive product upgrades",
+        "reason": "single registry-line verification; the Node/Bun gate owns the Rust patch roundtrip"
+      }
+    ]
+  },
+  "provenance": {
+    "npm": {
+      "@rustra/cli": {
+        "version": "0.11.3",
+        "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+        "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+        "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+        "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-rn-android-6hHHaY/RegistryRnConsumer/node_modules/@rustra/cli"
+      },
+      "@rustra/types": {
+        "version": "0.12.0",
+        "resolved": "https://registry.npmjs.org/@rustra/types/-/types-0.12.0.tgz",
+        "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+        "packageJsonSha256": "f805840302a87e41e43c4809e30f06090f6f1eb10645149ad13f83dccd24609a",
+        "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-rn-android-6hHHaY/RegistryRnConsumer/node_modules/@rustra/types"
+      },
+      "@rustra/react-native": {
+        "version": "0.9.2",
+        "resolved": "https://registry.npmjs.org/@rustra/react-native/-/react-native-0.9.2.tgz",
+        "integrity": "sha512-CcNfXaXWH+7hs9pIwn/XB/EeS20/CtV0ra5/DzLVna+MNMtq2cTKeCdPKqZw2GaNv5G2cMmuY4Tk/sOL0YaLhw==",
+        "packageJsonSha256": "78d4a8c51a837e2e035e0fdb9d459c618a70c4f0841b05374d677f286ca1ff3c",
+        "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-rn-android-6hHHaY/RegistryRnConsumer/node_modules/@rustra/react-native"
+      }
+    },
+    "cargo": {
+      "rustra": {
+        "version": "0.11.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "323b830a0786c234ef4c893197ac757b78292620451a97ac07f1be9aa00238f2",
+        "manifestPath": "/Users/loopy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-0.11.0/Cargo.toml"
+      },
+      "rustra-macros": {
+        "version": "0.11.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d3f7141341d0581323dbc8f4921b304c3cd4a415015fcfa18a9ccbdb3b23490b",
+        "manifestPath": "/Users/loopy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-macros-0.11.0/Cargo.toml"
+      },
+      "rustra-naming": {
+        "version": "0.11.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e988bbbea26f89ef74677a7820fc4a377a92ee0d47b6592b0830798f11eb3e43",
+        "manifestPath": "/Users/loopy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-naming-0.11.0/Cargo.toml"
+      }
+    }
+  },
+  "contractHashes": {
+    "baseline": "b54486f511a8234cf4b8616c9ef840746511a8581014ddc6d25738410ebbcfba",
+    "mutated": "8dccbc450fe6bd234c6fdee045fded8a8bbdc7579070e260011f27e5ed17ab8c"
+  },
+  "observations": {
+    "baseline": {
+      "phase": "baseline",
+      "echoResult": {
+        "message": "registry-rn"
+      },
+      "failEchoError": {
+        "code": null,
+        "message": "command.invalid_args: registry rn journey error propagation"
+      }
+    },
+    "mutated": {
+      "phase": "mutated",
+      "echoResult": {
+        "message": "registry-rn",
+        "repeat": 3
+      },
+      "failEchoError": {
+        "code": null,
+        "message": "command.invalid_args: registry rn journey error propagation"
+      }
+    }
+  },
+  "snapshots": {
+    "baseline": {
+      "root": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-rn-android-6hHHaY/evidence/baseline",
+      "files": {
+        "App.tsx": "65f8148ab9fcca6b84bdcf4a510d3ec3edfd795d60cd3ec377839050bae6019d",
+        "Cargo.lock": "79e65f50a2b07b85ebbd5943333fee9f511081855998aafe84e907a4143d5613",
+        "Cargo.toml": "fd5275e518982703067207a144e47182c4df22aa34911842582323969c67979e",
+        "journey-input.ts": "964c612056271bcf62d2681cb6d8f8dfba36a09516182c278551ea2001e51f1d",
+        "package-lock.json": "851b9265bee3c5938017b1282b69e027dc709f4c77dd81ec7b6134fc4b30f617",
+        "package.json": "cf4e40a85ee28060a4136e020497943032d263ccab60a013b85b8c48b7182037",
+        "rustra.json": "9a757127e9c9f0cdb209a8425b721d248e2d6255a4c34d5051f8df016120d2e6",
+        "src/lib.rs": "86640a317a2f3161119a9d300648c274cadd87041291abe3ae661953044b0a07"
+      }
+    },
+    "mutated": {
+      "root": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-rn-android-6hHHaY/evidence/mutated",
+      "files": {
+        "App.tsx": "65f8148ab9fcca6b84bdcf4a510d3ec3edfd795d60cd3ec377839050bae6019d",
+        "Cargo.lock": "79e65f50a2b07b85ebbd5943333fee9f511081855998aafe84e907a4143d5613",
+        "Cargo.toml": "fd5275e518982703067207a144e47182c4df22aa34911842582323969c67979e",
+        "journey-input.ts": "cdd7c895dadd39d86bcddd857c61d001549f871b1af358d6182652215904dd7e",
+        "package-lock.json": "851b9265bee3c5938017b1282b69e027dc709f4c77dd81ec7b6134fc4b30f617",
+        "package.json": "cf4e40a85ee28060a4136e020497943032d263ccab60a013b85b8c48b7182037",
+        "rustra.json": "9a757127e9c9f0cdb209a8425b721d248e2d6255a4c34d5051f8df016120d2e6",
+        "src/lib.rs": "ca3640103d08282c92a03ffa098bfbb888c6b2172645c57e77425dbe2d0a8abc"
+      }
+    }
+  },
+  "scratchRoot": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-rn-android-6hHHaY",
+  "steps": [
+    {
+      "name": "environment-node",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.721Z",
+      "durationMs": 19,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/001-environment-node.log"
+    },
+    {
+      "name": "environment-npm",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.740Z",
+      "durationMs": 106,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/002-environment-npm.log"
+    },
+    {
+      "name": "environment-cargo",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.846Z",
+      "durationMs": 23,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/003-environment-cargo.log"
+    },
+    {
+      "name": "environment-rustc",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.870Z",
+      "durationMs": 31,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/004-environment-rustc.log"
+    },
+    {
+      "name": "environment-adb",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.901Z",
+      "durationMs": 17,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/005-environment-adb.log"
+    },
+    {
+      "name": "runner-git-head",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.918Z",
+      "durationMs": 17,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/006-runner-git-head.log"
+    },
+    {
+      "name": "resolve-device-serial",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.935Z",
+      "durationMs": 16,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/007-resolve-device-serial.log"
+    },
+    {
+      "name": "device-evidence",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:18.952Z",
+      "durationMs": 218,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/008-device-evidence.log"
+    },
+    {
+      "name": "rn-init",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:19.170Z",
+      "durationMs": 2470,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/009-rn-init.log"
+    },
+    {
+      "name": "write-rust-core",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:21.640Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/010-write-rust-core.log"
+    },
+    {
+      "name": "write-app-tsx",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:21.641Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/011-write-app-tsx.log"
+    },
+    {
+      "name": "pin-npm-versions",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:21.641Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/012-pin-npm-versions.log"
+    },
+    {
+      "name": "install-npm",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:21.642Z",
+      "durationMs": 17753,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/013-install-npm.log"
+    },
+    {
+      "name": "verify-exact-npm-sources",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:39.395Z",
+      "durationMs": 4,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/014-verify-exact-npm-sources.log"
+    },
+    {
+      "name": "baseline-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:39.399Z",
+      "durationMs": 7923,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/015-baseline-codegen.log"
+    },
+    {
+      "name": "install-generated-workspace",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:47.323Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/016-install-generated-workspace.log"
+    },
+    {
+      "name": "workaround-published-cli-esm-module-manifest",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:47.323Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/017-workaround-published-cli-esm-module-manifest.log"
+    },
+    {
+      "name": "install-workspaces",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:47.323Z",
+      "durationMs": 670,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/018-install-workspaces.log"
+    },
+    {
+      "name": "baseline-doctor",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:47.994Z",
+      "durationMs": 676,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/019-baseline-doctor.log"
+    },
+    {
+      "name": "baseline-js-bundle",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:48.671Z",
+      "durationMs": 6676,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/020-baseline-js-bundle.log"
+    },
+    {
+      "name": "baseline-gradle-assemble",
+      "ok": true,
+      "startedAt": "2026-09-21T06:18:55.347Z",
+      "durationMs": 61773,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/021-baseline-gradle-assemble.log"
+    },
+    {
+      "name": "verify-apk",
+      "ok": true,
+      "startedAt": "2026-09-21T06:19:57.121Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/022-verify-apk.log"
+    },
+    {
+      "name": "baseline-cargo-metadata",
+      "ok": true,
+      "startedAt": "2026-09-21T06:19:57.121Z",
+      "durationMs": 124,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/023-baseline-cargo-metadata.log"
+    },
+    {
+      "name": "baseline-provenance",
+      "ok": true,
+      "startedAt": "2026-09-21T06:19:57.246Z",
+      "durationMs": 7,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/024-baseline-provenance.log"
+    },
+    {
+      "name": "baseline-install-apk",
+      "ok": true,
+      "startedAt": "2026-09-21T06:19:57.253Z",
+      "durationMs": 4629,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/025-baseline-install-apk.log"
+    },
+    {
+      "name": "baseline-clear-logcat",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:01.882Z",
+      "durationMs": 132,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/026-baseline-clear-logcat.log"
+    },
+    {
+      "name": "baseline-launch-app",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:02.015Z",
+      "durationMs": 505,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/027-baseline-launch-app.log"
+    },
+    {
+      "name": "baseline-collect-evidence",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:02.521Z",
+      "durationMs": 2124,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/028-baseline-collect-evidence.log"
+    },
+    {
+      "name": "baseline-observation-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:04.645Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/029-baseline-observation-verification.log"
+    },
+    {
+      "name": "mutate-contract",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:04.650Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/030-mutate-contract.log"
+    },
+    {
+      "name": "mutated-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:04.651Z",
+      "durationMs": 1195,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/031-mutated-codegen.log"
+    },
+    {
+      "name": "workaround-published-cli-esm-module-manifest",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:05.846Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/032-workaround-published-cli-esm-module-manifest.log"
+    },
+    {
+      "name": "mutated-js-bundle",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:05.846Z",
+      "durationMs": 1921,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/033-mutated-js-bundle.log"
+    },
+    {
+      "name": "mutated-gradle-assemble",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:07.767Z",
+      "durationMs": 18762,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/034-mutated-gradle-assemble.log"
+    },
+    {
+      "name": "mutated-contract-hash-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:26.530Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/035-mutated-contract-hash-verification.log"
+    },
+    {
+      "name": "mutated-install-apk",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:26.530Z",
+      "durationMs": 5175,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/036-mutated-install-apk.log"
+    },
+    {
+      "name": "mutated-clear-logcat",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:31.706Z",
+      "durationMs": 142,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/037-mutated-clear-logcat.log"
+    },
+    {
+      "name": "mutated-launch-app",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:31.848Z",
+      "durationMs": 448,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/038-mutated-launch-app.log"
+    },
+    {
+      "name": "mutated-collect-evidence",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:32.296Z",
+      "durationMs": 2134,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/039-mutated-collect-evidence.log"
+    },
+    {
+      "name": "mutated-observation-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:34.430Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/040-mutated-observation-verification.log"
+    },
+    {
+      "name": "uninstall-app",
+      "ok": true,
+      "startedAt": "2026-09-21T06:20:34.436Z",
+      "durationMs": 105,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-rn-android-logs/041-uninstall-app.log"
+    }
+  ]
+}
