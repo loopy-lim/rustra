@@ -955,6 +955,38 @@ test('generateFrameCodecsTs encodes string enums as variant index', () => {
   assert.ok(sort.includes('_variants.indexOf'), 'enum index lookup must be generated');
 });
 
+test('generateFrameCodecsTs decodes string enums as literal unions', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.enum.output',
+    commands: [
+      {
+        name: 'enumOutput',
+        commandId: 61,
+        inputType: 'EnumOutputInput',
+        outputType: 'EnumOutputResult',
+        inputSchema: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+          title: 'EnumOutputInput',
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { order: { type: 'string', enum: ['asc', 'desc'] } },
+          required: ['order'],
+          title: 'EnumOutputResult',
+        },
+      },
+    ],
+    events: [],
+  };
+  const codecs = generateFrameCodecsTs(schema);
+  assert.ok(
+    codecs.includes('const _variants = ["asc","desc"] as const;'),
+    'decoded enum variants must retain their literal union type',
+  );
+});
+
 test('generateFrameCodecsTs encodes primitive-valued dynamic maps deterministically', () => {
   const codecs = generateFrameCodecsTs(richSchema);
   const map = codecs.split('mapScoresCodec')[1].split('export const')[0];

@@ -74,7 +74,7 @@ export function generateComplexDecodeExpr(
     return `${indent}{\n${indent}  const _tag = u8[offset];\n${indent}  offset += 1;\n${indent}  if (_tag === 0) {\n${indent}    ${lvalue} = null;\n${indent}  } else {\n${generateField(innerField, lvalue, definitions, `${indent}    `)}\n${indent}  }\n${indent}}`;
   }
   if (field.kind === 'enum_str') {
-    return `${indent}{\n${indent}  const _v = _pcDecodeVarint(u8, offset);\n${indent}  offset += _v.bytesRead;\n${indent}  const _variants = ${JSON.stringify(field.enumVariants ?? [])};\n${indent}  ${lvalue} = _variants[_v.value];\n${indent}}`;
+    return `${indent}{\n${indent}  const _v = _pcDecodeVarint(u8, offset);\n${indent}  offset += _v.bytesRead;\n${indent}  const _variants = ${JSON.stringify(field.enumVariants ?? [])} as const;\n${indent}  ${lvalue} = _variants[_v.value];\n${indent}}`;
   }
   return null;
 }
