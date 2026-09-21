@@ -70,10 +70,13 @@
     "test:bindings-fresh": "bun run --cwd packages/cli build && node scripts/check-codegen-fresh.mjs --bindings",
     "audit:registry": "node scripts/audit-release-registry.mjs",
     "verify:release-gates": "node scripts/check-release-gates.mjs",
-    "test:registry-consumer": "node --test scripts/registry-consumer-gate.test.mjs",
+    "test:registry-consumer": "node --test scripts/registry-consumer-gate.test.mjs scripts/registry-consumer-tauri.test.mjs scripts/registry-consumer-rn-android.test.mjs scripts/registry-consumer-diagnostics.test.mjs",
     "verify:consumer:registry": "node scripts/registry-consumer-gate.mjs",
     "test:functions": "bun scripts/function-registration-integration.ts",
-    "bench:functions": "cargo bench -p rustra --bench function_dispatch"
+    "bench:functions": "cargo bench -p rustra --bench function_dispatch",
+    "verify:consumer:tauri": "node scripts/registry-consumer-tauri.mjs",
+    "verify:consumer:rn-android": "node scripts/registry-consumer-rn-android.mjs",
+    "verify:consumer:diagnostics": "node scripts/registry-consumer-diagnostics.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1",
