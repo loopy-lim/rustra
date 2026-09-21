@@ -9,8 +9,9 @@ function nativeInstaller(): Installer {
   if (!current) {
     throw new Error(
       '[rustra:autolink] RustraBridge was not linked. Run ' +
-        '\`bunx --bun react-native config\` to inspect bare RN autolinking, then ' +
-        '\`cd ios && pod install\` or rebuild Android. Expo Go cannot load JSI; Expo apps need a development build.',
+        '\`npx react-native config\` (or \`bunx --bun react-native config\`) to inspect bare RN ' +
+        'autolinking, then \`cd ios && pod install\` or rebuild Android. Expo Go cannot load JSI; ' +
+        'Expo apps need a development build.',
     );
   }
   return current;
@@ -33,7 +34,11 @@ export function renderPackageJson(adapterRange: string): string {
       name: '@rustra/generated-react-native',
       version: '0.0.0',
       private: true,
-      type: 'module',
+      // "type" 을 지정하지 않는다(=CommonJS) — RN CLI/gradle 오톬링킹이 이 패키지의
+      // react-native.config.js 를 Node require() 로 읽는데, ESM 패키지로 표시하면
+      // require 가 실패해 모듈이 링크에서 **조용히** 빠진다. bunx --bun 검증만으로는
+      // 발견되지 않는다(Bun require 는 ESM 을 읽는다). 진입 TS 는 metro 가 번들하므로
+      // 런타임 동작에는 영향이 없다.
       main: 'src/index.ts',
       'react-native': 'src/index.ts',
       peerDependencies: { '@rustra/react-native': adapterRange, 'react-native': '>=0.76' },
