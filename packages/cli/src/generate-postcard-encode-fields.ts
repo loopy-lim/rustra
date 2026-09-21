@@ -13,11 +13,16 @@ const MAP_VALUE_ENCODER: Record<string, string> = {
   map_string: '_pcEncodeString(_v)',
 };
 
+// `loopVar` names the element variable for the vec_* loop emitted at this
+// level. Nested vec_struct levels must receive a fresh, longer name so the
+// inner loop never shadows an outer one: element paths are baked into the
+// emitted text, and a shadowed `_i` would index the wrong array.
 export function generateFieldEncodeExpr(
   field: PostcardField,
   valueExpr: string,
   definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
+  loopVar: string = '_i',
 ): string {
   switch (field.kind) {
     case 'unit':
@@ -67,7 +72,13 @@ export function generateFieldEncodeExpr(
       if (!structDef) return `${indent}// missing definition for ${field.refType}`;
       return collectPostcardFields(structDef, definitions)
         .fields.map((subField) =>
-          generateFieldEncodeExpr(subField, `${valueExpr}.${subField.name}`, definitions, indent),
+          generateFieldEncodeExpr(
+            subField,
+            `${valueExpr}.${subField.name}`,
+            definitions,
+            indent,
+            loopVar,
+          ),
         )
         .join('\n');
     }
@@ -76,8 +87,8 @@ export function generateFieldEncodeExpr(
         `${indent}{\n` +
         `${indent}  const _arr = ${valueExpr};\n` +
         `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeString(_arr[_i]));\n` +
+        `${indent}  for (let ${loopVar} = 0; ${loopVar} < _arr.length; ${loopVar}++) {\n` +
+        `${indent}    parts.push(_pcEncodeString(_arr[${loopVar}]));\n` +
         `${indent}  }\n` +
         `${indent}}`
       );
@@ -89,15 +100,16 @@ export function generateFieldEncodeExpr(
         `${indent}{`,
         `${indent}  const _arr = ${valueExpr};`,
         `${indent}  parts.push(_pcEncodeVarint(_arr.length));`,
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {`,
+        `${indent}  for (let ${loopVar} = 0; ${loopVar} < _arr.length; ${loopVar}++) {`,
       ];
       for (const subField of collectPostcardFields(structDef, definitions).fields) {
         lines.push(
           generateFieldEncodeExpr(
             subField,
-            `${valueExpr}[_i].${subField.name}`,
+            `${valueExpr}[${loopVar}].${subField.name}`,
             definitions,
             `${indent}    `,
+            `${loopVar}i`,
           ),
         );
       }
