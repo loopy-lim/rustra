@@ -89,6 +89,18 @@ export function validateVersionManifest(manifest) {
     if (manifest.phases.candidate[name] === manifest.phases.baseline[name])
       throw new Error(`candidate ${name} must differ from baseline`);
   }
+  // hosts — GUI/모바일 여정(tauri, react-native)이 쓰는 선택 정확 핀. Node/Bun CLI
+  // 게이트는 이 섹션 없이도 그대로 통과해야 한다(키 검사는 엄격 유지).
+  const hostNames = ['@rustra/tauri', '@rustra/react-native'];
+  if (manifest.hosts !== undefined) {
+    if (!manifest.hosts || typeof manifest.hosts !== 'object' || Array.isArray(manifest.hosts))
+      throw new Error('version manifest hosts must be an object when present');
+    for (const [name, version] of Object.entries(manifest.hosts)) {
+      if (!hostNames.includes(name))
+        throw new Error(`version manifest hosts has unknown key ${name}`);
+      assertExactVersion(version, `hosts.${name}`);
+    }
+  }
   return manifest;
 }
 
@@ -108,7 +120,10 @@ function cargoDependencyBlocks(cargo) {
     );
 }
 
-export function assertNoConsumerContamination(projectDir, { expectedNpm } = {}) {
+export function assertNoConsumerContamination(
+  projectDir,
+  { expectedNpm, allowedWorkspacePackages = [] } = {},
+) {
   const violations = [];
   const packagePath = join(projectDir, 'package.json');
   if (existsSync(packagePath)) {
@@ -121,11 +136,17 @@ export function assertNoConsumerContamination(projectDir, { expectedNpm } = {}) 
         violations.push(`${name} has a non-string dependency spec`);
         continue;
       }
-      if (/^(?:workspace:|file:|link:|git(?:\+|:)|https?:\/\/.*\.git(?:#|$))/.test(spec))
-        violations.push(`${name} uses forbidden dependency source ${spec}`);
+      if (/^(?:workspace:|file:|link:|git(?:\+|:)|https?:\/\/.*\.git(?:#|$))/.test(spec)) {
+        // RN 코드젠 계약 — 생성된 네이티브 모듈은 workspace:* 로 등록된다
+        // (ensureReactNativeDependency). 로컬 Rustra 소스 우회가 아니라 코드젠
+        // 산출물이므로 여정마다 명시적으로 허용 목록에 넣어 쓴다.
+        const isGeneratedWorkspace =
+          spec === 'workspace:*' && allowedWorkspacePackages.includes(name);
+        if (!isGeneratedWorkspace) violations.push(`${name} uses forbidden dependency source ${spec}`);
+      }
       if (name.startsWith('@rustra/')) {
         const canonicalCliRange = expectedNpm?.[name] ? `^${expectedNpm[name]}` : null;
-        if (!EXACT_SEMVER.test(spec) && spec !== canonicalCliRange)
+        if (!EXACT_SEMVER.test(spec) && spec !== canonicalCliRange && spec !== 'workspace:*')
           violations.push(`${name} uses unsupported version spec ${spec}`);
       }
     }
@@ -139,10 +160,19 @@ export function assertNoConsumerContamination(projectDir, { expectedNpm } = {}) 
       violations.push('Cargo.toml contains a path/git dependency');
     for (const name of ['rustra', 'rustra-macros', 'rustra-naming']) {
       const escaped = name.replaceAll('-', '\\-');
-      const match = cargo.match(new RegExp(`^${escaped}\\s*=\\s*"([^"]+)"`, 'm'));
-      if (match && !match[1].startsWith('='))
+      // 두 표기 모두 잡는다 — `rustra = "x"` 와 `rustra = { version = "x", … }`.
+      // brace 형태를 파싱하지 않으면 features 지정 소비자가 핀 없이 통과하고,
+      // version 키 자체가 없으면(워크스페이스 상속 등) 최신 해석으로 뜬다.
+      const stringMatch = cargo.match(new RegExp(`^${escaped}\\s*=\\s*"([^"]+)"`, 'm'));
+      const braceMatch = cargo.match(new RegExp(`^${escaped}\\s*=\\s*\\{([^}]*)\\}`, 'm'));
+      const spec = stringMatch
+        ? stringMatch[1]
+        : (braceMatch?.[1].match(/version\s*=\s*"([^"]+)"/)?.[1] ?? null);
+      if (braceMatch && spec === null)
+        violations.push(`${name} brace dependency declares no version pin`);
+      if (spec !== null && !spec.startsWith('='))
         violations.push(`${name} is not pinned with =version`);
-      if (match) assertExactVersion(match[1].slice(1), `Cargo ${name}`);
+      if (spec !== null) assertExactVersion(spec.slice(1), `Cargo ${name}`);
     }
   }
   for (const name of ['cli', 'types', 'node', 'bun']) {

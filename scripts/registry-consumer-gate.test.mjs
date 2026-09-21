@@ -171,8 +171,7 @@ test('contamination scan rejects package overrides and workspace/file/git npm de
   }
 });
 
-test('contamination scan accepts only the CLI-compatible caret for the requested npm line', () => {
-  const { root, cleanup } = scratch();
+test('contamination scan accepts only the CLI-compatible caret for the requested npm line', () => {  const { root, cleanup } = scratch();
   try {
     writeJson(join(root, 'package.json'), {
       private: true,
@@ -197,6 +196,28 @@ test('contamination scan accepts only the CLI-compatible caret for the requested
     );
   } finally {
     cleanup();
+  }
+});
+
+test('contamination scan enforces =version pins through brace-form Cargo specs', () => {
+  const cases = [
+    ['rustra = { version = "=0.10.0", features = ["tauri"] }', null],
+    ['rustra = { version = "^0.10.0", features = ["tauri"] }', /not pinned with =version/],
+    ['rustra = { features = ["tauri"] }', /declares no version pin/],
+  ];
+  for (const [dependency, rejection] of cases) {
+    const { root, cleanup } = scratch();
+    try {
+      writeJson(join(root, 'package.json'), { private: true });
+      writeFileSync(
+        join(root, 'Cargo.toml'),
+        `[package]\nname="registry-consumer"\nversion="0.1.0"\n[dependencies]\n${dependency}\n`,
+      );
+      if (rejection) assert.throws(() => assertNoConsumerContamination(root), rejection);
+      else assert.doesNotThrow(() => assertNoConsumerContamination(root));
+    } finally {
+      cleanup();
+    }
   }
 });
 
@@ -405,7 +426,7 @@ test('registry fixture pins all Rustra crates and exports the cdylib native entr
       /pub fn package\(\) -> Package \{\s*let package = Package::builder\("app\.demo"\)\.command_fn\(echo\)\.command_fn\(fail_echo\)\.build\(\);\s*package\.register_ffi\(\);\s*package\s*\}/,
     );
     assert.doesNotMatch(lib, /Package::builder\("app\.demo"\)\s*let package/);
-    assert.match(readFileSync(join(root, 'package.json'), 'utf8'), /"@rustra\/bun": "\^0\.10\.0"/);
+    assert.match(readFileSync(join(root, 'package.json'), 'utf8'), /"@rustra\/bun": "0\.10\.0"/);
     assert.doesNotThrow(() => assertNoConsumerContamination(root, { expectedNpm: NPM }));
   } finally {
     cleanup();
