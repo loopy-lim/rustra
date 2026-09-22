@@ -8,7 +8,7 @@ When the contract (schema) shared by the Rust backend and TypeScript clients cha
 
 - **From 0.3.x** — follow [migrating from 0.3 to 0.4](migrations/0.3-to-0.4.md) first, then use this guide.
 - **From 0.5.x** — follow [migrating from 0.5 to 0.6](migrations/0.5-to-0.6.md) first. Old schemas may also fail CLI validation with a "generic type name" error (see the [Rust API guide — user-defined generics](rust-api-guide.md#user-defined-generic-types)); rebuild `schema.json` with the current rustra before running `rustra diff`.
-- **0.6 and later (incl. 0.8)** — no migration note needed; the recipes below apply directly.
+- **From 0.6–0.9** — include the [Frame/API migration](migrations/post-0.9-frame-and-audit.md) when crossing the Rust 0.10 release boundary, then use the recipes below.
 - **The rkyv V2 → Frame rename (0.10.0 release)** — see [the rename table](#frame-rename-rkyv-v2--frame) below; a pure rename, the wire format is unchanged.
 
 <a id="09-rename-rkyv-v2--frame"></a>
@@ -17,8 +17,10 @@ When the contract (schema) shared by the Rust backend and TypeScript clients cha
 
 The 0.10.0 release (2026-09-12) renames the binary protocol formerly called
 "rkyv V2" to **Frame** across all APIs. This is a naming change only — the wire
-bytes, framing, and postcard payload codec are unchanged, so old and new builds
-stay interoperable. Package versions are independent, so the rename belongs to
+bytes, framing, and postcard payload codec are unchanged. API names and native
+symbols do change: regenerate clients and rebuild native libraries/shells together
+as described in the [release migration](migrations/post-0.9-frame-and-audit.md).
+Package versions are independent, so the rename belongs to
 the release, not to one version number: the Rust workspace and
 `@rustra/types`/`@rustra/node`/`@rustra/bun`/`@rustra/cli` shipped it as 0.10.0,
 while `@rustra/tauri` and `@rustra/react-native` carried the same rename in
@@ -48,6 +50,20 @@ pre-rename. Update the identifiers you reference:
 The RN JSI host method follows the same rename (`invokeRkyvV2` → `invokeFrame`),
 and codegen output files land under the new names (`frame-codecs.ts`,
 `frame-registry.ts`) — re-run `rustra codegen` and update imports.
+
+The next CLI patch in the current source removes obsolete generated files only
+when their bytes match ownership hashes in the previous `.rustra-generated.json`.
+Published CLI 0.11.3 does not include this fix: also check for leftover
+`rkyv-codecs.ts`/`rkyv-registry.ts` when running the type checker. If an earlier
+CLI already replaced the manifest, restore the pre-upgrade generated files and
+manifest together before regenerating with the fixed CLI, or review and move the
+remaining files manually. Edited files, symlinks, and unrecorded files are never
+automatically removed. `codegen --check` reports legacy leftovers without deleting them.
+
+In an RN monorepo, register the app and generated module in the existing root
+workspaces. The fixed CLI reuses that root. If an earlier run added an unwanted
+nested workspaces field to the app manifest, compare it with the original manifest
+and remove the unintended change. The CLI does not delete user-defined workspace settings.
 
 ## Tools
 
@@ -82,93 +98,50 @@ The recipes below cover the four command-side types you will meet most often; th
 
 ## Recipes per breaking change
 
-### field_removed — field deletion
+Frame/postcard encodes struct fields by position. Field order, integer signedness,
+float width, enum ordinals, tuple positions and optional-field presence are part
+of the wire contract. Adding `Option<T>` or `#[serde(default)]` does not make a
+binary change backward-compatible. `skip_serializing_if` is not a migration
+mechanism for positional binary payloads.
 
-Instead of deleting, a **two-step deprecated transition** is recommended:
+### Field removal, type changes and field additions
 
-```rust
-// Step 1: keep the field as Option and give clients time to migrate
-pub struct UserOutput {
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>, // deprecated — use name
-}
+Keep the old command's input/output layout unchanged. Introduce a versioned
+command with a separate ID and adapt its input to the shared domain logic.
+Keep the old name and ID routed to the old layout until its consumers retire.
+Reordering fields or enum variants needs the same treatment as a type change.
+An optional field addition is also reported as a breaking wire change.
 
-// Step 2 (next release): remove the field — diff then reports field_removed
-```
+A JSON-only transport can sometimes accept omitted fields using `serde(default)`.
+Prove that behavior with the exact old/new JSON consumers. It does not establish
+compatibility for generated Frame, postcard or native typed calls.
 
-If you must delete immediately, regenerate the TS clients first to remove references to the field, then deploy the Rust side.
+### Command removal
 
-### field_type_changed — type change
-
-A two-step transition with an intermediate new field:
-
-```rust
-// before
-pub struct Config { pub timeout: i64 }
-
-// Step 1: add the new field + deprecate the existing field
-pub struct Config {
-    #[serde(default)]
-    pub timeout_ms: i64,           // new
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<i64>,      // deprecated (in seconds)
-}
-
-// Step 2: remove the old field
-```
-
-### required_field_added — adding a required field
-
-Starting with `Option<T>` + `#[serde(default)]` is not breaking:
-
-```rust
-pub struct SearchInput {
-    pub query: String,
-    #[serde(default)]                    // has a default → not required
-    pub limit: Option<i64>,              // OK even if clients omit it
-}
-```
-
-If the semantics must be required, deploy with a default value first and then remove the default in the next version — two steps.
-
-### command_removed — command deletion
-
-Backward compatibility can be kept with an alias:
-
-```rust
-#[command(name = "oldName")]
-fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
-```
-
-Add the command under a new name and keep the old name as an alias; once clients have migrated naturally, remove the alias.
+Retain the existing command while adding the new one. A name alias alone does
+not preserve numeric dispatch IDs or convert the previous wire layout. Verify
+both the name route and ID route with the previous generated client.
 
 ## Rollout order and contract hash
 
-`GENERATED_CONTRACT_HASH` in `contract.ts` is the SHA-256 of the entire schema. When the schema changes, the hash changes. Passing the `contractHash` option to `createFrameEngine` compares against the native hash at runtime and fails immediately on mismatch (fail-fast).
+`GENERATED_CONTRACT_HASH` identifies the generated contract. With `contractHash`
+provided, `createFrameEngine` verifies the native hash; generated host entrypoints
+configure this check. Keep strict verification during migration. `warn` and
+`off` change enforcement, not compatibility, and cannot make old binary layouts
+safe for a new decoder.
 
-**Safe deployment order (default):**
-
-1. Deploy the Rust backend — **additive changes** are compatible with existing clients.
-   (the state where `rustra diff` reports 0 breaking changes)
-2. Regenerate the TS clients (`bun run codegen`) and deploy.
-
-**When a breaking change is unavoidable (the reverse is impossible — always ship the new client first):**
-
-1. Deploy Rust that accepts the new schema while also accepting old-schema requests
-   (the `#[serde(default)]` pattern from the recipes above serves this role).
-2. Regenerate and deploy the TS clients.
-3. Deploy Rust with the old fields/commands removed (`field_removed` then occurs intentionally).
-
-> In environments with contractHash verification enabled, a hash mismatch error
-> (`contract.mismatch`) can occur between steps 1→2, so turn verification off
-> during the migration window or update the hash in step 2. "Off" is the
-> `contractVerification` engine option (`createFrameEngine`):
-> `'strict' | 'warn' | 'off'` — the default `undefined` behaves as `'strict'`.
-> `'warn'` downgrades the mismatch/unenforceable failure to a console warning and
-> still creates the engine (degraded mode); `'off'` skips verification even when
-> `contractHash` is set. The knob applies only to the native Frame engine and only
-> chooses the strictness — verification never runs unless `contractHash` is passed.
+1. Preserve the previous JS/Rust lockfiles, generated files and native build.
+2. Align CLI, runtime adapters and Rust dependencies using the
+   [compatibility table](compatibility-matrix.md). Regenerate the contract and
+   all bindings, then rebuild the app-specific native library and host shell.
+3. Run `rustra diff`, `rustra doctor` and `rustra codegen --check`. Exercise first
+   call, changed fields, declared errors, event subscribe/unsubscribe and disposal
+   in the intended host. A clean diff alone is not runtime acceptance.
+4. Ship JS, generated output and the matching native build as a set. For staged
+   mixed-version deployments, first implement and test an explicit versioned
+   contract negotiation/translation path; do not bypass a hash mismatch.
+5. Roll back the complete saved set and repeat the same calls. Reverting only
+   the JS dependency cannot restore native symbol or wire compatibility.
 
 ## CI integration
 
@@ -192,6 +165,11 @@ If a breaking change is detected, the job fails with exit 1. If the breaking cha
 
 ## Limitations
 
-- `diffSchemas` compares only top-level `properties` — changes inside nested
-  `$ref` definitions are not detected (improvement candidate).
-- The `compatible[]` list reports new command/optional field additions.
+- The diff traverses nested references (including recursive schemas), unions,
+  tuples and map values and checks positional wire facets conservatively.
+  Some JSON-only changes may therefore be reported as breaking.
+- It cannot prove behavioral compatibility, native ABI compatibility, or changes
+  to custom serde implementations that are absent from the schema.
+- Event additions appear in `compatible[]`; optional field additions do not.
+  Matching package IDs, supported capabilities and the final native build still
+  require runtime verification.

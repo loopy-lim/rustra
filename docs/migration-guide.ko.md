@@ -9,7 +9,7 @@ Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 �
 
 - **0.3.x에서 올라오는 경우** — 먼저 [0.3에서 0.4로 마이그레이션](migrations/0.3-to-0.4.ko.md)을 따른 뒤 이 가이드를 쓴다.
 - **0.5.x에서 올라오는 경우** — 먼저 [0.5에서 0.6으로 마이그레이션](migrations/0.5-to-0.6.ko.md)을 따른다. 오래된 스키마는 CLI 검증에서 "generic type name" 오류로 실패할 수도 있다([Rust API 가이드 — 사용자 정의 제네릭](rust-api-guide.ko.md#사용자-정의-제네릭-타입)) — `rustra diff` 전에 현재 rustra로 `schema.json`을 재생성한다.
-- **0.6 이상(0.8 포함)** — 별도 마이그레이션 노트는 없다. 아래 레시피를 그대로 쓴다.
+- **0.6~0.9에서 올라오는 경우** — Rust 0.10 경계를 넘을 때 [Frame/API 마이그레이션](migrations/post-0.9-frame-and-audit.ko.md)을 함께 적용한 뒤 아래 레시피를 쓴다.
 - **rkyv V2 → Frame 리네임(0.10.0 릴리스)** — 아래 [리네임 표](#frame-리네임-rkyv-v2--frame) 참고. 순수 이름 변경이며 와이어 포맷은 불변이다.
 
 <a id="09-리네임-rkyv-v2--frame"></a>
@@ -18,8 +18,9 @@ Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 �
 
 0.10.0 릴리스(2026-09-12)가 구칭 "rkyv V2"로 불리던 바이너리 프로토콜을 모든
 API에서 **Frame**으로 이름 바꾼다. 이름 변경만 있을 뿐 와이어 바이트, 프레이밍,
-postcard 페이로드 코덱은 불변이므로 구·신 빌드는 상호 운용된다. 패키지 버전은
-독립이라 리네임의 귀속점은 단일 버전 번호가 아니라 릴리스다: Rust 워크스페이스와
+postcard 페이로드 코덱은 불변이다. API 이름과 native 심벌은 바뀌므로
+[릴리스 마이그레이션](migrations/post-0.9-frame-and-audit.ko.md)에 따라 생성물과
+native 라이브러리·셸을 함께 갱신해야 한다. 패키지 버전은 독립이라 리네임의 귀속점은 단일 버전 번호가 아니라 릴리스다: Rust 워크스페이스와
 `@rustra/types`/`@rustra/node`/`@rustra/bun`/`@rustra/cli`는 0.10.0으로,
 `@rustra/tauri`와 `@rustra/react-native`는 각자의 0.9.0에 같은 리네임을 실었다 —
 0.9.x 어댑터 버전만으로 리네임 전을 뜻하지 않는다. 참조하는 식별자를 다음처럼
@@ -48,6 +49,19 @@ postcard 페이로드 코덱은 불변이므로 구·신 빌드는 상호 운용
 RN JSI 호스트 메서드도 같은 리네임을 따른다(`invokeRkyvV2` → `invokeFrame`),
 그리고 codegen 산출 파일도 새 이름(`frame-codecs.ts`, `frame-registry.ts`)으로
 떨어진다 — `rustra codegen`을 다시 실행하고 import를 갱신한다.
+
+현재 소스의 다음 CLI 패치에서는 이전 `.rustra-generated.json`에 기록된 hash가
+일치하는 구형 생성물을 정리한다. 아직 공개된 CLI 0.11.3에는 이 수정이 없으므로
+타입 검사에서 남은 `rkyv-codecs.ts`/`rkyv-registry.ts`도 확인해야 한다.
+이전 CLI 실행으로 manifest가 이미 덮어써졌다면, 업그레이드 전 생성물과
+manifest 묶음을 복원한 뒤 수정된 CLI로 다시 생성하거나 남은 파일의 내용을
+직접 검토해 옮긴다. 사용자 수정·symlink·소유 기록 없는 파일은 자동 삭제하지 않는다.
+`codegen --check`는 남은 구형 파일을 실패로 알리며 아무 파일도 지우지 않는다.
+
+RN 모노레포에서는 기존 루트 workspaces에 앱과 생성 모듈을 등록한다.
+수정된 CLI는 루트 설정을 재사용한다. 이전 실행이 앱 package.json에 불필요한
+중첩 workspaces를 추가했다면 원래 앱 manifest와 비교해 정리한다. CLI는
+사용자 정의 workspace 설정을 임의로 제거하지 않는다.
 
 ## 도구
 
@@ -85,98 +99,46 @@ rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json --for
 
 ## Breaking change별 해결 레시피
 
-### field_removed — 필드 삭제
+Frame/postcard는 구조체 필드를 위치 순서대로 인코딩한다. 필드 순서, 정수의
+signedness, 실수 크기, enum 순번, tuple 위치, optional 필드 존재 여부 모두
+wire 계약이다. `Option<T>`나 `#[serde(default)]`를 추가해도 바이너리 변경이
+하위호환으로 바뀌지 않는다. `skip_serializing_if`도 위치 기반 바이너리의
+마이그레이션 수단으로 사용할 수 없다.
 
-삭제 대신 **deprecated 2단계 전환**을 권장한다:
+### 필드 삭제·타입 변경·필드 추가
 
-```rust
-// 1단계: 필드를 Option 으로 남기고 클라이언트가 마이그레이션할 시간을 준다
-pub struct UserOutput {
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>, // deprecated — name 을 사용
-}
+기존 명령의 입출력 구조를 유지하고 별도 ID를 가진 버전별 명령을 추가한다.
+새 입출력을 공통 도메인 로직으로 변환하며, 이전 소비자가 사라질 때까지
+기존 이름과 ID는 이전 구조로 처리한다. 필드나 enum 순서 변경도 타입 변경과
+같이 취급한다. optional 필드 추가 역시 wire 파괴 변경으로 보고한다.
 
-// 2단계 (다음 릴리스): 필드 제거 — 이때 diff 는 field_removed 를 보고한다
-```
+JSON 전용 transport에서는 `serde(default)`로 생략된 필드를 수용할 수 있다.
+정확한 이전·이후 JSON 소비자로 검증해야 하며, 이 결과는 생성된 Frame,
+postcard, native typed 호출의 호환성 근거가 아니다.
 
-즉시 삭제해야 한다면 TS 클라이언트를 먼저 재생성해 해당 필드 참조를 제거한
-뒤 Rust 를 배포한다.
+### 커맨드 삭제
 
-### field_type_changed — 타입 변경
-
-중간 신규 필드를 두는 2단계 전환:
-
-```rust
-// before
-pub struct Config { pub timeout: i64 }
-
-// 1단계: 새 필드 추가 + 기존 필드 deprecated
-pub struct Config {
-    #[serde(default)]
-    pub timeout_ms: i64,           // new
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<i64>,      // deprecated (초 단위)
-}
-
-// 2단계: 구 필드 제거
-```
-
-### required_field_added — 필수 필드 추가
-
-`Option<T>` + `#[serde(default)]`로 시작하면 breaking이 아니다:
-
-```rust
-pub struct SearchInput {
-    pub query: String,
-    #[serde(default)]                    // 기본값 있음 → 필수 아님
-    pub limit: Option<i64>,              // 클라이언트가 안 보내도 OK
-}
-```
-
-필수여야 하는 의미라면, 기본값을 가진 상태로 배포한 뒤 다음 버전에서
-기본값을 제거하는 2단계로 간다.
-
-### command_removed — 커맨드 삭제
-
-별칭으로 하위호환을 유지할 수 있다:
-
-```rust
-#[command(name = "oldName")]
-fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
-```
-
-새 이름 커맨드를 추가하고 구 이름을 별칭으로 남겨두면, 클라이언트가
-자연스럽게 이전한 뒤 별칭을 제거한다.
+새 명령을 추가하는 동안 기존 명령을 유지한다. 이름 별칭만으로는 숫자 ID나
+이전 wire 구조를 보존하지 못한다. 이전 생성 클라이언트로 이름 경로와
+ID 경로를 모두 확인한다.
 
 ## 롤아웃 순서와 contract hash
 
-`contract.ts`의 `GENERATED_CONTRACT_HASH`는 스키마 전체의 SHA-256이다.
-스키마가 바뀌면 hash가 바뀐다. `createFrameEngine`에 `contractHash` 옵션을
-전달하면 런타임에 네이티브 해시와 비교해 불일치 시 즉시 실패한다(fail-fast).
+`GENERATED_CONTRACT_HASH`는 생성된 계약을 식별한다. `contractHash`를 전달하면
+`createFrameEngine`이 native hash를 검증하며 생성된 호스트 진입점은 이 검사를
+설정한다. 마이그레이션에서도 strict 검증을 유지한다. `warn`·`off`는 검증
+강도를 바꿀 뿐 호환성을 제공하지 않으며 이전 바이너리 구조를 안전하게 만들지 않는다.
 
-**안전한 배포 순서 (기본):**
-
-1. Rust 백엔드 배포 — **추가 전용(additive) 변경**이면 기존 클라이언트와 호환된다.
-   (`rustra diff`가 breaking 0을 보고하는 상태)
-2. TS 클라이언트 재생성 (`bun run codegen`) 후 배포.
-
-**breaking 변경이 불가피할 때 (역방향 불가 — 항상 신규 클라이언트 먼저):**
-
-1. 새 스키마를 수용하는 Rust 를 배포하되, 구 스키마 요청도 받아들이게 한다
-   (위 레시피의 `#[serde(default)]` 패턴이 이 역할을 한다).
-2. TS 클라이언트 재생성·배포.
-3. 구 필드/커맨드를 제거한 Rust 를 배포 (이때 `field_removed`가 의도적으로 발생).
-
-> contractHash 검증을 켜둔 환경에서는 1→2 사이에 hash 불일치 에러
-> (`contract.mismatch`)가 날 수 있으므로, 마이그레이션 기간에는 검증을
-> 끄거나 2단계로 hash 를 갱신한다. "끄기"는 엔진 옵션 `contractVerification`
-> (`createFrameEngine`): `'strict' | 'warn' | 'off'` — 미설정(`undefined`)은
-> `'strict'` 로 동작한다. `'warn'` 은 mismatch/unenforceable 실패를 콘솔 경고로
-> 강등하고 엔진 생성을 계속하고(degraded 모드), `'off'` 는 `contractHash` 를
-> 설정했더라도 검증 자체를 건너뛴다. 이 노브는 네이티브 Frame 엔진 경로에만
-> 적용되고 강도만 고른다 — `contractHash` 를 넘기지 않으면 검증은 원래 동작하지
-> 않는다.
+1. 이전 JS/Rust lockfile, 생성물, native 빌드를 보존한다.
+2. [호환성 표](compatibility-matrix.ko.md)에 맞춰 CLI, 어댑터, Rust 의존성을
+   맞춘다. 계약과 모든 binding을 재생성하고 앱별 native 라이브러리와 셸을 재빌드한다.
+3. `rustra diff`, `rustra doctor`, `rustra codegen --check`를 실행한다. 대상
+   호스트에서 첫 호출, 변경 필드, 선언 에러, 이벤트 구독·해지, 종료를 확인한다.
+   diff 통과만으로 런타임 수락을 대신하지 않는다.
+4. JS·생성물·native 빌드를 한 묶음으로 배포한다. 버전이 섞이는 점진 배포는
+   명시적 버전 협상·변환 경로를 먼저 구현하고 검증해야 한다. hash 불일치를 우회하지 않는다.
+5. 롤백할 때 보존한 전체 묶음을 복원하고 같은 호출을 반복한다. JS 의존성만
+   되돌려서는 native 심벌이나 wire 호환성을 복원할 수 없다.
 
 ## CI 통합
 
@@ -202,6 +164,9 @@ breaking이 감지되면 exit 1로 job이 실패한다. 의도된 breaking이면
 
 ## 제한
 
-- `diffSchemas`는 최상위 `properties`만 비교한다 — 중첩 `$ref` 정의 내부의
-  변경은 검출하지 않는다 (개선 후보).
-- `compatible[]` 목록은 새 커맨드/선택적 필드 추가를 보고한다.
+- 중첩·재귀 참조, union, tuple, map 값과 위치 기반 wire 속성을 보수적으로
+  비교한다. 따라서 JSON 전용 경로에서는 허용할 변경도 breaking으로 보고할 수 있다.
+- 동작 의미, native ABI, schema에 드러나지 않는 사용자 serde 구현의 호환성은
+  이 도구만으로 증명할 수 없다.
+- 이벤트 추가는 `compatible[]`에 나타나지만 optional 필드 추가는 그렇지 않다.
+  package ID, 지원 역량, 최종 native 빌드는 별도 런타임 검증이 필요하다.

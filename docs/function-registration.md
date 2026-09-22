@@ -2,8 +2,9 @@ English | [한국어](./function-registration.ko.md)
 
 # Register ordinary Rust functions
 
-Unreleased: this API is available in the development source. Use matching Rust,
-CLI and runtime packages when generating and running the client.
+This API is part of the Rust 0.11 release line. Use the manifest-aligned
+[CLI and runtime versions](compatibility-matrix.md) when generating and running
+the client. Local changes require separate package and native-build verification.
 
 `PackageBuilder::function` accepts a safe synchronous Rust function or closure
 with zero through twelve arguments. It does not require a Rustra macro, an
