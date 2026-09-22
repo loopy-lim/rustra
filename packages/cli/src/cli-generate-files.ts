@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { PackageSchema } from './schema.js';
 import { parsePackageSchema } from './schema-validation.js';
@@ -32,6 +32,7 @@ import { ensureHostDependencies, ensureReactNativeDependency } from './dependenc
 import type { HostEntries } from './host-entries.js';
 import { cliVersion, hostDependencyRanges } from './cli-runtime.js';
 import { generatedFileHeader } from './generated-header.js';
+import { planGeneratedCleanup } from './generated-cleanup.js';
 import {
   clearCodegenWarnings,
   formatCodegenWarning,
@@ -147,9 +148,16 @@ export async function generateFromSchema(
   // 코드젠 경고는 생성 파일 바이트와 무관한 별도 진행 채널 — stderr 로 출력해
   // 머신이 읽는 stdout(JSON 리포트)을 오염시키지 않는다.
   for (const warning of takeCodegenWarnings()) console.error(formatCodegenWarning(warning));
+  const manifestPath = resolve(outputPath, '.rustra-generated.json');
+  const roots = [outputPath];
+  if (cppOutputPath) roots.push(cppOutputPath);
+  if (reactNativeScaffold) roots.push(reactNativeScaffold.moduleDir);
+  const obsolete = await planGeneratedCleanup(files, manifestPath, roots);
   if (check) {
+    if (obsolete.length > 0)
+      throw new Error(`Generated drift (obsolete): ${obsolete.join(', ')}. Run rustra codegen.`);
     written.push(...files.map((file) => `${manifestPathFor(outputPath, file.path)} (verified)`));
-    await checkGeneratedFiles(files, resolve(outputPath, '.rustra-generated.json'), {
+    await checkGeneratedFiles(files, manifestPath, {
       schemaContent,
       generatorVersion: cliVersion,
     });
@@ -170,6 +178,11 @@ export async function generateFromSchema(
       written.push(existing === null ? relativePath : `${relativePath} (updated)`);
     }
   }
+  // Recheck ownership after output writes in case a consumer edited a retired file meanwhile.
+  for (const path of await planGeneratedCleanup(files, manifestPath, roots)) {
+    await unlink(path);
+    written.push(`${manifestPathFor(outputPath, path)} (removed)`);
+  }
   if (reactNativeScaffold)
     await ensureReactNativeDependency(
       reactNativeScaffold.appRoot,
@@ -178,7 +191,7 @@ export async function generateFromSchema(
     );
   if (hostEntries) await ensureHostDependencies(hostEntries, hostDependencyRanges);
   await writeFile(
-    resolve(outputPath, '.rustra-generated.json'),
+    manifestPath,
     `${JSON.stringify(
       buildGeneratedManifest(
         schemaContent,

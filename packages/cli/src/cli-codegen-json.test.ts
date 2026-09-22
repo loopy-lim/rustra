@@ -6,8 +6,17 @@
 // generate bin 보고, run → schema.json 복사). 실제 cargo 빌드는 하지 않는다.
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCodegen } from './cli-codegen.js';
@@ -154,6 +163,23 @@ test('codegen --format json reports drift:true when regeneration rewrites existi
       drifted.written.some((entry) => entry.endsWith('(unchanged)')),
       `untouched files stay (unchanged), got: ${JSON.stringify(drifted.written)}`,
     );
+    const legacy = join(project, 'generated', 'rkyv-codecs.ts');
+    const content = '// previous generated codec\n';
+    writeFileSync(legacy, content);
+    const manifestPath = join(project, 'generated', '.rustra-generated.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.files.push({
+      path: 'rkyv-codecs.ts',
+      sha256: createHash('sha256').update(content).digest('hex'),
+    });
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    stdout = [];
+    await runCodegen(['--config', join(project, 'rustra.json'), '--format', 'json']);
+    const removed = JSON.parse(stdout.at(-1)!) as { drift: boolean; written: string[] };
+    assert.equal(removed.drift, true);
+    assert.ok(removed.written.includes('rkyv-codecs.ts (removed)'));
+    assert.ok(removed.written.every((entry) => !entry.endsWith('(updated)')));
+    assert.equal(existsSync(legacy), false);
   } finally {
     restore();
     delete process.env.FAKE_SCHEMA_FILE;

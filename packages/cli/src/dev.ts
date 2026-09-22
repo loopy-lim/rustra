@@ -19,7 +19,6 @@ import { captureSchemaParity } from './dev-schema-capture.js';
 import { rustInputFingerprint } from './dev-fingerprint.js';
 import { detectDirty, planPipeline, runOnce } from './dev-support.js';
 import { createParityGate } from './parity-gate.js';
-import { readCargoMetadata, selectHostPackage, requireTargetDirectory } from './cargo-metadata.js';
 import { readFile } from 'node:fs/promises';
 
 export { createWatchLoop, createReloadHooks } from './watch.js';

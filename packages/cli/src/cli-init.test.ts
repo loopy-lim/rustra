@@ -345,6 +345,11 @@ test(
       // reactNative 섹션이 있으면 selectReactNativeCargoTarget 이 staticlib 크레이트를 요구한다.
       // 스캐폴드 Cargo.toml 에 [lib] staticlib 이 없던 결함을 잡는 게이트.
       await runInit([project, '--host', 'react-native']);
+      const manifest = JSON.parse(readFileSync(join(project, 'package.json'), 'utf-8'));
+      assert.equal(
+        manifest.dependencies['@rustra/react-native'],
+        cliManifest.rustraTemplate.reactNativeRange,
+      );
       assert.match(
         readFileSync(join(project, 'Cargo.toml'), 'utf-8'),
         /crate-type\s*=\s*\["rlib", "staticlib"\]/,
@@ -408,6 +413,55 @@ test(
         assert.match(content, /Stage: {2}/);
         assert.match(content, /DO NOT EDIT/);
       }
+    });
+  },
+);
+
+test(
+  'RN scaffold native entry registers its actual FFI package',
+  { timeout: 180_000 },
+  async () => {
+    const { spawnSync } = await import('node:child_process');
+    await withTempDir(async (root) => {
+      const project = join(root, 'app');
+      await runInit([project, '--host', 'react-native']);
+      const repo = fileURLToPath(new URL('../../../', import.meta.url));
+      const manifest = join(project, 'Cargo.toml');
+      writeFileSync(
+        manifest,
+        readFileSync(manifest, 'utf8') +
+          '\n[patch.crates-io]\n' +
+          ['rustra', 'rustra-macros', 'rustra-naming']
+            .map(
+              (name) =>
+                `${name} = { path = ${JSON.stringify(join(repo, 'crates', name).replaceAll('\\', '/'))} }`,
+            )
+            .join('\n') +
+          '\n',
+      );
+      const lib = join(project, 'src/lib.rs');
+      writeFileSync(
+        lib,
+        readFileSync(lib, 'utf8') +
+          `
+#[test]
+fn native_entry_registers_echo() {
+    rustra_mobile_init();
+    rustra_mobile_init();
+    let package = rustra::ffi::get_package().expect("native entry must register FFI");
+    let value = package.invoke_json("echo", serde_json::json!({ "message": "native init" })).unwrap();
+    assert_eq!(value["message"], "native init");
+}
+`,
+      );
+      const result = spawnSync('cargo', ['test', '--manifest-path', manifest, '--lib', '--quiet'], {
+        cwd: project,
+        encoding: 'utf8',
+        timeout: 150_000,
+        env: { ...process.env, CARGO_TARGET_DIR: join(repo, 'target/init-smoke') },
+      });
+      assert.equal(result.status, 0, `${result.error ?? ''}\n${result.stdout}\n${result.stderr}`);
+      assert.match(result.stdout, /1 passed/);
     });
   },
 );
