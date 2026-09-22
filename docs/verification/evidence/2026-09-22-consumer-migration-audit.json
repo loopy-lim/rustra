@@ -1,0 +1,1987 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-22T05:42:34.916838+00:00",
+  "status": "local_source_package_host_validation_complete_with_limits",
+  "workspace": "/tmp/rustra-consumers-20260922",
+  "sdkBaseHead": "c717117ff5e4623951242fae07edf8844829c161",
+  "publication": "Local candidate only; same version labels do not identify public registry bytes.",
+  "limits": [
+    "No APK/IPA/device installation, GUI launch, production data migration or installed-app downgrade.",
+    "Rollback restores the complete source/lock/generated artifact set in a separate copy, then rebuilds and tests it.",
+    "Yeoyu and Leftcar RN native C++/JNI runtime and event teardown remain unverified on devices.",
+    "Leftcar streaming and input transport do not use the tested Rustra addNumbers bridge; no video performance claim.",
+    "Leftcar original Rust fixtures fail to compile and architecture check has one existing violation."
+  ],
+  "packages": [
+    {
+      "name": "@rustra/types",
+      "version": "0.12.0",
+      "filename": "rustra-types-0.12.0.tgz",
+      "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+      "sha256": "82391953d2934c95ac7d7f009e8ae7cdcc8815625422b31ad55be7e7dc9c23f2"
+    },
+    {
+      "name": "@rustra/react-native",
+      "version": "0.9.2",
+      "filename": "rustra-react-native-0.9.2.tgz",
+      "integrity": "sha512-i8VSWHrWLLQSjPF/nMIxrTaAnXL05FwtoJA1JlsHI+ZVrUoyRA92W46HXEEVkNU+zEW15u5M7MTgKC8Cj2rq4g==",
+      "sha256": "c48f1043f6b6052731d88b22a4ed438a246aae7f01666c257b205d3b35594b22"
+    },
+    {
+      "name": "@rustra/tauri",
+      "version": "0.9.3",
+      "filename": "rustra-tauri-0.9.3.tgz",
+      "integrity": "sha512-HCrhDwFOwSJDTaKtDQlnaDS+xlAeii4nTRv9a5Tn+c8POaGXAztKzro1jHBdSnN+3KlCHeJ0uFSClZQ0fudXAQ==",
+      "sha256": "49bb0f0c3392fd88680ae2fbf1086868071e5e6c52dcae3205b90f40853954c8"
+    },
+    {
+      "name": "@rustra/cli",
+      "version": "0.11.3",
+      "filename": "rustra-cli-0.11.3.tgz",
+      "integrity": "sha512-lgZ8OZNALXIU74oSoPELRIRqraYcxL93SwsBcrSWCGu1TvIM5CP3H8NAEtH5QF3v6AaOuFgXhjOzuGlDStAJIQ==",
+      "sha256": "86eb1f34b16792944f12a781ca3b0fefa8e5f91e83e2f5e8c24b4b5665e44a46"
+    }
+  ],
+  "sdkSourceParity": {
+    "crates": {
+      "fileCount": 200,
+      "sha256": "afce7ce5ab4140c8207d4097f2051fdc6fb8f03d52dd48563a173131fcc88973",
+      "snapshot": "/tmp/rustra-consumers-20260922/sdk",
+      "different": []
+    },
+    "packages/types/src": {
+      "fileCount": 62,
+      "sha256": "8563c204021a9f0c29585915369bf9333d5aa11b86f976446f4030bc53ffc0d5",
+      "snapshot": "/tmp/rustra-consumers-20260922/sdk",
+      "different": []
+    },
+    "packages/react-native/src": {
+      "fileCount": 5,
+      "sha256": "bf71281993212e0bb776391526b4e0a6fae87ec1c86588436749b9c12a1a58bd",
+      "snapshot": "/tmp/rustra-consumers-20260922/sdk",
+      "different": []
+    },
+    "packages/cli/src": {
+      "fileCount": 163,
+      "sha256": "7e999c47ed7901283a6ea686c40d4661de2a7621e75fb1ff4ff41c9e727f1c9f",
+      "snapshot": "/tmp/rustra-consumers-20260922/sdk-v2",
+      "different": []
+    }
+  },
+  "consumers": {
+    "KeyBridge": {
+      "head": "fb8ab2685d785f085c21dcc4d6b73b0f1741d7dc",
+      "branch": "codex/stability-android-rn",
+      "initialDirtyStatus": " M .github/workflows/ci.yml\n M .gitignore\n M README.ko.md\n M README.md\n M android/README.md\n M android/app/build.gradle.kts\n M android/app/src/main/AndroidManifest.xml\n M android/app/src/main/java/dev/loopy/keybridge/Bridge.kt\n M android/app/src/main/java/dev/loopy/keybridge/LenovoShortcutsCard.kt\n M android/app/src/main/java/dev/loopy/keybridge/MainActivity.kt\n M android/app/src/main/java/dev/loopy/keybridge/OutputPipeline.kt\n M android/app/src/main/java/dev/loopy/keybridge/Preferences.kt\n M android/app/src/main/java/dev/loopy/keybridge/RemapService.kt\n M android/app/src/test/java/dev/loopy/keybridge/OutputPipelineTest.kt\n M android/build.gradle.kts\n M android/gradle.properties\n M android/settings.gradle.kts\n M bun.lock\n M desktop/src-tauri/resources/keybridge.toml\n M desktop/src-tauri/src/control.rs\n M desktop/src/index.html\n M desktop/src/style.css\n M macos/Sources/KeyBridge/Backend.swift\n M macos/Sources/KeyBridge/KeyboardEngine.swift\n M package.json\n M scripts/android-device.ts\n M scripts/android-toolchain.ts\n M scripts/android.ts\n?? android/app/src/main/java/dev/loopy/keybridge/ConnectionRetry.kt\n?? android/app/src/main/java/dev/loopy/keybridge/KeyBridgeApp.kt\n?? android/app/src/main/java/dev/loopy/keybridge/SettingsActivity.kt\n?? android/app/src/main/java/dev/loopy/keybridge/SettingsModule.kt\n?? android/app/src/main/java/dev/loopy/keybridge/ui/\n?? android/app/src/main/res/values/rn_styles.xml\n?? android/app/src/test/java/dev/loopy/keybridge/ConnectionRetryTest.kt\n?? babel.config.cjs\n?? docs/superpowers/plans/2026-09-22-reliability-and-android-rn.md\n?? docs/superpowers/specs/2026-09-22-reliability-and-android-rn-design.md\n?? metro.config.cjs\n?? mobile/\n?? react-native.config.cjs\n?? scripts/macos-backend-health.test.ts\n",
+      "sourceFileCount": 293,
+      "initialInventorySha256": "7fa3674d6a66bac25d8a0a66f05b6369ae30bd1a3b25f47d6467b584bdc32138",
+      "phases": {
+        "baseline": {
+          "generatorVersion": "0.10.0",
+          "schemaHash": "7730359e30bbd5ce786a2ec309095be64e2054c02808fedb5be8fde65b65aa99",
+          "manifestSha256": "5f84dc320258d0c5a958afcb9fad4baa3b6c0f5689dd12d12408959d7860149f",
+          "generated": {
+            "android/rust/bridge/generated/commands.ts": "c814fb5e9b7a25645207dca0378e4b8ae9eb319ce4963540be4897fb407ababe",
+            "android/rust/bridge/generated/contract.ts": "e5b783c84e03883e3c1e29a44b6bc0dfe345bb99601c17ef31d107796ac51903",
+            "android/rust/bridge/generated/frame-codecs.ts": "a399b74eba4c0b7c1229330a57e2f3174969f7015afd7b6c44fcc060c7002610",
+            "android/rust/bridge/generated/frame-registry.ts": "60247591921aee91ba2f25cbfe79f8ea10ce129c51393e049944c594101a86ee",
+            "android/rust/bridge/generated/types.ts": "25c2193ff8ed5749c285c5782fd65673c4a926d8bc50128e26815f3200f63188"
+          },
+          "dependencyFiles": {
+            "android/rust/Cargo.lock": "8a7cd0635d550cfde59d6a5a4275cb09a34868227da2695d2dd6d4b5a791225e",
+            "android/rust/Cargo.toml": "f7cd673479e2d33a243e34fe68362b2fc2d5bd3e29dbb15415bea3f5982dd0c2",
+            "android/rust/bridge/Cargo.toml": "05d328a5aa9ba3555502e65786c369caec3b619860c8df71eb16315a220e54d2",
+            "android/rust/core/Cargo.toml": "aca90d7bc2dc5624c5a2444c0afa31f5db14e87906bc0bd439ecf67d8e991d80",
+            "bun.lock": "2c7e8efe82134946a8166653a894f276e3d0f0050fea0e78d21ce2c67f7aafc7",
+            "desktop/bun.lock": "a7e58ddc4f206c63e13a372a78ab866d6de9569f89ea7b8fd4292245199c8aa6",
+            "desktop/package.json": "3f5fba300ed35082bb55fd815cb660a3b885b8a09ad9034979ce8b6ce7430cba",
+            "desktop/src-tauri/Cargo.lock": "23e70245bcb0975c5238a3ff042750d36bbe09d4aee6e3459358e4eb563cb8fa",
+            "desktop/src-tauri/Cargo.toml": "e0554bc5baea93989f3718400a75c0e04ceea3521c1ad690bcc39790faa8f228",
+            "package.json": "cb34b75f53809f915bfddeeb1e26513abe7511920fa4af5c75dbad4ae7c58e44",
+            "windows/rs/Cargo.lock": "47b125b54d96dd0fa6d14ed36f50692d4cf782d6d145d87c269e704649335428",
+            "windows/rs/Cargo.toml": "33005bd85f3977b5a785ec49f1c15d429d3f32dc74f9abaa4573dc1f77a88259",
+            "windows/rs/backend/Cargo.toml": "ca39fb31f3ff8446250e0f589312688f3b82e89e38231e1af41c9b9cdae71a38",
+            "windows/rs/core/Cargo.toml": "2c97b2bd0346693ee4e5ef29e38d2c7548edea0e32b2cf139416239580e99240"
+          },
+          "nativeBindings": {
+            "android/native/generated/dev/loopy/keybridge/nativecore/generated/keybridge_android_bridge.kt": "a3de24e6702548a3f91348025dbc4a8f46e2d3405d5daf610b3661361a4e8fc0",
+            "android/native/generated/keybridge_android_bridge.swift": "57bb2b434d571ab89ae72834e293d8199c29e3c4f618c19cb3d540e4840679f5",
+            "android/native/generated/keybridge_android_bridgeFFI.h": "6674e611ffcaded52cc90cb48176d7916a6a14b083adaf77f99851410fbb0580",
+            "android/native/generated/keybridge_android_bridgeFFI.modulemap": "5422ceee008f5cde8c26b5a17c3e81d48df6e5b3bfbb4ba8b513eabc39154ca9",
+            "android/rust/bridge/src/uniffi_generated.rs": "6ab547622026a4552981dd738412697d29a26e5592c0799831c3edb0b06aa8e3"
+          },
+          "hostDylibSha256": "55593008ebb8d34e998cf2aadcd9d2f43f7a99752b78a0e798777fb77ab27916",
+          "kotlinReports": [
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.AppRulesTest.xml",
+              "tests": 6,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "1928edf788b33b7f7a49b56d82812c6c7ba5665f35e962204dafe0926d2fa9e7"
+            },
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.EngineTest.xml",
+              "tests": 22,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "1a18daf3cfe9415c0b76a850ddb58032ccd48ea2c8eab52c21bd1ff80c93f8ce"
+            },
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.TomlConfigTest.xml",
+              "tests": 9,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "d3950c2f762bf424ba5c8a0a206036226d39fc1689acb1fa39dfe0b217755e5e"
+            },
+            {
+              "file": "android/native/build/test-results/testDebugUnitTest/TEST-dev.loopy.keybridge.nativecore.NativeParityTest.xml",
+              "tests": 9,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "8759f48a6450153f4ee12635ae284bd48bb0de82a7c8effae07ee2fcf2c323c6"
+            }
+          ]
+        },
+        "candidate": {
+          "generatorVersion": "0.11.3",
+          "schemaHash": "7730359e30bbd5ce786a2ec309095be64e2054c02808fedb5be8fde65b65aa99",
+          "manifestSha256": "17c38d81592aac881757957433e87c14191f246219853993c81cef50aa2dc781",
+          "generated": {
+            "android/rust/bridge/generated/commands.ts": "c814fb5e9b7a25645207dca0378e4b8ae9eb319ce4963540be4897fb407ababe",
+            "android/rust/bridge/generated/contract.ts": "e5b783c84e03883e3c1e29a44b6bc0dfe345bb99601c17ef31d107796ac51903",
+            "android/rust/bridge/generated/frame-codecs.ts": "a399b74eba4c0b7c1229330a57e2f3174969f7015afd7b6c44fcc060c7002610",
+            "android/rust/bridge/generated/frame-registry.ts": "60247591921aee91ba2f25cbfe79f8ea10ce129c51393e049944c594101a86ee",
+            "android/rust/bridge/generated/types.ts": "25c2193ff8ed5749c285c5782fd65673c4a926d8bc50128e26815f3200f63188"
+          },
+          "dependencyFiles": {
+            "android/rust/Cargo.lock": "b6d4164c6b0a490fe3dd77cc0f2f3d8ae853de2ab5e7e719a64bb71f3129b0b2",
+            "android/rust/Cargo.toml": "a4b03db38c9ca513c8b8dfe3a34be42dfd88a28dddc1274a8d4258b02ae287d8",
+            "android/rust/bridge/Cargo.toml": "05d328a5aa9ba3555502e65786c369caec3b619860c8df71eb16315a220e54d2",
+            "android/rust/core/Cargo.toml": "aca90d7bc2dc5624c5a2444c0afa31f5db14e87906bc0bd439ecf67d8e991d80",
+            "bun.lock": "f9dbfb1dca19ffd52696225e40ebf4405fbfdb3b6bee30f103acf64f478c4f5c",
+            "desktop/bun.lock": "c631f7b12e3319132822a76b64ae0233628cd6fddf520bb3151d9dbd47ede131",
+            "desktop/package.json": "8f155cb98d7f4975f6febd37efa777152431701e90ea1f5bb7ca4fb9554d8502",
+            "desktop/src-tauri/Cargo.lock": "74a8158cae7f21a628706860e04fcce92e154cbf529f675084ce61aee705e08a",
+            "desktop/src-tauri/Cargo.toml": "571d2d93bd34fc3f20ed04bd03e004f7da672cad3d21c88d2e1ff73330483f55",
+            "package.json": "662fa882c3e162e769b7bd81e3c17f2ac57706df6f93ebc8e6db3c227e90512a",
+            "windows/rs/Cargo.lock": "47b125b54d96dd0fa6d14ed36f50692d4cf782d6d145d87c269e704649335428",
+            "windows/rs/Cargo.toml": "33005bd85f3977b5a785ec49f1c15d429d3f32dc74f9abaa4573dc1f77a88259",
+            "windows/rs/backend/Cargo.toml": "ca39fb31f3ff8446250e0f589312688f3b82e89e38231e1af41c9b9cdae71a38",
+            "windows/rs/core/Cargo.toml": "2c97b2bd0346693ee4e5ef29e38d2c7548edea0e32b2cf139416239580e99240"
+          },
+          "nativeBindings": {
+            "android/native/generated/dev/loopy/keybridge/nativecore/generated/keybridge_android_bridge.kt": "a3de24e6702548a3f91348025dbc4a8f46e2d3405d5daf610b3661361a4e8fc0",
+            "android/native/generated/keybridge_android_bridge.swift": "57bb2b434d571ab89ae72834e293d8199c29e3c4f618c19cb3d540e4840679f5",
+            "android/native/generated/keybridge_android_bridgeFFI.h": "6674e611ffcaded52cc90cb48176d7916a6a14b083adaf77f99851410fbb0580",
+            "android/native/generated/keybridge_android_bridgeFFI.modulemap": "5422ceee008f5cde8c26b5a17c3e81d48df6e5b3bfbb4ba8b513eabc39154ca9",
+            "android/rust/bridge/src/uniffi_generated.rs": "6ab547622026a4552981dd738412697d29a26e5592c0799831c3edb0b06aa8e3"
+          },
+          "hostDylibSha256": "69dd91fcf4af9c2f83cfaede55753fa5380872c756b6095270aef901730579c4",
+          "kotlinReports": [
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.AppRulesTest.xml",
+              "tests": 6,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "c75745801b53143a834829de21078aaaf9fcec66521791b29740b589e9eef48e"
+            },
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.EngineTest.xml",
+              "tests": 22,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "8a17c5b6a6355b65c6b405158a10b5e484bd3f8b8967e27655025c8d08a2b94c"
+            },
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.TomlConfigTest.xml",
+              "tests": 9,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "0db0f9bb486a076f22be54d81d199507534c999304b649ba171e27f737924e4e"
+            },
+            {
+              "file": "android/native/build/test-results/testDebugUnitTest/TEST-dev.loopy.keybridge.nativecore.NativeParityTest.xml",
+              "tests": 9,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "e5d0f874c8e5da0b6061d631c73f90f22ceeb7832ad49155a929a3dc843e3ece"
+            }
+          ]
+        },
+        "rollback": {
+          "generatorVersion": "0.10.0",
+          "schemaHash": "7730359e30bbd5ce786a2ec309095be64e2054c02808fedb5be8fde65b65aa99",
+          "manifestSha256": "5f84dc320258d0c5a958afcb9fad4baa3b6c0f5689dd12d12408959d7860149f",
+          "generated": {
+            "android/rust/bridge/generated/commands.ts": "c814fb5e9b7a25645207dca0378e4b8ae9eb319ce4963540be4897fb407ababe",
+            "android/rust/bridge/generated/contract.ts": "e5b783c84e03883e3c1e29a44b6bc0dfe345bb99601c17ef31d107796ac51903",
+            "android/rust/bridge/generated/frame-codecs.ts": "a399b74eba4c0b7c1229330a57e2f3174969f7015afd7b6c44fcc060c7002610",
+            "android/rust/bridge/generated/frame-registry.ts": "60247591921aee91ba2f25cbfe79f8ea10ce129c51393e049944c594101a86ee",
+            "android/rust/bridge/generated/types.ts": "25c2193ff8ed5749c285c5782fd65673c4a926d8bc50128e26815f3200f63188"
+          },
+          "dependencyFiles": {
+            "android/rust/Cargo.lock": "8a7cd0635d550cfde59d6a5a4275cb09a34868227da2695d2dd6d4b5a791225e",
+            "android/rust/Cargo.toml": "f7cd673479e2d33a243e34fe68362b2fc2d5bd3e29dbb15415bea3f5982dd0c2",
+            "android/rust/bridge/Cargo.toml": "05d328a5aa9ba3555502e65786c369caec3b619860c8df71eb16315a220e54d2",
+            "android/rust/core/Cargo.toml": "aca90d7bc2dc5624c5a2444c0afa31f5db14e87906bc0bd439ecf67d8e991d80",
+            "bun.lock": "2c7e8efe82134946a8166653a894f276e3d0f0050fea0e78d21ce2c67f7aafc7",
+            "desktop/bun.lock": "a7e58ddc4f206c63e13a372a78ab866d6de9569f89ea7b8fd4292245199c8aa6",
+            "desktop/package.json": "3f5fba300ed35082bb55fd815cb660a3b885b8a09ad9034979ce8b6ce7430cba",
+            "desktop/src-tauri/Cargo.lock": "23e70245bcb0975c5238a3ff042750d36bbe09d4aee6e3459358e4eb563cb8fa",
+            "desktop/src-tauri/Cargo.toml": "e0554bc5baea93989f3718400a75c0e04ceea3521c1ad690bcc39790faa8f228",
+            "package.json": "cb34b75f53809f915bfddeeb1e26513abe7511920fa4af5c75dbad4ae7c58e44",
+            "windows/rs/Cargo.lock": "47b125b54d96dd0fa6d14ed36f50692d4cf782d6d145d87c269e704649335428",
+            "windows/rs/Cargo.toml": "33005bd85f3977b5a785ec49f1c15d429d3f32dc74f9abaa4573dc1f77a88259",
+            "windows/rs/backend/Cargo.toml": "ca39fb31f3ff8446250e0f589312688f3b82e89e38231e1af41c9b9cdae71a38",
+            "windows/rs/core/Cargo.toml": "2c97b2bd0346693ee4e5ef29e38d2c7548edea0e32b2cf139416239580e99240"
+          },
+          "nativeBindings": {
+            "android/native/generated/dev/loopy/keybridge/nativecore/generated/keybridge_android_bridge.kt": "a3de24e6702548a3f91348025dbc4a8f46e2d3405d5daf610b3661361a4e8fc0",
+            "android/native/generated/keybridge_android_bridge.swift": "57bb2b434d571ab89ae72834e293d8199c29e3c4f618c19cb3d540e4840679f5",
+            "android/native/generated/keybridge_android_bridgeFFI.h": "6674e611ffcaded52cc90cb48176d7916a6a14b083adaf77f99851410fbb0580",
+            "android/native/generated/keybridge_android_bridgeFFI.modulemap": "5422ceee008f5cde8c26b5a17c3e81d48df6e5b3bfbb4ba8b513eabc39154ca9",
+            "android/rust/bridge/src/uniffi_generated.rs": "6ab547622026a4552981dd738412697d29a26e5592c0799831c3edb0b06aa8e3"
+          },
+          "hostDylibSha256": "55593008ebb8d34e998cf2aadcd9d2f43f7a99752b78a0e798777fb77ab27916",
+          "kotlinReports": [
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.AppRulesTest.xml",
+              "tests": 6,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "b4b091edbbc75534d00a615c1aea44842459e4e27ac8985388fd65a3d12d10a1"
+            },
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.EngineTest.xml",
+              "tests": 22,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "9aa9ccc7e72f3b9a36a712f892922892391d09855d8af7294adde0eecf566fd8"
+            },
+            {
+              "file": "android/core/build/test-results/test/TEST-dev.loopy.keybridge.core.TomlConfigTest.xml",
+              "tests": 9,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "62de30071604034e63891e57e21bcd9aa3d67f3792d6501fbf2e3c65d6803fb1"
+            },
+            {
+              "file": "android/native/build/test-results/testDebugUnitTest/TEST-dev.loopy.keybridge.nativecore.NativeParityTest.xml",
+              "tests": 9,
+              "failures": 0,
+              "errors": 0,
+              "sha256": "93d11fe3c2d96844e7738c51c85a45eb5dc0abd090ae0e1c0d574eeafbf63815"
+            }
+          ]
+        }
+      },
+      "commands": [
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "install",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": ["bun", "install", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.968,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-install.log",
+          "logSha256": "807016397712431b508f4cf48d426fadbfecce6791b50538405c3765d6069f12",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "desktop-install",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate/desktop",
+          "argv": ["bun", "install", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.085,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-desktop-install.log",
+          "logSha256": "175f46fcc19d8d1837e83a385aa7ef8e2a61b9d76e2d01eadfed224f14b2606a",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "baseline",
+          "label": "desktop-install",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/baseline/desktop",
+          "argv": ["bun", "install", "--frozen-lockfile", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.8,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/baseline-desktop-install.log",
+          "logSha256": "4d61d780a5f29598d07af59f50749a5e8be04962ae07b1b4fbae12cbe96e22e2",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "baseline",
+          "label": "desktop-typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/baseline/desktop",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 3.402,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/baseline-desktop-typecheck.log",
+          "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "baseline",
+          "label": "desktop-build",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/baseline/desktop",
+          "argv": ["bun", "run", "build"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.093,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/baseline-desktop-build.log",
+          "logSha256": "8305a9af96b3a0191769c0484f8ddc84b8a15bc591a82ceed58f69c419507f71",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "desktop-typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate/desktop",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 1.568,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-desktop-typecheck.log",
+          "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "desktop-build",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate/desktop",
+          "argv": ["bun", "run", "build"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.083,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-desktop-build.log",
+          "logSha256": "bdf6d9569755e900c18eeac27bc8a6411b5b8f922d6d39020a9a2f76b4a0bea2",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "baseline",
+          "label": "bindings",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/baseline",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "android/rust/bridge/rustra.json",
+            "--check-bindings"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 107.852,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/baseline-bindings.log",
+          "logSha256": "8bcc9c80c71061f7288af023597ddba88221f7b74ace435a6fd4b2b5754b1ce7",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "codegen",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "android/rust/bridge/rustra.json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 49.195,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-codegen.log",
+          "logSha256": "7ddda443e388b4654bd3f9f1e61daff02a55d4b8cb29b2870c013bec0ba2c8a6",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "rust",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": [
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "android/rust/Cargo.toml",
+            "--features",
+            "uniffi"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 6.21,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-rust.log",
+          "logSha256": "53e2ddb89161d6f7f23f091234e9972c0c49061006cab2afb70e6050fe9dd209",
+          "metrics": {
+            "rust": {
+              "passed": 81,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "bindings",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "android/rust/bridge/rustra.json",
+            "--check-bindings"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 4.459,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-bindings.log",
+          "logSha256": "35ccdab8e630ef75ce268695bf4b2f0e92b837df73090153ddfeb4b948e77640",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "baseline",
+          "label": "kotlin",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/baseline/android",
+          "argv": [
+            "./gradlew",
+            "--no-daemon",
+            ":core:test",
+            ":native:testDebugUnitTest",
+            "-x",
+            "generateRustBindings",
+            "-x",
+            "buildRustAndroid"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 235.247,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/baseline-kotlin.log",
+          "logSha256": "8a8bd60bf849a76117c902dc9dd240c582a23d2a904d0829d48b69f47f315e0b",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "kotlin",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate/android",
+          "argv": [
+            "./gradlew",
+            "--no-daemon",
+            ":core:test",
+            ":native:testDebugUnitTest",
+            "-x",
+            "generateRustBindings",
+            "-x",
+            "buildRustAndroid"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 102.359,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-kotlin.log",
+          "logSha256": "35ca35a3479e13b4c6a52afac022e08fbddbb6f56115c341c50f8194be03a0db",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "install-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": ["bun", "install", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.305,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-install-v2.log",
+          "logSha256": "e800dee7ae134cdb1a0b3092556deed68c44a1ba1440f04f5f6b3a691a0035b8",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "install",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback",
+          "argv": ["bun", "install", "--frozen-lockfile", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.658,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-install.log",
+          "logSha256": "7c42324f0f7c851c5a26aac368fcf0c3c960c20a3d5eaee31b6a25c36927b20b",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "codegen-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "android/rust/bridge/rustra.json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 8.342,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-codegen-v2.log",
+          "logSha256": "eed80ae41f73a5465f309a8f4462c48711c663f25e51f427a7eee3151ffa66ee",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "bindings-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "android/rust/bridge/rustra.json",
+            "--check-bindings"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 3.46,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-bindings-v2.log",
+          "logSha256": "34e83724c1a840e5dcb64ce1254f9098fe8a7d71ff2b18c5d8d6c2426d8ff322",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "candidate",
+          "label": "schema-diff",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "diff",
+            "--old",
+            "../baseline/android/rust/bridge/generated/schema.json",
+            "--new",
+            "android/rust/bridge/generated/schema.json",
+            "--format",
+            "json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.053,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/candidate-schema-diff.log",
+          "logSha256": "5bb4e4a64efaab92f945870978a8ff4e5e3e2279151e179a7e8561ce224836ad",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "rust",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback",
+          "argv": [
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "android/rust/Cargo.toml",
+            "--features",
+            "uniffi"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 6.098,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-rust.log",
+          "logSha256": "4bc2ad51037104e2cb7c62c768bd762a9c577812431eb6a63ce06277344e8f99",
+          "metrics": {
+            "rust": {
+              "passed": 81,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "bindings",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "android/rust/bridge/rustra.json",
+            "--check-bindings"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 12.278,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-bindings.log",
+          "logSha256": "23b2e9ee711f24ad08505227d39829540b63cf73f99e2d22fd115dbf9772b7eb",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "desktop-install",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback/desktop",
+          "argv": ["bun", "install", "--frozen-lockfile", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.081,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-desktop-install.log",
+          "logSha256": "e077979eadb3d91a522748ead28f53feb23d330f4055b5c2aa652493d37ec2a8",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "desktop-typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback/desktop",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 1.827,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-desktop-typecheck.log",
+          "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "desktop-build",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback/desktop",
+          "argv": ["bun", "run", "build"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.066,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-desktop-build.log",
+          "logSha256": "924f4f135d61c1fae86d4a9bcc8b9c1666e4d948b441cf5b2319f6dc99a11183",
+          "metrics": {}
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "desktop-rust",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback/desktop/src-tauri",
+          "argv": [
+            "env",
+            "CARGO_TARGET_DIR=/tmp/rustra-consumers-20260922/targets/KeyBridge-desktop",
+            "cargo",
+            "test",
+            "--locked"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 9.463,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-desktop-rust.log",
+          "logSha256": "487fc55e0ec37003965bad86bcfd503fbfdc421e436a9364a27ce90cc86cd4f3",
+          "metrics": {
+            "rust": {
+              "passed": 29,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "KeyBridge",
+          "phase": "rollback",
+          "label": "kotlin",
+          "cwd": "/tmp/rustra-consumers-20260922/KeyBridge/rollback/android",
+          "argv": [
+            "env",
+            "JAVA_HOME=/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+            "ANDROID_HOME=/Users/loopy/Library/Android/sdk",
+            "GRADLE_USER_HOME=/tmp/rustra-consumers-20260922/gradle-cache",
+            "./gradlew",
+            "--no-daemon",
+            ":core:test",
+            ":native:testDebugUnitTest",
+            "-x",
+            "generateRustBindings",
+            "-x",
+            "buildRustAndroid"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 59.391,
+          "log": "/tmp/rustra-consumers-20260922/KeyBridge/rollback-kotlin.log",
+          "logSha256": "3eeb91f10146914d788dfbe99d76a1f43c649654f08a74c297867e3ad2b36ba2",
+          "metrics": {}
+        }
+      ],
+      "additionalLogs": [
+        {
+          "name": "baseline-desktop-rust.log",
+          "sha256": "9ddbbd9dc7dc5266f360c06179c8be0624cb3ea4517a25e030e4ad521453b699",
+          "metrics": {
+            "rust": {
+              "passed": 29,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "name": "baseline-install-v2.log",
+          "sha256": "ceb4b9fe9b102fde07939f515bc32c027d100efb8efd55a560efc2a4fe84d4b7",
+          "metrics": {}
+        },
+        {
+          "name": "baseline-install.log",
+          "sha256": "6a1b390f83977dedd7ecbf833121485d22f4e058d87e85085ad4d37e084d7d2e",
+          "metrics": {}
+        },
+        {
+          "name": "baseline-rust.log",
+          "sha256": "acd0d5ec756912669d66c9c87c75ee630f97f56b4808a4a8537aa4cdc5efc2fe",
+          "metrics": {
+            "rust": {
+              "passed": 81,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "name": "baseline-tools.log",
+          "sha256": "63636b5212cbdc340690af7d95c7d238bd3de2f07d31d61ab7e6689015e3dab9",
+          "metrics": {
+            "bunPassed": 6,
+            "bunFailed": 0
+          }
+        },
+        {
+          "name": "candidate-desktop-rust.log",
+          "sha256": "97f390b77b223644317ff80ebf597ee37cc3531fb0a8f2db7ce7af8e1e34c403",
+          "metrics": {
+            "rust": {
+              "passed": 29,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        }
+      ],
+      "rollbackSourceDifferences": [],
+      "finalCandidateBindingsEqualBaseline": true
+    },
+    "yeoyu": {
+      "head": "23db25608a695718204414828f9f73ad380a68df",
+      "branch": "codex/browser-maturity",
+      "initialDirtyStatus": " M android/app/src/main/java/dev/browser/GeckoSessionRegistry.kt\n M android/app/src/main/java/dev/browser/PermissionRequestLedger.kt\n M android/app/src/test/java/dev/browser/PermissionRequestLedgerTest.kt\n M src/App.tsx\n M src/chrome/appStyles.ts\n M src/components/ConsentSettings.tsx\n M src/components/Dialogs.tsx\n M src/components/SettingsDialog.tsx\n M src/consent.ts\n M src/i18n.ts\n M src/permissionRequests.ts\n M tests/consentSettingsReset.test.tsx\n M tests/permissionDialogPolicy.test.tsx\n M tests/permissionRequests.test.ts\n?? android/app/src/main/java/dev/browser/BrowserPermissionDefaults.kt\n?? android/app/src/test/java/dev/browser/BrowserPermissionDefaultsTest.kt\n?? docs/evidence/browser-foundation-2026-09-16/\n?? docs/evidence/browser-growth-2026-09-12/\n?? docs/evidence/browser-improvement-audit-2026-09-16/\n?? docs/evidence/browser-remaining-2026-09-16/\n?? docs/evidence/design-permissions-2026-09-22/\n?? docs/evidence/download-history-recovery-2026-09-16/\n?? docs/evidence/external-pip-2026-09-12/\n?? docs/evidence/home-fullscreen-2026-09-12/\n?? docs/evidence/motion-2026-09-12/\n?? docs/evidence/motion-regression-2026-09-12/\n?? docs/evidence/permission-grant-scope-2026-09-16/\n?? docs/evidence/pin-tab-2026-09-12/\n?? docs/evidence/responsive-viewport-2026-09-16/\n?? docs/evidence/settings-color-audit-2026-09-16/\n?? docs/evidence/settings-consent-2026-09-16/\n?? docs/evidence/settings-custom-colors-2026-09-16/\n?? docs/evidence/space-bookmarks-2026-09-12/\n?? docs/evidence/system-pip-2026-09-12/\n?? docs/reports/design-permissions-2026-09-22.ko.md\n?? tests/fixtures/consent-permissions.tsx\n",
+      "sourceFileCount": 3721,
+      "initialInventorySha256": "e938f3f044459a2ef27db6a134511ef9cbbf113e685a59a6c9f0417053614aa2",
+      "phases": {
+        "baseline": {
+          "generatorVersion": "0.8.0",
+          "schemaHash": "43bd495b8a190cc65e4e1d893d8c9c438e7aa56aa5f57d8f1ac3ce50e4e66a6e",
+          "manifestSha256": "971066d3f2f0e411e39f3b3ca6f482852ee1bcda5caa9b9eea0e4e20bd040963",
+          "generated": {
+            "modules/rustra-jsi/android/build-rust-android.sh": "b5d4893e3f51ec9222efb6b02245e61602b8d0f80c581dd5da3bd2ebc1317a29",
+            "modules/rustra-jsi/android/build.gradle": "4ff3ed628580471bf713447305e9af289e323114d7d4da48919555273f1660c7",
+            "modules/rustra-jsi/android/CMakeLists.txt": "2ad3c4842a64ebd1535ba72184066b3ecc7b9f6e0ffa5993862b9916399a8854",
+            "modules/rustra-jsi/android/src/main/AndroidManifest.xml": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547",
+            "modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt": "45dc70c38559e8f9ac1b50ce5f21fe8fe81327535018669cc5ca8a86f5364e26",
+            "modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07",
+            "modules/rustra-jsi/generated/rustra-generated-codecs.cpp": "ac2c6c1f0999b5b252c3b17c1b770cf37deede1a044cd838c76a1f06c2f41d36",
+            "modules/rustra-jsi/generated/rustra-generated-codecs.hpp": "0aa9c0a4c5852ff55358267ae9f65e855b0af47438a72ae891b67b57a7b421a7",
+            "modules/rustra-jsi/ios/build-rust-ios.sh": "a2b57cfaa359a887354abcf99b6cd572f17822126d280318aee77d0ee1cc1c99",
+            "modules/rustra-jsi/ios/RustraBridge.cpp": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798",
+            "modules/rustra-jsi/ios/RustraBridgeModule.mm": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785",
+            "modules/rustra-jsi/package.json": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5",
+            "modules/rustra-jsi/react-native.config.js": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b",
+            "modules/rustra-jsi/RustraBridge.podspec": "845ef6ec87da87b2cdfd1ea81323fed77a375861a859714951075ce5350d0a1f",
+            "modules/rustra-jsi/src/index.ts": "ff47f63762759f76cbb71017c5b129de4900761895a42e31b5a6c0c3750076ff",
+            "generated/commands.ts": "34e7130442da39c4de870437c64786e495897668aa794e4419021485dbd61f4a",
+            "generated/contract.ts": "4ae22a38ef30bd439e3833a1630ffa3b72e1817d516bd0986d193c9065c3695d",
+            "generated/react-native.ts": "ab71eed28455e6acb0c2a169782122e0708435743d97d648247cb13df4c181a6",
+            "generated/rkyv-codecs.ts": "21aa15b892abbd335ce5a3b8158eee895ada989f724ef67e79d366d08c49c5ee",
+            "generated/rkyv-registry.ts": "2fedc887d8ae8907d36298bbe758d777a6c723c4aaf09a4fbe67ba47a8526652",
+            "generated/types.ts": "0dee5415877e93de6da883c241452d5028002fe22b9b28c918fb16716011679d"
+          },
+          "dependencyFiles": {
+            "Cargo.lock": "8a5e614904c20b12852a5b295372d12219d499887e065dd67236a17f72bbaa54",
+            "Cargo.toml": "20119e803d8ca0f74b0a0442a266860ff01f53073f58589402a91639f347add6",
+            "bun.lock": "c6f062cdecfc625905fbc395681e14c5660505945becd0c22c595347d812228f",
+            "modules/rustra-jsi/package.json": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5",
+            "native/Cargo.toml": "3ca966f4e4ea888af6975b9877d06f385a516250062e6082772226fae91f28c3",
+            "package.json": "082706c08fea2a981f548bafebcfe07300cb1b7bb6a8f35a793d7185ddc74ddf"
+          }
+        },
+        "candidate": {
+          "generatorVersion": "0.11.3",
+          "schemaHash": "fec406eea1f970376fcf23907a0c5a4e022d5576078d360b57544ec294dfc4b4",
+          "manifestSha256": "7a4248f2b3210d85885e613c7e2703032be9cefa030fc63be9c563db13471337",
+          "generated": {
+            "modules/rustra-jsi/android/build-rust-android.sh": "b5d4893e3f51ec9222efb6b02245e61602b8d0f80c581dd5da3bd2ebc1317a29",
+            "modules/rustra-jsi/android/build.gradle": "4ff3ed628580471bf713447305e9af289e323114d7d4da48919555273f1660c7",
+            "modules/rustra-jsi/android/CMakeLists.txt": "9ca4eccc6db13c1d584551c4901847c84188eb7e7d74765e7884770b51501656",
+            "modules/rustra-jsi/android/src/main/AndroidManifest.xml": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547",
+            "modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921",
+            "modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07",
+            "modules/rustra-jsi/generated/rustra-generated-codecs.cpp": "409668bbc73af2ea1ff8e456baeb8c90cfca222d57840f8d21896a2981c2c85d",
+            "modules/rustra-jsi/generated/rustra-generated-codecs.hpp": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d",
+            "modules/rustra-jsi/ios/build-rust-ios.sh": "a2b57cfaa359a887354abcf99b6cd572f17822126d280318aee77d0ee1cc1c99",
+            "modules/rustra-jsi/ios/RustraBridge.cpp": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798",
+            "modules/rustra-jsi/ios/RustraBridgeModule.mm": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785",
+            "modules/rustra-jsi/package.json": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13",
+            "modules/rustra-jsi/react-native.config.js": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b",
+            "modules/rustra-jsi/RustraBridge.podspec": "845ef6ec87da87b2cdfd1ea81323fed77a375861a859714951075ce5350d0a1f",
+            "modules/rustra-jsi/src/index.ts": "6c9d182eb5a4132aea132226c4755ffd3866bf3da5617b3543561407b327e5eb",
+            "generated/commands.ts": "34e7130442da39c4de870437c64786e495897668aa794e4419021485dbd61f4a",
+            "generated/contract.ts": "64167c6b709f795a18871817bfb0725eb0921fe9820b078e46ebb71df3e58578",
+            "generated/frame-codecs.ts": "604182b1f4d26e0b9b7a5f792eae4b12aa3ecc3f1b7dae1f3c496bc2b277e03a",
+            "generated/frame-registry.ts": "97eea3a3f194318c88954436cacb14dfd53b648312c6421ef0f5dfc40a68f0b7",
+            "generated/react-native.ts": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8",
+            "generated/types.ts": "0dee5415877e93de6da883c241452d5028002fe22b9b28c918fb16716011679d"
+          },
+          "dependencyFiles": {
+            "Cargo.lock": "e1fdbe35aea54ceed395f9531e3404c5d72f16289b5920b1f04e7578a6a57bbf",
+            "Cargo.toml": "20119e803d8ca0f74b0a0442a266860ff01f53073f58589402a91639f347add6",
+            "bun.lock": "c6f062cdecfc625905fbc395681e14c5660505945becd0c22c595347d812228f",
+            "modules/rustra-jsi/package.json": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13",
+            "native/Cargo.toml": "3ca966f4e4ea888af6975b9877d06f385a516250062e6082772226fae91f28c3",
+            "package.json": "082706c08fea2a981f548bafebcfe07300cb1b7bb6a8f35a793d7185ddc74ddf"
+          }
+        },
+        "rollback": {
+          "generatorVersion": "0.8.0",
+          "schemaHash": "43bd495b8a190cc65e4e1d893d8c9c438e7aa56aa5f57d8f1ac3ce50e4e66a6e",
+          "manifestSha256": "971066d3f2f0e411e39f3b3ca6f482852ee1bcda5caa9b9eea0e4e20bd040963",
+          "generated": {
+            "modules/rustra-jsi/android/build-rust-android.sh": "b5d4893e3f51ec9222efb6b02245e61602b8d0f80c581dd5da3bd2ebc1317a29",
+            "modules/rustra-jsi/android/build.gradle": "4ff3ed628580471bf713447305e9af289e323114d7d4da48919555273f1660c7",
+            "modules/rustra-jsi/android/CMakeLists.txt": "2ad3c4842a64ebd1535ba72184066b3ecc7b9f6e0ffa5993862b9916399a8854",
+            "modules/rustra-jsi/android/src/main/AndroidManifest.xml": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547",
+            "modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt": "45dc70c38559e8f9ac1b50ce5f21fe8fe81327535018669cc5ca8a86f5364e26",
+            "modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07",
+            "modules/rustra-jsi/generated/rustra-generated-codecs.cpp": "ac2c6c1f0999b5b252c3b17c1b770cf37deede1a044cd838c76a1f06c2f41d36",
+            "modules/rustra-jsi/generated/rustra-generated-codecs.hpp": "0aa9c0a4c5852ff55358267ae9f65e855b0af47438a72ae891b67b57a7b421a7",
+            "modules/rustra-jsi/ios/build-rust-ios.sh": "a2b57cfaa359a887354abcf99b6cd572f17822126d280318aee77d0ee1cc1c99",
+            "modules/rustra-jsi/ios/RustraBridge.cpp": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798",
+            "modules/rustra-jsi/ios/RustraBridgeModule.mm": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785",
+            "modules/rustra-jsi/package.json": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5",
+            "modules/rustra-jsi/react-native.config.js": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b",
+            "modules/rustra-jsi/RustraBridge.podspec": "845ef6ec87da87b2cdfd1ea81323fed77a375861a859714951075ce5350d0a1f",
+            "modules/rustra-jsi/src/index.ts": "ff47f63762759f76cbb71017c5b129de4900761895a42e31b5a6c0c3750076ff",
+            "generated/commands.ts": "34e7130442da39c4de870437c64786e495897668aa794e4419021485dbd61f4a",
+            "generated/contract.ts": "4ae22a38ef30bd439e3833a1630ffa3b72e1817d516bd0986d193c9065c3695d",
+            "generated/react-native.ts": "ab71eed28455e6acb0c2a169782122e0708435743d97d648247cb13df4c181a6",
+            "generated/rkyv-codecs.ts": "21aa15b892abbd335ce5a3b8158eee895ada989f724ef67e79d366d08c49c5ee",
+            "generated/rkyv-registry.ts": "2fedc887d8ae8907d36298bbe758d777a6c723c4aaf09a4fbe67ba47a8526652",
+            "generated/types.ts": "0dee5415877e93de6da883c241452d5028002fe22b9b28c918fb16716011679d"
+          },
+          "dependencyFiles": {
+            "Cargo.lock": "8a5e614904c20b12852a5b295372d12219d499887e065dd67236a17f72bbaa54",
+            "Cargo.toml": "20119e803d8ca0f74b0a0442a266860ff01f53073f58589402a91639f347add6",
+            "bun.lock": "c6f062cdecfc625905fbc395681e14c5660505945becd0c22c595347d812228f",
+            "modules/rustra-jsi/package.json": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5",
+            "native/Cargo.toml": "3ca966f4e4ea888af6975b9877d06f385a516250062e6082772226fae91f28c3",
+            "package.json": "082706c08fea2a981f548bafebcfe07300cb1b7bb6a8f35a793d7185ddc74ddf"
+          }
+        }
+      },
+      "commands": [
+        {
+          "app": "yeoyu",
+          "phase": "baseline",
+          "label": "vendor-types",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/baseline",
+          "argv": [
+            "node",
+            "/Users/loopy/dev/ll3/rustra-bridge/node_modules/typescript/bin/tsc",
+            "-p",
+            ".deps/rustra-main/packages/types/tsconfig.json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 1.05,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/baseline-vendor-types.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "baseline",
+          "label": "vendor-rn",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/baseline",
+          "argv": [
+            "node",
+            "/Users/loopy/dev/ll3/rustra-bridge/node_modules/typescript/bin/tsc",
+            "-p",
+            ".deps/rustra-main/packages/react-native/tsconfig.json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 1.083,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/baseline-vendor-rn.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "baseline",
+          "label": "typecheck-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/baseline",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 7.702,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/baseline-typecheck-v2.log",
+          "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "baseline",
+          "label": "codegen-check",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/baseline",
+          "argv": ["bun", "run", "codegen", "--check"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.712,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/baseline-codegen-check.log",
+          "logSha256": "7aeeaf5c01815b083a6bc51acfdf8e8ba9a03b8e4274d7f45b87e2b69f0556c3",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "install",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "install", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 1.066,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-install.log",
+          "logSha256": "49cb9f82949058893dbbe12ed5f2299cb59f16b23092aeba0d6fa749967ccfe8",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "rust",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["cargo", "test", "--manifest-path", "native/Cargo.toml"],
+          "exitCode": 0,
+          "elapsedSeconds": 35.089,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-rust.log",
+          "logSha256": "5ae7351513cb4ecbf077a34bebcf8fe8e145c8a444632fe9db8627dca7ac0c95",
+          "metrics": {
+            "rust": {
+              "passed": 66,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "codegen",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "run", "codegen"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.541,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-codegen.log",
+          "logSha256": "21309b40acf1c3467bab0fd0b14223488928399318a3a13a9fe57e75f2fb8a03",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 2,
+          "elapsedSeconds": 4.717,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-typecheck.log",
+          "logSha256": "2cb05dd73663191ed6aa1cc0659c6133af7c7fd9b59ddbc3922c21797a9edbbf",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "js",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "test", "tests"],
+          "exitCode": 0,
+          "elapsedSeconds": 14.783,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-js.log",
+          "logSha256": "2e7aea6911e710b2a929fd258d7cd400a55d96eed7aff6d7927fb53f4870897d",
+          "metrics": {
+            "bunPassed": 516,
+            "bunFailed": 0
+          }
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "codegen-check",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "run", "codegen", "--check"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.443,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-codegen-check.log",
+          "logSha256": "fe8d114cb6b57e6858e2d4ce62f6527e677e37eda86215709b425da224d0d32a",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "schema-diff",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": [
+            "bun",
+            "/tmp/rustra-consumers-20260922/sdk/packages/cli/dist/index.js",
+            "diff",
+            "--old",
+            "../baseline/generated/schema.json",
+            "--new",
+            "generated/schema.json",
+            "--format",
+            "json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.083,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-schema-diff.log",
+          "logSha256": "5bb4e4a64efaab92f945870978a8ff4e5e3e2279151e179a7e8561ce224836ad",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "codegen-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "run", "codegen"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.43,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-codegen-v2.log",
+          "logSha256": "8b3a7b599cbc5e03467ef5edbf60e8b4cd1d20aa45241aeb467604bf7fc42f97",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "rollback",
+          "label": "install",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/rollback",
+          "argv": ["bun", "install", "--frozen-lockfile", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.56,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/rollback-install.log",
+          "logSha256": "76c4bf81865dd99f9e1aaf255b613b32ee0ab6786ddd7e80ce4de826a6dd8a3f",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "typecheck-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 3.535,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-typecheck-v2.log",
+          "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "codegen-check-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "run", "codegen", "--check"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.324,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-codegen-check-v2.log",
+          "logSha256": "36bf7decf75055f93f61121ec521121709e310c2da92ba56160ccc2eea24ad0a",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "rollback",
+          "label": "rust",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/rollback",
+          "argv": ["cargo", "test", "--locked", "--manifest-path", "native/Cargo.toml"],
+          "exitCode": 0,
+          "elapsedSeconds": 10.761,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/rollback-rust.log",
+          "logSha256": "cf5c3d40298117ad90c222409ef97dab95fed7fcc5cc29016f86b359db161c86",
+          "metrics": {
+            "rust": {
+              "passed": 66,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "yeoyu",
+          "phase": "rollback",
+          "label": "typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/rollback",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 13.503,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/rollback-typecheck.log",
+          "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "rollback",
+          "label": "js",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/rollback",
+          "argv": ["bun", "test", "tests"],
+          "exitCode": 0,
+          "elapsedSeconds": 14.259,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/rollback-js.log",
+          "logSha256": "965fc3bee32616ef51cbf402541f86744088bef54c74eacb5a8687f178a5b41a",
+          "metrics": {
+            "bunPassed": 516,
+            "bunFailed": 0
+          }
+        },
+        {
+          "app": "yeoyu",
+          "phase": "rollback",
+          "label": "codegen-check",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/rollback",
+          "argv": ["bun", "run", "codegen", "--check"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.518,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/rollback-codegen-check.log",
+          "logSha256": "7f47e5cbf35c2c4efd8cc48eb2b7171a84ccd8744809b78d9bb1202a41704e69",
+          "metrics": {}
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "js-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": ["bun", "test", "tests"],
+          "exitCode": 0,
+          "elapsedSeconds": 11.46,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-js-v2.log",
+          "logSha256": "c5ee7110e7dbed17fa95d37bdcb4aea2f10709f3b683606d3b65b1b3f39be953",
+          "metrics": {
+            "bunPassed": 516,
+            "bunFailed": 0
+          }
+        },
+        {
+          "app": "yeoyu",
+          "phase": "candidate",
+          "label": "schema-diff-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/yeoyu/candidate",
+          "argv": [
+            "bun",
+            ".deps/rustra-main/packages/cli/src/index.ts",
+            "diff",
+            "--old",
+            "../baseline/generated/schema.json",
+            "--new",
+            "generated/schema.json",
+            "--format",
+            "json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.1,
+          "log": "/tmp/rustra-consumers-20260922/yeoyu/candidate-schema-diff-v2.log",
+          "logSha256": "5bb4e4a64efaab92f945870978a8ff4e5e3e2279151e179a7e8561ce224836ad",
+          "metrics": {}
+        }
+      ],
+      "additionalLogs": [
+        {
+          "name": "baseline-install.log",
+          "sha256": "3f9ba79e0b0017645bafc169554be6bb38ccd7174df22292abc029037f20ab94",
+          "metrics": {}
+        },
+        {
+          "name": "baseline-js.log",
+          "sha256": "ebe86923ad0dadb1f75d1d2a77b9a389e05e6264edec2b4eb883ca60eef1abcb",
+          "metrics": {
+            "bunPassed": 516,
+            "bunFailed": 0
+          }
+        },
+        {
+          "name": "baseline-rust.log",
+          "sha256": "371d281af3554b751d8c52c1d825fef4819da95b75bb801d1565664bf5ebf8b7",
+          "metrics": {
+            "rust": {
+              "passed": 66,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "name": "baseline-typecheck.log",
+          "sha256": "52860e3a71def988dfb4db5ad3e8fb9749b1088ed5b18e38294d98f9eb7d168d",
+          "metrics": {}
+        }
+      ],
+      "rollbackSourceDifferences": []
+    },
+    "leftcar": {
+      "head": "090abba404a1b6e8f881f68753a3685df1048afc",
+      "branch": "codex/sidecar-extension-experience",
+      "initialDirtyStatus": " M apps/host-desktop/src-tauri/src/control.rs\n M apps/host-desktop/src-tauri/src/lib.rs\n M apps/host-desktop/src-tauri/src/virtual_display.rs\n M apps/host-desktop/src/components/ExtendedDisplayCard.tsx\n M apps/viewer-expo/app/catalog.tsx\n M apps/viewer-expo/src/control.ts\n M apps/viewer-expo/src/use-catalog-model.ts\n M crates/control-contract/src/host.rs\n M native/macos-capture-shim/Sources/Transport/CaptureSession+Cursor.swift\n M native/macos-capture-shim/Sources/Transport/CaptureSession+Input.swift\n M native/macos-capture-shim/Sources/Transport/CursorStreamCoordinator.swift\n M native/macos-capture-shim/Sources/VirtualDisplay/CGVirtualDisplayBridge.m\n M native/macos-capture-shim/Tests/CursorStreamTests.swift\n M native/macos-capture-shim/Tests/VirtualDisplayBridgeProbe.swift\n M packages/ui-tokens/src/i18n.ts\n M tools/ui-regression/build.mjs\n?? apps/viewer-expo/src/ExtensionDisplayCard.tsx\n?? apps/viewer-expo/src/extension-display.test.ts\n?? apps/viewer-expo/src/extension-display.ts\n?? apps/viewer-expo/src/use-extension-display.ts\n?? docs/superpowers/plans/2026-09-22-sidecar-extension-experience.md\n?? docs/superpowers/specs/2026-09-22-sidecar-extension-experience.md\n?? tools/ui-regression/extended-display.cjs\n?? tools/ui-regression/extended-display.jsx\n",
+      "sourceFileCount": 1131,
+      "initialInventorySha256": "602d78643ba5c83ad12b5eb820e03407d882402fdb31310b2f213e97b6d63aaf",
+      "phases": {
+        "baseline": {
+          "generatorVersion": "0.10.0",
+          "schemaHash": "be754a50f3177d068356707641c86b80ebcaf7d08930823fe7afc46cc354cf37",
+          "manifestSha256": "db184ac6a4acffa0ed2f0de847392e9f1726837d34201cd96f6660b97b1ef127",
+          "generated": {
+            "apps/viewer-expo/modules/rustra-bridge/android/build-rust-android.sh": "3f4453060e37cdc535ada8595e242301832f1bf3ab019027e5f866a6c9463f76",
+            "apps/viewer-expo/modules/rustra-bridge/android/build.gradle": "7b1f4af0d4f1094c0d88a34bd370d5c845b134dcc86a649ee90d02946cf3d7cb",
+            "apps/viewer-expo/modules/rustra-bridge/android/CMakeLists.txt": "2ad3c4842a64ebd1535ba72184066b3ecc7b9f6e0ffa5993862b9916399a8854",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/AndroidManifest.xml": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07",
+            "apps/viewer-expo/modules/rustra-bridge/generated/rustra-generated-codecs.cpp": "4e1a441fc97a36df6a9755f8a2c264ebe15ab2a53339647ad4b797e489e442eb",
+            "apps/viewer-expo/modules/rustra-bridge/generated/rustra-generated-codecs.hpp": "d901bf617faebfde8609d5c28150086929aa3d419f29b7468307c3401344dfa8",
+            "apps/viewer-expo/modules/rustra-bridge/ios/build-rust-ios.sh": "7597122d7ae95d81e9fcc869383623e436fcfd71686abd05aaeb852cb5c21817",
+            "apps/viewer-expo/modules/rustra-bridge/ios/RustraBridge.cpp": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798",
+            "apps/viewer-expo/modules/rustra-bridge/ios/RustraBridgeModule.mm": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785",
+            "apps/viewer-expo/modules/rustra-bridge/package.json": "70aff97f3cd65f1f1d8b11cac8549e9081d9c45a2cbb75cf41956a08be97b5c9",
+            "apps/viewer-expo/modules/rustra-bridge/react-native.config.js": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b",
+            "apps/viewer-expo/modules/rustra-bridge/RustraBridge.podspec": "7819e600abf785da4e5abc0e98c535dc17de5435e75a4df79f17c3320952856a",
+            "apps/viewer-expo/modules/rustra-bridge/src/index.ts": "ff47f63762759f76cbb71017c5b129de4900761895a42e31b5a6c0c3750076ff",
+            "apps/viewer-expo/generated/commands.ts": "069bfda70d444e1af09aeb4b67f3c89313e801effd4dffcfe1fc53bc354f3ef6",
+            "apps/viewer-expo/generated/contract.ts": "c271bd53d55c83b422726617fd89279b260063664c45a96d5a879a8849bd273d",
+            "apps/viewer-expo/generated/frame-codecs.ts": "57bc25a00697f97c65901a70e2df3fa0a9e11948acf3d6cf4a18b12afff5126d",
+            "apps/viewer-expo/generated/frame-registry.ts": "a11d09a3a84bc4a9a39ee7ee441c6fa7ca38d64a4e94cf007a862d615dc22adb",
+            "apps/viewer-expo/generated/react-native.ts": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8",
+            "apps/viewer-expo/generated/types.ts": "771904ba8cb744e91cdfd37c90cc3ceeeb3851288ac55546ef93eacf18053a88"
+          },
+          "dependencyFiles": {
+            "Cargo.lock": "fd9b0c20a95e043530709a11e726435e06531a96dcee239c1833f1dd0c6f0949",
+            "Cargo.toml": "99c64f4158aae3ecaa59870a0add86cd2f324183e04e3fca97e0f75afcc0af42",
+            "apps/host-desktop/package.json": "ed375a54d6e126034200a55e9fea4ed700ddea7cef7be104049cea9daaf4dc54",
+            "apps/host-desktop/src-tauri/Cargo.lock": "552db3bcd9232a0853dbf23d86b141a665dc9355666104d573a629dbc58945f9",
+            "apps/host-desktop/src-tauri/Cargo.toml": "e3e3afd91d79e017140213c25205628ce3444efa46b68ed51347068d732517b1",
+            "apps/viewer-android/package.json": "4e0851324486170d0176c738bbb16895360536fd20e820d1c13b406622619941",
+            "apps/viewer-expo/modules/rustra-bridge/package.json": "70aff97f3cd65f1f1d8b11cac8549e9081d9c45a2cbb75cf41956a08be97b5c9",
+            "apps/viewer-expo/package.json": "18620e956f51f9ed0d78f1f84f24a27483161a83058a8974cfabbfb3948ad30d",
+            "bun.lock": "a0bc22cfacfacbc9caa564aeeb5d9eb4ea2fedc883e06df6f2dcf87be8017269",
+            "crates/control-contract/Cargo.toml": "d7d75372ace915ea438159afbc585f12db049bf1bd7ed79dd9d4ad3455402617",
+            "crates/domain/Cargo.toml": "23de09a0c84309743ac36d0896e82aca4d80a1ac1b11993c9bcf5d9c4bc66024",
+            "crates/fec-core/Cargo.toml": "e6f1fb57f271a390352aa48482279f8d59347138f6cfb028be1e5f267e7c0e4c",
+            "crates/host-core/Cargo.toml": "6787d685ac3ae4cb28ec7d1d3e64024832b78073dd041ef14f033867e07c6fa8",
+            "crates/keymap/Cargo.toml": "107f33768ef069cf7c233bfa09fad070ef59db84eca6e574c62ed85d7c18be38",
+            "crates/media-model/Cargo.toml": "81917782db85c2683d43c2ea4eaf774fcea4269fea4380ee02d94078c82bfd53",
+            "crates/secure-channel/Cargo.toml": "ea760b54820a5ad6157ac9e3eebbdbec561c6e79ca04a91cadece8bf8674ffff",
+            "crates/session/Cargo.toml": "ae27e7e6db708a03c90a79b5ae1476f929a9fddb5e4281bb93ad979bb3d5dbca",
+            "crates/usb-mux/Cargo.toml": "029cc4cda36389df4dc8715296284ef58f3471e91dabaa4eda0d7c35e8cfcbff",
+            "crates/viewer-core/Cargo.toml": "df06a74df2568f1eb6164a42aaba35f00c44f2287e92ed5da945a8a94f2c1258",
+            "crates/viewer-decoder/Cargo.toml": "f7bde66da72510ab107d067efc4806e98fa83fc48e239efcbb5d279485e13063",
+            "native/android-viewer/Cargo.toml": "ddddfe1667aec20ca96047c2d10116c8d40d8cc1aa35cccc949da6d09fd7c733",
+            "native/leftcar-rustra/Cargo.toml": "1a6c523813aa14c72e1ecf69958560288ec1d35e08565f8f9ccba1fd353d3bc8",
+            "package.json": "5d46aadb8f17fa4b3ccad446b2aee2e5372b7450784c64756e9ea5d3f1e1a8b0",
+            "packages/ui-tokens/package.json": "894cd35bde5fca9d310bfd434d4762de48d82575aeb7703e40b64ae263eb20cf",
+            "tools/architecture-check/Cargo.toml": "7f94815718834276f5eb0b06dea8ec8b4cf10573f7a98a8890248915a934bcd5",
+            "vendor/rustra-react-native/package.json": "b5dcd57a89025bda2b40c4132c1002ad14a20efc59403a4be7d4137316dbc031",
+            "vendor/rustra-types/package.json": "b17fa4a6601c69627082b261f24df1357dd9ef314f6e50f6cf23fee7a420d1a2"
+          }
+        },
+        "candidate": {
+          "generatorVersion": "0.11.3",
+          "schemaHash": "be754a50f3177d068356707641c86b80ebcaf7d08930823fe7afc46cc354cf37",
+          "manifestSha256": "75ad7a4763a9c8f8152ab7201b1814aff9d1a9c4953a48ae7f763de95aa45f53",
+          "generated": {
+            "apps/viewer-expo/modules/rustra-bridge/android/build-rust-android.sh": "3f4453060e37cdc535ada8595e242301832f1bf3ab019027e5f866a6c9463f76",
+            "apps/viewer-expo/modules/rustra-bridge/android/build.gradle": "baddea791d177b80e3012727b1042172453bd832dc042101a7fc76dc3ec706ae",
+            "apps/viewer-expo/modules/rustra-bridge/android/CMakeLists.txt": "9ca4eccc6db13c1d584551c4901847c84188eb7e7d74765e7884770b51501656",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/AndroidManifest.xml": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07",
+            "apps/viewer-expo/modules/rustra-bridge/generated/rustra-generated-codecs.cpp": "f44d2d3ed42d786675199b00bc07a626bd79b3932d21ea5057ad0371598beb90",
+            "apps/viewer-expo/modules/rustra-bridge/generated/rustra-generated-codecs.hpp": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d",
+            "apps/viewer-expo/modules/rustra-bridge/ios/build-rust-ios.sh": "7597122d7ae95d81e9fcc869383623e436fcfd71686abd05aaeb852cb5c21817",
+            "apps/viewer-expo/modules/rustra-bridge/ios/RustraBridge.cpp": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798",
+            "apps/viewer-expo/modules/rustra-bridge/ios/RustraBridgeModule.mm": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785",
+            "apps/viewer-expo/modules/rustra-bridge/package.json": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13",
+            "apps/viewer-expo/modules/rustra-bridge/react-native.config.js": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b",
+            "apps/viewer-expo/modules/rustra-bridge/RustraBridge.podspec": "2742a85881332d42b52b0ce3308d729b2d89ed720cd3eea89dae6141dcf545e4",
+            "apps/viewer-expo/modules/rustra-bridge/src/index.ts": "6c9d182eb5a4132aea132226c4755ffd3866bf3da5617b3543561407b327e5eb",
+            "apps/viewer-expo/generated/commands.ts": "069bfda70d444e1af09aeb4b67f3c89313e801effd4dffcfe1fc53bc354f3ef6",
+            "apps/viewer-expo/generated/contract.ts": "c271bd53d55c83b422726617fd89279b260063664c45a96d5a879a8849bd273d",
+            "apps/viewer-expo/generated/frame-codecs.ts": "57bc25a00697f97c65901a70e2df3fa0a9e11948acf3d6cf4a18b12afff5126d",
+            "apps/viewer-expo/generated/frame-registry.ts": "a11d09a3a84bc4a9a39ee7ee441c6fa7ca38d64a4e94cf007a862d615dc22adb",
+            "apps/viewer-expo/generated/react-native.ts": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8",
+            "apps/viewer-expo/generated/types.ts": "771904ba8cb744e91cdfd37c90cc3ceeeb3851288ac55546ef93eacf18053a88"
+          },
+          "dependencyFiles": {
+            "Cargo.lock": "22d1a07e8f3c7900166fdb8c55631467a3f6da02d24ce35bb8b75256677d5991",
+            "Cargo.toml": "99c64f4158aae3ecaa59870a0add86cd2f324183e04e3fca97e0f75afcc0af42",
+            "apps/host-desktop/package.json": "ed375a54d6e126034200a55e9fea4ed700ddea7cef7be104049cea9daaf4dc54",
+            "apps/host-desktop/src-tauri/Cargo.lock": "552db3bcd9232a0853dbf23d86b141a665dc9355666104d573a629dbc58945f9",
+            "apps/host-desktop/src-tauri/Cargo.toml": "e3e3afd91d79e017140213c25205628ce3444efa46b68ed51347068d732517b1",
+            "apps/viewer-android/package.json": "4e0851324486170d0176c738bbb16895360536fd20e820d1c13b406622619941",
+            "apps/viewer-expo/modules/rustra-bridge/package.json": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13",
+            "apps/viewer-expo/package.json": "25289c4fda6993b63a7255507420e879fd299050ee53b5b75a8ed0abc27c1130",
+            "bun.lock": "06c3220fd1946ca497663579fb8652b5099e36c5ed78937413cfccab505aa6a6",
+            "crates/control-contract/Cargo.toml": "00d149d5c3b39c328b1a7121160c10733d4c706a8f46736259e61ceb8ec6fcff",
+            "crates/domain/Cargo.toml": "23de09a0c84309743ac36d0896e82aca4d80a1ac1b11993c9bcf5d9c4bc66024",
+            "crates/fec-core/Cargo.toml": "e6f1fb57f271a390352aa48482279f8d59347138f6cfb028be1e5f267e7c0e4c",
+            "crates/host-core/Cargo.toml": "6787d685ac3ae4cb28ec7d1d3e64024832b78073dd041ef14f033867e07c6fa8",
+            "crates/keymap/Cargo.toml": "107f33768ef069cf7c233bfa09fad070ef59db84eca6e574c62ed85d7c18be38",
+            "crates/media-model/Cargo.toml": "81917782db85c2683d43c2ea4eaf774fcea4269fea4380ee02d94078c82bfd53",
+            "crates/secure-channel/Cargo.toml": "ea760b54820a5ad6157ac9e3eebbdbec561c6e79ca04a91cadece8bf8674ffff",
+            "crates/session/Cargo.toml": "ae27e7e6db708a03c90a79b5ae1476f929a9fddb5e4281bb93ad979bb3d5dbca",
+            "crates/usb-mux/Cargo.toml": "029cc4cda36389df4dc8715296284ef58f3471e91dabaa4eda0d7c35e8cfcbff",
+            "crates/viewer-core/Cargo.toml": "df06a74df2568f1eb6164a42aaba35f00c44f2287e92ed5da945a8a94f2c1258",
+            "crates/viewer-decoder/Cargo.toml": "f7bde66da72510ab107d067efc4806e98fa83fc48e239efcbb5d279485e13063",
+            "native/android-viewer/Cargo.toml": "ddddfe1667aec20ca96047c2d10116c8d40d8cc1aa35cccc949da6d09fd7c733",
+            "native/leftcar-rustra/Cargo.toml": "feee2f4b9de128d940ee42482e6050be5a2a7141f5db03695ab39a4c4ed16405",
+            "package.json": "e0905bcfdb309a26e991752fd4426fcf558bb7fc0e0de98a780066a8834b3493",
+            "packages/ui-tokens/package.json": "894cd35bde5fca9d310bfd434d4762de48d82575aeb7703e40b64ae263eb20cf",
+            "tools/architecture-check/Cargo.toml": "7f94815718834276f5eb0b06dea8ec8b4cf10573f7a98a8890248915a934bcd5",
+            "vendor/rustra-react-native/package.json": "b5dcd57a89025bda2b40c4132c1002ad14a20efc59403a4be7d4137316dbc031",
+            "vendor/rustra-types/package.json": "b17fa4a6601c69627082b261f24df1357dd9ef314f6e50f6cf23fee7a420d1a2"
+          }
+        },
+        "rollback": {
+          "generatorVersion": "0.10.0",
+          "schemaHash": "be754a50f3177d068356707641c86b80ebcaf7d08930823fe7afc46cc354cf37",
+          "manifestSha256": "db184ac6a4acffa0ed2f0de847392e9f1726837d34201cd96f6660b97b1ef127",
+          "generated": {
+            "apps/viewer-expo/modules/rustra-bridge/android/build-rust-android.sh": "3f4453060e37cdc535ada8595e242301832f1bf3ab019027e5f866a6c9463f76",
+            "apps/viewer-expo/modules/rustra-bridge/android/build.gradle": "7b1f4af0d4f1094c0d88a34bd370d5c845b134dcc86a649ee90d02946cf3d7cb",
+            "apps/viewer-expo/modules/rustra-bridge/android/CMakeLists.txt": "2ad3c4842a64ebd1535ba72184066b3ecc7b9f6e0ffa5993862b9916399a8854",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/AndroidManifest.xml": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921",
+            "apps/viewer-expo/modules/rustra-bridge/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07",
+            "apps/viewer-expo/modules/rustra-bridge/generated/rustra-generated-codecs.cpp": "4e1a441fc97a36df6a9755f8a2c264ebe15ab2a53339647ad4b797e489e442eb",
+            "apps/viewer-expo/modules/rustra-bridge/generated/rustra-generated-codecs.hpp": "d901bf617faebfde8609d5c28150086929aa3d419f29b7468307c3401344dfa8",
+            "apps/viewer-expo/modules/rustra-bridge/ios/build-rust-ios.sh": "7597122d7ae95d81e9fcc869383623e436fcfd71686abd05aaeb852cb5c21817",
+            "apps/viewer-expo/modules/rustra-bridge/ios/RustraBridge.cpp": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798",
+            "apps/viewer-expo/modules/rustra-bridge/ios/RustraBridgeModule.mm": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785",
+            "apps/viewer-expo/modules/rustra-bridge/package.json": "70aff97f3cd65f1f1d8b11cac8549e9081d9c45a2cbb75cf41956a08be97b5c9",
+            "apps/viewer-expo/modules/rustra-bridge/react-native.config.js": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b",
+            "apps/viewer-expo/modules/rustra-bridge/RustraBridge.podspec": "7819e600abf785da4e5abc0e98c535dc17de5435e75a4df79f17c3320952856a",
+            "apps/viewer-expo/modules/rustra-bridge/src/index.ts": "ff47f63762759f76cbb71017c5b129de4900761895a42e31b5a6c0c3750076ff",
+            "apps/viewer-expo/generated/commands.ts": "069bfda70d444e1af09aeb4b67f3c89313e801effd4dffcfe1fc53bc354f3ef6",
+            "apps/viewer-expo/generated/contract.ts": "c271bd53d55c83b422726617fd89279b260063664c45a96d5a879a8849bd273d",
+            "apps/viewer-expo/generated/frame-codecs.ts": "57bc25a00697f97c65901a70e2df3fa0a9e11948acf3d6cf4a18b12afff5126d",
+            "apps/viewer-expo/generated/frame-registry.ts": "a11d09a3a84bc4a9a39ee7ee441c6fa7ca38d64a4e94cf007a862d615dc22adb",
+            "apps/viewer-expo/generated/react-native.ts": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8",
+            "apps/viewer-expo/generated/types.ts": "771904ba8cb744e91cdfd37c90cc3ceeeb3851288ac55546ef93eacf18053a88"
+          },
+          "dependencyFiles": {
+            "Cargo.lock": "fd9b0c20a95e043530709a11e726435e06531a96dcee239c1833f1dd0c6f0949",
+            "Cargo.toml": "99c64f4158aae3ecaa59870a0add86cd2f324183e04e3fca97e0f75afcc0af42",
+            "apps/host-desktop/package.json": "ed375a54d6e126034200a55e9fea4ed700ddea7cef7be104049cea9daaf4dc54",
+            "apps/host-desktop/src-tauri/Cargo.lock": "552db3bcd9232a0853dbf23d86b141a665dc9355666104d573a629dbc58945f9",
+            "apps/host-desktop/src-tauri/Cargo.toml": "e3e3afd91d79e017140213c25205628ce3444efa46b68ed51347068d732517b1",
+            "apps/viewer-android/package.json": "4e0851324486170d0176c738bbb16895360536fd20e820d1c13b406622619941",
+            "apps/viewer-expo/modules/rustra-bridge/package.json": "70aff97f3cd65f1f1d8b11cac8549e9081d9c45a2cbb75cf41956a08be97b5c9",
+            "apps/viewer-expo/package.json": "18620e956f51f9ed0d78f1f84f24a27483161a83058a8974cfabbfb3948ad30d",
+            "bun.lock": "a0bc22cfacfacbc9caa564aeeb5d9eb4ea2fedc883e06df6f2dcf87be8017269",
+            "crates/control-contract/Cargo.toml": "d7d75372ace915ea438159afbc585f12db049bf1bd7ed79dd9d4ad3455402617",
+            "crates/domain/Cargo.toml": "23de09a0c84309743ac36d0896e82aca4d80a1ac1b11993c9bcf5d9c4bc66024",
+            "crates/fec-core/Cargo.toml": "e6f1fb57f271a390352aa48482279f8d59347138f6cfb028be1e5f267e7c0e4c",
+            "crates/host-core/Cargo.toml": "6787d685ac3ae4cb28ec7d1d3e64024832b78073dd041ef14f033867e07c6fa8",
+            "crates/keymap/Cargo.toml": "107f33768ef069cf7c233bfa09fad070ef59db84eca6e574c62ed85d7c18be38",
+            "crates/media-model/Cargo.toml": "81917782db85c2683d43c2ea4eaf774fcea4269fea4380ee02d94078c82bfd53",
+            "crates/secure-channel/Cargo.toml": "ea760b54820a5ad6157ac9e3eebbdbec561c6e79ca04a91cadece8bf8674ffff",
+            "crates/session/Cargo.toml": "ae27e7e6db708a03c90a79b5ae1476f929a9fddb5e4281bb93ad979bb3d5dbca",
+            "crates/usb-mux/Cargo.toml": "029cc4cda36389df4dc8715296284ef58f3471e91dabaa4eda0d7c35e8cfcbff",
+            "crates/viewer-core/Cargo.toml": "df06a74df2568f1eb6164a42aaba35f00c44f2287e92ed5da945a8a94f2c1258",
+            "crates/viewer-decoder/Cargo.toml": "f7bde66da72510ab107d067efc4806e98fa83fc48e239efcbb5d279485e13063",
+            "native/android-viewer/Cargo.toml": "ddddfe1667aec20ca96047c2d10116c8d40d8cc1aa35cccc949da6d09fd7c733",
+            "native/leftcar-rustra/Cargo.toml": "1a6c523813aa14c72e1ecf69958560288ec1d35e08565f8f9ccba1fd353d3bc8",
+            "package.json": "5d46aadb8f17fa4b3ccad446b2aee2e5372b7450784c64756e9ea5d3f1e1a8b0",
+            "packages/ui-tokens/package.json": "894cd35bde5fca9d310bfd434d4762de48d82575aeb7703e40b64ae263eb20cf",
+            "tools/architecture-check/Cargo.toml": "7f94815718834276f5eb0b06dea8ec8b4cf10573f7a98a8890248915a934bcd5",
+            "vendor/rustra-react-native/package.json": "b5dcd57a89025bda2b40c4132c1002ad14a20efc59403a4be7d4137316dbc031",
+            "vendor/rustra-types/package.json": "b17fa4a6601c69627082b261f24df1357dd9ef314f6e50f6cf23fee7a420d1a2"
+          }
+        }
+      },
+      "commands": [
+        {
+          "app": "leftcar",
+          "phase": "baseline",
+          "label": "contract",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/baseline",
+          "argv": ["bun", "run", "test:contract"],
+          "exitCode": 0,
+          "elapsedSeconds": 1.394,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/baseline-contract.log",
+          "logSha256": "434944b404fecb0e09ba42557d257816e2a1619b19885a163dcb34976af456b8",
+          "metrics": {
+            "vitestPassed": 4
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "baseline",
+          "label": "rust-normalized",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/baseline",
+          "argv": ["cargo", "test", "--locked", "-p", "control-contract", "-p", "leftcar-rustra"],
+          "exitCode": 0,
+          "elapsedSeconds": 3.108,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/baseline-rust-normalized.log",
+          "logSha256": "e87e19d28e999e944947febd3661f5c975f364c0f2a2614831879ad42fa2bee3",
+          "metrics": {
+            "rust": {
+              "passed": 36,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "install",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "install", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 2.859,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-install.log",
+          "logSha256": "0a0ebb6aa0416ec934180bebe7fe364d356aaaecfc1a079f761d93d53e82b2e6",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "baseline",
+          "label": "typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/baseline",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 11.815,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/baseline-typecheck.log",
+          "logSha256": "ab85d04819510a85725e0f12b80571c9c71cba8b387b2fb1263da2477d4833e2",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "baseline",
+          "label": "architecture",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/baseline",
+          "argv": ["bun", "run", "test:architecture"],
+          "exitCode": 1,
+          "elapsedSeconds": 0.217,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/baseline-architecture.log",
+          "logSha256": "fbcdbfc24141070d218bd22ff11212d07195abefc27d8380694358cb526720bb",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "rust",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["cargo", "test", "-p", "control-contract", "-p", "leftcar-rustra"],
+          "exitCode": 0,
+          "elapsedSeconds": 30.308,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-rust.log",
+          "logSha256": "5a2ecf9359390e61860bd3db252751c68cf977b163ec5305e5afd26b38a0f1b2",
+          "metrics": {
+            "rust": {
+              "passed": 36,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "rust-codegen",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "run", "rustra:generate"],
+          "exitCode": 0,
+          "elapsedSeconds": 5.263,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-rust-codegen.log",
+          "logSha256": "8d00dda776e5fa9edae13467593cf3a1fb3f886d346c5d79ac647a82ba01e132",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "codegen",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "apps/viewer-expo/rustra.json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.252,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-codegen.log",
+          "logSha256": "52268df760ec330eebc0270e9a7d44f04ddcacfda8155f5b50ca7f842a2126f7",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 14.755,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-typecheck.log",
+          "logSha256": "ab85d04819510a85725e0f12b80571c9c71cba8b387b2fb1263da2477d4833e2",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "contract",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "run", "test:contract"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.75,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-contract.log",
+          "logSha256": "0dd1ea2dc1ffc1218b021766ff65e340274201d70bcb865926c47c31c8beb251",
+          "metrics": {
+            "vitestPassed": 4
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "codegen-check",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "apps/viewer-expo/rustra.json",
+            "--check"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.365,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-codegen-check.log",
+          "logSha256": "36eb9e61af0354c776aa347c38f2567b66a6a2dc7b69455efd8f9bcdf2535c72",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "architecture",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "run", "test:architecture"],
+          "exitCode": 1,
+          "elapsedSeconds": 0.11,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-architecture.log",
+          "logSha256": "a6ade64c4d0819dc7b36e2e2000ecf243459f8fb3675f8196460761db32ac045",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "react-doctor",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["npx", "-y", "react-doctor@latest", ".", "--verbose"],
+          "exitCode": 0,
+          "elapsedSeconds": 30.816,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-react-doctor.log",
+          "logSha256": "50ec0cd9ae9d9c67c37189e146f8d7f8f5045d21e8d84277929f9c66f2f3365e",
+          "metrics": {
+            "reactDoctorScore": 87
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "schema-diff",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "diff",
+            "--old",
+            "../baseline/packages/control-generated/host/schema.json",
+            "--new",
+            "packages/control-generated/host/schema.json",
+            "--format",
+            "json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.096,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-schema-diff.log",
+          "logSha256": "5bb4e4a64efaab92f945870978a8ff4e5e3e2279151e179a7e8561ce224836ad",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "baseline",
+          "label": "react-doctor",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/baseline",
+          "argv": ["npx", "-y", "react-doctor@latest", ".", "--verbose"],
+          "exitCode": 0,
+          "elapsedSeconds": 31.549,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/baseline-react-doctor.log",
+          "logSha256": "7a268896319264a60227d4acfd53e689a939d33ce3f9449f8db4369ac49c392c",
+          "metrics": {
+            "reactDoctorScore": 100
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "install-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "install", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.661,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-install-v2.log",
+          "logSha256": "b9d8c2dd0c1554467e2e88fb85e12a0609967d33aefe5ce240e8d394eb7a457a",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "rollback",
+          "label": "install",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/rollback",
+          "argv": ["bun", "install", "--frozen-lockfile", "--ignore-scripts"],
+          "exitCode": 0,
+          "elapsedSeconds": 1.41,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/rollback-install.log",
+          "logSha256": "22b13887b041cb4f6e341813068e1021fa9f9601d6b3b58305f2b23cbb9184fe",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "codegen-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "apps/viewer-expo/rustra.json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.451,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-codegen-v2.log",
+          "logSha256": "11a9a28a03b5eee5ba1574163dc80b1584fba48421a5a0f8d9f0be9ee4633d51",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "codegen-check-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "apps/viewer-expo/rustra.json",
+            "--check"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.316,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-codegen-check-v2.log",
+          "logSha256": "dcd9ec9cd606034d33ea3668b45287de4e19b83610dc687533d5fec7ac126432",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "typecheck-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 27.487,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-typecheck-v2.log",
+          "logSha256": "ab85d04819510a85725e0f12b80571c9c71cba8b387b2fb1263da2477d4833e2",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "contract-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["bun", "run", "test:contract"],
+          "exitCode": 0,
+          "elapsedSeconds": 1.39,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-contract-v2.log",
+          "logSha256": "0a0d62817c947142f7f0620932d540a1d6323399959714ab9645a4dab56fd30e",
+          "metrics": {
+            "vitestPassed": 4
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "rollback",
+          "label": "rust",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/rollback",
+          "argv": ["cargo", "test", "--locked", "-p", "control-contract", "-p", "leftcar-rustra"],
+          "exitCode": 0,
+          "elapsedSeconds": 2.56,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/rollback-rust.log",
+          "logSha256": "e883a8c8211a8fb7b11237c0bead98b195169be339d46ba664f7c544b7959331",
+          "metrics": {
+            "rust": {
+              "passed": 36,
+              "failed": 0,
+              "ignored": 0
+            }
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "react-doctor-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": ["npx", "-y", "react-doctor@latest", ".", "--verbose"],
+          "exitCode": 0,
+          "elapsedSeconds": 25.551,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-react-doctor-v2.log",
+          "logSha256": "135dfd18c7aada8be6959cb4c6eafd13addb81f9eefa3da19b01f2781d768d59",
+          "metrics": {
+            "reactDoctorScore": 100
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "rollback",
+          "label": "typecheck",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/rollback",
+          "argv": ["bun", "run", "typecheck"],
+          "exitCode": 0,
+          "elapsedSeconds": 14.48,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/rollback-typecheck.log",
+          "logSha256": "ab85d04819510a85725e0f12b80571c9c71cba8b387b2fb1263da2477d4833e2",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "rollback",
+          "label": "contract",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/rollback",
+          "argv": ["bun", "run", "test:contract"],
+          "exitCode": 0,
+          "elapsedSeconds": 0.57,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/rollback-contract.log",
+          "logSha256": "9902f270eed575f228fa93ba781767ac10fcae63c1966c9294bee910acc6785f",
+          "metrics": {
+            "vitestPassed": 4
+          }
+        },
+        {
+          "app": "leftcar",
+          "phase": "rollback",
+          "label": "codegen-check",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/rollback",
+          "argv": [
+            "bun",
+            "/tmp/rustra-consumers-20260922/KeyBridge/baseline/node_modules/@rustra/cli/dist/index.js",
+            "codegen",
+            "--config",
+            "apps/viewer-expo/rustra.json",
+            "--check"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 4.675,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/rollback-codegen-check.log",
+          "logSha256": "8923449faecd8a6a0f6e3e25d2953fa48769c8dcde08ce9af2511e5c9d3ee3ae",
+          "metrics": {}
+        },
+        {
+          "app": "leftcar",
+          "phase": "candidate",
+          "label": "schema-diff-v2",
+          "cwd": "/tmp/rustra-consumers-20260922/leftcar/candidate",
+          "argv": [
+            "bun",
+            "node_modules/@rustra/cli/dist/index.js",
+            "diff",
+            "--old",
+            "../baseline/packages/control-generated/host/schema.json",
+            "--new",
+            "packages/control-generated/host/schema.json",
+            "--format",
+            "json"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.059,
+          "log": "/tmp/rustra-consumers-20260922/leftcar/candidate-schema-diff-v2.log",
+          "logSha256": "5bb4e4a64efaab92f945870978a8ff4e5e3e2279151e179a7e8561ce224836ad",
+          "metrics": {}
+        }
+      ],
+      "additionalLogs": [
+        {
+          "name": "baseline-install-v2.log",
+          "sha256": "1d656e166a053130553da2d4db955accd981e3db4d43b6838ef0ed2783cea831",
+          "metrics": {}
+        },
+        {
+          "name": "baseline-install.log",
+          "sha256": "6a1b390f83977dedd7ecbf833121485d22f4e058d87e85085ad4d37e084d7d2e",
+          "metrics": {}
+        },
+        {
+          "name": "baseline-rust.log",
+          "sha256": "dedea822ec3c2dc72defcfca65acb83a06df917faf690b016fc6dff371e713ed",
+          "metrics": {}
+        }
+      ],
+      "rollbackSourceDifferences": ["crates/control-contract/tests/contract.rs"],
+      "testFixtureNormalization": "--- crates/control-contract/tests/contract.rs\n+++ crates/control-contract/tests/contract.rs\n@@ -273,6 +273,8 @@\n         window_size: None,\n         input_allowed: None,\n         virtual_display_pending_removal: None,\n+        virtual_display_control: None,\n+        virtual_display_source_id: None,\n     };\n     let advertised: Vec<_> = catalog\n         .encoder_experiments\n@@ -304,6 +306,8 @@\n         udp_stability_capabilities: None,\n         input_allowed: None,\n         virtual_display_pending_removal: None,\n+        virtual_display_control: None,\n+        virtual_display_source_id: None,\n         reconfigure_encoder_experiment: Some(true),\n         reconfigure_source: Some(true),\n         window_size: None,\n@@ -377,6 +381,8 @@\n         udp_stability_capabilities: None,\n         input_allowed: None,\n         virtual_display_pending_removal: None,\n+        virtual_display_control: None,\n+        virtual_display_source_id: None,\n         reconfigure_encoder_experiment: None,\n         reconfigure_source: Some(true),\n         window_size: None,\n",
+      "existingArchitectureFailure": "StreamPointerDiagnostics.kt imports org.json.JSONObject; same one violation before and after upgrade."
+    }
+  },
+  "originalPreservation": {
+    "KeyBridge": {
+      "fileCount": 296,
+      "initialSha256": "7fa3674d6a66bac25d8a0a66f05b6369ae30bd1a3b25f47d6467b584bdc32138",
+      "finalSha256": "f89959f355e400821856cf5743481ec103f68462d0b021acbbe4d1b917191eb1",
+      "changed": [
+        "android/README.md",
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/src/main/java/dev/loopy/keybridge/Bridge.kt",
+        "android/app/src/main/java/dev/loopy/keybridge/OutputDelivery.kt",
+        "android/app/src/main/java/dev/loopy/keybridge/SettingsActivity.kt",
+        "android/app/src/test/java/dev/loopy/keybridge/OutputDeliveryTest.kt",
+        "desktop/src-tauri/resources/keybridge.toml",
+        "docs/superpowers/plans/2026-09-22-reliability-and-android-rn.md",
+        "docs/superpowers/verification/2026-09-22-reliability-and-android-rn.md",
+        "mobile/src/App.tsx",
+        "mobile/src/Editor.tsx",
+        "mobile/src/model.test.ts",
+        "mobile/src/model.ts",
+        "scripts/android.ts"
+      ],
+      "headUnchanged": true,
+      "statusUnchanged": false,
+      "finalHead": "fb8ab2685d785f085c21dcc4d6b73b0f1741d7dc",
+      "verificationScope": "Initial captured snapshot; concurrent original changes were not copied back, reverted, or included in this verification."
+    },
+    "yeoyu": {
+      "fileCount": 3793,
+      "initialSha256": "e938f3f044459a2ef27db6a134511ef9cbbf113e685a59a6c9f0417053614aa2",
+      "finalSha256": "14ca944dd86458f810e81e0fb210aaecf5485b5904391a2d1cb236600b3fc5fd",
+      "changed": [
+        "docs/evidence/design-permissions-2026-09-22/denied-feedback-v2-ui.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/foreground-before-input.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/foreground-before-input.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/input.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/input.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/2e34e7ec74da4549a402cb29bf5fbc5c/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/5f1f9d52c0724a7999ad8f23e3ac9399/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/foreground-before-input.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/foreground-before-input.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/input.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/input.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/65fa1e3fcbb54869bcd6d5722549cfd7/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/a45f26df4c284e27a7bee38d355b2e56/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/cd4aac1bc9cb4544bf0d5b843c652e43/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/ea1b61acda484f6cb1d9a55245a2cc88/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/dump.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/dump.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/foreground-after.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/foreground-after.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/foreground-before-input.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/foreground-before-input.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/foreground-before.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/foreground-before.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/input.txt",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/input.txt.command.json",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/ui.xml",
+        "docs/evidence/design-permissions-2026-09-22/input-guard/f8f904dd4534406191a86e2ce7dd35b8/ui.xml.command.json",
+        "docs/evidence/design-permissions-2026-09-22/permissions-feedback-tablet-v2.png",
+        "docs/evidence/design-permissions-2026-09-22/runtime-errors-v2.txt",
+        "docs/evidence/design-permissions-2026-09-22/source-receipt-v2.json",
+        "docs/reports/design-permissions-2026-09-22.ko.md",
+        "src/components/ConsentSettings.tsx",
+        "src/components/SettingsRow.tsx",
+        "src/i18n.ts",
+        "tests/fixtures/consent-permissions.tsx",
+        "tests/fixtures/settings-dialog.tsx"
+      ],
+      "headUnchanged": false,
+      "statusUnchanged": false,
+      "finalHead": "1f100aced90a0e0083bc3fd076185525ea2e6b4e",
+      "verificationScope": "Initial captured snapshot; concurrent original changes were not copied back, reverted, or included in this verification."
+    },
+    "leftcar": {
+      "fileCount": 1134,
+      "initialSha256": "602d78643ba5c83ad12b5eb820e03407d882402fdb31310b2f213e97b6d63aaf",
+      "finalSha256": "8f7a14a3e53170752124609b1e81086308bf648da6dbb9ed116b702a87f58e84",
+      "changed": [
+        "apps/host-desktop/src-tauri/src/control.rs",
+        "apps/host-desktop/src-tauri/src/lib.rs",
+        "apps/host-desktop/src-tauri/src/virtual_display.rs",
+        "apps/host-desktop/src/components/ExtendedDisplayCard.tsx",
+        "apps/host-desktop/src/index.css",
+        "apps/viewer-expo/src/control.test.ts",
+        "apps/viewer-expo/src/control.ts",
+        "apps/viewer-expo/src/use-extension-display.ts",
+        "crates/control-contract/tests/contract.rs",
+        "docs/superpowers/plans/2026-09-22-sidecar-extension-experience.md",
+        "docs/superpowers/specs/2026-09-22-sidecar-extension-experience.md",
+        "docs/superpowers/specs/2026-09-22-sidecar-extension-verification.md",
+        "native/macos-capture-shim/Sources/VirtualDisplay/CGVirtualDisplayBridge.m",
+        "native/macos-capture-shim/Tests/VirtualDisplayBridgeProbe.swift",
+        "tools/ui-regression/build.mjs",
+        "tools/ui-regression/extended-display.cjs",
+        "tools/ui-regression/extension-control-io.js",
+        "tools/ui-regression/extension-viewer.jsx"
+      ],
+      "headUnchanged": true,
+      "statusUnchanged": false,
+      "finalHead": "090abba404a1b6e8f881f68753a3685df1048afc",
+      "verificationScope": "Initial captured snapshot; concurrent original changes were not copied back, reverted, or included in this verification."
+    },
+    "yeoyu-vendor": {
+      "initialSha256": "92ddb845babed0fe10fbe82d24d4ef4a5257cd4dcc22212668080ef63bdc0aee",
+      "finalSha256": "92ddb845babed0fe10fbe82d24d4ef4a5257cd4dcc22212668080ef63bdc0aee",
+      "unchanged": true
+    }
+  },
+  "finalCliInstallation": {
+    "KeyBridge": {
+      "checkedFiles": 541,
+      "mismatches": []
+    },
+    "leftcar": {
+      "checkedFiles": 541,
+      "mismatches": []
+    },
+    "yeoyu": {
+      "mode": "vendored source and built dist overlay",
+      "sourceMatches": true
+    }
+  }
+}
