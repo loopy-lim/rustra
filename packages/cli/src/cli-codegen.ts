@@ -27,9 +27,9 @@ function wrapError(message: string, error: unknown): Error {
   });
 }
 
-/** runGenerate 진행 표기의 drift 신호 — "(updated)" 접미어가 하나라도 있으면 갱신. */
+/** runGenerate 진행 표기의 drift 신호 — 기존 파일 갱신 또는 구형 파일 제거. */
 const hasUpdatedMarker = (files: string[]): boolean =>
-  files.some((file) => file.endsWith('(updated)'));
+  files.some((file) => file.endsWith('(updated)') || file.endsWith('(removed)'));
 
 /**
  * 스테일 런타임 바이너리 힌트(감사 #3) — codegen 은 TS/C++ 만 다시 렌더하고 실제

@@ -122,6 +122,16 @@ describe('parseCliArgs', () => {
     expect(parsed.values.get('config')).toBe('x');
   });
 
+  test('preserves equals signs inside inline option values', () => {
+    const parsed = parseCliArgs(['--config=/tmp/a=b=c/rustra.json', '--check'], {
+      command: 'codegen',
+      valueFlags: ['config'],
+      booleanFlags: ['check'],
+    });
+    expect(parsed.values.get('config')).toBe('/tmp/a=b=c/rustra.json');
+    expect(parsed.flags.has('check')).toBe(true);
+  });
+
   test('rejects unknown flags without a close match with the available set', () => {
     expect(() =>
       parseCliArgs(['--zzz'], {
