@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   checkCriterionRegression,
@@ -32,6 +33,8 @@ function logger(): TestLogger {
 
 async function fixture(point: number, lower: number, upper: number): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-'));
+  await mkdir(join(root, 'group/case/new'), { recursive: true });
+  await Bun.write(join(root, 'group/case/new/estimates.json'), '{}');
   const change = join(root, 'group', 'case', 'change');
   await mkdir(change, { recursive: true });
   await Bun.write(
@@ -147,6 +150,8 @@ test('regression amid widespread implausible improvement flags baseline mismatch
       ['groupB/case1', -0.33],
       ['groupB/case2', 0.71],
     ] as const) {
+      await mkdir(join(root, name, 'new'), { recursive: true });
+      await Bun.write(join(root, name, 'new/estimates.json'), '{}');
       const change = join(root, name, 'change');
       await mkdir(change, { recursive: true });
       // lower/upper 부호: point가 음수면 CI 전체가 음수(통계적 유의한 개선),
@@ -173,7 +178,9 @@ test('regression amid widespread implausible improvement flags baseline mismatch
       logger: output,
     });
     assert.equal(result.exitCode, 3);
-    assert.match(output.errors[0], /Baseline environment mismatch/);
+    assert.match(output.errors[0], /Mixed performance changes/);
+    assert.doesNotMatch(output.errors[0], /re-run with bootstrap_baseline=true/);
+    assert.match(output.errors[0], /same environment/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -186,6 +193,8 @@ test('a lone regression with normal improvements stays a genuine failure', async
       ['groupA/case1', -0.1],
       ['groupA/case2', 0.2],
     ] as const) {
+      await mkdir(join(root, name, 'new'), { recursive: true });
+      await Bun.write(join(root, name, 'new/estimates.json'), '{}');
       const change = join(root, name, 'change');
       await mkdir(change, { recursive: true });
       await Bun.write(
@@ -240,10 +249,128 @@ test('renderRegressionReport renders verdict badges per exit code', () => {
     /❌ \*\*회귀 감지\*\*/u,
   );
   assert.match(renderRegressionReport({ exitCode: 0, rows }), /✅ \*\*통과\*\*/u);
-  assert.match(renderRegressionReport({ exitCode: 3, rows }), /⚠️ \*\*baseline 환경 불일치\*\*/u);
-  assert.match(renderRegressionReport({ exitCode: 2, rows: [] }), /⚠️ \*\*baseline 없음\*\*/u);
+  assert.match(renderRegressionReport({ exitCode: 3, rows }), /⚠️ \*\*혼합 성능 변화\*\*/u);
+  assert.match(renderRegressionReport({ exitCode: 2, rows: [] }), /⚠️ \*\*비교 불가\*\*/u);
 
   const report = renderRegressionReport({ exitCode: 1, rows }, { thresholdPercent: 10 });
   assert.match(report, /`g\/slow` \| 15\.00% \| 11\.00% \.\. 20\.00% \| ❌ 회귀/u);
   assert.match(report, /`g\/fast` \| -44\.00% \| -46\.00% \.\. -42\.00% \| ⚠️ 개선 이상/u);
+});
+
+test('an inconclusive comparison never claims a new baseline was accepted', () => {
+  const report = renderRegressionReport({ exitCode: 3, rows: [] });
+  assert.doesNotMatch(report, /채택했습니다/);
+  assert.match(report, /미채택|not adopted/);
+});
+
+test('malformed numeric estimates cannot become a successful zero-percent change', async () => {
+  const root = await fixture(0.5, 0.4, 0.6);
+  try {
+    for (const [point, lower, upper] of [
+      [null, -0.05, 0.05],
+      [0.5, null, 0.6],
+      [0.5, 0.4, null],
+      ['0.0', -0.05, 0.05],
+      [false, -0.05, 0.05],
+      [0.5, 0.6, 0.4],
+    ]) {
+      await Bun.write(
+        join(root, 'group/case/change/estimates.json'),
+        JSON.stringify({
+          mean: {
+            point_estimate: point,
+            confidence_interval: { lower_bound: lower, upper_bound: upper },
+          },
+        }),
+      );
+      await assert.rejects(
+        checkCriterionRegression({
+          criterionRoot: root,
+          maxRegression: 0.1,
+          logger: logger(),
+        }),
+        /Malformed Criterion estimate/,
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reports use the configured CLI budget including fractional percentages', () => {
+  for (const [ratio, percent] of [
+    ['0.2', '20'],
+    ['0.005', '0.5'],
+  ]) {
+    const options = parseRegressionArgs(['--max-regression', ratio]);
+    for (const exitCode of [0, 1]) {
+      assert.ok(renderRegressionReport({ exitCode, rows: [] }, options).includes(`${percent}%`));
+    }
+  }
+});
+
+test('a malformed CLI input replaces an old successful report with the failure', async () => {
+  const root = await fixture(0.5, 0.4, 0.6);
+  try {
+    await Bun.write(join(root, 'group/case/change/estimates.json'), '{broken json');
+    const report = join(root, 'report.md');
+    await Bun.write(report, '✅ **통과** — previous run');
+    const result = Bun.spawnSync([
+      process.execPath,
+      fileURLToPath(new URL('./check-criterion-regression.mjs', import.meta.url)),
+      '--criterion-root',
+      root,
+      '--report',
+      report,
+    ]);
+    assert.equal(result.exitCode, 2);
+    const content = await Bun.file(report).text();
+    assert.match(content, /비교 불가/);
+    assert.doesNotMatch(content, /previous run|✅ \*\*통과/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('fresh measurements without a matching change estimate fail closed', async () => {
+  const root = await fixture(0.01, -0.01, 0.02);
+  try {
+    await mkdir(join(root, 'new-route/new'), { recursive: true });
+    await Bun.write(join(root, 'new-route/new/estimates.json'), '{}');
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: logger(),
+    });
+    assert.equal(result.exitCode, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('preparation removes restored measurements while retaining comparison baselines', async () => {
+  const { prepareCriterionRun } = await import('./check-criterion-regression.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-prepare-'));
+  try {
+    for (const phase of ['base', 'new', 'change']) {
+      await mkdir(join(root, 'retired-route', phase), { recursive: true });
+      await Bun.write(join(root, 'retired-route', phase, 'estimates.json'), '{}');
+    }
+    await prepareCriterionRun(root);
+    assert.equal(await Bun.file(join(root, 'retired-route/base/estimates.json')).exists(), true);
+    assert.equal(await Bun.file(join(root, 'retired-route/new/estimates.json')).exists(), false);
+    assert.equal(await Bun.file(join(root, 'retired-route/change/estimates.json')).exists(), false);
+    assert.equal(
+      (
+        await checkCriterionRegression({
+          criterionRoot: root,
+          maxRegression: 0.1,
+          logger: logger(),
+        })
+      ).exitCode,
+      2,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
