@@ -42,7 +42,7 @@
     "test:complex-codec-bench": "bun test scripts/complex-codec-bench.test.ts scripts/track-b-bench.test.ts",
     "bench:complex": "bun scripts/complex-codec-bench.mjs",
     "bench:track-b": "bun scripts/track-b-bench.mjs",
-    "test:bench-gate": "bun test scripts/check-criterion-regression.test.ts scripts/benchmark-workflow.test.mjs",
+    "test:bench-gate": "bun test scripts/check-criterion-regression.test.ts scripts/benchmark-workflow.test.mjs scripts/benchmark-environment.test.mjs",
     "bench": "bun scripts/transport-bench.mjs",
     "bench:bun": "bun scripts/transport-bench.mjs",
     "bench:hosts": "bun scripts/host-bench.mjs",

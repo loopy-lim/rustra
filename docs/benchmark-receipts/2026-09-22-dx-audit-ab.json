@@ -1,0 +1,3172 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-09-22T05:10:19.567965+00:00",
+  "scope": "macOS arm64 release core diagnostic, five selected cases, not mobile/app acceptance",
+  "environment": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "unavailable: sandbox denies sysctl machdep.cpu.brand_string",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)"
+  },
+  "inputs": {
+    "baseline": {
+      "commit": "7d5516f69af0029f1507add0aa06c4fba3ca9522",
+      "root": "/tmp/rustra-audit-baseline-source",
+      "sources": {
+        "crates/rustra/benches/common.rs": "c6ad6a7955087384cff677d01c9c33f4fda0a45a4b920233b7a95022339de776",
+        "crates/rustra/benches/complex_route.rs": "6d98086180fe9e52a88cddc2b7d6f685637ea3edc842783415245debd340968c",
+        "crates/rustra/benches/dynamic_registry.rs": "457abd018c09090155b71a1433666d23d246581aa8cabc5150a05aa772b418ad",
+        "crates/rustra/benches/function_dispatch.rs": "490fedbb2e8359a729e6cacbfae55778098acf2c47b6b2cc2ca1810f7c29007e",
+        "crates/rustra/benches/support/complex_cases.rs": "6ac075caa3bd0a8aa810c80c238717d010f27dcea16b5a1f23a7571913cb2c95",
+        "crates/rustra/benches/support/tree_cases.rs": "47a307a0b262970c15839791576735996e8409323e9e9b617f3898c22e10462f",
+        "crates/rustra/benches/support/tree_wire.rs": "7c6061ae5df5d26fb97d5af9aa27b2a5d09b32e896d7d637e811c8c27cdd49e1",
+        "crates/rustra/benches/tier_compare.rs": "252c18467031d5fb7048d13cb1b463fd57fbc431ab2658bd0a648fe7e6ad0204",
+        "crates/rustra/benches/tree_route.rs": "545d6f6cbdc693af39a3c197be0e0da4848f05961a9e01bc8d035a812a444a71",
+        "crates/rustra/benches/type_scaling.rs": "2186851f721ca36df60d02d367d4b5aa97f4a64cced137974000feece75bbc3f",
+        "crates/rustra/examples/basic.rs": "e81eed2663d4cf1acc8ac6097c0f31b0de2bff03ca21c3a0bc8c9027353b88a5",
+        "crates/rustra/examples/codec_allocations.rs": "e28e21372c6452be8bb62affee4e3774b91dda31ce241a61a2b24dcfef0aa54d",
+        "crates/rustra/examples/function_fixture.rs": "c614662e087c67046e66fd93509dcce031920efad3b5e999a50931c3b971f86b",
+        "crates/rustra/examples/tree_allocations.rs": "89b66906c2e7cbb56e50d3766bc190389ace67e397c322d3183f146ab79a1109",
+        "crates/rustra/src/builder.rs": "1d7b9d9acfdea47379fed9323e0b3f5028ed4265cd4e6131189946b4925c31be",
+        "crates/rustra/src/builder_build.rs": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b",
+        "crates/rustra/src/builder_capabilities.rs": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a",
+        "crates/rustra/src/builder_commands.rs": "15c787db7c06053851c3de69d75e53d77f994ccb85782c283cf19b85dfb2254c",
+        "crates/rustra/src/builder_devices.rs": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564",
+        "crates/rustra/src/builder_errors.rs": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13",
+        "crates/rustra/src/builder_events.rs": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077",
+        "crates/rustra/src/builder_functions.rs": "b563748f6c64316985e772a39e567e42d8fb0307ca4cba1ba9497d7602b34e12",
+        "crates/rustra/src/builder_platform.rs": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819",
+        "crates/rustra/src/byte_buffer.rs": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd",
+        "crates/rustra/src/cancel.rs": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b",
+        "crates/rustra/src/cancel_tests.rs": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5",
+        "crates/rustra/src/channels.rs": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45",
+        "crates/rustra/src/channels_handles.rs": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234",
+        "crates/rustra/src/channels_host.rs": "92c0c3eb5e337f718ca08fe59fd956d51c0af8f4686f408f008c02efdbde4b91",
+        "crates/rustra/src/channels_tests.rs": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f",
+        "crates/rustra/src/codegen.rs": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb",
+        "crates/rustra/src/codegen_names.rs": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210",
+        "crates/rustra/src/codegen_objects.rs": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd",
+        "crates/rustra/src/codegen_types.rs": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac",
+        "crates/rustra/src/command.rs": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09",
+        "crates/rustra/src/command_build.rs": "376832b68d4860e847316965f067869db2f5a031e826f38aa812178d611f073b",
+        "crates/rustra/src/command_execution.rs": "92beecef6fc6575c67d07c28fa696b3bcabd5f3faa0d50c7d69fdb609d56e47f",
+        "crates/rustra/src/command_handlers.rs": "6475fbaddb2e8f2a11453ab53f758288142a24286db8559f6577a88f82103c41",
+        "crates/rustra/src/command_into.rs": "44cfcb791d4a204ba2573aadd71b18a9317c8d018bdf511683ac8de124f2142a",
+        "crates/rustra/src/command_raw.rs": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e",
+        "crates/rustra/src/command_raw_wire.rs": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0",
+        "crates/rustra/src/command_schema.rs": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb",
+        "crates/rustra/src/command_types.rs": "987aa4745c671f725acf242ed2d63b7dca5cf22f5c206cc4f1ddfd4ed029c2c9",
+        "crates/rustra/src/complex_codec.rs": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5",
+        "crates/rustra/src/complex_codec_decode.rs": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c",
+        "crates/rustra/src/complex_codec_encode.rs": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e",
+        "crates/rustra/src/complex_codec_encode_object.rs": "c6ca046d21ca39032054973aef71acb61e29750bdcd2d2abb38b662414d8832b",
+        "crates/rustra/src/complex_codec_schema.rs": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd",
+        "crates/rustra/src/complex_codec_tests.rs": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd",
+        "crates/rustra/src/complex_codec_variants.rs": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c",
+        "crates/rustra/src/complex_codec_wire.rs": "1c11306eefb2eafafef42588869ec38e4db58fa5ea02785fd78d5bdc9f2d0918",
+        "crates/rustra/src/complex_schema_ir.rs": "3f3af4cffcb22628305ec7d9cc7d75b49f8fb3b587d0deefd720de6e940e68b6",
+        "crates/rustra/src/complex_schema_ir_compile.rs": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8",
+        "crates/rustra/src/complex_serde.rs": "f5ca25c386191418f55944baf99d0c14d883671612e717b7470cf3bdfbcca820",
+        "crates/rustra/src/complex_serde_compat_tests.rs": "9d60a0c37d88b4e9ded5ed66305a3ebbed49e82c6da3c6b4ed93c85665fde80e",
+        "crates/rustra/src/complex_serde_de_access.rs": "f51659924ad8826daa7eb8194b44129e0c816dd7ab022dc5c0267fcf33329cb1",
+        "crates/rustra/src/complex_serde_de_aux.rs": "2cb641b40799b55615622bacabfde88f7720e1e5385adc998c2f8bcb873ab1d2",
+        "crates/rustra/src/complex_serde_de_core.rs": "6a240cbbd5b37b9ca7402143ee961d7ae2fdd463b15754db3ecdc3e06de4c0c1",
+        "crates/rustra/src/complex_serde_de_entry.rs": "100189b35972005ccaba2f2918f15b626e6aa1c049e26bc6974fe94ab52b0a71",
+        "crates/rustra/src/complex_serde_de_enum.rs": "be5923bee08ac5befce7e0d91237ebe5de03d5a7bca335f38522ebb002884654",
+        "crates/rustra/src/complex_serde_de_integer_seq.rs": "1c2cdda1d4b695c530330b23776e256382b5930185f2a024c164de0bc1335393",
+        "crates/rustra/src/complex_serde_integer_seq_tests.rs": "3148069a26719c31158d983289e23c17ae48c7ed5fa900b41cbfbb5bc05581d2",
+        "crates/rustra/src/complex_serde_map_scratch.rs": "99c2ec08df9913c35f2b3a6fd0f1a1f998df75bd670d8d5f427c847f79251255",
+        "crates/rustra/src/complex_serde_pair_tests.rs": "5e385c370b83ad59ebe6b78cef2222e66f28684f7a6da2f4d6939f65fe56bdc5",
+        "crates/rustra/src/complex_serde_recursive_tests.rs": "5670afe3e9bce51eb2dcd32e5e153b5338d0f92121d42320c343acf972227914",
+        "crates/rustra/src/complex_serde_refs.rs": "f1914fada36141ee424ece26684c309a9015375a9e2022c7fc9595a5edd726dc",
+        "crates/rustra/src/complex_serde_scratch_tests.rs": "f861afa0269e493b63ed46468e26636df4e2fcbfe4f2931642f24dd1d9073dc0",
+        "crates/rustra/src/complex_serde_ser_access.rs": "e5f8159cee7943a4142c210cde2ac8fd6c3a4befd51aaf615d04dfbdeb2250ea",
+        "crates/rustra/src/complex_serde_ser_core.rs": "d0d08b6196efc9982995330e17dfca0ce8c773db88b593391610505a62ea1780",
+        "crates/rustra/src/complex_serde_ser_entry.rs": "e97e7ed79422d4c808d97d53d1bd265fb7977c411161e0b1322cb4839e6f5504",
+        "crates/rustra/src/complex_serde_ser_map_key.rs": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19",
+        "crates/rustra/src/complex_serde_ser_struct.rs": "963479a71758195c3706e5beff469f583c16e7a8482b9a5e98e1f3f9f7997609",
+        "crates/rustra/src/complex_serde_support.rs": "b4b0784ea8e50b25f4a2ffca62ddc24bd0d3f63c19fd3ef4852a83ab2158f9ef",
+        "crates/rustra/src/complex_serde_tests.rs": "ebf574e1ff0eb1f94888b247ae76503b37c031bae6a3be89111a1f8b9ee22d47",
+        "crates/rustra/src/complex_serde_validation_tests.rs": "f86d64b92a11ce1905abb703095039d328631fcde679bac1d12189b677c95eab",
+        "crates/rustra/src/device_capabilities.rs": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56",
+        "crates/rustra/src/entry.rs": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba",
+        "crates/rustra/src/error.rs": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94",
+        "crates/rustra/src/error_tests.rs": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f",
+        "crates/rustra/src/events.rs": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960",
+        "crates/rustra/src/events_bus.rs": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2",
+        "crates/rustra/src/events_state.rs": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977",
+        "crates/rustra/src/events_tests.rs": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849",
+        "crates/rustra/src/executor.rs": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0",
+        "crates/rustra/src/ffi.rs": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b",
+        "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+        "crates/rustra/src/ffi_buffer_entries.rs": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c",
+        "crates/rustra/src/ffi_channel.rs": "26b631413e02a2bb642a8caa042887bc8e2926b8ff0a5b8bdf70ea5ace71b4e0",
+        "crates/rustra/src/ffi_dispatch.rs": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd",
+        "crates/rustra/src/ffi_event_core.rs": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356",
+        "crates/rustra/src/ffi_event_entries.rs": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52",
+        "crates/rustra/src/ffi_free_guard.rs": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943",
+        "crates/rustra/src/ffi_hot_reload.rs": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2",
+        "crates/rustra/src/ffi_hot_reload_tests.rs": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5",
+        "crates/rustra/src/ffi_lifecycle_entries.rs": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e",
+        "crates/rustra/src/ffi_pool.rs": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47",
+        "crates/rustra/src/ffi_prelude.rs": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3",
+        "crates/rustra/src/ffi_schema_entries.rs": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1",
+        "crates/rustra/src/ffi_snapshot.rs": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90",
+        "crates/rustra/src/ffi_snapshot_tests.rs": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5",
+        "crates/rustra/src/ffi_sync_entries.rs": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72",
+        "crates/rustra/src/ffi_tests.rs": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4",
+        "crates/rustra/src/ffi_typed_async.rs": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544",
+        "crates/rustra/src/ffi_typed_buffer.rs": "f62ba581f7e0bb8125ae607cadc7c299e38c0123a6205b7281de0e02e1813d82",
+        "crates/rustra/src/ffi_typed_entries.rs": "342c572a9ac2564e7b211873a2e82c48ce4d7565eb84c8e50bddd526ee27ba9d",
+        "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7",
+        "crates/rustra/src/frame_codec.rs": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da",
+        "crates/rustra/src/frame_decode.rs": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d",
+        "crates/rustra/src/frame_error.rs": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb",
+        "crates/rustra/src/frame_fields.rs": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18",
+        "crates/rustra/src/frame_raw.rs": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702",
+        "crates/rustra/src/frame_response.rs": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f",
+        "crates/rustra/src/frame_support.rs": "c5f89d7cc87107e3d5b203f456c41c5ab77ac651968ce407b7eaab30e34281ab",
+        "crates/rustra/src/frame_support_extra.rs": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67",
+        "crates/rustra/src/frame_tier3.rs": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4",
+        "crates/rustra/src/frame_vec.rs": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657",
+        "crates/rustra/src/function.rs": "8f6c526278c4898fb9d70023b26e762a52e9a9e69b1c41e0632bf1b686e75ef5",
+        "crates/rustra/src/hot_core.rs": "5e133b2a5f4fed9dc995932f343823726e6e019b9d561870f92c4576ae83f64d",
+        "crates/rustra/src/hot_core_dylib.rs": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d",
+        "crates/rustra/src/hot_core_retention.rs": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0",
+        "crates/rustra/src/hot_core_tests.rs": "4a8e2b1cfbd5a46819951a913853236a59a0e95eab17f5b49c5af43cfde7b244",
+        "crates/rustra/src/hot_core_watch.rs": "80e4dd98e0ce2627f44e80b696843380efbc6db26146d1be6a4417d528bd48ca",
+        "crates/rustra/src/internal_tests/buffer_invoke_tests.rs": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40",
+        "crates/rustra/src/internal_tests/builder_devices_tests.rs": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a",
+        "crates/rustra/src/internal_tests/builder_errors_tests.rs": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34",
+        "crates/rustra/src/internal_tests/builder_platform_tests.rs": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915",
+        "crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c",
+        "crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb",
+        "crates/rustra/src/internal_tests/complex_into_tests.rs": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881",
+        "crates/rustra/src/internal_tests/raw_invoke_tests.rs": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7",
+        "crates/rustra/src/internal_tests/runtime_registry_tests.rs": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657",
+        "crates/rustra/src/internal_tests.rs": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a",
+        "crates/rustra/src/invoke.rs": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d",
+        "crates/rustra/src/invoke_buffer.rs": "752c36c38b71e1bc9dcfb38fdec801b706147cc6dacaaff581632f3a7b5742a1",
+        "crates/rustra/src/invoke_dispatch.rs": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2",
+        "crates/rustra/src/invoke_frame.rs": "d54776c2db79a9859c27c6078732e6876e86d23656ea4e30f3aa20eb5812df3f",
+        "crates/rustra/src/invoke_typed.rs": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d",
+        "crates/rustra/src/lib.rs": "e62ab6bce6f46ca92791a65a9c70f926d9131e7dcbb22e2ace0f45d9366a6f4e",
+        "crates/rustra/src/limits.rs": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0",
+        "crates/rustra/src/package.rs": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995",
+        "crates/rustra/src/package_codegen.rs": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf",
+        "crates/rustra/src/package_commands_gen.rs": "dbb3ddecf95d5e6577bc92e13285b858c3ed57c0908c850a4eeb778684c2e09e",
+        "crates/rustra/src/package_core.rs": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a",
+        "crates/rustra/src/package_events.rs": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46",
+        "crates/rustra/src/package_json.rs": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13",
+        "crates/rustra/src/package_schema.rs": "1b41d7f1474f5798ec95e487b033d850e6f2f554a90110b06bb325a191151629",
+        "crates/rustra/src/package_types.rs": "3c09ee7cc3be37d058fe897bb96221149b1c99e9959409a22ef7e80ef52da4c7",
+        "crates/rustra/src/package_types_gen.rs": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533",
+        "crates/rustra/src/platform.rs": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602",
+        "crates/rustra/src/prelude.rs": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d",
+        "crates/rustra/src/private.rs": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed",
+        "crates/rustra/src/registry.rs": "819c862e9b89268d17ab395230aa9ef0d7e2198b8675607137ff4b52d606238f",
+        "crates/rustra/src/schema.rs": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053",
+        "crates/rustra/src/state.rs": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895",
+        "crates/rustra/src/tauri_channel_ipc.rs": "85260a49c2f4287888cceaba84eced9256bb968ec3b60f03be381ed2fc946f89",
+        "crates/rustra/src/tauri_channel_ownership.rs": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67",
+        "crates/rustra/src/tauri_channels.rs": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18",
+        "crates/rustra/src/tauri_support.rs": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61",
+        "crates/rustra/src/tauri_support_swap_report.rs": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16",
+        "crates/rustra/src/tauri_support_tests.rs": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856",
+        "crates/rustra/tests/cancel_tests.rs": "a32efd12c6a5159f7a4d1eb1a79425126a8fa25809a3fc71687cddd6b37fad63",
+        "crates/rustra/tests/channel_send_limit.rs": "dc3f5d5dac979197519744b1827db620f5e0e3783f410201ed10c2d14cc354d2",
+        "crates/rustra/tests/event_sink_tests.rs": "e87b8b8aec30d75a10baf4cddbf821211484567fde9e58a16f6f4e436217483e",
+        "crates/rustra/tests/ffi_concurrency.rs": "fa21ef5d604fc518ffee0c01b03b9121586e2c6b6ea88d9f3e4a892c3b7ec020",
+        "crates/rustra/tests/field_order_drift.rs": "01d011d87e89019750ed4d63ce77920483753bc80c2a4e2a1bb48a5b84cacb3c",
+        "crates/rustra/tests/frame_concurrency.rs": "b2f428f7277a424323673ef249d71a9cd5a8290e98f933650bd5534cfa43ed9b",
+        "crates/rustra/tests/frame_fuzz.rs": "5e53b186c903e00326c1b2d58294633fc02c3f8ff320bf2898e784dc3b0fdd43",
+        "crates/rustra/tests/frame_panic.rs": "5c1df7e54fb4c391ae96d060b59938d1341b4ffe7b2e64e2598500f658f33004",
+        "crates/rustra/tests/frame_wire.rs": "c59eb39648ae760725644b33cfe9ea728adeca04a20d80a4c475f1757239259a",
+        "crates/rustra/tests/function_allocations.rs": "69c905c0af872ad0bb6130aa29a277232ce5b4b5b0d4b7b25400f37a103e5748",
+        "crates/rustra/tests/function_registration.rs": "167c979a035f7730754952bbffc62fd07bc9dc22d9516df6879b97c064f2f8ae",
+        "crates/rustra/tests/inspector_golden.rs": "59c84d5256e352282ca539b86b702e8b47ed86669dc41a15bfe5f998f640e51f",
+        "crates/rustra/tests/integer_sequence_route.rs": "df96dd72bcc21f6f7d6fde23b2a9b0f498f715a36a1be22677a5ad0ab4cdeba3",
+        "crates/rustra/tests/invocation_isolation.rs": "a049eb0aad5c420475501b67e662757f448ea8dd851f19c0b0d0e8dbc7494a53",
+        "crates/rustra/tests/invoke_typed_tests.rs": "514ed7c60ef0e39e0e8b59c0d18bf1b1e6e4ecdbe44dc5fa4588fa3080b5c35d",
+        "crates/rustra/tests/ota_compat_tests.rs": "63b51497feba49a737739d3f75fc06b4dca67f20bd3b9784a0827ee789b860ed",
+        "crates/rustra/tests/payload_robustness.rs": "5ea0ded65da7c6d42784dfcf3ef50e518509b645305473e4f8a41a302473cdc1",
+        "crates/rustra/tests/public_authoring_api_tests.rs": "ac2a1cde789a5f54e0378cde24baedffc77900613064838353143094b655e24f",
+        "crates/rustra/tests/raw_dispatch_contract.rs": "e00eda15836eac671737866ebba180aad9ce87576389468173e93dc4b57108c9",
+        "crates/rustra/tests/raw_ffi_allocations.rs": "1b872e2123ed2cfc77d5481b72667d934779a0912d02118bb91ef7fb4a8e7f02",
+        "crates/rustra/tests/response_limits.rs": "35235155a4a9988023344f574d8ab8f673808a55baebb9e310bb7b32f353d67f",
+        "crates/rustra/tests/sync_execution.rs": "dfc84817043e54004a2de7c8cc843352e95d5c61465157dbf0984e760b55368f",
+        "crates/rustra/tests/tree_benchmark_fixtures.rs": "5d1e9b755e0f01d93792c7d59ee42220b4662b2ba9ffd895144815c35300f24f",
+        "crates/rustra/tests/trust_baseline_ffi.rs": "e037ca2a7a6da23380624d676f6fe23dfe071f5003a03586ba6f6a85f4b953a7",
+        "crates/rustra-macros/src/lib.rs": "f9a55f5880a6d7b41448e0fceb90af863693bee110449c4fdf88d9a6bd991794",
+        "crates/rustra-macros/src/macro_bridge_type.rs": "bf73882db0c72d2c65c96c4161db0ba2499d6ebafef456b3b00e9a9c4018f731",
+        "crates/rustra-macros/src/macro_build.rs": "4488f6add790d8a1f503b487939b7ef654327f515835a8e21282f1c3e7fcb702",
+        "crates/rustra-macros/src/macro_command.rs": "4982243981e30a79f8b01dd99666bd6c3f2e9b1a5be213fbf6649461dc9e7b9e",
+        "crates/rustra-macros/src/macro_command_support.rs": "fd1737ba9de81b9654397ef2619a32849d3788eee0e838f547ed1dbc36da0ac5",
+        "crates/rustra-macros/src/macro_register.rs": "a5e453bfb961a6eed192fa6058357692f7aeae5e72f09ae1c4d72b323325f76d",
+        "crates/rustra-naming/src/lib.rs": "775466df7d830b535ab2980ddb7d604a6fcaef90306234b0c36e0b3e0248ba5c",
+        "crates/rustra-naming/tests/naming.rs": "674fa745b9c9b749863fe66a6e0e316ed9ff377c0b6f36ee15207423b6c06c3d"
+      },
+      "manifests": {
+        "Cargo.toml": "745da26546ca81d496d874baf2c4cf1f2b3fc6ac9e411a690b232f97e4e245e1",
+        "Cargo.lock": "11755949012a6789d67cf67d71b90623bb836552cfd2d142af43adef90cdc7a1",
+        "crates/rustra/Cargo.toml": "6504711b11bf3a1efd7de19734e14815dddf5adfef31e1b5a24e4cdba99fc9c7"
+      },
+      "binaries": {
+        "tree_route": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/tree_route-86e151aa1dfaa2ba",
+          "sha256": "d6a50d7274fee6fadd311e3f266d565af4e333b881c44376b8fbf60f70d481b7"
+        },
+        "complex_route": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/complex_route-d71d6e953c00d9e4",
+          "sha256": "f102024b03281e40c568c1205bf75fb6fe298341d6c895dd11a8e1abf4c41311"
+        }
+      }
+    },
+    "candidate": {
+      "commit": "c717117ff5e4623951242fae07edf8844829c161",
+      "root": "/Users/loopy/dev/ll3/rustra-bridge",
+      "sources": {
+        "crates/rustra/benches/common.rs": "c6ad6a7955087384cff677d01c9c33f4fda0a45a4b920233b7a95022339de776",
+        "crates/rustra/benches/complex_route.rs": "6d98086180fe9e52a88cddc2b7d6f685637ea3edc842783415245debd340968c",
+        "crates/rustra/benches/dynamic_registry.rs": "457abd018c09090155b71a1433666d23d246581aa8cabc5150a05aa772b418ad",
+        "crates/rustra/benches/function_dispatch.rs": "490fedbb2e8359a729e6cacbfae55778098acf2c47b6b2cc2ca1810f7c29007e",
+        "crates/rustra/benches/support/complex_cases.rs": "6ac075caa3bd0a8aa810c80c238717d010f27dcea16b5a1f23a7571913cb2c95",
+        "crates/rustra/benches/support/tree_cases.rs": "47a307a0b262970c15839791576735996e8409323e9e9b617f3898c22e10462f",
+        "crates/rustra/benches/support/tree_wire.rs": "7c6061ae5df5d26fb97d5af9aa27b2a5d09b32e896d7d637e811c8c27cdd49e1",
+        "crates/rustra/benches/tier_compare.rs": "252c18467031d5fb7048d13cb1b463fd57fbc431ab2658bd0a648fe7e6ad0204",
+        "crates/rustra/benches/tree_route.rs": "545d6f6cbdc693af39a3c197be0e0da4848f05961a9e01bc8d035a812a444a71",
+        "crates/rustra/benches/type_scaling.rs": "2186851f721ca36df60d02d367d4b5aa97f4a64cced137974000feece75bbc3f",
+        "crates/rustra/examples/basic.rs": "e81eed2663d4cf1acc8ac6097c0f31b0de2bff03ca21c3a0bc8c9027353b88a5",
+        "crates/rustra/examples/codec_allocations.rs": "e28e21372c6452be8bb62affee4e3774b91dda31ce241a61a2b24dcfef0aa54d",
+        "crates/rustra/examples/function_fixture.rs": "c614662e087c67046e66fd93509dcce031920efad3b5e999a50931c3b971f86b",
+        "crates/rustra/examples/tree_allocations.rs": "89b66906c2e7cbb56e50d3766bc190389ace67e397c322d3183f146ab79a1109",
+        "crates/rustra/src/builder.rs": "1d7b9d9acfdea47379fed9323e0b3f5028ed4265cd4e6131189946b4925c31be",
+        "crates/rustra/src/builder_build.rs": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b",
+        "crates/rustra/src/builder_capabilities.rs": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a",
+        "crates/rustra/src/builder_commands.rs": "15c787db7c06053851c3de69d75e53d77f994ccb85782c283cf19b85dfb2254c",
+        "crates/rustra/src/builder_devices.rs": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564",
+        "crates/rustra/src/builder_errors.rs": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13",
+        "crates/rustra/src/builder_events.rs": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077",
+        "crates/rustra/src/builder_functions.rs": "b563748f6c64316985e772a39e567e42d8fb0307ca4cba1ba9497d7602b34e12",
+        "crates/rustra/src/builder_platform.rs": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819",
+        "crates/rustra/src/byte_buffer.rs": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd",
+        "crates/rustra/src/cancel.rs": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b",
+        "crates/rustra/src/cancel_tests.rs": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5",
+        "crates/rustra/src/channels.rs": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45",
+        "crates/rustra/src/channels_handles.rs": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234",
+        "crates/rustra/src/channels_host.rs": "92c0c3eb5e337f718ca08fe59fd956d51c0af8f4686f408f008c02efdbde4b91",
+        "crates/rustra/src/channels_tests.rs": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f",
+        "crates/rustra/src/codegen.rs": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb",
+        "crates/rustra/src/codegen_names.rs": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210",
+        "crates/rustra/src/codegen_objects.rs": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd",
+        "crates/rustra/src/codegen_types.rs": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac",
+        "crates/rustra/src/command.rs": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09",
+        "crates/rustra/src/command_build.rs": "376832b68d4860e847316965f067869db2f5a031e826f38aa812178d611f073b",
+        "crates/rustra/src/command_execution.rs": "92beecef6fc6575c67d07c28fa696b3bcabd5f3faa0d50c7d69fdb609d56e47f",
+        "crates/rustra/src/command_handlers.rs": "6475fbaddb2e8f2a11453ab53f758288142a24286db8559f6577a88f82103c41",
+        "crates/rustra/src/command_into.rs": "44cfcb791d4a204ba2573aadd71b18a9317c8d018bdf511683ac8de124f2142a",
+        "crates/rustra/src/command_raw.rs": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e",
+        "crates/rustra/src/command_raw_wire.rs": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0",
+        "crates/rustra/src/command_schema.rs": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb",
+        "crates/rustra/src/command_types.rs": "987aa4745c671f725acf242ed2d63b7dca5cf22f5c206cc4f1ddfd4ed029c2c9",
+        "crates/rustra/src/complex_codec.rs": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5",
+        "crates/rustra/src/complex_codec_decode.rs": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c",
+        "crates/rustra/src/complex_codec_encode.rs": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e",
+        "crates/rustra/src/complex_codec_encode_object.rs": "c6ca046d21ca39032054973aef71acb61e29750bdcd2d2abb38b662414d8832b",
+        "crates/rustra/src/complex_codec_schema.rs": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd",
+        "crates/rustra/src/complex_codec_tests.rs": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd",
+        "crates/rustra/src/complex_codec_variants.rs": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c",
+        "crates/rustra/src/complex_codec_wire.rs": "1c11306eefb2eafafef42588869ec38e4db58fa5ea02785fd78d5bdc9f2d0918",
+        "crates/rustra/src/complex_schema_ir.rs": "3f3af4cffcb22628305ec7d9cc7d75b49f8fb3b587d0deefd720de6e940e68b6",
+        "crates/rustra/src/complex_schema_ir_compile.rs": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8",
+        "crates/rustra/src/complex_serde.rs": "f5ca25c386191418f55944baf99d0c14d883671612e717b7470cf3bdfbcca820",
+        "crates/rustra/src/complex_serde_compat_tests.rs": "9d60a0c37d88b4e9ded5ed66305a3ebbed49e82c6da3c6b4ed93c85665fde80e",
+        "crates/rustra/src/complex_serde_de_access.rs": "f51659924ad8826daa7eb8194b44129e0c816dd7ab022dc5c0267fcf33329cb1",
+        "crates/rustra/src/complex_serde_de_aux.rs": "2cb641b40799b55615622bacabfde88f7720e1e5385adc998c2f8bcb873ab1d2",
+        "crates/rustra/src/complex_serde_de_core.rs": "6a240cbbd5b37b9ca7402143ee961d7ae2fdd463b15754db3ecdc3e06de4c0c1",
+        "crates/rustra/src/complex_serde_de_entry.rs": "100189b35972005ccaba2f2918f15b626e6aa1c049e26bc6974fe94ab52b0a71",
+        "crates/rustra/src/complex_serde_de_enum.rs": "be5923bee08ac5befce7e0d91237ebe5de03d5a7bca335f38522ebb002884654",
+        "crates/rustra/src/complex_serde_de_integer_seq.rs": "1c2cdda1d4b695c530330b23776e256382b5930185f2a024c164de0bc1335393",
+        "crates/rustra/src/complex_serde_integer_seq_tests.rs": "3148069a26719c31158d983289e23c17ae48c7ed5fa900b41cbfbb5bc05581d2",
+        "crates/rustra/src/complex_serde_map_scratch.rs": "99c2ec08df9913c35f2b3a6fd0f1a1f998df75bd670d8d5f427c847f79251255",
+        "crates/rustra/src/complex_serde_pair_tests.rs": "5e385c370b83ad59ebe6b78cef2222e66f28684f7a6da2f4d6939f65fe56bdc5",
+        "crates/rustra/src/complex_serde_recursive_tests.rs": "5670afe3e9bce51eb2dcd32e5e153b5338d0f92121d42320c343acf972227914",
+        "crates/rustra/src/complex_serde_refs.rs": "f1914fada36141ee424ece26684c309a9015375a9e2022c7fc9595a5edd726dc",
+        "crates/rustra/src/complex_serde_scratch_tests.rs": "f861afa0269e493b63ed46468e26636df4e2fcbfe4f2931642f24dd1d9073dc0",
+        "crates/rustra/src/complex_serde_ser_access.rs": "e5f8159cee7943a4142c210cde2ac8fd6c3a4befd51aaf615d04dfbdeb2250ea",
+        "crates/rustra/src/complex_serde_ser_core.rs": "d0d08b6196efc9982995330e17dfca0ce8c773db88b593391610505a62ea1780",
+        "crates/rustra/src/complex_serde_ser_entry.rs": "e97e7ed79422d4c808d97d53d1bd265fb7977c411161e0b1322cb4839e6f5504",
+        "crates/rustra/src/complex_serde_ser_map_key.rs": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19",
+        "crates/rustra/src/complex_serde_ser_struct.rs": "963479a71758195c3706e5beff469f583c16e7a8482b9a5e98e1f3f9f7997609",
+        "crates/rustra/src/complex_serde_support.rs": "b4b0784ea8e50b25f4a2ffca62ddc24bd0d3f63c19fd3ef4852a83ab2158f9ef",
+        "crates/rustra/src/complex_serde_tests.rs": "ebf574e1ff0eb1f94888b247ae76503b37c031bae6a3be89111a1f8b9ee22d47",
+        "crates/rustra/src/complex_serde_validation_tests.rs": "f86d64b92a11ce1905abb703095039d328631fcde679bac1d12189b677c95eab",
+        "crates/rustra/src/device_capabilities.rs": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56",
+        "crates/rustra/src/entry.rs": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba",
+        "crates/rustra/src/error.rs": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94",
+        "crates/rustra/src/error_tests.rs": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f",
+        "crates/rustra/src/events.rs": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960",
+        "crates/rustra/src/events_bus.rs": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2",
+        "crates/rustra/src/events_state.rs": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977",
+        "crates/rustra/src/events_tests.rs": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849",
+        "crates/rustra/src/executor.rs": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0",
+        "crates/rustra/src/ffi.rs": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b",
+        "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+        "crates/rustra/src/ffi_buffer_entries.rs": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c",
+        "crates/rustra/src/ffi_channel.rs": "1c920cc33cce13182f5752b208cd6cd585e4a4eb488a21d79739cbcc3cc9c170",
+        "crates/rustra/src/ffi_dispatch.rs": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd",
+        "crates/rustra/src/ffi_event_core.rs": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356",
+        "crates/rustra/src/ffi_event_entries.rs": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52",
+        "crates/rustra/src/ffi_free_guard.rs": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943",
+        "crates/rustra/src/ffi_hot_reload.rs": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2",
+        "crates/rustra/src/ffi_hot_reload_tests.rs": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5",
+        "crates/rustra/src/ffi_lifecycle_entries.rs": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e",
+        "crates/rustra/src/ffi_pool.rs": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47",
+        "crates/rustra/src/ffi_prelude.rs": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3",
+        "crates/rustra/src/ffi_schema_entries.rs": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1",
+        "crates/rustra/src/ffi_snapshot.rs": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90",
+        "crates/rustra/src/ffi_snapshot_tests.rs": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5",
+        "crates/rustra/src/ffi_sync_entries.rs": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72",
+        "crates/rustra/src/ffi_tests.rs": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4",
+        "crates/rustra/src/ffi_typed_async.rs": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544",
+        "crates/rustra/src/ffi_typed_buffer.rs": "f62ba581f7e0bb8125ae607cadc7c299e38c0123a6205b7281de0e02e1813d82",
+        "crates/rustra/src/ffi_typed_entries.rs": "342c572a9ac2564e7b211873a2e82c48ce4d7565eb84c8e50bddd526ee27ba9d",
+        "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7",
+        "crates/rustra/src/frame_codec.rs": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da",
+        "crates/rustra/src/frame_decode.rs": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d",
+        "crates/rustra/src/frame_error.rs": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb",
+        "crates/rustra/src/frame_fields.rs": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18",
+        "crates/rustra/src/frame_raw.rs": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702",
+        "crates/rustra/src/frame_response.rs": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f",
+        "crates/rustra/src/frame_support.rs": "c5f89d7cc87107e3d5b203f456c41c5ab77ac651968ce407b7eaab30e34281ab",
+        "crates/rustra/src/frame_support_extra.rs": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67",
+        "crates/rustra/src/frame_tier3.rs": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4",
+        "crates/rustra/src/frame_vec.rs": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657",
+        "crates/rustra/src/function.rs": "8f6c526278c4898fb9d70023b26e762a52e9a9e69b1c41e0632bf1b686e75ef5",
+        "crates/rustra/src/hot_core.rs": "3b007f7c07a31a019a4e4d8283e04d51dd1e3a9b33c93289937c3aff0fcbaa47",
+        "crates/rustra/src/hot_core_dylib.rs": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d",
+        "crates/rustra/src/hot_core_retention.rs": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0",
+        "crates/rustra/src/hot_core_tests.rs": "551767fc2551ed782ff0cf1c8765ff6ca7c19cf94edbb05205b374905083a271",
+        "crates/rustra/src/hot_core_watch.rs": "b2720bd7929ed6378e141d10a863da2e7cd68f229402b3b829885baa1e1c801c",
+        "crates/rustra/src/internal_tests/buffer_invoke_tests.rs": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40",
+        "crates/rustra/src/internal_tests/builder_devices_tests.rs": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a",
+        "crates/rustra/src/internal_tests/builder_errors_tests.rs": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34",
+        "crates/rustra/src/internal_tests/builder_platform_tests.rs": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915",
+        "crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c",
+        "crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb",
+        "crates/rustra/src/internal_tests/complex_into_tests.rs": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881",
+        "crates/rustra/src/internal_tests/raw_invoke_tests.rs": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7",
+        "crates/rustra/src/internal_tests/runtime_registry_tests.rs": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657",
+        "crates/rustra/src/internal_tests.rs": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a",
+        "crates/rustra/src/invoke.rs": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d",
+        "crates/rustra/src/invoke_buffer.rs": "752c36c38b71e1bc9dcfb38fdec801b706147cc6dacaaff581632f3a7b5742a1",
+        "crates/rustra/src/invoke_dispatch.rs": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2",
+        "crates/rustra/src/invoke_frame.rs": "d54776c2db79a9859c27c6078732e6876e86d23656ea4e30f3aa20eb5812df3f",
+        "crates/rustra/src/invoke_typed.rs": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d",
+        "crates/rustra/src/lib.rs": "e62ab6bce6f46ca92791a65a9c70f926d9131e7dcbb22e2ace0f45d9366a6f4e",
+        "crates/rustra/src/limits.rs": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0",
+        "crates/rustra/src/package.rs": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995",
+        "crates/rustra/src/package_codegen.rs": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf",
+        "crates/rustra/src/package_commands_gen.rs": "dbb3ddecf95d5e6577bc92e13285b858c3ed57c0908c850a4eeb778684c2e09e",
+        "crates/rustra/src/package_core.rs": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a",
+        "crates/rustra/src/package_events.rs": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46",
+        "crates/rustra/src/package_json.rs": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13",
+        "crates/rustra/src/package_schema.rs": "1b41d7f1474f5798ec95e487b033d850e6f2f554a90110b06bb325a191151629",
+        "crates/rustra/src/package_types.rs": "3c09ee7cc3be37d058fe897bb96221149b1c99e9959409a22ef7e80ef52da4c7",
+        "crates/rustra/src/package_types_gen.rs": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533",
+        "crates/rustra/src/platform.rs": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602",
+        "crates/rustra/src/prelude.rs": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d",
+        "crates/rustra/src/private.rs": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed",
+        "crates/rustra/src/registry.rs": "819c862e9b89268d17ab395230aa9ef0d7e2198b8675607137ff4b52d606238f",
+        "crates/rustra/src/schema.rs": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053",
+        "crates/rustra/src/state.rs": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895",
+        "crates/rustra/src/tauri_channel_ipc.rs": "a3203f315b4e396077843999cb68b86e021d314e2a9d814dad732193429d3df2",
+        "crates/rustra/src/tauri_channel_ownership.rs": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67",
+        "crates/rustra/src/tauri_channels.rs": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18",
+        "crates/rustra/src/tauri_support.rs": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61",
+        "crates/rustra/src/tauri_support_swap_report.rs": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16",
+        "crates/rustra/src/tauri_support_tests.rs": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856",
+        "crates/rustra/tests/cancel_tests.rs": "a32efd12c6a5159f7a4d1eb1a79425126a8fa25809a3fc71687cddd6b37fad63",
+        "crates/rustra/tests/channel_nul_fail_closed.rs": "525959cf7512dfeea4936db0d8413f18e939683804893e53582b749f1213e51b",
+        "crates/rustra/tests/channel_send_limit.rs": "dc3f5d5dac979197519744b1827db620f5e0e3783f410201ed10c2d14cc354d2",
+        "crates/rustra/tests/event_sink_tests.rs": "e87b8b8aec30d75a10baf4cddbf821211484567fde9e58a16f6f4e436217483e",
+        "crates/rustra/tests/ffi_concurrency.rs": "fa21ef5d604fc518ffee0c01b03b9121586e2c6b6ea88d9f3e4a892c3b7ec020",
+        "crates/rustra/tests/field_order_drift.rs": "01d011d87e89019750ed4d63ce77920483753bc80c2a4e2a1bb48a5b84cacb3c",
+        "crates/rustra/tests/frame_concurrency.rs": "b2f428f7277a424323673ef249d71a9cd5a8290e98f933650bd5534cfa43ed9b",
+        "crates/rustra/tests/frame_fuzz.rs": "5e53b186c903e00326c1b2d58294633fc02c3f8ff320bf2898e784dc3b0fdd43",
+        "crates/rustra/tests/frame_panic.rs": "5c1df7e54fb4c391ae96d060b59938d1341b4ffe7b2e64e2598500f658f33004",
+        "crates/rustra/tests/frame_wire.rs": "c59eb39648ae760725644b33cfe9ea728adeca04a20d80a4c475f1757239259a",
+        "crates/rustra/tests/function_allocations.rs": "69c905c0af872ad0bb6130aa29a277232ce5b4b5b0d4b7b25400f37a103e5748",
+        "crates/rustra/tests/function_registration.rs": "167c979a035f7730754952bbffc62fd07bc9dc22d9516df6879b97c064f2f8ae",
+        "crates/rustra/tests/inspector_golden.rs": "59c84d5256e352282ca539b86b702e8b47ed86669dc41a15bfe5f998f640e51f",
+        "crates/rustra/tests/integer_sequence_route.rs": "df96dd72bcc21f6f7d6fde23b2a9b0f498f715a36a1be22677a5ad0ab4cdeba3",
+        "crates/rustra/tests/invocation_isolation.rs": "a049eb0aad5c420475501b67e662757f448ea8dd851f19c0b0d0e8dbc7494a53",
+        "crates/rustra/tests/invoke_typed_tests.rs": "514ed7c60ef0e39e0e8b59c0d18bf1b1e6e4ecdbe44dc5fa4588fa3080b5c35d",
+        "crates/rustra/tests/ota_compat_tests.rs": "63b51497feba49a737739d3f75fc06b4dca67f20bd3b9784a0827ee789b860ed",
+        "crates/rustra/tests/payload_robustness.rs": "5ea0ded65da7c6d42784dfcf3ef50e518509b645305473e4f8a41a302473cdc1",
+        "crates/rustra/tests/public_authoring_api_tests.rs": "ac2a1cde789a5f54e0378cde24baedffc77900613064838353143094b655e24f",
+        "crates/rustra/tests/raw_dispatch_contract.rs": "e00eda15836eac671737866ebba180aad9ce87576389468173e93dc4b57108c9",
+        "crates/rustra/tests/raw_ffi_allocations.rs": "1b872e2123ed2cfc77d5481b72667d934779a0912d02118bb91ef7fb4a8e7f02",
+        "crates/rustra/tests/response_limits.rs": "35235155a4a9988023344f574d8ab8f673808a55baebb9e310bb7b32f353d67f",
+        "crates/rustra/tests/sync_execution.rs": "dfc84817043e54004a2de7c8cc843352e95d5c61465157dbf0984e760b55368f",
+        "crates/rustra/tests/tree_benchmark_fixtures.rs": "5d1e9b755e0f01d93792c7d59ee42220b4662b2ba9ffd895144815c35300f24f",
+        "crates/rustra/tests/trust_baseline_ffi.rs": "e037ca2a7a6da23380624d676f6fe23dfe071f5003a03586ba6f6a85f4b953a7",
+        "crates/rustra-macros/src/lib.rs": "f9a55f5880a6d7b41448e0fceb90af863693bee110449c4fdf88d9a6bd991794",
+        "crates/rustra-macros/src/macro_bridge_type.rs": "bf73882db0c72d2c65c96c4161db0ba2499d6ebafef456b3b00e9a9c4018f731",
+        "crates/rustra-macros/src/macro_build.rs": "4488f6add790d8a1f503b487939b7ef654327f515835a8e21282f1c3e7fcb702",
+        "crates/rustra-macros/src/macro_command.rs": "4982243981e30a79f8b01dd99666bd6c3f2e9b1a5be213fbf6649461dc9e7b9e",
+        "crates/rustra-macros/src/macro_command_support.rs": "fd1737ba9de81b9654397ef2619a32849d3788eee0e838f547ed1dbc36da0ac5",
+        "crates/rustra-macros/src/macro_register.rs": "a5e453bfb961a6eed192fa6058357692f7aeae5e72f09ae1c4d72b323325f76d",
+        "crates/rustra-naming/src/lib.rs": "775466df7d830b535ab2980ddb7d604a6fcaef90306234b0c36e0b3e0248ba5c",
+        "crates/rustra-naming/tests/naming.rs": "674fa745b9c9b749863fe66a6e0e316ed9ff377c0b6f36ee15207423b6c06c3d"
+      },
+      "manifests": {
+        "Cargo.toml": "745da26546ca81d496d874baf2c4cf1f2b3fc6ac9e411a690b232f97e4e245e1",
+        "Cargo.lock": "11755949012a6789d67cf67d71b90623bb836552cfd2d142af43adef90cdc7a1",
+        "crates/rustra/Cargo.toml": "6504711b11bf3a1efd7de19734e14815dddf5adfef31e1b5a24e4cdba99fc9c7"
+      },
+      "binaries": {
+        "function_dispatch": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/function_dispatch-56274fb1b69f59f2",
+          "sha256": "b362ae7ae647fd21d79904ea546b7e7ecdfa037c10cc7d2b7a5db49231b68797"
+        },
+        "tree_route": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/tree_route-86e151aa1dfaa2ba",
+          "sha256": "bb48b031ad9c5da0783dd33103c281c5f50b049de5e5d4650dc602aaace6a8fd"
+        },
+        "complex_route": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/complex_route-d71d6e953c00d9e4",
+          "sha256": "0b79b0e5fe5d3a182cee82cc161eb1d4cd331d2810e77463046539f505aad98c"
+        }
+      }
+    }
+  },
+  "filters": {
+    "tree_route": "tree_route/(dfs|resident|echo)/balanced8191$",
+    "complex_route": "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+  },
+  "runs": [
+    {
+      "iteration": 1,
+      "variant": "baseline",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "44f2799075919f5fed6b05ee7357a3b09f05c5050de5e1e9d7a513a772f98136",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19991.415091565206,
+              "upper_bound": 20276.41224524838
+            },
+            "point_estimate": 20124.971133303054,
+            "standard_error": 73.15089373496743
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19863.81981951264,
+              "upper_bound": 19987.51465201465
+            },
+            "point_estimate": 19930.54491727993,
+            "standard_error": 30.907125232814398
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 249.76619120437962,
+              "upper_bound": 446.40638939912105
+            },
+            "point_estimate": 316.926052592061,
+            "standard_error": 50.17981636995689
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19845.784414625767,
+              "upper_bound": 20083.967453757847
+            },
+            "point_estimate": 19946.392325425426,
+            "standard_error": 61.869718689493276
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 494.4102484297545,
+              "upper_bound": 937.5912957214492
+            },
+            "point_estimate": 734.2385844442549,
+            "standard_error": 113.47227851404985
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20888.169025874573,
+              "upper_bound": 21245.5467941086
+            },
+            "point_estimate": 21059.401963083394,
+            "standard_error": 91.64724125640615
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20665.776284461153,
+              "upper_bound": 20902.950198389546
+            },
+            "point_estimate": 20781.432795698925,
+            "standard_error": 61.78296946297081
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 316.97350918855915,
+              "upper_bound": 689.761549352928
+            },
+            "point_estimate": 452.70807920365394,
+            "standard_error": 92.46967281154963
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 21134.584140779163,
+              "upper_bound": 21776.984969180165
+            },
+            "point_estimate": 21442.124025884128,
+            "standard_error": 164.494096881991
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 690.6398920456984,
+              "upper_bound": 1132.6050451379492
+            },
+            "point_estimate": 923.2473536229838,
+            "standard_error": 112.90129735653191
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7855282.513333333,
+              "upper_bound": 8063098.341333336
+            },
+            "point_estimate": 7947739.853333333,
+            "standard_error": 53075.276920966295
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7765166.666666666,
+              "upper_bound": 7980388.666666667
+            },
+            "point_estimate": 7880229.166666666,
+            "standard_error": 58297.416388687605
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 272983.96725356486,
+              "upper_bound": 422304.02360260533
+            },
+            "point_estimate": 344457.39388465835,
+            "standard_error": 38716.579915674556
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 301987.97145948774,
+              "upper_bound": 783010.8167991764
+            },
+            "point_estimate": 531390.7131194789,
+            "standard_error": 143585.17812230537
+          }
+        }
+      }
+    },
+    {
+      "iteration": 1,
+      "variant": "baseline",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "5bce39e4e79da0d037cb264e637549dc8933e310930fdbb1ddc115b633fcfb59",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 57.95782993482786,
+              "upper_bound": 60.672773293388694
+            },
+            "point_estimate": 59.2121827128848,
+            "standard_error": 0.6933898860192804
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.98623223514212,
+              "upper_bound": 56.24347134521967
+            },
+            "point_estimate": 56.110005258374656,
+            "standard_error": 0.06112911313986652
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1.0300905552380228,
+              "upper_bound": 1.3411660532455971
+            },
+            "point_estimate": 1.1731797137121411,
+            "standard_error": 0.07909646954544218
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 57.07744432831861,
+              "upper_bound": 59.217739436706864
+            },
+            "point_estimate": 58.0249822603378,
+            "standard_error": 0.5495537132031034
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 9.58841849687843,
+              "upper_bound": 20.68391439091318
+            },
+            "point_estimate": 15.560120102500049,
+            "standard_error": 2.8269754010457566
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5277.550207560535,
+              "upper_bound": 5578.288974371501
+            },
+            "point_estimate": 5406.459706659586,
+            "standard_error": 77.86323204423334
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5173.821683752718,
+              "upper_bound": 5201.82026480464
+            },
+            "point_estimate": 5189.77090325405,
+            "standard_error": 7.7428971066598224
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 112.35986778468057,
+              "upper_bound": 148.57213250723785
+            },
+            "point_estimate": 133.5556341505104,
+            "standard_error": 9.179170176389512
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5238.517254181643,
+              "upper_bound": 5823.93261520819
+            },
+            "point_estimate": 5473.404001850445,
+            "standard_error": 154.6474223101309
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 443.401152692624,
+              "upper_bound": 2751.11256374481
+            },
+            "point_estimate": 1745.3210745340775,
+            "standard_error": 591.6218605118381
+          }
+        }
+      }
+    },
+    {
+      "iteration": 1,
+      "variant": "candidate",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "824f85dbe9410b37757d51a6fe6a104ebe86439915351b1616bcbc7c70782c62",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20685.451332846424,
+              "upper_bound": 21007.411323251243
+            },
+            "point_estimate": 20839.7511587318,
+            "standard_error": 82.45581388433853
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20475.112822128853,
+              "upper_bound": 20723.78113207547
+            },
+            "point_estimate": 20527.675431034484,
+            "standard_error": 70.52677225789594
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 333.47375465359846,
+              "upper_bound": 611.016526478528
+            },
+            "point_estimate": 445.90920587790214,
+            "standard_error": 72.37986142570236
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20649.042595806884,
+              "upper_bound": 21098.286978892018
+            },
+            "point_estimate": 20857.82287557263,
+            "standard_error": 115.07034534556486
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 639.2368318700525,
+              "upper_bound": 989.3771009598768
+            },
+            "point_estimate": 830.9945182769953,
+            "standard_error": 89.75727210249077
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20532.124222942606,
+              "upper_bound": 21013.8467700915
+            },
+            "point_estimate": 20757.105835145896,
+            "standard_error": 123.01925159783845
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20261.58125,
+              "upper_bound": 20492.292
+            },
+            "point_estimate": 20356.661788659796,
+            "standard_error": 55.80366319445491
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 304.0811152886391,
+              "upper_bound": 654.1662388850938
+            },
+            "point_estimate": 463.3800104601594,
+            "standard_error": 94.3440774269745
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20388.852786779626,
+              "upper_bound": 20695.321735933714
+            },
+            "point_estimate": 20528.018007093247,
+            "standard_error": 78.15877489075287
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 837.3315776387066,
+              "upper_bound": 1618.064728040935
+            },
+            "point_estimate": 1230.022697460193,
+            "standard_error": 202.62585256619104
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 8189083.613333335,
+              "upper_bound": 9649726.564749997
+            },
+            "point_estimate": 8728528.203333333,
+            "standard_error": 397185.683857446
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7946611.0,
+              "upper_bound": 8191722.333333333
+            },
+            "point_estimate": 8066284.666666666,
+            "standard_error": 59590.54640083869
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 351942.5469517708,
+              "upper_bound": 686619.0002425759
+            },
+            "point_estimate": 488351.87563002063,
+            "standard_error": 84518.02385277222
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 592380.2466962693,
+              "upper_bound": 6650190.79969308
+            },
+            "point_estimate": 3956587.2681987295,
+            "standard_error": 1966628.9453299935
+          }
+        }
+      }
+    },
+    {
+      "iteration": 1,
+      "variant": "candidate",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "d3fa77f982faa0657252921ab3fc539a29d1e7cd3fe506591973b2b8e3ae0620",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.12183428095308,
+              "upper_bound": 55.61952676456327
+            },
+            "point_estimate": 55.359217915307646,
+            "standard_error": 0.12684265632342193
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.54040029651594,
+              "upper_bound": 54.79540303146486
+            },
+            "point_estimate": 54.67070619298262,
+            "standard_error": 0.06289371107770979
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1.0246528235782966,
+              "upper_bound": 1.2580908313695327
+            },
+            "point_estimate": 1.1415615927379303,
+            "standard_error": 0.060853697484547754
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.2264781267068,
+              "upper_bound": 56.009695025973826
+            },
+            "point_estimate": 55.58967952516405,
+            "standard_error": 0.20032288554394925
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 2.1916675711590456,
+              "upper_bound": 3.457357139055335
+            },
+            "point_estimate": 2.848556570718602,
+            "standard_error": 0.32350587664116653
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5407.9724351733375,
+              "upper_bound": 6441.111322960894
+            },
+            "point_estimate": 5851.669544288933,
+            "standard_error": 264.5767426828018
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5158.735855936056,
+              "upper_bound": 5195.022311420342
+            },
+            "point_estimate": 5176.992260157829,
+            "standard_error": 8.632506876360223
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 166.84270251341337,
+              "upper_bound": 199.98561571722567
+            },
+            "point_estimate": 182.22581603370944,
+            "standard_error": 8.141907231502724
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5372.449343564142,
+              "upper_bound": 6236.577819628621
+            },
+            "point_estimate": 5727.852661284823,
+            "standard_error": 224.87420824860564
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1333.1829914684824,
+              "upper_bound": 8904.51072981767
+            },
+            "point_estimate": 5905.430782807901,
+            "standard_error": 1808.4297386903368
+          }
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "variant": "candidate",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "e5aeeb4d7c6ac1b0744d330838adb10a166132ed4772fd554b264e268eacba89",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20356.954030699708,
+              "upper_bound": 20570.522212214277
+            },
+            "point_estimate": 20458.58167440154,
+            "standard_error": 54.38903141285179
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20305.58510638298,
+              "upper_bound": 20441.053921568626
+            },
+            "point_estimate": 20365.462026515153,
+            "standard_error": 38.31363716938752
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 283.6479527495369,
+              "upper_bound": 480.96155660953013
+            },
+            "point_estimate": 385.0234521913687,
+            "standard_error": 49.57850318098727
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20369.867423953,
+              "upper_bound": 20565.750196157594
+            },
+            "point_estimate": 20464.557470518692,
+            "standard_error": 50.123131253128236
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 397.3052272473566,
+              "upper_bound": 717.2529294434091
+            },
+            "point_estimate": 548.0383727676536,
+            "standard_error": 86.16375242336056
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 24681.772281896832,
+              "upper_bound": 28486.223883040286
+            },
+            "point_estimate": 26379.69224089181,
+            "standard_error": 974.5770907532652
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 22473.262479871177,
+              "upper_bound": 24372.87947352854
+            },
+            "point_estimate": 23554.731196581197,
+            "standard_error": 508.06987038041507
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 2169.3094349894336,
+              "upper_bound": 4232.122035508904
+            },
+            "point_estimate": 2993.819807077124,
+            "standard_error": 543.7984845581002
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 23705.482801863476,
+              "upper_bound": 26515.401240028506
+            },
+            "point_estimate": 24910.077099814458,
+            "standard_error": 721.3129522523484
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 4741.296860056181,
+              "upper_bound": 13991.934153646682
+            },
+            "point_estimate": 9805.90718739816,
+            "standard_error": 2391.0693072259014
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7565128.186,
+              "upper_bound": 7717946.816666668
+            },
+            "point_estimate": 7629469.570000001,
+            "standard_error": 39347.513775192434
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7553083.333333333,
+              "upper_bound": 7632389.0
+            },
+            "point_estimate": 7589423.5,
+            "standard_error": 19759.504792422726
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 144677.0474314692,
+              "upper_bound": 234930.3208291533
+            },
+            "point_estimate": 181711.15927398205,
+            "standard_error": 23846.714482521144
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 177409.25687902485,
+              "upper_bound": 620253.7841402809
+            },
+            "point_estimate": 393831.7980770642,
+            "standard_error": 143420.61730832
+          }
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "variant": "candidate",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "4bf329620363c1cd6193affddfac46e07197fd45c07c48d551d0317e697fcc5d",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 56.14474362890505,
+              "upper_bound": 56.80861382584261
+            },
+            "point_estimate": 56.45136002459235,
+            "standard_error": 0.1700175719183895
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.721226406408746,
+              "upper_bound": 55.89326024466676
+            },
+            "point_estimate": 55.81371118520204,
+            "standard_error": 0.04317275888829521
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.8801873561782345,
+              "upper_bound": 1.169309057857663
+            },
+            "point_estimate": 1.0194971782879039,
+            "standard_error": 0.0752595114259782
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 56.22100733122666,
+              "upper_bound": 57.12021331764823
+            },
+            "point_estimate": 56.6175625345662,
+            "standard_error": 0.23085008570998933
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 2.4786202205701175,
+              "upper_bound": 5.054482445109652
+            },
+            "point_estimate": 3.804081566597649,
+            "standard_error": 0.6620322950356292
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5254.219968781391,
+              "upper_bound": 5367.02556620067
+            },
+            "point_estimate": 5306.248148009273,
+            "standard_error": 28.7392211754879
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5161.156855531028,
+              "upper_bound": 5195.916282642089
+            },
+            "point_estimate": 5181.652074410011,
+            "standard_error": 9.352358919900471
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 145.16136043436006,
+              "upper_bound": 186.5843195620477
+            },
+            "point_estimate": 162.94314786385678,
+            "standard_error": 10.573681191934872
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5164.476680336009,
+              "upper_bound": 5245.684314575228
+            },
+            "point_estimate": 5200.25125091276,
+            "standard_error": 20.77598970336246
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 418.3419835333278,
+              "upper_bound": 844.570985810131
+            },
+            "point_estimate": 639.3625163193656,
+            "standard_error": 108.40749941640048
+          }
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "variant": "baseline",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "614df5706c4e9e64e0eb024f125d809b8a6fe39b2044becf9e78b010397101d8",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 24613.526773356138,
+              "upper_bound": 29817.14103437382
+            },
+            "point_estimate": 27075.71762188639,
+            "standard_error": 1334.6005823936748
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20375.954545454544,
+              "upper_bound": 21194.595454545455
+            },
+            "point_estimate": 20646.343120197187,
+            "standard_error": 237.43250380392794
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 556.8183181127903,
+              "upper_bound": 1868.6253478194897
+            },
+            "point_estimate": 996.4081630670187,
+            "standard_error": 363.6336418516307
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 21890.319958976874,
+              "upper_bound": 24570.685005906646
+            },
+            "point_estimate": 23047.513679218668,
+            "standard_error": 690.6630724985181
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 9797.225390297812,
+              "upper_bound": 16518.087613472453
+            },
+            "point_estimate": 13440.01810105176,
+            "standard_error": 1721.9874882484448
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20714.12410362812,
+              "upper_bound": 20966.13774391739
+            },
+            "point_estimate": 20833.19667836436,
+            "standard_error": 64.52488493233452
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20589.84948500283,
+              "upper_bound": 20748.126315789475
+            },
+            "point_estimate": 20659.85849030471,
+            "standard_error": 40.91512922417379
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 239.40798463277164,
+              "upper_bound": 417.6653008481163
+            },
+            "point_estimate": 301.8155548508105,
+            "standard_error": 45.86604149421062
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20713.98996703796,
+              "upper_bound": 20954.273944453944
+            },
+            "point_estimate": 20827.66771437238,
+            "standard_error": 61.56822713581502
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 448.6328096167874,
+              "upper_bound": 820.879190990439
+            },
+            "point_estimate": 648.4108277368758,
+            "standard_error": 95.39989608201836
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 9108544.17475,
+              "upper_bound": 11093225.466249999
+            },
+            "point_estimate": 10024222.783333335,
+            "standard_error": 506563.84679855977
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7925305.666666667,
+              "upper_bound": 8204125.0
+            },
+            "point_estimate": 8013361.0,
+            "standard_error": 75096.01022366986
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 315031.9851070633,
+              "upper_bound": 767451.0735750189
+            },
+            "point_estimate": 456352.92039811565,
+            "standard_error": 113181.53260299843
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 3226963.8119200775,
+              "upper_bound": 6714309.634498275
+            },
+            "point_estimate": 5078996.62295682,
+            "standard_error": 891281.2298922278
+          }
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "variant": "baseline",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "020865f85d05c03f511991bf41d393cf5827faa1f8d7c1074ad64af6e60430e4",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 60.47592673831878,
+              "upper_bound": 64.31956169596407
+            },
+            "point_estimate": 62.16833903426689,
+            "standard_error": 0.9925132499567566
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.96290428033618,
+              "upper_bound": 56.18141959605303
+            },
+            "point_estimate": 56.049323389400186,
+            "standard_error": 0.055454870791345354
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.7555228211473296,
+              "upper_bound": 1.2580808868438478
+            },
+            "point_estimate": 0.9340991592890538,
+            "standard_error": 0.12958064286271034
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 62.79248771942374,
+              "upper_bound": 66.76117115113429
+            },
+            "point_estimate": 64.67429395927338,
+            "standard_error": 1.0142722715160961
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 11.739356553736455,
+              "upper_bound": 33.51409636273708
+            },
+            "point_estimate": 22.196658553634965,
+            "standard_error": 6.474912121128088
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5253.354871332693,
+              "upper_bound": 5338.690503678608
+            },
+            "point_estimate": 5293.57739370278,
+            "standard_error": 21.80562034032125
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5145.685675626768,
+              "upper_bound": 5181.091314935065
+            },
+            "point_estimate": 5167.016264931741,
+            "standard_error": 9.374592740254187
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 140.12485844661418,
+              "upper_bound": 184.56712133441115
+            },
+            "point_estimate": 157.60281218956263,
+            "standard_error": 11.258462753314937
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5347.669024704878,
+              "upper_bound": 5497.056302264742
+            },
+            "point_estimate": 5419.171832730144,
+            "standard_error": 37.98135440232366
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 377.2712248010561,
+              "upper_bound": 596.3465413300097
+            },
+            "point_estimate": 486.3170928224069,
+            "standard_error": 56.147313981532086
+          }
+        }
+      }
+    },
+    {
+      "iteration": 3,
+      "variant": "baseline",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "5111044f5acc05233b151a1e34252300881be6b3450e97b9b2a30b0cb1ba8ed9",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 21818.229174256445,
+              "upper_bound": 24226.890340946098
+            },
+            "point_estimate": 22789.32385682376,
+            "standard_error": 631.5816229003882
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20755.76171875,
+              "upper_bound": 21930.56574109907
+            },
+            "point_estimate": 21241.23582725577,
+            "standard_error": 312.8145437234478
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 820.6483642066205,
+              "upper_bound": 2282.248788751663
+            },
+            "point_estimate": 1490.2207215795709,
+            "standard_error": 375.89407185399875
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 22215.818678664513,
+              "upper_bound": 23483.704135210963
+            },
+            "point_estimate": 22848.107148662628,
+            "standard_error": 323.999104830993
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1999.9646563729625,
+              "upper_bound": 10243.253102436704
+            },
+            "point_estimate": 6340.471589578583,
+            "standard_error": 2555.3165346692135
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20025.528300378588,
+              "upper_bound": 20404.501581455243
+            },
+            "point_estimate": 20201.83597738418,
+            "standard_error": 97.07475910692484
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19832.720588235294,
+              "upper_bound": 20025.044680851064
+            },
+            "point_estimate": 19945.416838235295,
+            "standard_error": 38.844743641839074
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 339.5136514692203,
+              "upper_bound": 589.82540431798
+            },
+            "point_estimate": 490.7035661002997,
+            "standard_error": 67.68248304459803
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20191.327756123002,
+              "upper_bound": 20649.249663743205
+            },
+            "point_estimate": 20409.098846904093,
+            "standard_error": 117.28720216742406
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 654.229081801537,
+              "upper_bound": 1305.333933493695
+            },
+            "point_estimate": 973.0783265159058,
+            "standard_error": 173.14481183167703
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 9156195.01,
+              "upper_bound": 10043950.975
+            },
+            "point_estimate": 9562785.62,
+            "standard_error": 226807.6854431806
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 8554802.0,
+              "upper_bound": 8996604.25
+            },
+            "point_estimate": 8720187.5,
+            "standard_error": 116022.77429844596
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 613055.0891160965,
+              "upper_bound": 1200776.6496307007
+            },
+            "point_estimate": 811723.114939034,
+            "standard_error": 150512.2198943003
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1442870.41209497,
+              "upper_bound": 3109889.5420845808
+            },
+            "point_estimate": 2266279.1293641543,
+            "standard_error": 439806.4763856938
+          }
+        }
+      }
+    },
+    {
+      "iteration": 3,
+      "variant": "baseline",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "0ce75109c99001c0fc3cdaf4fd144e89588f25811a0aa52c69bbb002a8bd6cd0",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 59.93729428721994,
+              "upper_bound": 62.531861812187806
+            },
+            "point_estimate": 61.15670266774288,
+            "standard_error": 0.6611254639101718
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.88191705333131,
+              "upper_bound": 56.155617065741794
+            },
+            "point_estimate": 55.9625571811259,
+            "standard_error": 0.0649952700408447
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.4911095318210738,
+              "upper_bound": 0.8617463183041214
+            },
+            "point_estimate": 0.6101656736956762,
+            "standard_error": 0.0923128441116269
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 61.215512261297995,
+              "upper_bound": 64.75131880316745
+            },
+            "point_estimate": 62.88996752506422,
+            "standard_error": 0.9059287887172595
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 10.575773670479066,
+              "upper_bound": 18.971209949286237
+            },
+            "point_estimate": 14.748279403714095,
+            "standard_error": 2.1764688613324985
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5208.935704933471,
+              "upper_bound": 5373.252082524592
+            },
+            "point_estimate": 5277.077044023494,
+            "standard_error": 42.726060196435505
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5130.132362225193,
+              "upper_bound": 5153.39034180457
+            },
+            "point_estimate": 5143.153629938965,
+            "standard_error": 6.573041450678984
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 83.25324361766914,
+              "upper_bound": 110.32994159282451
+            },
+            "point_estimate": 93.47104365437569,
+            "standard_error": 6.939323859885767
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5177.102421921559,
+              "upper_bound": 5265.592068805294
+            },
+            "point_estimate": 5216.849941746876,
+            "standard_error": 22.716381806707837
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 362.0684922823015,
+              "upper_bound": 1532.04610219923
+            },
+            "point_estimate": 957.8897843753933,
+            "standard_error": 352.2190685151408
+          }
+        }
+      }
+    },
+    {
+      "iteration": 3,
+      "variant": "candidate",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "721dfaefbef3ae3407012db453d389bc064cdaf49ce0950a28e980c888f3aca2",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 22160.676067115674,
+              "upper_bound": 23394.192329439447
+            },
+            "point_estimate": 22716.073056338726,
+            "standard_error": 315.3876617046974
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 21355.158424908426,
+              "upper_bound": 22311.424012158055
+            },
+            "point_estimate": 21727.09534739454,
+            "standard_error": 268.97970643657504
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 962.4219271895766,
+              "upper_bound": 1894.9396997286278
+            },
+            "point_estimate": 1446.8169676110083,
+            "standard_error": 247.0645791504882
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 22473.948975205043,
+              "upper_bound": 24922.07298218239
+            },
+            "point_estimate": 23487.543571745235,
+            "standard_error": 642.31439452256
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1773.7792792088749,
+              "upper_bound": 4571.177605224833
+            },
+            "point_estimate": 3168.6989646683696,
+            "standard_error": 772.2015256634963
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 23867.875854289,
+              "upper_bound": 27106.322157779075
+            },
+            "point_estimate": 25373.34062118936,
+            "standard_error": 828.0482228945856
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 21199.3,
+              "upper_bound": 23004.803186504218
+            },
+            "point_estimate": 21812.29631190727,
+            "standard_error": 479.1469341450202
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1514.3002603350487,
+              "upper_bound": 4155.842108682358
+            },
+            "point_estimate": 2392.9580631865856,
+            "standard_error": 697.0389490877178
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 22901.113782359917,
+              "upper_bound": 25002.796733766856
+            },
+            "point_estimate": 23852.127465642086,
+            "standard_error": 535.6572002473728
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5370.279948947841,
+              "upper_bound": 10998.790307641793
+            },
+            "point_estimate": 8320.519051741685,
+            "standard_error": 1447.721237425599
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 10193465.155875,
+              "upper_bound": 11421007.295
+            },
+            "point_estimate": 10764804.35,
+            "standard_error": 314693.05998733954
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 9326468.75,
+              "upper_bound": 10559125.0
+            },
+            "point_estimate": 9820625.0,
+            "standard_error": 255755.78395869693
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1284950.864687562,
+              "upper_bound": 2307388.871535659
+            },
+            "point_estimate": 1758719.0221264958,
+            "standard_error": 237000.58974343585
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 2024794.6744606157,
+              "upper_bound": 4220815.187002509
+            },
+            "point_estimate": 3160745.808473234,
+            "standard_error": 567231.1086373132
+          }
+        }
+      }
+    },
+    {
+      "iteration": 3,
+      "variant": "candidate",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "a1f539441122ce5b9e2769d125e75db38ead32238b496047d04d7126575f2d04",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 111.79543698051584,
+              "upper_bound": 219.57810946561605
+            },
+            "point_estimate": 159.87642539798733,
+            "standard_error": 27.600916740893528
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 56.148154787468336,
+              "upper_bound": 56.72670807453416
+            },
+            "point_estimate": 56.31218701962127,
+            "standard_error": 0.1659993326188725
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.7948327239324869,
+              "upper_bound": 1.7444748804625507
+            },
+            "point_estimate": 1.0995166476067442,
+            "standard_error": 0.26403819502263437
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 73.72088826742905,
+              "upper_bound": 87.32872643431733
+            },
+            "point_estimate": 79.90110710617162,
+            "standard_error": 3.489862193187121
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 299.1356810721258,
+              "upper_bound": 873.524723173311
+            },
+            "point_estimate": 618.5396318041742,
+            "standard_error": 146.02178597029405
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 24462.166270990387,
+              "upper_bound": 37212.04367764957
+            },
+            "point_estimate": 30408.45529228687,
+            "standard_error": 3250.5922039469633
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 8778.603627963215,
+              "upper_bound": 10454.57754630698
+            },
+            "point_estimate": 9638.864672649459,
+            "standard_error": 452.32283051330154
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5243.428822928668,
+              "upper_bound": 7641.412770856169
+            },
+            "point_estimate": 6505.42722514196,
+            "standard_error": 654.6467547248847
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20754.264466147015,
+              "upper_bound": 29006.37267024497
+            },
+            "point_estimate": 24608.543086007805,
+            "standard_error": 2112.638708547556
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 49391.92925736949,
+              "upper_bound": 96139.24702981598
+            },
+            "point_estimate": 73254.27564194534,
+            "standard_error": 12018.049743438167
+          }
+        }
+      }
+    },
+    {
+      "iteration": 4,
+      "variant": "candidate",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "ce29f0e81894d405db7504380c5dd5756f066ae0e504959b6b5617c2538a8b70",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 27654.88130176361,
+              "upper_bound": 43610.94646997485
+            },
+            "point_estimate": 34734.46309968447,
+            "standard_error": 4106.500297207379
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20637.96624472574,
+              "upper_bound": 22006.774590163935
+            },
+            "point_estimate": 21117.658809060915,
+            "standard_error": 356.3807028213517
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 486.4429504228457,
+              "upper_bound": 2338.9977445159575
+            },
+            "point_estimate": 1038.9211880772004,
+            "standard_error": 503.5456878367353
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 24433.6432620069,
+              "upper_bound": 38951.852216128806
+            },
+            "point_estimate": 30515.98604797793,
+            "standard_error": 3750.795429608916
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19189.86410633154,
+              "upper_bound": 59941.79679997855
+            },
+            "point_estimate": 41225.93034560742,
+            "standard_error": 10563.054719449983
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19833.749505317723,
+              "upper_bound": 19984.829587211447
+            },
+            "point_estimate": 19906.545851833154,
+            "standard_error": 38.637544002532294
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19692.981404647984,
+              "upper_bound": 19962.65
+            },
+            "point_estimate": 19780.417852624923,
+            "standard_error": 73.30427544299131
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 234.20283396641065,
+              "upper_bound": 417.122356588241
+            },
+            "point_estimate": 368.1026714487419,
+            "standard_error": 51.04717622774256
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19667.72143314911,
+              "upper_bound": 19792.85970265885
+            },
+            "point_estimate": 19721.869546032216,
+            "standard_error": 32.03913485163103
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 292.5471047511387,
+              "upper_bound": 487.10939799294295
+            },
+            "point_estimate": 388.0495814938524,
+            "standard_error": 50.633344560446446
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 9246158.750625,
+              "upper_bound": 10320817.054375
+            },
+            "point_estimate": 9730184.785,
+            "standard_error": 275805.2813727068
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 8680833.5,
+              "upper_bound": 9202562.5
+            },
+            "point_estimate": 8967645.75,
+            "standard_error": 126045.69898915071
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 755307.9620406032,
+              "upper_bound": 1329105.6941686568
+            },
+            "point_estimate": 1026190.4673814774,
+            "standard_error": 132732.6783480903
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1449337.5871272548,
+              "upper_bound": 3793563.8555884217
+            },
+            "point_estimate": 2765073.6290489226,
+            "standard_error": 582242.0578490187
+          }
+        }
+      }
+    },
+    {
+      "iteration": 4,
+      "variant": "candidate",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "7373509256bc4fb238254f5b79abdcbc1cfe36321d27ed8effd3b55fc09f9157",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.745354288083,
+              "upper_bound": 55.05260056379811
+            },
+            "point_estimate": 54.889951046117396,
+            "standard_error": 0.07832260979820148
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.27473563891613,
+              "upper_bound": 54.626464371980674
+            },
+            "point_estimate": 54.46897521388304,
+            "standard_error": 0.09040472747434727
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.8630831493345209,
+              "upper_bound": 1.1439454515251215
+            },
+            "point_estimate": 1.0199492593236148,
+            "standard_error": 0.07123233231134919
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.47576666243346,
+              "upper_bound": 54.84439085638324
+            },
+            "point_estimate": 54.64699570090588,
+            "standard_error": 0.09429231594947339
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1.2345860958108166,
+              "upper_bound": 2.311024621966098
+            },
+            "point_estimate": 1.7490794297624952,
+            "standard_error": 0.2823071869461344
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5106.547346179715,
+              "upper_bound": 5147.684120368311
+            },
+            "point_estimate": 5125.592965764246,
+            "standard_error": 10.49990794574346
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5072.066436961258,
+              "upper_bound": 5101.3308276686275
+            },
+            "point_estimate": 5089.776002165757,
+            "standard_error": 6.846334939808584
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 124.47562471019516,
+              "upper_bound": 153.0659816464385
+            },
+            "point_estimate": 138.73951228494337,
+            "standard_error": 7.233778150410278
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5148.117792014597,
+              "upper_bound": 5205.077210301134
+            },
+            "point_estimate": 5172.726195529021,
+            "standard_error": 14.63064816521342
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 144.16657941918916,
+              "upper_bound": 319.9642193931317
+            },
+            "point_estimate": 235.96059836534684,
+            "standard_error": 44.56083860332889
+          }
+        }
+      }
+    },
+    {
+      "iteration": 4,
+      "variant": "baseline",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "d344bf1d5522ebce996a1c22dc86512a24f3b0667dc073f1d6ed8582cea9ad8c",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19851.96104589318,
+              "upper_bound": 19984.33068427507
+            },
+            "point_estimate": 19915.78549832034,
+            "standard_error": 33.76154580523735
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19803.93440315315,
+              "upper_bound": 19899.236113179446
+            },
+            "point_estimate": 19840.78068181818,
+            "standard_error": 27.275685343336033
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 174.0134599388112,
+              "upper_bound": 339.29222756001127
+            },
+            "point_estimate": 248.9368721639028,
+            "standard_error": 42.953679003600556
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19857.76865344662,
+              "upper_bound": 20002.625563870923
+            },
+            "point_estimate": 19925.71361962465,
+            "standard_error": 37.00540856019616
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 266.0062468063689,
+              "upper_bound": 417.190680861594
+            },
+            "point_estimate": 340.89461170604307,
+            "standard_error": 39.003005781524635
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19999.171240838456,
+              "upper_bound": 20111.37605075742
+            },
+            "point_estimate": 20052.97865672448,
+            "standard_error": 28.78497415587364
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19946.045238095237,
+              "upper_bound": 20034.141161679658
+            },
+            "point_estimate": 19995.386663306454,
+            "standard_error": 25.711549117694428
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 165.47632364757578,
+              "upper_bound": 281.21741268536266
+            },
+            "point_estimate": 249.73287742273862,
+            "standard_error": 30.730354183529098
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20039.953596389532,
+              "upper_bound": 20204.45935840843
+            },
+            "point_estimate": 20118.8665325846,
+            "standard_error": 42.12202428789067
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 213.14040156301078,
+              "upper_bound": 358.9113799913589
+            },
+            "point_estimate": 289.2566506247532,
+            "standard_error": 37.48799718809678
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7589972.6912499955,
+              "upper_bound": 7848726.737166669
+            },
+            "point_estimate": 7691673.8599999985,
+            "standard_error": 68877.12961743346
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7561125.0,
+              "upper_bound": 7670250.0
+            },
+            "point_estimate": 7628708.166666666,
+            "standard_error": 26672.540309055592
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 174668.80939901012,
+              "upper_bound": 282044.3827927108
+            },
+            "point_estimate": 214956.48688375927,
+            "standard_error": 27938.261374139434
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 216358.458711537,
+              "upper_bound": 1142123.181793739
+            },
+            "point_estimate": 693453.9603023739,
+            "standard_error": 311992.39254143194
+          }
+        }
+      }
+    },
+    {
+      "iteration": 4,
+      "variant": "baseline",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "d9f2792aa7296673aabade901dbf615ace4633d0b2d8850f8a3a0db2f4dd45ed",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 59.44265585634316,
+              "upper_bound": 65.05855159694036
+            },
+            "point_estimate": 61.975176103452235,
+            "standard_error": 1.442254758621243
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 55.97504737118462,
+              "upper_bound": 56.19196194073662
+            },
+            "point_estimate": 56.08484169653525,
+            "standard_error": 0.055584363978892944
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.8284430964647648,
+              "upper_bound": 1.197717096652674
+            },
+            "point_estimate": 1.0229748267998091,
+            "standard_error": 0.09405827648206694
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 57.6528309079803,
+              "upper_bound": 63.961592796772315
+            },
+            "point_estimate": 59.966188050483204,
+            "standard_error": 1.7352455612037554
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 15.96814862476664,
+              "upper_bound": 45.55934827206602
+            },
+            "point_estimate": 32.32656927989534,
+            "standard_error": 7.468204347779825
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5150.041043224757,
+              "upper_bound": 5205.01996040844
+            },
+            "point_estimate": 5173.561637451305,
+            "standard_error": 14.170586040579197
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5119.758745640802,
+              "upper_bound": 5148.638382493005
+            },
+            "point_estimate": 5136.165669910861,
+            "standard_error": 7.060216271306409
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 114.88851538567042,
+              "upper_bound": 139.6134931251116
+            },
+            "point_estimate": 128.78280719200882,
+            "standard_error": 6.374998734308901
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5166.3376743645795,
+              "upper_bound": 5247.230773742057
+            },
+            "point_estimate": 5199.879668008638,
+            "standard_error": 21.089320108918862
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 154.6868287611792,
+              "upper_bound": 492.25865216366213
+            },
+            "point_estimate": 315.96628049326284,
+            "standard_error": 105.37533591886027
+          }
+        }
+      }
+    },
+    {
+      "iteration": 5,
+      "variant": "baseline",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "2dc4973c7600c804993a3719e29bc268b1d833d6b717cf237bbb4351b2db0177",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19623.721158404653,
+              "upper_bound": 19703.078807683614
+            },
+            "point_estimate": 19662.395092071314,
+            "standard_error": 20.27828036358561
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19610.729,
+              "upper_bound": 19678.005714285715
+            },
+            "point_estimate": 19635.584883130083,
+            "standard_error": 16.422031633018612
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 101.7923801204759,
+              "upper_bound": 182.59527491212967
+            },
+            "point_estimate": 143.2868413691932,
+            "standard_error": 21.374989763296004
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19647.512663103196,
+              "upper_bound": 19713.23242634113
+            },
+            "point_estimate": 19677.271604699275,
+            "standard_error": 16.80795644794013
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 159.7752628195694,
+              "upper_bound": 246.10840217772565
+            },
+            "point_estimate": 203.94312581290635,
+            "standard_error": 22.11205661601654
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20224.161515251024,
+              "upper_bound": 20391.183728835917
+            },
+            "point_estimate": 20305.485137936823,
+            "standard_error": 42.6153593889438
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20141.555357142857,
+              "upper_bound": 20273.61136618141
+            },
+            "point_estimate": 20224.231109481916,
+            "standard_error": 41.41693887305569
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 254.9176861765543,
+              "upper_bound": 427.9356506682747
+            },
+            "point_estimate": 353.8005956085862,
+            "standard_error": 45.607815396395225
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20157.164033182806,
+              "upper_bound": 20285.481148286464
+            },
+            "point_estimate": 20216.86778941924,
+            "standard_error": 32.65922009645981
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 347.9729915889846,
+              "upper_bound": 509.1297481054879
+            },
+            "point_estimate": 428.8055625517716,
+            "standard_error": 41.36692501638707
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7768484.283333336,
+              "upper_bound": 9538963.470916664
+            },
+            "point_estimate": 8426926.379999997,
+            "standard_error": 484497.6058279081
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7600277.666666667,
+              "upper_bound": 7762368.166666666
+            },
+            "point_estimate": 7674756.833333334,
+            "standard_error": 42605.19081236172
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 227918.85845363117,
+              "upper_bound": 416940.47109782556
+            },
+            "point_estimate": 313642.04763173964,
+            "standard_error": 49280.777750138805
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 592223.063721736,
+              "upper_bound": 8196402.392771122
+            },
+            "point_estimate": 4879642.135951922,
+            "standard_error": 2435789.3495297246
+          }
+        }
+      }
+    },
+    {
+      "iteration": 5,
+      "variant": "baseline",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/audit-baseline/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "4b8c23f3db5eba9f11a6ad02d244332ffc96d32bb39ab00b28beaafffba553a7",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.830656972012164,
+              "upper_bound": 55.146375702840515
+            },
+            "point_estimate": 54.98091541514099,
+            "standard_error": 0.0804191235942948
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.545416326235966,
+              "upper_bound": 54.76072522478016
+            },
+            "point_estimate": 54.659734050262244,
+            "standard_error": 0.05686314955277321
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1.0502757057428185,
+              "upper_bound": 1.3058504119677943
+            },
+            "point_estimate": 1.1790309616970032,
+            "standard_error": 0.06358948608985643
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.8157280287626,
+              "upper_bound": 55.09730444742966
+            },
+            "point_estimate": 54.948773596669696,
+            "standard_error": 0.07212129204675981
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1.284514418639561,
+              "upper_bound": 2.3554820355556534
+            },
+            "point_estimate": 1.8018970210326126,
+            "standard_error": 0.27999271994673347
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5073.355170868677,
+              "upper_bound": 5112.447621223179
+            },
+            "point_estimate": 5091.209149914507,
+            "standard_error": 9.938686707773268
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5030.381810543825,
+              "upper_bound": 5072.8128273475495
+            },
+            "point_estimate": 5048.388671875,
+            "standard_error": 10.5830149646557
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 132.92758941018903,
+              "upper_bound": 165.25830817700282
+            },
+            "point_estimate": 147.37028283290206,
+            "standard_error": 8.131635172652404
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5077.767012350769,
+              "upper_bound": 5123.024862177599
+            },
+            "point_estimate": 5098.732429785783,
+            "standard_error": 11.500729635345971
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 154.63767364689448,
+              "upper_bound": 309.20783565264753
+            },
+            "point_estimate": 221.8035430389343,
+            "standard_error": 47.62028308640826
+          }
+        }
+      }
+    },
+    {
+      "iteration": 5,
+      "variant": "candidate",
+      "suite": "tree_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/tree_route-86e151aa1dfaa2ba",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "tree_route/(dfs|resident|echo)/balanced8191$"
+      ],
+      "logSha256": "40fadd60617a6c8f242f851d57d48d6fd7b6803a21be0730b9781abdb94daaa3",
+      "estimates": {
+        "tree_route/resident/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20049.659066387256,
+              "upper_bound": 20221.892391496312
+            },
+            "point_estimate": 20131.373120052453,
+            "standard_error": 43.985498312813846
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19944.01935483871,
+              "upper_bound": 20108.229
+            },
+            "point_estimate": 20008.166021324352,
+            "standard_error": 41.31650406784642
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 198.80057728900985,
+              "upper_bound": 335.618374324383
+            },
+            "point_estimate": 254.81237302992156,
+            "standard_error": 34.77804693552034
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19989.641648176435,
+              "upper_bound": 20095.80671998298
+            },
+            "point_estimate": 20041.56582030442,
+            "standard_error": 27.122800669590568
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 307.5381952211139,
+              "upper_bound": 557.3539664090033
+            },
+            "point_estimate": 442.0672093883035,
+            "standard_error": 64.2805682797854
+          }
+        },
+        "tree_route/dfs/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19855.0489778715,
+              "upper_bound": 22179.322024639434
+            },
+            "point_estimate": 20751.759018781082,
+            "standard_error": 621.6630323530316
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 19468.934895833336,
+              "upper_bound": 19566.420634920636
+            },
+            "point_estimate": 19521.178389830508,
+            "standard_error": 26.951390016045835
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 163.93748169097634,
+              "upper_bound": 345.0604853993752
+            },
+            "point_estimate": 252.0611583821644,
+            "standard_error": 47.11459884644277
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 20431.571826937554,
+              "upper_bound": 26142.87680474664
+            },
+            "point_estimate": 22695.279107433133,
+            "standard_error": 1533.0553406538504
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1248.2392733832203,
+              "upper_bound": 10310.03485086632
+            },
+            "point_estimate": 6231.064246730334,
+            "standard_error": 2826.065765873395
+          }
+        },
+        "tree_route/echo/balanced8191": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7481056.676666668,
+              "upper_bound": 7579402.53425
+            },
+            "point_estimate": 7528648.480000001,
+            "standard_error": 25055.75944146452
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 7449153.0,
+              "upper_bound": 7551708.333333333
+            },
+            "point_estimate": 7511021.0,
+            "standard_error": 22968.801581947642
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 144511.9846343994,
+              "upper_bound": 253998.03909063363
+            },
+            "point_estimate": 210724.8994588852,
+            "standard_error": 29058.20200741263
+          },
+          "slope": null,
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 195810.74786813158,
+              "upper_bound": 311640.5334698817
+            },
+            "point_estimate": 251717.85047132027,
+            "standard_error": 30289.835184125528
+          }
+        }
+      }
+    },
+    {
+      "iteration": 5,
+      "variant": "candidate",
+      "suite": "complex_route",
+      "argv": [
+        "/Users/loopy/dev/ll3/rustra-bridge/target/release/deps/complex_route-d71d6e953c00d9e4",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.5",
+        "--measurement-time",
+        "2",
+        "complex_route/invoke_frame/(scalar_control|optional_string_64k)$"
+      ],
+      "logSha256": "e3de8ba9b9a1d083490e21bd3164b2455246f620321a60d988849818f12e196e",
+      "estimates": {
+        "complex_route/invoke_frame/scalar_control": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.50618583569528,
+              "upper_bound": 54.8729654592394
+            },
+            "point_estimate": 54.665481482753655,
+            "standard_error": 0.0946421190229752
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.26163577193502,
+              "upper_bound": 54.46587046165591
+            },
+            "point_estimate": 54.38796806122397,
+            "standard_error": 0.05344920490521926
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 0.9334574917393434,
+              "upper_bound": 1.141851978113817
+            },
+            "point_estimate": 1.0575806511450152,
+            "standard_error": 0.054207366731309346
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 54.43581299759623,
+              "upper_bound": 54.63221171913551
+            },
+            "point_estimate": 54.533596895189135,
+            "standard_error": 0.05030344173254478
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 1.0671512129488918,
+              "upper_bound": 3.297764156617996
+            },
+            "point_estimate": 2.1277062563701072,
+            "standard_error": 0.6936900694004828
+          }
+        },
+        "complex_route/invoke_frame/optional_string_64k": {
+          "mean": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5179.569221266195,
+              "upper_bound": 5349.944960500529
+            },
+            "point_estimate": 5250.156460733765,
+            "standard_error": 44.25604883394327
+          },
+          "median": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5104.431900855473,
+              "upper_bound": 5127.227678571429
+            },
+            "point_estimate": 5116.298656162275,
+            "standard_error": 6.295160952876112
+          },
+          "median_abs_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 134.5887954505143,
+              "upper_bound": 183.17659269025032
+            },
+            "point_estimate": 158.89575142845598,
+            "standard_error": 12.850075000412982
+          },
+          "slope": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 5073.6720809690205,
+              "upper_bound": 5205.790220402029
+            },
+            "point_estimate": 5124.138174855085,
+            "standard_error": 35.4611263149599
+          },
+          "std_dev": {
+            "confidence_interval": {
+              "confidence_level": 0.95,
+              "lower_bound": 369.4004555648351,
+              "upper_bound": 1593.2931121280674
+            },
+            "point_estimate": 992.4339824232374,
+            "standard_error": 373.0363063040902
+          }
+        }
+      }
+    }
+  ],
+  "ok": true,
+  "comparison": [
+    {
+      "case": "complex_route/invoke_frame/optional_string_64k",
+      "independentProcessMeansNs": {
+        "baseline": [
+          5406.459706659586, 5293.57739370278, 5277.077044023494, 5173.561637451305,
+          5091.209149914507
+        ],
+        "candidate": [
+          5851.669544288933, 5306.248148009273, 30408.45529228687, 5125.592965764246,
+          5250.156460733765
+        ]
+      },
+      "medianNs": {
+        "baseline": 5277.077044023494,
+        "candidate": 5306.248148009273
+      },
+      "candidateOverBaseline": 1.005527890486044
+    },
+    {
+      "case": "complex_route/invoke_frame/scalar_control",
+      "independentProcessMeansNs": {
+        "baseline": [
+          59.2121827128848, 62.16833903426689, 61.15670266774288, 61.975176103452235,
+          54.98091541514099
+        ],
+        "candidate": [
+          55.359217915307646, 56.45136002459235, 159.87642539798733, 54.889951046117396,
+          54.665481482753655
+        ]
+      },
+      "medianNs": {
+        "baseline": 61.15670266774288,
+        "candidate": 55.359217915307646
+      },
+      "candidateOverBaseline": 0.9052027905439527
+    },
+    {
+      "case": "tree_route/dfs/balanced8191",
+      "independentProcessMeansNs": {
+        "baseline": [
+          21059.401963083394, 20833.19667836436, 20201.83597738418, 20052.97865672448,
+          20305.485137936823
+        ],
+        "candidate": [
+          20757.105835145896, 26379.69224089181, 25373.34062118936, 19906.545851833154,
+          20751.759018781082
+        ]
+      },
+      "medianNs": {
+        "baseline": 20305.485137936823,
+        "candidate": 20757.105835145896
+      },
+      "candidateOverBaseline": 1.0222413152968854
+    },
+    {
+      "case": "tree_route/echo/balanced8191",
+      "independentProcessMeansNs": {
+        "baseline": [
+          7947739.853333333, 10024222.783333335, 9562785.62, 7691673.8599999985, 8426926.379999997
+        ],
+        "candidate": [
+          8728528.203333333, 7629469.570000001, 10764804.35, 9730184.785, 7528648.480000001
+        ]
+      },
+      "medianNs": {
+        "baseline": 8426926.379999997,
+        "candidate": 8728528.203333333
+      },
+      "candidateOverBaseline": 1.0357902525467817
+    },
+    {
+      "case": "tree_route/resident/balanced8191",
+      "independentProcessMeansNs": {
+        "baseline": [
+          20124.971133303054, 27075.71762188639, 22789.32385682376, 19915.78549832034,
+          19662.395092071314
+        ],
+        "candidate": [
+          20839.7511587318, 20458.58167440154, 22716.073056338726, 34734.46309968447,
+          20131.373120052453
+        ]
+      },
+      "medianNs": {
+        "baseline": 20124.971133303054,
+        "candidate": 20839.7511587318
+      },
+      "candidateOverBaseline": 1.0355170708417027
+    }
+  ],
+  "finishedAt": "2026-09-22T05:13:04.636976+00:00"
+}
