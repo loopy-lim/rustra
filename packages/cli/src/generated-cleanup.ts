@@ -40,23 +40,29 @@ export async function planGeneratedCleanup(
   // Older releases overwrote the manifest while leaving these files behind.
   // Detect that state too, but require the old manifest hash before removing it.
   for (const name of ['rkyv-codecs.ts', 'rkyv-registry.ts']) obsolete.add(resolve(output, name));
-  const removable: string[] = [];
-  for (const path of obsolete) {
-    let stat;
-    try {
-      stat = await lstat(path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-      throw error;
-    }
+  const attempted = await Promise.all(
+    [...obsolete].map(async (path) => {
+      try {
+        return { path, stat: await lstat(path) };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw error;
+      }
+    }),
+  );
+  const existing = attempted.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  const hint =
+    'Preserve local edits, then restore the previous manifest or manually review and move the file before rerunning codegen.';
+
+  for (const { path, stat } of existing) {
     const label = `Obsolete legacy generated file ${path}`;
-    const hint =
-      'Preserve local edits, then restore the previous manifest or manually review and move the file before rerunning codegen.';
     if (stat.isSymbolicLink() || !stat.isFile())
       throw new Error(`${label}: symlink or non-regular file; ${hint}`);
-    const hash = recorded.get(path);
-    if (!hash) throw new Error(`${label}: unrecorded ownership; ${hint}`);
-    let allowed = false;
+    if (!recorded.get(path)) throw new Error(`${label}: unrecorded ownership; ${hint}`);
+  }
+
+  const parentDirectories = new Set<string>();
+  for (const { path } of existing)
     for (const root of roots) {
       const resolvedRoot = resolve(root);
       if (!within(resolvedRoot, path)) continue;
@@ -64,14 +70,44 @@ export async function planGeneratedCleanup(
         let directory = dirname(path);
         within(resolvedRoot, directory);
         directory = dirname(directory)
-      ) {
-        if ((await lstat(directory)).isSymbolicLink())
+      )
+        parentDirectories.add(directory);
+    }
+  // root 는 파일 존재와 무관하게 아직 만들어지지 않았을 수 있다(첫 코드젠) —
+  // 원본의 lazy realpath 와 동일하게 없는 root 는 null 로 건너뛴다.
+  const [symlinkCandidateResults, realRoots, realPaths, contents] = await Promise.all([
+    Promise.all(
+      [...parentDirectories].map(async (directory) =>
+        (await lstat(directory)).isSymbolicLink() ? directory : null,
+      ),
+    ),
+    Promise.all(roots.map((root) => realpath(root).catch(() => null))),
+    Promise.all(existing.map(({ path }) => realpath(path))),
+    Promise.all(existing.map(({ path }) => readFile(path, 'utf8'))),
+  ]);
+  const symlinkedParents = new Set(
+    symlinkCandidateResults.filter((directory): directory is string => directory !== null),
+  );
+
+  const removable: string[] = [];
+  for (const [index, { path }] of existing.entries()) {
+    const label = `Obsolete legacy generated file ${path}`;
+    let allowed = false;
+    for (const [rootIndex, root] of roots.entries()) {
+      const resolvedRoot = resolve(root);
+      if (!within(resolvedRoot, path)) continue;
+      for (
+        let directory = dirname(path);
+        within(resolvedRoot, directory);
+        directory = dirname(directory)
+      )
+        if (symlinkedParents.has(directory))
           throw new Error(`${label}: parent directory is a symlink; ${hint}`);
-      }
-      if (within(await realpath(root), await realpath(path))) allowed = true;
+      const realRoot = realRoots[rootIndex];
+      if (realRoot !== null && within(realRoot, realPaths[index])) allowed = true;
     }
     if (!allowed) throw new Error(`${label}: outside generated roots; ${hint}`);
-    if (sha256(await readFile(path, 'utf8')) !== hash)
+    if (sha256(contents[index]) !== recorded.get(path))
       throw new Error(`${label}: modified since generation; ${hint}`);
     removable.push(path);
   }
