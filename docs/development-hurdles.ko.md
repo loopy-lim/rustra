@@ -114,7 +114,7 @@ bunx --bun @rustra/cli doctor --config rustra.json --strict
 
 공통으로 Rust MSRV 1.88+, Cargo, Node/Bun, C/C++ 컴파일러, CMake, Cargo manifest와
 설정된 Rust target을 확인합니다. React Native를 설정한 경우에만 macOS의
-Xcode/CocoaPods와 Android의 Java 17, `ANDROID_NDK_ROOT` 또는 SDK의 NDK
+Xcode/CocoaPods와 Android의 Java 17, `ANDROID_NDK_HOME` 또는 SDK의 NDK
 `27.1.12297006`, 기본 Rust Android target을 추가로 확인합니다. Tauri 설정에는
 호스트별 native build 도구도 포함됩니다.
 
@@ -268,6 +268,25 @@ bunx --bun expo run:ios
 bunx --bun expo run:android
 ```
 
+### calculator 예제의 iOS glog 모듈 오류
+
+RN 0.81.5와 Nitro 0.37.1을 함께 사용하는 예제에서 Xcode 26.2가
+`import of module ... appears within namespace google`로 실패할 수 있습니다.
+예제의 Expo plugin은 glog 0.3.5에서 namespace 내부로 포함하는 두 헤더만
+`textual header`로 지정합니다. 다른 pod의 모듈 설정과 Nitro 버전은 유지합니다.
+이미 `ios/`가 있는 예제도 설정을 다시 생성한 뒤 Pods를 설치합니다.
+
+```bash
+cd examples/react-native-calculator
+bunx expo prebuild --platform ios --no-install
+cd ios && pod install
+```
+
+수정은 추적되는 `plugins/with-glog-textual-headers.cjs`와
+`scripts/fix-glog-modulemap.rb`에서 적용되므로 생성된 Pods를 직접 수정할 필요가
+없습니다. 다른 glog 버전에는 적용하지 않으며, 예상과 다른 modulemap이나 누락된
+헤더는 조용히 건너뛰지 않고 오류를 출력합니다.
+
 ### Rust 타입 경계
 
 브리지 파라미터와 반환값은 `#[bridge_type]` 및 Serde/Schemars로 표현할 수 있는 owned
@@ -293,6 +312,29 @@ bunx --bun expo run:android
 fuzzing과 native build를 함께 통과시켜야 합니다.
 
 ## 외부 레퍼런스가 적은 문제
+
+### 앱을 실행하지 않고 네이티브 바인딩 검사
+
+Apple Silicon에서 calculator 예제와 맞는 iOS Pods를 준비한 뒤, 로컬 Catalyst
+프로세스의 Hermes로 실제 C++ binder/codec을 검사할 수 있습니다.
+
+```bash
+RUSTRA_NATIVE_TEST_PLATFORM=mac-catalyst \
+  bash examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh
+```
+
+의존성 framework가 다른 위치에 있으면 `RUSTRA_NATIVE_DEPS_ROOT`에 `Headers`와
+대상 slice를 포함한 `ReactNativeDependencies.xcframework` 디렉터리를 지정합니다.
+예제의 React Native 의존성과 같은 framework 버전을 사용해야 합니다. 스크립트는
+컴파일 전에 누락된 입력을 알리고 소스·바이너리 hash를 `RUSTRA_NATIVE_TEST_DIR`
+(기본 `/private/tmp/rustra-native-sync-hermes`)의 `identities.txt`에 기록합니다.
+기본 플랫폼은 `ios-simulator`이고 `RUSTRA_NATIVE_TEST_BUILD_ONLY=1`이면 빌드만 합니다.
+실행하려면 이미 부팅된 `RUSTRA_SIMULATOR_UDID`가 필요합니다. 스크립트는 시뮬레이터를
+부팅하거나 앱을 설치하지 않습니다.
+
+실제 Hermes와 제품 binder/codec을 쓰지만 C ABI 상대는 통제된 테스트 구현입니다.
+Android/iOS 앱 시작, native 이벤트 스케줄링, 실제 소비자의 Rust FFI 수명 검증을
+대신하지 않습니다.
 
 0.x API의 변경 가능성은 남아 있으므로, CI에서 `doctor`, `codegen:check`, `rustra diff`
 를 함께 실행하고 CLI/Rust/adapter 버전을 각각 lock합니다. 문제를 재현할 때는 다음

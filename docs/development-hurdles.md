@@ -108,7 +108,7 @@ bunx --bun @rustra/cli doctor --config rustra.json --format json
 bunx --bun @rustra/cli doctor --config rustra.json --strict
 ```
 
-It commonly checks Rust MSRV 1.88+, Cargo, Node/Bun, a C/C++ compiler, CMake, the Cargo manifest, and the configured Rust target. Only when React Native is configured does it additionally check Xcode/CocoaPods on macOS, and on Android Java 17, `ANDROID_NDK_ROOT` or the NDK `27.1.12297006` in the SDK, and the default Rust Android targets. Tauri configuration also includes per-host native build tools.
+It commonly checks Rust MSRV 1.88+, Cargo, Node/Bun, a C/C++ compiler, CMake, the Cargo manifest, and the configured Rust target. Only when React Native is configured does it additionally check Xcode/CocoaPods on macOS, and on Android Java 17, `ANDROID_NDK_HOME` or the NDK `27.1.12297006` in the SDK, and the default Rust Android targets. Tauri configuration also includes per-host native build tools.
 
 Two checks look past the local toolchain. `registry.reachability` fetches `https://index.crates.io/config.json` with a 3-second timeout and reports `warn` — never `fail`, so an offline CI stays green — when crates.io is unreachable, with proxy (`HTTPS_PROXY`/`HTTP_PROXY`) and offline (`CARGO_NET_OFFLINE=true`) hints; it is skipped when Cargo itself is missing. `codegen.device_catalog` reads the generated `schema.json`: `skip` when no command declares devices, `warn` when commands declare devices but the schema has no `deviceCapabilities` catalog (regenerate with a current rustra), `pass` when every declared token is in the catalog, and `fail` for tokens outside it — debug builds accept such tokens with a warning while release builds panic at registration (see [dev-tier.md](dev-tier.md)).
 
@@ -198,6 +198,25 @@ bunx --bun expo run:ios
 bunx --bun expo run:android
 ```
 
+### Calculator example iOS glog module error
+
+With RN 0.81.5 and Nitro 0.37.1, Xcode 26.2 can fail with
+`import of module ... appears within namespace google`. The example's Expo plugin
+marks only the two headers included inside glog 0.3.5 namespaces as `textual header`.
+It preserves other pods' module settings and the Nitro version. Regenerate the
+configuration and install Pods even when the example already has an `ios/` directory:
+
+```bash
+cd examples/react-native-calculator
+bunx expo prebuild --platform ios --no-install
+cd ios && pod install
+```
+
+The tracked `plugins/with-glog-textual-headers.cjs` and
+`scripts/fix-glog-modulemap.rb` apply the workaround without manual edits to generated
+Pods. Other glog versions are left alone; an unexpected module map or missing header
+produces an error instead of silently skipping the fix.
+
 ### Rust type boundary
 
 Bridge parameters and return values must be owned data expressible through `#[bridge_type]` and Serde/Schemars. The restriction that references, `dyn Trait`, and closures cannot be passed directly cannot be lifted, but documentation and schema validation should surface the boundary at the codegen stage. When channel/resource features are needed, use an owned handle contract instead of the callback itself.
@@ -213,6 +232,29 @@ The dynamic command registry has a u16 command ID space of at most 65,534 entrie
 The unsafe Rust/C++ boundary of the zero-copy FFI remains. Application users go through the generated modules and adapter APIs; contributors touching bridge internals must pass Miri, sanitizers, fuzzing, and native builds together.
 
 ## Problems with few external references
+
+### Native binding checks without a running app
+
+On Apple Silicon with the calculator example's matching iOS Pods available, run the
+production C++ binder/codec on Hermes in a local Catalyst process:
+
+```bash
+RUSTRA_NATIVE_TEST_PLATFORM=mac-catalyst \
+  bash examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh
+```
+
+If the dependencies framework lives elsewhere, set `RUSTRA_NATIVE_DEPS_ROOT` to its
+`ReactNativeDependencies.xcframework` directory, including `Headers` and the target
+slice. Use the framework version matching the example's React Native dependencies.
+The script reports missing inputs before compilation and writes source/binary hashes
+to `identities.txt` in `RUSTRA_NATIVE_TEST_DIR` (default `/private/tmp/rustra-native-sync-hermes`).
+The default platform remains `ios-simulator`; `RUSTRA_NATIVE_TEST_BUILD_ONLY=1`
+compiles without running, and execution requires an already booted `RUSTRA_SIMULATOR_UDID`.
+The script never boots a simulator or installs an app.
+
+These tests use real Hermes and production binder/codec code with controlled C ABI
+peers. They do not prove Android/iOS app startup, native event scheduling, or a real
+consumer's Rust FFI lifecycle.
 
 The 0.x API can still change, so run `doctor`, `codegen:check`, and `rustra diff` together in CI and lock the CLI/Rust/adapter versions separately. When reproducing an issue, leaving the following information behind makes diagnosis possible without descending into the source code.
 

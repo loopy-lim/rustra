@@ -21,6 +21,9 @@ on:
       - 'examples/react-native-calculator/modules/**'
       - 'examples/calculator/**'
       - '.github/workflows/bench.yml'
+      - 'scripts/check-criterion-regression*'
+      - 'scripts/benchmark-workflow.test.mjs'
+      - 'scripts/benchmark-environment*'
 
 jobs:
   rust-bench:
@@ -36,6 +39,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
+      - name: Reset cached Criterion artifacts
+        run: rm -rf target/criterion
       # 직전 성공 벤치의 criterion baseline 복원 — 없으면 change: 이 첫 측정
       # 기준(no baseline)이 되어 회귀 감지가 무의미해진다. retention(14일)
       # 내 아티팩트만 유효하다.
@@ -48,6 +53,9 @@ jobs:
           name: criterion-results
           path: target/criterion
 
+      - name: Record benchmark environment
+        run: bun scripts/benchmark-environment.mjs target/criterion
+
       - name: Require a real previous baseline
         if: github.event_name != 'workflow_dispatch' || inputs.bootstrap_baseline != true
         run: |
@@ -56,6 +64,9 @@ jobs:
             echo 'Run workflow_dispatch once with bootstrap_baseline=true, then rerun normally.' >&2
             exit 1
           fi
+
+      - name: Discard restored measurements before this run
+        run: bun scripts/check-criterion-regression.mjs --prepare
 
       # dev 프로파일 벤치 — dynamic(Tier 3) 경로가 register 로만 도달해
       # debug 빌드가 필요하다 ( benches/tier_compare.rs 주석 참조 ).
@@ -94,19 +105,17 @@ jobs:
           set -o pipefail
           cargo bench -p rustra --bench tree_route 2>&1 | tee bench_tree.txt
 
+      - name: Run function_dispatch benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo bench -p rustra --bench function_dispatch 2>&1 | tee bench_functions.txt
+
       - name: Enforce 10% regression budget
         id: gate
         if: github.event_name != 'workflow_dispatch' || inputs.bootstrap_baseline != true
         run: |
-          set +e  # exit 3(환경 불일치)을 code 로 받아 재부트 분기로 넘기기 위해
           bun scripts/check-criterion-regression.mjs --max-regression 0.10 --report bench-report.md
-          code=$?
-          set -e
-          if [ "$code" -eq 3 ]; then
-            echo "mismatch=true" >> "$GITHUB_OUTPUT"
-            exit 0  # baseline 폐기 + 재부트 — job 은 실패시키지 않는다
-          fi
-          exit "$code"
 
       - name: Summary
         if: always()
@@ -114,12 +123,10 @@ jobs:
           {
             echo "## Benchmark results"
             echo '```'
-            grep -E "time:|change:|Performance has" bench_tier.txt bench_scaling.txt bench_dynamic.txt bench_complex.txt bench_tree.txt || true
+            grep -E "time:|change:|Performance has" bench_tier.txt bench_scaling.txt bench_dynamic.txt bench_complex.txt bench_tree.txt bench_functions.txt || true
             echo '```'
-            if [ "${{ steps.gate.outputs.mismatch }}" = "true" ]; then
-              echo
-              echo '⚠️ Baseline environment mismatch — 회귀와 대규모 개선이 동시 관측됨.'
-              echo '기존 baseline 을 폐기하고 이번 결과를 새 baseline 으로 채택했다.'
+            if [ -f bench-report.md ]; then
+              cat bench-report.md
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -156,11 +163,10 @@ jobs:
         # 업로드하면 다음 실행이 오염된 base와 비교해 회귀가 고착된다
         # (첫 실패 +10% → 다음 실패 또 +10% 누적 우회). 실패 결과는 별도
         # 아티팩트명으로 보존해 원인 분석은 가능하게 한다.
-        # 예외: gate 가 baseline 환경 불일치(mismatch)를 검출하면 이번 결과를
-        # 정상 baseline 으로 채택해 runner 시대 진동에서 벗어난다.
+        # 비교 불가(exit 3)와 벤치 자체 실패도 미채택. 명시적 bootstrap 성공만 예외다.
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: criterion-results${{ steps.gate.outcome == 'failure' && '-rejected' || '' }}
+          name: criterion-results${{ (failure() || cancelled()) && '-rejected' || '' }}
           path: target/criterion/
           retention-days: 14

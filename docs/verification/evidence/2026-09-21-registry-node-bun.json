@@ -1,0 +1,1546 @@
+{
+  "schemaVersion": 1,
+  "gate": "rustra-public-registry-consumer",
+  "ok": true,
+  "startedAt": "2026-09-21T05:18:10.310Z",
+  "completedAt": "2026-09-21T05:18:29.334Z",
+  "durationMs": 19024,
+  "evidenceBoundary": "automated public-registry CLI/Node/Bun consumer cycle; does not close G1 or G2",
+  "configuration": {
+    "manifestPath": "/Users/loopy/dev/ll3/rustra-bridge/scripts/registry-consumer/versions.json",
+    "versions": {
+      "schemaVersion": 1,
+      "npm": {
+        "@rustra/cli": "0.11.3",
+        "@rustra/types": "0.12.0",
+        "@rustra/node": "0.10.2",
+        "@rustra/bun": "0.10.2"
+      },
+      "phases": {
+        "baseline": {
+          "rustra": "0.10.2",
+          "rustra-macros": "0.10.2",
+          "rustra-naming": "0.10.2"
+        },
+        "candidate": {
+          "rustra": "0.11.0",
+          "rustra-macros": "0.11.0",
+          "rustra-naming": "0.11.0"
+        },
+        "rollback": {
+          "rustra": "0.10.2",
+          "rustra-macros": "0.10.2",
+          "rustra-naming": "0.10.2"
+        }
+      }
+    }
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osRelease": "25.6.0",
+    "osVersion": "Darwin Kernel Version 25.6.0: Fri Jul 31 19:18:49 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6000",
+    "node": "v22.21.1",
+    "npm": "11.18.0",
+    "bun": "1.4.1",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "productVersion": "26.6.2"
+  },
+  "runner": {
+    "gitHead": "4b736f84dc0124b16284e178403a2712947c90ea",
+    "gitDirty": true,
+    "sourceFiles": {
+      "scripts/registry-consumer-gate.mjs": {
+        "retainedPath": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/runner/scripts/registry-consumer-gate.mjs",
+        "sha256": "ffc56cdcf8541962add54a7c42eac2187e17c10234cfd1d2afe82a3431efbd16"
+      },
+      "scripts/onboarding-gate.mjs": {
+        "retainedPath": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/runner/scripts/onboarding-gate.mjs",
+        "sha256": "b4e11b65fce3302731d423cd496e251cb0d0395ba7b8de61c434b0ea806fda57"
+      },
+      "scripts/registry-consumer/fixture.mjs": {
+        "retainedPath": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/runner/scripts/registry-consumer/fixture.mjs",
+        "sha256": "04f3f1c32306a2392b011eabff00ab4855e781fac946d5fa875c6da0155b7797"
+      },
+      "scripts/registry-consumer/provenance.mjs": {
+        "retainedPath": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/runner/scripts/registry-consumer/provenance.mjs",
+        "sha256": "d7f6d58fa5f5c87ae87318c7eb7db9f0abfbd057e5dadda813d1ae571566d095"
+      },
+      "scripts/registry-consumer/runner.mjs": {
+        "retainedPath": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/runner/scripts/registry-consumer/runner.mjs",
+        "sha256": "8bb8c2ff80eb72df579dc1865946a16caca5a8e03c6ab4381e4cef85f9ae49fe"
+      },
+      "scripts/registry-consumer/versions.json": {
+        "retainedPath": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/runner/scripts/registry-consumer/versions.json",
+        "sha256": "554ab60cd82f697dfdbe3d0ecda189dcd7eea211615e4e26144c1f597b747601"
+      }
+    }
+  },
+  "scratchRoot": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT",
+  "projectDir": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer",
+  "steps": [
+    {
+      "name": "environment-node",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.311Z",
+      "durationMs": 19,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/001-environment-node.log"
+    },
+    {
+      "name": "environment-npm",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.330Z",
+      "durationMs": 95,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/002-environment-npm.log"
+    },
+    {
+      "name": "environment-bun",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.425Z",
+      "durationMs": 6,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/003-environment-bun.log"
+    },
+    {
+      "name": "environment-cargo",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.432Z",
+      "durationMs": 23,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/004-environment-cargo.log"
+    },
+    {
+      "name": "environment-rustc",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.456Z",
+      "durationMs": 29,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/005-environment-rustc.log"
+    },
+    {
+      "name": "environment-sw-vers",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.486Z",
+      "durationMs": 9,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/006-environment-sw-vers.log"
+    },
+    {
+      "name": "runner-git-head",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.496Z",
+      "durationMs": 15,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/007-runner-git-head.log"
+    },
+    {
+      "name": "runner-git-status",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.512Z",
+      "durationMs": 34,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/008-runner-git-status.log"
+    },
+    {
+      "name": "prepare-bootstrap-manifest",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.549Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/009-prepare-bootstrap-manifest.log"
+    },
+    {
+      "name": "install-published-cli",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:10.549Z",
+      "durationMs": 1068,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/010-install-published-cli.log"
+    },
+    {
+      "name": "verify-published-cli-source",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:11.618Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/011-verify-published-cli-source.log"
+    },
+    {
+      "name": "published-cli-init",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:11.618Z",
+      "durationMs": 72,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/012-published-cli-init.log"
+    },
+    {
+      "name": "pin-original-scaffold",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:11.690Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/013-pin-original-scaffold.log"
+    },
+    {
+      "name": "verify-clean-fixture-before-install",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:11.691Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/014-verify-clean-fixture-before-install.log"
+    },
+    {
+      "name": "resolve-original-exact-npm-lock",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:11.692Z",
+      "durationMs": 586,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/015-resolve-original-exact-npm-lock.log"
+    },
+    {
+      "name": "install-original-frozen-npm-lock",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:12.278Z",
+      "durationMs": 328,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/016-install-original-frozen-npm-lock.log"
+    },
+    {
+      "name": "verify-original-exact-npm-sources",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:12.606Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/017-verify-original-exact-npm-sources.log"
+    },
+    {
+      "name": "baseline-doctor",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:12.607Z",
+      "durationMs": 174,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/018-baseline-doctor.log"
+    },
+    {
+      "name": "baseline-initial-pin-rust",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:12.782Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/019-baseline-initial-pin-rust.log"
+    },
+    {
+      "name": "baseline-initial-contamination-prebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:12.782Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/020-baseline-initial-contamination-prebuild.log"
+    },
+    {
+      "name": "baseline-initial-build",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:12.783Z",
+      "durationMs": 7595,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/021-baseline-initial-build.log"
+    },
+    {
+      "name": "baseline-initial-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.379Z",
+      "durationMs": 177,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/022-baseline-initial-codegen.log"
+    },
+    {
+      "name": "baseline-initial-rebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.556Z",
+      "durationMs": 51,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/023-baseline-initial-rebuild.log"
+    },
+    {
+      "name": "baseline-initial-codegen-check",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.608Z",
+      "durationMs": 164,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/024-baseline-initial-codegen-check.log"
+    },
+    {
+      "name": "baseline-initial-cargo-metadata",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.772Z",
+      "durationMs": 47,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/025-baseline-initial-cargo-metadata.log"
+    },
+    {
+      "name": "baseline-original-demo",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.820Z",
+      "durationMs": 54,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/026-baseline-original-demo.log"
+    },
+    {
+      "name": "baseline-original-demo-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.874Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/027-baseline-original-demo-output-verification.log"
+    },
+    {
+      "name": "baseline-original-provenance",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.874Z",
+      "durationMs": 6,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/028-baseline-original-provenance.log"
+    },
+    {
+      "name": "extend-public-host-fixture",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.880Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/029-extend-public-host-fixture.log"
+    },
+    {
+      "name": "verify-extended-fixture-before-install",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.881Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/030-verify-extended-fixture-before-install.log"
+    },
+    {
+      "name": "resolve-extended-exact-npm-lock",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:20.881Z",
+      "durationMs": 961,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/031-resolve-extended-exact-npm-lock.log"
+    },
+    {
+      "name": "install-extended-frozen-npm-lock",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:21.842Z",
+      "durationMs": 607,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/032-install-extended-frozen-npm-lock.log"
+    },
+    {
+      "name": "verify-extended-exact-npm-sources",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:22.449Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/033-verify-extended-exact-npm-sources.log"
+    },
+    {
+      "name": "baseline-extended-pin-rust",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:22.450Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/034-baseline-extended-pin-rust.log"
+    },
+    {
+      "name": "baseline-extended-contamination-prebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:22.451Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/035-baseline-extended-contamination-prebuild.log"
+    },
+    {
+      "name": "baseline-extended-build",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:22.451Z",
+      "durationMs": 582,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/036-baseline-extended-build.log"
+    },
+    {
+      "name": "baseline-extended-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.033Z",
+      "durationMs": 181,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/037-baseline-extended-codegen.log"
+    },
+    {
+      "name": "baseline-extended-rebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.214Z",
+      "durationMs": 53,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/038-baseline-extended-rebuild.log"
+    },
+    {
+      "name": "baseline-extended-codegen-check",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.267Z",
+      "durationMs": 164,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/039-baseline-extended-codegen-check.log"
+    },
+    {
+      "name": "baseline-extended-cargo-metadata",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.431Z",
+      "durationMs": 44,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/040-baseline-extended-cargo-metadata.log"
+    },
+    {
+      "name": "baseline-extended-native-artifact-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.476Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/041-baseline-extended-native-artifact-verification.log"
+    },
+    {
+      "name": "baseline-extended-bundle-generated-node-probe",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.476Z",
+      "durationMs": 16,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/042-baseline-extended-bundle-generated-node-probe.log"
+    },
+    {
+      "name": "baseline-extended-node-stdio",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.493Z",
+      "durationMs": 49,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/043-baseline-extended-node-stdio.log"
+    },
+    {
+      "name": "baseline-extended-bun-ffi",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.542Z",
+      "durationMs": 33,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/044-baseline-extended-bun-ffi.log"
+    },
+    {
+      "name": "baseline-extended-host-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.575Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/045-baseline-extended-host-output-verification.log"
+    },
+    {
+      "name": "baseline-mutate-contract",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.576Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/046-baseline-mutate-contract.log"
+    },
+    {
+      "name": "baseline-mutated-pin-rust",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.576Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/047-baseline-mutated-pin-rust.log"
+    },
+    {
+      "name": "baseline-mutated-contamination-prebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.576Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/048-baseline-mutated-contamination-prebuild.log"
+    },
+    {
+      "name": "baseline-mutated-build",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:23.577Z",
+      "durationMs": 532,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/049-baseline-mutated-build.log"
+    },
+    {
+      "name": "baseline-mutated-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.110Z",
+      "durationMs": 179,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/050-baseline-mutated-codegen.log"
+    },
+    {
+      "name": "baseline-mutated-rebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.289Z",
+      "durationMs": 73,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/051-baseline-mutated-rebuild.log"
+    },
+    {
+      "name": "baseline-mutated-codegen-check",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.363Z",
+      "durationMs": 181,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/052-baseline-mutated-codegen-check.log"
+    },
+    {
+      "name": "baseline-mutated-cargo-metadata",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.544Z",
+      "durationMs": 44,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/053-baseline-mutated-cargo-metadata.log"
+    },
+    {
+      "name": "baseline-mutated-native-artifact-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.588Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/054-baseline-mutated-native-artifact-verification.log"
+    },
+    {
+      "name": "baseline-mutated-bundle-generated-node-probe",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.588Z",
+      "durationMs": 17,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/055-baseline-mutated-bundle-generated-node-probe.log"
+    },
+    {
+      "name": "baseline-mutated-node-stdio",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.605Z",
+      "durationMs": 49,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/056-baseline-mutated-node-stdio.log"
+    },
+    {
+      "name": "baseline-mutated-bun-ffi",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.655Z",
+      "durationMs": 31,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/057-baseline-mutated-bun-ffi.log"
+    },
+    {
+      "name": "baseline-mutated-host-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.686Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/058-baseline-mutated-host-output-verification.log"
+    },
+    {
+      "name": "baseline-provenance",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.686Z",
+      "durationMs": 13,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/059-baseline-provenance.log"
+    },
+    {
+      "name": "baseline-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.699Z",
+      "durationMs": 1,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/060-baseline-output-verification.log"
+    },
+    {
+      "name": "candidate-pin-rust",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.700Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/061-candidate-pin-rust.log"
+    },
+    {
+      "name": "candidate-contamination-prebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.700Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/062-candidate-contamination-prebuild.log"
+    },
+    {
+      "name": "candidate-build",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:24.700Z",
+      "durationMs": 2978,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/063-candidate-build.log"
+    },
+    {
+      "name": "candidate-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:27.678Z",
+      "durationMs": 189,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/064-candidate-codegen.log"
+    },
+    {
+      "name": "candidate-rebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:27.867Z",
+      "durationMs": 56,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/065-candidate-rebuild.log"
+    },
+    {
+      "name": "candidate-codegen-check",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:27.923Z",
+      "durationMs": 177,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/066-candidate-codegen-check.log"
+    },
+    {
+      "name": "candidate-cargo-metadata",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.101Z",
+      "durationMs": 46,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/067-candidate-cargo-metadata.log"
+    },
+    {
+      "name": "candidate-native-artifact-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.147Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/068-candidate-native-artifact-verification.log"
+    },
+    {
+      "name": "candidate-bundle-generated-node-probe",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.147Z",
+      "durationMs": 18,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/069-candidate-bundle-generated-node-probe.log"
+    },
+    {
+      "name": "candidate-node-stdio",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.165Z",
+      "durationMs": 50,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/070-candidate-node-stdio.log"
+    },
+    {
+      "name": "candidate-bun-ffi",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.215Z",
+      "durationMs": 30,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/071-candidate-bun-ffi.log"
+    },
+    {
+      "name": "candidate-host-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.245Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/072-candidate-host-output-verification.log"
+    },
+    {
+      "name": "candidate-provenance",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.245Z",
+      "durationMs": 15,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/073-candidate-provenance.log"
+    },
+    {
+      "name": "candidate-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.260Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/074-candidate-output-verification.log"
+    },
+    {
+      "name": "rollback-pin-rust",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.260Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/075-rollback-pin-rust.log"
+    },
+    {
+      "name": "rollback-contamination-prebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.260Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/076-rollback-contamination-prebuild.log"
+    },
+    {
+      "name": "rollback-build",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.260Z",
+      "durationMs": 522,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/077-rollback-build.log"
+    },
+    {
+      "name": "rollback-codegen",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.782Z",
+      "durationMs": 179,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/078-rollback-codegen.log"
+    },
+    {
+      "name": "rollback-rebuild",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:28.962Z",
+      "durationMs": 49,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/079-rollback-rebuild.log"
+    },
+    {
+      "name": "rollback-codegen-check",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.011Z",
+      "durationMs": 169,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/080-rollback-codegen-check.log"
+    },
+    {
+      "name": "rollback-cargo-metadata",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.180Z",
+      "durationMs": 44,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/081-rollback-cargo-metadata.log"
+    },
+    {
+      "name": "rollback-native-artifact-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.224Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/082-rollback-native-artifact-verification.log"
+    },
+    {
+      "name": "rollback-bundle-generated-node-probe",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.224Z",
+      "durationMs": 17,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/083-rollback-bundle-generated-node-probe.log"
+    },
+    {
+      "name": "rollback-node-stdio",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.241Z",
+      "durationMs": 49,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/084-rollback-node-stdio.log"
+    },
+    {
+      "name": "rollback-bun-ffi",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.290Z",
+      "durationMs": 31,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/085-rollback-bun-ffi.log"
+    },
+    {
+      "name": "rollback-host-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.321Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/086-rollback-host-output-verification.log"
+    },
+    {
+      "name": "rollback-provenance",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.321Z",
+      "durationMs": 13,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/087-rollback-provenance.log"
+    },
+    {
+      "name": "rollback-output-verification",
+      "ok": true,
+      "startedAt": "2026-09-21T05:18:29.334Z",
+      "durationMs": 0,
+      "status": 0,
+      "signal": null,
+      "rawLogPath": "/tmp/rustra-roadmap-20260921/registry-consumer-logs/088-rollback-output-verification.log"
+    }
+  ],
+  "bootstrapNpm": {
+    "@rustra/cli": {
+      "version": "0.11.3",
+      "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+      "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+      "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+      "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/node_modules/@rustra/cli"
+    }
+  },
+  "npmInstalled": {
+    "@rustra/cli": {
+      "version": "0.11.3",
+      "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+      "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+      "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+      "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/cli"
+    },
+    "@rustra/types": {
+      "version": "0.12.0",
+      "resolved": "https://registry.npmjs.org/@rustra/types/-/types-0.12.0.tgz",
+      "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+      "packageJsonSha256": "f805840302a87e41e43c4809e30f06090f6f1eb10645149ad13f83dccd24609a",
+      "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/types"
+    },
+    "@rustra/node": {
+      "version": "0.10.2",
+      "resolved": "https://registry.npmjs.org/@rustra/node/-/node-0.10.2.tgz",
+      "integrity": "sha512-LYi2DDYPwCF23B8pTNoBanpTx4Krfu0h32uvtP/sRWrxYYJBGu4iofySzqLwQ/2j604vNF5jXesYt8pr6jO01g==",
+      "packageJsonSha256": "300ed3cc5d0a5f1ccd985def015f1460234942d7cedb163ffbf828d7ce593579",
+      "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/node"
+    },
+    "@rustra/bun": {
+      "version": "0.10.2",
+      "resolved": "https://registry.npmjs.org/@rustra/bun/-/bun-0.10.2.tgz",
+      "integrity": "sha512-QdICp5yQ4ZO4W0u5uWKA6Zn50U/TPMv+uJe1hl+FgmOwGyEQdWWcy8Rc+hdAZfmW2b+3q4Tnz2TiXGXaO2KXRw==",
+      "packageJsonSha256": "f93f22e79904296e392252ebcea4d960f8adaf7bfcb216b36af436bcf30b825a",
+      "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/bun"
+    }
+  },
+  "pinningStrategy": {
+    "npmManifest": "published CLI-compatible canonical caret ranges for runtime adapters",
+    "exactInstallInputs": [
+      "@rustra/cli@0.11.3",
+      "@rustra/types@0.12.0",
+      "@rustra/node@0.10.2",
+      "@rustra/bun@0.10.2"
+    ],
+    "frozenInstall": "npm ci from the generated package-lock.json",
+    "enforcement": "every phase rejects lock or installed versions that differ from the requested exact four versions"
+  },
+  "originalScaffoldEvidence": {
+    "installed": {
+      "npm": {
+        "@rustra/cli": {
+          "version": "0.11.3",
+          "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+          "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+          "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+          "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/cli"
+        },
+        "@rustra/types": {
+          "version": "0.12.0",
+          "resolved": "https://registry.npmjs.org/@rustra/types/-/types-0.12.0.tgz",
+          "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+          "packageJsonSha256": "f805840302a87e41e43c4809e30f06090f6f1eb10645149ad13f83dccd24609a",
+          "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/types"
+        },
+        "@rustra/node": {
+          "version": "0.10.2",
+          "resolved": "https://registry.npmjs.org/@rustra/node/-/node-0.10.2.tgz",
+          "integrity": "sha512-LYi2DDYPwCF23B8pTNoBanpTx4Krfu0h32uvtP/sRWrxYYJBGu4iofySzqLwQ/2j604vNF5jXesYt8pr6jO01g==",
+          "packageJsonSha256": "300ed3cc5d0a5f1ccd985def015f1460234942d7cedb163ffbf828d7ce593579",
+          "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/node"
+        }
+      },
+      "cargo": {
+        "rustra": {
+          "version": "0.10.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "1362bf4630ba7fe4e1b1752dac5f88550beddb63fc88380dbbc52885a497f078",
+          "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-0.10.2/Cargo.toml"
+        },
+        "rustra-macros": {
+          "version": "0.10.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "8891a670c65894582b1b5c7d34049dae2cfcf6554839e6a05692798e268c1784",
+          "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-macros-0.10.2/Cargo.toml"
+        },
+        "rustra-naming": {
+          "version": "0.10.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "b9093812e8326bc782ba63813d290bc1913856672f09d1c3fa46d3546eb75d02",
+          "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-naming-0.10.2/Cargo.toml"
+        }
+      }
+    },
+    "contractHash": "eb582ca278c8c422078147932039be29e4a93493da5560b0c4208cb1b501b373",
+    "evidenceSnapshot": {
+      "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/baseline-original",
+      "files": {
+        "Cargo.lock": "a5acfd31ccc647f5c742567b305b6881b3c638ea1acf9c18d000504e05f7960f",
+        "Cargo.toml": "8e29789a356b38ff100db88065de688aa87ad26426134d6db53e76a289cd286c",
+        "package-lock.json": "8e28ee139a06b3bb2bdadfcc22ff8fed885643417d2ebeb44912ced473fd8707",
+        "package.json": "17725afa8d32822c01747fd4958d0fa8bd7a211594fcafede3894e02b8973b92",
+        "rustra.json": "8581dc467d7c04f6d7f095f89ea275df156bb4865799c9b0c969ddab9151cc59",
+        "src/generated/.rustra-generated.json": "f9d3695986800a245d1aa79d338ea6d5599bfc4bb9e5709879b7923550bbf7fd",
+        "src/generated/commands.ts": "8ccd3f38dfafabd668c192b6acaaed9d5d7578f49567b8dfa20e103656a28115",
+        "src/generated/contract.ts": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5",
+        "src/generated/frame-codecs.ts": "96e5ca72b24f1693c7a74707e0ccf1facf71f934109b147cf44c1f46615d37cd",
+        "src/generated/frame-registry.ts": "a32de9ebb73e2755748e894dc49804119edb2404d5dc32496f46a1d7fc4043a4",
+        "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+        "src/generated/types.ts": "be31de7360e7463e781712f6a14169d29d6153f3c9024216e71949099af2359e"
+      }
+    },
+    "demo": {
+      "jsRuntime": "bun",
+      "adapter": "@rustra/node",
+      "transport": "stdio",
+      "classification": "original generated demo; not Bun FFI evidence"
+    }
+  },
+  "journey": {
+    "scaffold": [
+      "published CLI init",
+      "doctor",
+      "build",
+      "codegen",
+      "original demo",
+      "codegen --check"
+    ],
+    "extendedFixture": [
+      "cdylib build",
+      "Node stdio call",
+      "Bun FFI call",
+      "generated strict-contract Node entry",
+      "error propagation (not declared typed domain-error handling)",
+      "contract mutation"
+    ],
+    "excluded": [
+      {
+        "segment": "event subscribe/unsubscribe",
+        "reason": "the public init echo scaffold declares no event contract; adding an event producer would test a separate product fixture"
+      },
+      {
+        "segment": "Tauri and React Native",
+        "reason": "this command-line gate has no GUI/mobile runtime"
+      },
+      {
+        "segment": "five external evaluators",
+        "reason": "requires independent human evaluation for G1"
+      }
+    ]
+  },
+  "initialHostEvidence": {
+    "node": {
+      "host": "node",
+      "adapter": "@rustra/node",
+      "transport": "stdio",
+      "contractVerification": "strict-generated-entry",
+      "result": {
+        "message": "registry-node"
+      },
+      "propagatedError": {
+        "code": "transport.error",
+        "message": "Error: RustraError { code: \"command.invalid_args\", message: \"registry gate error propagation\", retryable: false }"
+      }
+    },
+    "bun": {
+      "host": "bun",
+      "adapter": "@rustra/bun",
+      "transport": "ffi",
+      "contractVerification": "strict-generated-entry",
+      "result": {
+        "message": "registry-bun"
+      },
+      "propagatedError": {
+        "code": "command.invalid_args",
+        "message": "registry gate error propagation"
+      }
+    }
+  },
+  "phases": {
+    "baseline": {
+      "phase": "baseline",
+      "transition": "initial-install",
+      "expectedVersions": {
+        "npm": {
+          "@rustra/cli": "0.11.3",
+          "@rustra/types": "0.12.0",
+          "@rustra/node": "0.10.2",
+          "@rustra/bun": "0.10.2"
+        },
+        "rust": {
+          "rustra": "0.10.2",
+          "rustra-macros": "0.10.2",
+          "rustra-naming": "0.10.2"
+        }
+      },
+      "installed": {
+        "npm": {
+          "@rustra/cli": {
+            "version": "0.11.3",
+            "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+            "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+            "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/cli"
+          },
+          "@rustra/types": {
+            "version": "0.12.0",
+            "resolved": "https://registry.npmjs.org/@rustra/types/-/types-0.12.0.tgz",
+            "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+            "packageJsonSha256": "f805840302a87e41e43c4809e30f06090f6f1eb10645149ad13f83dccd24609a",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/types"
+          },
+          "@rustra/node": {
+            "version": "0.10.2",
+            "resolved": "https://registry.npmjs.org/@rustra/node/-/node-0.10.2.tgz",
+            "integrity": "sha512-LYi2DDYPwCF23B8pTNoBanpTx4Krfu0h32uvtP/sRWrxYYJBGu4iofySzqLwQ/2j604vNF5jXesYt8pr6jO01g==",
+            "packageJsonSha256": "300ed3cc5d0a5f1ccd985def015f1460234942d7cedb163ffbf828d7ce593579",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/node"
+          },
+          "@rustra/bun": {
+            "version": "0.10.2",
+            "resolved": "https://registry.npmjs.org/@rustra/bun/-/bun-0.10.2.tgz",
+            "integrity": "sha512-QdICp5yQ4ZO4W0u5uWKA6Zn50U/TPMv+uJe1hl+FgmOwGyEQdWWcy8Rc+hdAZfmW2b+3q4Tnz2TiXGXaO2KXRw==",
+            "packageJsonSha256": "f93f22e79904296e392252ebcea4d960f8adaf7bfcb216b36af436bcf30b825a",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/bun"
+          }
+        },
+        "cargo": {
+          "rustra": {
+            "version": "0.10.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "1362bf4630ba7fe4e1b1752dac5f88550beddb63fc88380dbbc52885a497f078",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-0.10.2/Cargo.toml"
+          },
+          "rustra-macros": {
+            "version": "0.10.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "8891a670c65894582b1b5c7d34049dae2cfcf6554839e6a05692798e268c1784",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-macros-0.10.2/Cargo.toml"
+          },
+          "rustra-naming": {
+            "version": "0.10.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "b9093812e8326bc782ba63813d290bc1913856672f09d1c3fa46d3546eb75d02",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-naming-0.10.2/Cargo.toml"
+          }
+        }
+      },
+      "locks": {
+        "npm": {
+          "path": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/baseline/package-lock.json",
+          "sha256": "d38c1171ab930fcbb856c472aa761295ec980ab4ece6c3c25163e8d71e18c9de"
+        },
+        "cargo": {
+          "path": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/baseline/Cargo.lock",
+          "sha256": "a5acfd31ccc647f5c742567b305b6881b3c638ea1acf9c18d000504e05f7960f"
+        }
+      },
+      "generated": {
+        "contractHash": "81e5f194f9fcb2113f8f21f92e463a53d9f49a8b60384e554dd877b22ce64c13",
+        "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/baseline/src/generated",
+        "files": {
+          "src/generated/.rustra-generated.json": "0bea7fcf7c48795fc577be3dbedf46785527e8d826ed5cf82d95a344d23b9b77",
+          "src/generated/bun.ts": "639d371d90b22c8ca4f91b05e2d17ea9f74646d2218617c6867cb21b2648601c",
+          "src/generated/commands.ts": "75972ef65722a3a3c901abfb4690b03ac71f0173093130e7136b4443b570ef37",
+          "src/generated/contract.ts": "18fecf22aa5e861f61f1b896254d4faa6bf6622128edc620ede86867da556179",
+          "src/generated/frame-codecs.ts": "5efccb42bf63bc857d96e5edd7f6152ab3896b2fa4d0fd8921b4ce32cdbe6c88",
+          "src/generated/frame-registry.ts": "fa429a7e2e1a44fa44e8eb00564ced0f24dbdb9c66ea1d495748ca1a85082851",
+          "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+          "src/generated/types.ts": "86e1775a70215204765ba3d1a4a9b988ec6f0716d7523c12e66cbd4f2c0ee32e"
+        }
+      },
+      "evidenceSnapshot": {
+        "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/baseline",
+        "files": {
+          "Cargo.lock": "a5acfd31ccc647f5c742567b305b6881b3c638ea1acf9c18d000504e05f7960f",
+          "Cargo.toml": "c51f4a06f42562bdbb4b47c7632757f61d829f4e41c298e7fc7c1711e5d8a611",
+          "package-lock.json": "d38c1171ab930fcbb856c472aa761295ec980ab4ece6c3c25163e8d71e18c9de",
+          "package.json": "f66a9a056a230061ef92ffe9583121e17ebd66f6de19eab95aa37bdc389b74e5",
+          "rustra.json": "be476617cd4d058f3c716777854e60b7d845e4a72e81f6fa3aee29bed125420f",
+          "src/generated/.rustra-generated.json": "0bea7fcf7c48795fc577be3dbedf46785527e8d826ed5cf82d95a344d23b9b77",
+          "src/generated/bun.ts": "639d371d90b22c8ca4f91b05e2d17ea9f74646d2218617c6867cb21b2648601c",
+          "src/generated/commands.ts": "75972ef65722a3a3c901abfb4690b03ac71f0173093130e7136b4443b570ef37",
+          "src/generated/contract.ts": "18fecf22aa5e861f61f1b896254d4faa6bf6622128edc620ede86867da556179",
+          "src/generated/frame-codecs.ts": "5efccb42bf63bc857d96e5edd7f6152ab3896b2fa4d0fd8921b4ce32cdbe6c88",
+          "src/generated/frame-registry.ts": "fa429a7e2e1a44fa44e8eb00564ced0f24dbdb9c66ea1d495748ca1a85082851",
+          "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+          "src/generated/types.ts": "86e1775a70215204765ba3d1a4a9b988ec6f0716d7523c12e66cbd4f2c0ee32e"
+        }
+      },
+      "nativeArtifacts": {
+        "nodeExecutable": {
+          "originalPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-target/debug/rustra-app",
+          "sha256": "88038c4711e74ab3ac9201e18c7c9dc67dfe642f120017cd2a7b664ebe58866e",
+          "retainedAfterSuccess": false
+        },
+        "bunLibrary": {
+          "originalPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-target/debug/librustra_app.dylib",
+          "sha256": "241678129be56bd97804b75ff96e189ea51878b4255add493ca8248db4685430",
+          "retainedAfterSuccess": false
+        }
+      },
+      "hosts": {
+        "node": {
+          "host": "node",
+          "adapter": "@rustra/node",
+          "transport": "stdio",
+          "contractVerification": "strict-generated-entry",
+          "result": {
+            "message": "registry-node",
+            "repeat": 3
+          },
+          "propagatedError": {
+            "code": "transport.error",
+            "message": "Error: RustraError { code: \"command.invalid_args\", message: \"registry gate error propagation\", retryable: false }"
+          }
+        },
+        "bun": {
+          "host": "bun",
+          "adapter": "@rustra/bun",
+          "transport": "ffi",
+          "contractVerification": "strict-generated-entry",
+          "result": {
+            "message": "registry-bun",
+            "repeat": 3
+          },
+          "propagatedError": {
+            "code": "command.invalid_args",
+            "message": "registry gate error propagation"
+          }
+        }
+      }
+    },
+    "candidate": {
+      "phase": "candidate",
+      "transition": "rust-only-patch",
+      "expectedVersions": {
+        "npm": {
+          "@rustra/cli": "0.11.3",
+          "@rustra/types": "0.12.0",
+          "@rustra/node": "0.10.2",
+          "@rustra/bun": "0.10.2"
+        },
+        "rust": {
+          "rustra": "0.11.0",
+          "rustra-macros": "0.11.0",
+          "rustra-naming": "0.11.0"
+        }
+      },
+      "installed": {
+        "npm": {
+          "@rustra/cli": {
+            "version": "0.11.3",
+            "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+            "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+            "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/cli"
+          },
+          "@rustra/types": {
+            "version": "0.12.0",
+            "resolved": "https://registry.npmjs.org/@rustra/types/-/types-0.12.0.tgz",
+            "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+            "packageJsonSha256": "f805840302a87e41e43c4809e30f06090f6f1eb10645149ad13f83dccd24609a",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/types"
+          },
+          "@rustra/node": {
+            "version": "0.10.2",
+            "resolved": "https://registry.npmjs.org/@rustra/node/-/node-0.10.2.tgz",
+            "integrity": "sha512-LYi2DDYPwCF23B8pTNoBanpTx4Krfu0h32uvtP/sRWrxYYJBGu4iofySzqLwQ/2j604vNF5jXesYt8pr6jO01g==",
+            "packageJsonSha256": "300ed3cc5d0a5f1ccd985def015f1460234942d7cedb163ffbf828d7ce593579",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/node"
+          },
+          "@rustra/bun": {
+            "version": "0.10.2",
+            "resolved": "https://registry.npmjs.org/@rustra/bun/-/bun-0.10.2.tgz",
+            "integrity": "sha512-QdICp5yQ4ZO4W0u5uWKA6Zn50U/TPMv+uJe1hl+FgmOwGyEQdWWcy8Rc+hdAZfmW2b+3q4Tnz2TiXGXaO2KXRw==",
+            "packageJsonSha256": "f93f22e79904296e392252ebcea4d960f8adaf7bfcb216b36af436bcf30b825a",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/bun"
+          }
+        },
+        "cargo": {
+          "rustra": {
+            "version": "0.11.0",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "323b830a0786c234ef4c893197ac757b78292620451a97ac07f1be9aa00238f2",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-0.11.0/Cargo.toml"
+          },
+          "rustra-macros": {
+            "version": "0.11.0",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "d3f7141341d0581323dbc8f4921b304c3cd4a415015fcfa18a9ccbdb3b23490b",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-macros-0.11.0/Cargo.toml"
+          },
+          "rustra-naming": {
+            "version": "0.11.0",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "e988bbbea26f89ef74677a7820fc4a377a92ee0d47b6592b0830798f11eb3e43",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-naming-0.11.0/Cargo.toml"
+          }
+        }
+      },
+      "locks": {
+        "npm": {
+          "path": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/candidate/package-lock.json",
+          "sha256": "d38c1171ab930fcbb856c472aa761295ec980ab4ece6c3c25163e8d71e18c9de"
+        },
+        "cargo": {
+          "path": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/candidate/Cargo.lock",
+          "sha256": "79e65f50a2b07b85ebbd5943333fee9f511081855998aafe84e907a4143d5613"
+        }
+      },
+      "generated": {
+        "contractHash": "81e5f194f9fcb2113f8f21f92e463a53d9f49a8b60384e554dd877b22ce64c13",
+        "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/candidate/src/generated",
+        "files": {
+          "src/generated/.rustra-generated.json": "0bea7fcf7c48795fc577be3dbedf46785527e8d826ed5cf82d95a344d23b9b77",
+          "src/generated/bun.ts": "639d371d90b22c8ca4f91b05e2d17ea9f74646d2218617c6867cb21b2648601c",
+          "src/generated/commands.ts": "75972ef65722a3a3c901abfb4690b03ac71f0173093130e7136b4443b570ef37",
+          "src/generated/contract.ts": "18fecf22aa5e861f61f1b896254d4faa6bf6622128edc620ede86867da556179",
+          "src/generated/frame-codecs.ts": "5efccb42bf63bc857d96e5edd7f6152ab3896b2fa4d0fd8921b4ce32cdbe6c88",
+          "src/generated/frame-registry.ts": "fa429a7e2e1a44fa44e8eb00564ced0f24dbdb9c66ea1d495748ca1a85082851",
+          "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+          "src/generated/types.ts": "86e1775a70215204765ba3d1a4a9b988ec6f0716d7523c12e66cbd4f2c0ee32e"
+        }
+      },
+      "evidenceSnapshot": {
+        "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/candidate",
+        "files": {
+          "Cargo.lock": "79e65f50a2b07b85ebbd5943333fee9f511081855998aafe84e907a4143d5613",
+          "Cargo.toml": "3f2096a0a4f50da9ea602f547cbc7baba18ccd325948370d8c309b43480a87e3",
+          "package-lock.json": "d38c1171ab930fcbb856c472aa761295ec980ab4ece6c3c25163e8d71e18c9de",
+          "package.json": "f66a9a056a230061ef92ffe9583121e17ebd66f6de19eab95aa37bdc389b74e5",
+          "rustra.json": "be476617cd4d058f3c716777854e60b7d845e4a72e81f6fa3aee29bed125420f",
+          "src/generated/.rustra-generated.json": "0bea7fcf7c48795fc577be3dbedf46785527e8d826ed5cf82d95a344d23b9b77",
+          "src/generated/bun.ts": "639d371d90b22c8ca4f91b05e2d17ea9f74646d2218617c6867cb21b2648601c",
+          "src/generated/commands.ts": "75972ef65722a3a3c901abfb4690b03ac71f0173093130e7136b4443b570ef37",
+          "src/generated/contract.ts": "18fecf22aa5e861f61f1b896254d4faa6bf6622128edc620ede86867da556179",
+          "src/generated/frame-codecs.ts": "5efccb42bf63bc857d96e5edd7f6152ab3896b2fa4d0fd8921b4ce32cdbe6c88",
+          "src/generated/frame-registry.ts": "fa429a7e2e1a44fa44e8eb00564ced0f24dbdb9c66ea1d495748ca1a85082851",
+          "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+          "src/generated/types.ts": "86e1775a70215204765ba3d1a4a9b988ec6f0716d7523c12e66cbd4f2c0ee32e"
+        }
+      },
+      "nativeArtifacts": {
+        "nodeExecutable": {
+          "originalPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-target/debug/rustra-app",
+          "sha256": "31a8a95d9c181324d5264e15a4248e674dda5890ca0441621fb926d8e2c03c4c",
+          "retainedAfterSuccess": false
+        },
+        "bunLibrary": {
+          "originalPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-target/debug/librustra_app.dylib",
+          "sha256": "6a70dc8727035bca8ecc0f3d5f9e66f35133addb4b4391d84f6fcef87d92c6cb",
+          "retainedAfterSuccess": false
+        }
+      },
+      "hosts": {
+        "node": {
+          "host": "node",
+          "adapter": "@rustra/node",
+          "transport": "stdio",
+          "contractVerification": "strict-generated-entry",
+          "result": {
+            "message": "registry-node",
+            "repeat": 3
+          },
+          "propagatedError": {
+            "code": "transport.error",
+            "message": "Error: RustraError { code: \"command.invalid_args\", message: \"registry gate error propagation\", retryable: false }"
+          }
+        },
+        "bun": {
+          "host": "bun",
+          "adapter": "@rustra/bun",
+          "transport": "ffi",
+          "contractVerification": "strict-generated-entry",
+          "result": {
+            "message": "registry-bun",
+            "repeat": 3
+          },
+          "propagatedError": {
+            "code": "command.invalid_args",
+            "message": "registry gate error propagation"
+          }
+        }
+      }
+    },
+    "rollback": {
+      "phase": "rollback",
+      "transition": "rust-only-patch",
+      "expectedVersions": {
+        "npm": {
+          "@rustra/cli": "0.11.3",
+          "@rustra/types": "0.12.0",
+          "@rustra/node": "0.10.2",
+          "@rustra/bun": "0.10.2"
+        },
+        "rust": {
+          "rustra": "0.10.2",
+          "rustra-macros": "0.10.2",
+          "rustra-naming": "0.10.2"
+        }
+      },
+      "installed": {
+        "npm": {
+          "@rustra/cli": {
+            "version": "0.11.3",
+            "resolved": "https://registry.npmjs.org/@rustra/cli/-/cli-0.11.3.tgz",
+            "integrity": "sha512-UvNFy9Y/6UMRurYteAFrP8XcnTplFlQOX4+xLi2D8NnTceGF2jVH0DbNZUtwNAh55dXJEukmwwsjmBn/4WpAHg==",
+            "packageJsonSha256": "a58f8452b946c6a3d61ecf3e9d365c6e56f7ce79c5b04257b0cbe38519fdf203",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/cli"
+          },
+          "@rustra/types": {
+            "version": "0.12.0",
+            "resolved": "https://registry.npmjs.org/@rustra/types/-/types-0.12.0.tgz",
+            "integrity": "sha512-5EYgbNrbFMuMyZ8HNO3rQKmApGANGEfq1jC3gqsbiwkf1CRYzaNQTcadUkQCEm2A5S8d/ynMP15uy50EEKIGWg==",
+            "packageJsonSha256": "f805840302a87e41e43c4809e30f06090f6f1eb10645149ad13f83dccd24609a",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/types"
+          },
+          "@rustra/node": {
+            "version": "0.10.2",
+            "resolved": "https://registry.npmjs.org/@rustra/node/-/node-0.10.2.tgz",
+            "integrity": "sha512-LYi2DDYPwCF23B8pTNoBanpTx4Krfu0h32uvtP/sRWrxYYJBGu4iofySzqLwQ/2j604vNF5jXesYt8pr6jO01g==",
+            "packageJsonSha256": "300ed3cc5d0a5f1ccd985def015f1460234942d7cedb163ffbf828d7ce593579",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/node"
+          },
+          "@rustra/bun": {
+            "version": "0.10.2",
+            "resolved": "https://registry.npmjs.org/@rustra/bun/-/bun-0.10.2.tgz",
+            "integrity": "sha512-QdICp5yQ4ZO4W0u5uWKA6Zn50U/TPMv+uJe1hl+FgmOwGyEQdWWcy8Rc+hdAZfmW2b+3q4Tnz2TiXGXaO2KXRw==",
+            "packageJsonSha256": "f93f22e79904296e392252ebcea4d960f8adaf7bfcb216b36af436bcf30b825a",
+            "realpath": "/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/registry-consumer/node_modules/@rustra/bun"
+          }
+        },
+        "cargo": {
+          "rustra": {
+            "version": "0.10.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "1362bf4630ba7fe4e1b1752dac5f88550beddb63fc88380dbbc52885a497f078",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-0.10.2/Cargo.toml"
+          },
+          "rustra-macros": {
+            "version": "0.10.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "8891a670c65894582b1b5c7d34049dae2cfcf6554839e6a05692798e268c1784",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-macros-0.10.2/Cargo.toml"
+          },
+          "rustra-naming": {
+            "version": "0.10.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "lockSource": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "b9093812e8326bc782ba63813d290bc1913856672f09d1c3fa46d3546eb75d02",
+            "manifestPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/rustra-naming-0.10.2/Cargo.toml"
+          }
+        }
+      },
+      "locks": {
+        "npm": {
+          "path": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/rollback/package-lock.json",
+          "sha256": "d38c1171ab930fcbb856c472aa761295ec980ab4ece6c3c25163e8d71e18c9de"
+        },
+        "cargo": {
+          "path": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/rollback/Cargo.lock",
+          "sha256": "a5acfd31ccc647f5c742567b305b6881b3c638ea1acf9c18d000504e05f7960f"
+        }
+      },
+      "generated": {
+        "contractHash": "81e5f194f9fcb2113f8f21f92e463a53d9f49a8b60384e554dd877b22ce64c13",
+        "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/rollback/src/generated",
+        "files": {
+          "src/generated/.rustra-generated.json": "0bea7fcf7c48795fc577be3dbedf46785527e8d826ed5cf82d95a344d23b9b77",
+          "src/generated/bun.ts": "639d371d90b22c8ca4f91b05e2d17ea9f74646d2218617c6867cb21b2648601c",
+          "src/generated/commands.ts": "75972ef65722a3a3c901abfb4690b03ac71f0173093130e7136b4443b570ef37",
+          "src/generated/contract.ts": "18fecf22aa5e861f61f1b896254d4faa6bf6622128edc620ede86867da556179",
+          "src/generated/frame-codecs.ts": "5efccb42bf63bc857d96e5edd7f6152ab3896b2fa4d0fd8921b4ce32cdbe6c88",
+          "src/generated/frame-registry.ts": "fa429a7e2e1a44fa44e8eb00564ced0f24dbdb9c66ea1d495748ca1a85082851",
+          "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+          "src/generated/types.ts": "86e1775a70215204765ba3d1a4a9b988ec6f0716d7523c12e66cbd4f2c0ee32e"
+        }
+      },
+      "evidenceSnapshot": {
+        "root": "/tmp/rustra-roadmap-20260921/registry-consumer-evidence/rollback",
+        "files": {
+          "Cargo.lock": "a5acfd31ccc647f5c742567b305b6881b3c638ea1acf9c18d000504e05f7960f",
+          "Cargo.toml": "c51f4a06f42562bdbb4b47c7632757f61d829f4e41c298e7fc7c1711e5d8a611",
+          "package-lock.json": "d38c1171ab930fcbb856c472aa761295ec980ab4ece6c3c25163e8d71e18c9de",
+          "package.json": "f66a9a056a230061ef92ffe9583121e17ebd66f6de19eab95aa37bdc389b74e5",
+          "rustra.json": "be476617cd4d058f3c716777854e60b7d845e4a72e81f6fa3aee29bed125420f",
+          "src/generated/.rustra-generated.json": "0bea7fcf7c48795fc577be3dbedf46785527e8d826ed5cf82d95a344d23b9b77",
+          "src/generated/bun.ts": "639d371d90b22c8ca4f91b05e2d17ea9f74646d2218617c6867cb21b2648601c",
+          "src/generated/commands.ts": "75972ef65722a3a3c901abfb4690b03ac71f0173093130e7136b4443b570ef37",
+          "src/generated/contract.ts": "18fecf22aa5e861f61f1b896254d4faa6bf6622128edc620ede86867da556179",
+          "src/generated/frame-codecs.ts": "5efccb42bf63bc857d96e5edd7f6152ab3896b2fa4d0fd8921b4ce32cdbe6c88",
+          "src/generated/frame-registry.ts": "fa429a7e2e1a44fa44e8eb00564ced0f24dbdb9c66ea1d495748ca1a85082851",
+          "src/generated/node.ts": "39c8d7e77cd8604d3beab2fa4a3dd95f39c70d7a800d2379af80914ebbb75c4c",
+          "src/generated/types.ts": "86e1775a70215204765ba3d1a4a9b988ec6f0716d7523c12e66cbd4f2c0ee32e"
+        }
+      },
+      "nativeArtifacts": {
+        "nodeExecutable": {
+          "originalPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-target/debug/rustra-app",
+          "sha256": "156668b4242a725be45aada2b589f8d774a5199f7aa3824378d700db4ab80a55",
+          "retainedAfterSuccess": false
+        },
+        "bunLibrary": {
+          "originalPath": "/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-registry-consumer-PuNGcT/cargo-target/debug/librustra_app.dylib",
+          "sha256": "b15633da0548f6d3597ea2ad161bf88fdf29526378fb298551abfcf8ff4918a9",
+          "retainedAfterSuccess": false
+        }
+      },
+      "hosts": {
+        "node": {
+          "host": "node",
+          "adapter": "@rustra/node",
+          "transport": "stdio",
+          "contractVerification": "strict-generated-entry",
+          "result": {
+            "message": "registry-node",
+            "repeat": 3
+          },
+          "propagatedError": {
+            "code": "transport.error",
+            "message": "Error: RustraError { code: \"command.invalid_args\", message: \"registry gate error propagation\", retryable: false }"
+          }
+        },
+        "bun": {
+          "host": "bun",
+          "adapter": "@rustra/bun",
+          "transport": "ffi",
+          "contractVerification": "strict-generated-entry",
+          "result": {
+            "message": "registry-bun",
+            "repeat": 3
+          },
+          "propagatedError": {
+            "code": "command.invalid_args",
+            "message": "registry gate error propagation"
+          }
+        }
+      }
+    }
+  },
+  "comparison": {
+    "rollbackMatchesMutatedBaseline": true,
+    "contractHash": "81e5f194f9fcb2113f8f21f92e463a53d9f49a8b60384e554dd877b22ce64c13",
+    "outputs": {
+      "node": {
+        "message": "registry-node",
+        "repeat": 3
+      },
+      "bun": {
+        "message": "registry-bun",
+        "repeat": 3
+      }
+    },
+    "classification": "one Rust-only patch upgrade followed by rollback; not two successive full product upgrades"
+  },
+  "scratchRetained": false
+}

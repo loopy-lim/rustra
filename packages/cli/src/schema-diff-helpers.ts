@@ -28,3 +28,23 @@ export function resolveDefinition(ref: string, definitions: Record<string, unkno
   const prefix = ref.startsWith('#/definitions/') ? '#/definitions/' : '#/$defs/';
   return ref.startsWith(prefix) ? definitions[ref.slice(prefix.length)] : undefined;
 }
+
+/** Same discriminator precedence as the complex codec; title is only a fallback. */
+export function variantKeys(schema: Record<string, unknown>): unknown[] | undefined {
+  if (!Array.isArray(schema.oneOf)) return undefined;
+  const explicit = schema['x-rustra-variant-order'];
+  return schema.oneOf.map((value, index) => {
+    if (Array.isArray(explicit) && explicit[index] !== undefined) return explicit[index];
+    const variant = asRecord(value);
+    if (typeof variant.const === 'string') return variant.const;
+    if (Array.isArray(variant.enum) && variant.enum.length === 1) return String(variant.enum[0]);
+    const properties = asRecord(variant.properties);
+    const discriminator = Object.values(properties).find(
+      (field) => asRecord(field).const !== undefined,
+    );
+    if (discriminator !== undefined) return String(asRecord(discriminator).const);
+    const keys = Object.keys(properties);
+    if (keys.length === 1) return keys[0];
+    return typeof variant.title === 'string' ? variant.title : null;
+  });
+}

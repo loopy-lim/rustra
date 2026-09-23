@@ -23,12 +23,16 @@ export function pinCargoVersions(projectDir, versions) {
   writeFileSync(path, cargo);
 }
 
+// 발행 CLI의 호환 범위(cli package.json rustraTemplate)는 핀 버전과 기저가 다를 수
+// 있다(예: nodeRange ^0.10.0 vs 핀 0.10.2). CLI의 ensureHostDependencies 는 범위 내
+// 정확 버전을 수용하고 오염 검사도 정확 semver 를 허용하므로, manifest 는 정확 핀을
+// 쓴다 — caret 기저 표기는 CLI 범위와 어긋날 때 codegen 이 정확히 거부한다.
 export function pinOriginalScaffold(projectDir, versions) {
   const packagePath = join(projectDir, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
   packageJson.dependencies = {
-    '@rustra/node': `^${versions.npm['@rustra/node']}`,
-    '@rustra/types': `^${versions.npm['@rustra/types']}`,
+    '@rustra/node': versions.npm['@rustra/node'],
+    '@rustra/types': versions.npm['@rustra/types'],
   };
   packageJson.devDependencies = { '@rustra/cli': versions.npm['@rustra/cli'] };
   writeJson(packagePath, packageJson);
@@ -39,9 +43,9 @@ export function prepareRegistryFixture(projectDir, versions) {
   const packagePath = join(projectDir, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
   packageJson.dependencies = {
-    '@rustra/node': `^${versions.npm['@rustra/node']}`,
-    '@rustra/bun': `^${versions.npm['@rustra/bun']}`,
-    '@rustra/types': `^${versions.npm['@rustra/types']}`,
+    '@rustra/node': versions.npm['@rustra/node'],
+    '@rustra/bun': versions.npm['@rustra/bun'],
+    '@rustra/types': versions.npm['@rustra/types'],
   };
   packageJson.devDependencies = { '@rustra/cli': versions.npm['@rustra/cli'] };
   writeJson(packagePath, packageJson);

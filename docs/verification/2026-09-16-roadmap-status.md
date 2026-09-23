@@ -1,10 +1,31 @@
 # Rustra 완료 기준과 후속 실행 현황
 
-- 확인일: 2026-09-16 (KST)
+- 확인일: 2026-09-16 (KST) · 2026-09-21 레지스트리 여정 라운드 추가 갱신
 - 제품 기준: [2026-09-14 로드맵 SPEC](../specs/2026-09-14-rustra-roadmap.md)
 - 현재 원격 main: `1f277de2e68e2242b7a6503e6e0ab731833e60e3`
 - 이번 구현: `codex/m1-registry-onboarding`, [실행 PLAN](../plans/2026-09-16-m1-registry-onboarding.md)
 - 최종 목표: **검증된 Node/Bun/Tauri/RN 범위에 대한 1.0**. 현재는 M0 구현·발행 완료, M1의 Node/Bun 공개 패키지 자동 여정 구현·검증 완료이며 전체 M1·1.0은 미완료다.
+
+## 0. 2026-09-21 레지스트리 여정 라운드 (M1 보강)
+
+이 날짜 이후 발행된 라인(발행 CLI `0.11.3`, `types 0.12.0`, `node`/`bun 0.10.2`, `tauri 0.9.3`, `react-native 0.9.2`, crates `0.11.0`)을 대상으로 M1의 자동 검증 가능한 잔여를 실행했다. 실행 도구·영수증·재실행 방법은 [공개 레지스트리 도입 검증](../registry-onboarding.ko.md)에 있다.
+
+| 여정                                                           | 결과               | 증거                                                          |
+| -------------------------------------------------------------- | ------------------ | ------------------------------------------------------------- |
+| Node/Bun 재검증(버전 핀 갱신, Rust `0.10.2 → 0.11.0 → 0.10.2`) | 통과 88/88, 19.0초 | [영수증](evidence/2026-09-21-registry-node-bun.json)          |
+| Tauri/macOS 실제 WebView(신규 여정)                            | 통과 34단계, 44초  | [영수증](evidence/2026-09-21-registry-tauri-webview.json)     |
+| RN/Android 실기기(신규 여정, TB710FU/Android 16)               | 통과 41단계, 136초 | [영수증](evidence/2026-09-21-registry-rn-android-device.json) |
+| 진단 실패 입력 5종(A4, 신규 여정)                              | 5/5 통과           | [영수증](evidence/2026-09-21-registry-diagnostics.json)       |
+
+Tauri 여정은 실제 WKWebView 안의 JS가 생성된 엄격 계약 클라이언트로 첫 호출·선언 도메인 에러 전파·`calc.tick` 푸시 이벤트 구독 3회/해지 후 0회·계약 필드 변경 후 `repeat=3` 반환까지 관측해 `reportEvidence` 커맨드로 되돌렸다. RN/Android 여정은 공개 커뮤니티 템플릿(Expo 없음)에서 cargo-ndk staticlib + Gradle APK 를 실기기로 실행해 같은 A2/A3 표면(에러·필드 변경)을 기기 증거 수준으로 확인했다. 진단 여정은 stale 생성물·계약 해시 불일치·네이티브 부재·SDK 부재 doctor·계약 밖 payload 각각이 원인·대상·다음 조치를 갖춘 채 loud-fail 함을 검증했다(계약 밖 필드는 생성 클라이언트의 선언 필드 인코딩으로 와이어가 오염되지 않음을 확인).
+
+**이 라운드가 발견한 결함**:
+
+1. **RN 생성 모듈 ESM manifest 결함(수정 완료, 미발행)** — 생성 모듈의 `"type": "module"` + CommonJS `react-native.config.js` 조합에서 Node 기반 오토크링킹이 모듈을 조용히 누락시켰다. 렌더러 수정(`type` 생략) + 예제 재생성 + 재검증(Node/bun 양쪽 `react-native config`) 완료. 발행 CLI `0.11.3` 은 여전히 결함을 가지므로 RN 여정은 동일 수정을 워크어라운드로 적용해 기록한다.
+2. **RN 오톨링킹 심링크 경로 결함(앱 해법 문서화)** — 모듈이 `node_modules` 심링크로 등록되면 Gradle `file()` 기준이 어긋나 어댑터 경로가 `node_modules/node_modules/…` 로 풀린다. 앱 소유 `react-native.config.js` 로 root 를 고정해 회피하며, 렌더러 측 강화는 후보다.
+3. **RN/Android 이벤트 푸시 교착(미수선, 최우선 후보)** — 브릿지 호출 중 명령 안에서 `Package::emit` 하면 invoke 는 반환되지만 JS 이벤트 루프가 다음 매크로태스크 전에 멈춘다. `pollMs` 로도 회피 불가(싱크가 install 시점에 설치). 실기기 TB710FU·RN 0.81.5·어댑터 0.9.2·rustra 0.11.0 에서 3/3 재현. RN 다리의 a3Events 는 주장하지 않고 Tauri 여정이 이벤트 증거를 담당한다.
+
+**잔여(RN/iOS)**: RN/iOS 시뮬레이터 다리는 아직 자동 여정이 없다 — Android 다리의 패턴(RN 템플릿·정확 핀·코드젠·pod install·xcodebuild·simctl 실행)을 그대로 이어 구현·실행하면 된다. A5(기존 앱 업그레이드)·A6(외부 평가자)는 여전히 사용자 결정 사항이다.
 
 ## 1. 어디까지 해야 하는가
 

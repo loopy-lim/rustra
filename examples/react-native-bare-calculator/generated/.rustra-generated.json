@@ -49,7 +49,7 @@
     },
     {
       "path": "../modules/rustra-bridge/package.json",
-      "sha256": "70aff97f3cd65f1f1d8b11cac8549e9081d9c45a2cbb75cf41956a08be97b5c9"
+      "sha256": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13"
     },
     {
       "path": "../modules/rustra-bridge/react-native.config.js",
@@ -61,7 +61,7 @@
     },
     {
       "path": "../modules/rustra-bridge/src/index.ts",
-      "sha256": "ff47f63762759f76cbb71017c5b129de4900761895a42e31b5a6c0c3750076ff"
+      "sha256": "6c9d182eb5a4132aea132226c4755ffd3866bf3da5617b3543561407b327e5eb"
     },
     {
       "path": "commands.ts",

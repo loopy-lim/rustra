@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "plugins": ["./plugins/with-glog-textual-headers.cjs"],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

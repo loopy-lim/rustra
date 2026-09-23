@@ -955,6 +955,38 @@ test('generateFrameCodecsTs encodes string enums as variant index', () => {
   assert.ok(sort.includes('_variants.indexOf'), 'enum index lookup must be generated');
 });
 
+test('generateFrameCodecsTs decodes string enums as literal unions', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.enum.output',
+    commands: [
+      {
+        name: 'enumOutput',
+        commandId: 61,
+        inputType: 'EnumOutputInput',
+        outputType: 'EnumOutputResult',
+        inputSchema: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+          title: 'EnumOutputInput',
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { order: { type: 'string', enum: ['asc', 'desc'] } },
+          required: ['order'],
+          title: 'EnumOutputResult',
+        },
+      },
+    ],
+    events: [],
+  };
+  const codecs = generateFrameCodecsTs(schema);
+  assert.ok(
+    codecs.includes('const _variants = ["asc","desc"] as const;'),
+    'decoded enum variants must retain their literal union type',
+  );
+});
+
 test('generateFrameCodecsTs encodes primitive-valued dynamic maps deterministically', () => {
   const codecs = generateFrameCodecsTs(richSchema);
   const map = codecs.split('mapScoresCodec')[1].split('export const')[0];
@@ -1837,6 +1869,157 @@ test('generated manifest records schema and file hashes', () => {
   assert.equal(manifest.generatorVersion, '0.5.0');
   assert.equal(manifest.files[0]?.path, 'types.ts');
   assert.match(manifest.files[0]?.sha256 ?? '', /^[a-f0-9]{64}$/);
+});
+
+test('Frame migration removes only unchanged legacy codecs recorded by the old manifest', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-retired-codecs-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    const legacy = ['rkyv-codecs.ts', 'rkyv-registry.ts'].map((path) => ({
+      path,
+      content: `// old generated ${path}\n`,
+    }));
+    for (const file of legacy) writeFileSync(join(root, file.path), file.content);
+    writeFileSync(join(root, 'custom.ts'), 'export const keep = true;\n');
+    writeFileSync(
+      join(root, '.rustra-generated.json'),
+      JSON.stringify(buildGeneratedManifest('{}', '0.8.0', legacy)),
+    );
+    await generateFromSchema(schemaPath, root);
+    for (const file of legacy) assert.equal(existsSync(join(root, file.path)), false);
+    assert.equal(readFileSync(join(root, 'custom.ts'), 'utf8'), 'export const keep = true;\n');
+    assert.ok(existsSync(join(root, 'frame-codecs.ts')));
+    await generateFromSchema(schemaPath, root, undefined, false, undefined, undefined, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Frame migration preserves edited legacy codecs and refuses before rewriting outputs', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-edited-codecs-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    writeFileSync(join(root, 'rkyv-codecs.ts'), '// user edits\n');
+    const manifest = JSON.stringify(
+      buildGeneratedManifest('{}', '0.8.0', [{ path: 'rkyv-codecs.ts', content: '// old\n' }]),
+    );
+    writeFileSync(join(root, '.rustra-generated.json'), manifest);
+    await assert.rejects(generateFromSchema(schemaPath, root), /legacy.*rkyv-codecs.*modified/i);
+    assert.equal(readFileSync(join(root, 'rkyv-codecs.ts'), 'utf8'), '// user edits\n');
+    assert.equal(readFileSync(join(root, '.rustra-generated.json'), 'utf8'), manifest);
+    assert.equal(existsSync(join(root, 'frame-codecs.ts')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generated check rejects unrecorded legacy leftovers without deleting them', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-unrecorded-codecs-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    await generateFromSchema(schemaPath, root);
+    writeFileSync(join(root, 'rkyv-registry.ts'), '// left by an older upgrade\n');
+    await assert.rejects(
+      generateFromSchema(schemaPath, root, undefined, false, undefined, undefined, true),
+      /legacy.*rkyv-registry.*unrecorded/i,
+    );
+    await assert.rejects(generateFromSchema(schemaPath, root), /legacy.*unrecorded/i);
+    assert.equal(existsSync(join(root, 'rkyv-registry.ts')), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Frame migration preserves a legacy path replaced by a symlink', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-symlink-codecs-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    const content = '// preserved\n';
+    writeFileSync(join(root, 'custom.ts'), content);
+    symlinkSync(join(root, 'custom.ts'), join(root, 'rkyv-codecs.ts'));
+    writeFileSync(
+      join(root, '.rustra-generated.json'),
+      JSON.stringify(buildGeneratedManifest('{}', '0.8.0', [{ path: 'rkyv-codecs.ts', content }])),
+    );
+    await assert.rejects(generateFromSchema(schemaPath, root), /legacy.*symlink/i);
+    assert.equal(readFileSync(join(root, 'custom.ts'), 'utf8'), content);
+    assert.equal(existsSync(join(root, 'rkyv-codecs.ts')), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('obsolete optional outputs fail check without writes and are removed on regeneration', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-obsolete-facade-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    await generateFromSchema(schemaPath, root, undefined, true);
+    const before = readFileSync(join(root, '.rustra-generated.json'), 'utf8');
+    await assert.rejects(
+      generateFromSchema(schemaPath, root, undefined, false, undefined, undefined, true),
+      /Generated drift \(obsolete\)/,
+    );
+    assert.equal(existsSync(join(root, 'positional-facade.ts')), true);
+    assert.equal(readFileSync(join(root, '.rustra-generated.json'), 'utf8'), before);
+    const written = await generateFromSchema(schemaPath, root);
+    assert.ok(written.includes('positional-facade.ts (removed)'));
+    assert.equal(existsSync(join(root, 'positional-facade.ts')), false);
+    await generateFromSchema(schemaPath, root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('cleanup rejects an out-of-root manifest entry before removing any generated files', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-escape-cleanup-'));
+  const output = join(root, 'generated');
+  try {
+    mkdirSync(output);
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    const files = [
+      { path: 'rkyv-codecs.ts', content: '// legacy\n' },
+      { path: '../keep.ts', content: '// user\n' },
+    ];
+    for (const file of files) writeFileSync(join(output, file.path), file.content);
+    writeFileSync(
+      join(output, '.rustra-generated.json'),
+      JSON.stringify(buildGeneratedManifest('{}', '0.8.0', files)),
+    );
+    await assert.rejects(generateFromSchema(schemaPath, output), /outside generated roots/);
+    for (const file of files)
+      assert.equal(readFileSync(join(output, file.path), 'utf8'), file.content);
+    assert.equal(existsSync(join(output, 'frame-codecs.ts')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('cleanup rejects a directory symlink alias of a current generated output', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-cleanup-alias-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(simpleSchema));
+    await generateFromSchema(schemaPath, root);
+    const expected = readFileSync(join(root, 'frame-codecs.ts'), 'utf8');
+    const manifestPath = join(root, '.rustra-generated.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.files.push(
+      buildGeneratedManifest('', '', [{ path: 'legacy/frame-codecs.ts', content: expected }])
+        .files[0],
+    );
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    symlinkSync(root, join(root, 'legacy'), 'dir');
+    await assert.rejects(generateFromSchema(schemaPath, root), /symlink/);
+    assert.equal(readFileSync(join(root, 'frame-codecs.ts'), 'utf8'), expected);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('generated check reports missing files without writing', async () => {

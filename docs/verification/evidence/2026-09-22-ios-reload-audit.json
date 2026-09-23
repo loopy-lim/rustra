@@ -1,0 +1,1754 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-22T06:44:25.910632+00:00",
+  "ok": true,
+  "scope": "iOS Simulator Debug, one native process and 30 JavaScript runtime reloads with a Rust-owned 64 KiB buffer and pending Rust async invocation. Not dylib hot-core replacement, device acceptance, leak proof or a soak test.",
+  "environment": {
+    "device": "iPhone 17",
+    "os": "iOS 26.2",
+    "udid": "99B087B5-DEF6-4CF1-9177-81A5DE564CFC",
+    "bundleId": "dev.rustra.audit20260922",
+    "pid": 13825,
+    "metro": "http://127.0.0.1:18081",
+    "requestedLaunchEnvironment": {
+      "SIMCTL_CHILD_MallocScribble": "1",
+      "SIMCTL_CHILD_MallocGuardEdges": "1"
+    },
+    "metroEnvironment": {
+      "EXPO_PUBLIC_RUSTRA_DEMO": "reload",
+      "EXPO_OFFLINE": "1",
+      "CI": "unset"
+    }
+  },
+  "results": {
+    "reloads": 30,
+    "distinctRuntimes": 31,
+    "syncCallResults": 31,
+    "retainedBuffers": 31,
+    "bufferBytesEach": 65536,
+    "asyncCallsStarted": 31,
+    "readyTokens": [
+      "1790059226014",
+      "1790059226455",
+      "1790059226890",
+      "1790059227333",
+      "1790059227771",
+      "1790059228201",
+      "1790059228627",
+      "1790059229057",
+      "1790059229483",
+      "1790059229909",
+      "1790059230339",
+      "1790059230762",
+      "1790059231196",
+      "1790059231628",
+      "1790059232063",
+      "1790059232500",
+      "1790059232933",
+      "1790059233366",
+      "1790059233789",
+      "1790059234214",
+      "1790059234642",
+      "1790059235070",
+      "1790059235503",
+      "1790059235943",
+      "1790059236377",
+      "1790059236807",
+      "1790059237241",
+      "1790059237667",
+      "1790059238095",
+      "1790059238520",
+      "1790059238950"
+    ],
+    "completedCallbacks": [
+      {
+        "token": "1790059238950",
+        "emitted": 301
+      }
+    ],
+    "obsoleteRuntimeCompletionLogs": 0,
+    "failedOrRejectedLogs": 0,
+    "sameProcessAliveAfterDelayedCompletion": true
+  },
+  "fixtureAdjustments": [
+    "Isolated copy only: 6000 ticks changed to 300 ticks at 10 ms so delayed completions can be observed in this bounded run",
+    "Runner adds -RCT_jsLocation 127.0.0.1:18081 and prints the launched PID; original fixture and runner in main repository unchanged"
+  ],
+  "command": [
+    "bun",
+    "scripts/reload-stress.mjs",
+    "--cycles",
+    "30",
+    "--timeout-ms",
+    "180000",
+    "--device",
+    "99B087B5-DEF6-4CF1-9177-81A5DE564CFC",
+    "--bundle-id",
+    "dev.rustra.audit20260922",
+    "--reload-url",
+    "ws://127.0.0.1:18081/message"
+  ],
+  "nativeProduct": {
+    "buildReceipt": "docs/verification/evidence/2026-09-22-ios-example-build-audit.json",
+    "identities": {
+      "executable": {
+        "path": "/tmp/rustra-ios-audit-20260922/derived-data/Build/Products/Debug-iphonesimulator/reactnativecalculator.app/reactnativecalculator",
+        "sha256": "08e23df1fbf5d5c1a3426037afc392cefccb49a77492723b4b344e70eb19ec2e"
+      },
+      "debugDylib": {
+        "path": "/tmp/rustra-ios-audit-20260922/derived-data/Build/Products/Debug-iphonesimulator/reactnativecalculator.app/reactnativecalculator.debug.dylib",
+        "sha256": "0b8dbd057692aba299907e9f15b6e74bd0a4e19c94b15396a4f11b04261ec605"
+      }
+    },
+    "hermes": {
+      "path": "/tmp/rustra-ios-audit-20260922/derived-data/Build/Products/Debug-iphonesimulator/reactnativecalculator.app/Frameworks/hermes.framework/hermes",
+      "sha256": "c78bb911568529d3ad18d7274a9a0762931d0565e9b074938c4f75ab6442587b"
+    }
+  },
+  "productSourceParity": {
+    "matchedFiles": 394,
+    "files": [
+      {
+        "path": "Cargo.lock",
+        "sha256": "11755949012a6789d67cf67d71b90623bb836552cfd2d142af43adef90cdc7a1"
+      },
+      {
+        "path": "Cargo.toml",
+        "sha256": "745da26546ca81d496d874baf2c4cf1f2b3fc6ac9e411a690b232f97e4e245e1"
+      },
+      {
+        "path": "crates/rustra-macros/Cargo.toml",
+        "sha256": "2fd304cf69ea3335d1c226041b8bd456e5ea2f89b31876f27da3de5ac12a6b7f"
+      },
+      {
+        "path": "crates/rustra-macros/README.md",
+        "sha256": "385b5a57735540c9b5defdab4e43475c0cd0169a51bd50b065d78ca81e9b5733"
+      },
+      {
+        "path": "crates/rustra-macros/src/lib.rs",
+        "sha256": "f9a55f5880a6d7b41448e0fceb90af863693bee110449c4fdf88d9a6bd991794"
+      },
+      {
+        "path": "crates/rustra-macros/src/macro_bridge_type.rs",
+        "sha256": "bf73882db0c72d2c65c96c4161db0ba2499d6ebafef456b3b00e9a9c4018f731"
+      },
+      {
+        "path": "crates/rustra-macros/src/macro_build.rs",
+        "sha256": "4488f6add790d8a1f503b487939b7ef654327f515835a8e21282f1c3e7fcb702"
+      },
+      {
+        "path": "crates/rustra-macros/src/macro_command.rs",
+        "sha256": "4982243981e30a79f8b01dd99666bd6c3f2e9b1a5be213fbf6649461dc9e7b9e"
+      },
+      {
+        "path": "crates/rustra-macros/src/macro_command_support.rs",
+        "sha256": "fd1737ba9de81b9654397ef2619a32849d3788eee0e838f547ed1dbc36da0ac5"
+      },
+      {
+        "path": "crates/rustra-macros/src/macro_register.rs",
+        "sha256": "a5e453bfb961a6eed192fa6058357692f7aeae5e72f09ae1c4d72b323325f76d"
+      },
+      {
+        "path": "crates/rustra-naming/Cargo.toml",
+        "sha256": "15a07cd63b758329048a3a927dacb10068a8ee62d1df53ae7f27c58cc305b032"
+      },
+      {
+        "path": "crates/rustra-naming/src/lib.rs",
+        "sha256": "775466df7d830b535ab2980ddb7d604a6fcaef90306234b0c36e0b3e0248ba5c"
+      },
+      {
+        "path": "crates/rustra-naming/tests/naming.rs",
+        "sha256": "674fa745b9c9b749863fe66a6e0e316ed9ff377c0b6f36ee15207423b6c06c3d"
+      },
+      {
+        "path": "crates/rustra/Cargo.toml",
+        "sha256": "6504711b11bf3a1efd7de19734e14815dddf5adfef31e1b5a24e4cdba99fc9c7"
+      },
+      {
+        "path": "crates/rustra/README.ko.md",
+        "sha256": "a2416b29828dd8a8f837fca9863b70a09f4a43ea8831c669763ec686a53368fd"
+      },
+      {
+        "path": "crates/rustra/README.md",
+        "sha256": "151b62857533d5ded0c59038ddbf5992e8b885ca5d3914f6d4cd6e22215af014"
+      },
+      {
+        "path": "crates/rustra/benches/common.rs",
+        "sha256": "c6ad6a7955087384cff677d01c9c33f4fda0a45a4b920233b7a95022339de776"
+      },
+      {
+        "path": "crates/rustra/benches/complex_route.rs",
+        "sha256": "6d98086180fe9e52a88cddc2b7d6f685637ea3edc842783415245debd340968c"
+      },
+      {
+        "path": "crates/rustra/benches/dynamic_registry.rs",
+        "sha256": "457abd018c09090155b71a1433666d23d246581aa8cabc5150a05aa772b418ad"
+      },
+      {
+        "path": "crates/rustra/benches/function_dispatch.rs",
+        "sha256": "490fedbb2e8359a729e6cacbfae55778098acf2c47b6b2cc2ca1810f7c29007e"
+      },
+      {
+        "path": "crates/rustra/benches/support/complex_cases.rs",
+        "sha256": "6ac075caa3bd0a8aa810c80c238717d010f27dcea16b5a1f23a7571913cb2c95"
+      },
+      {
+        "path": "crates/rustra/benches/support/tree_cases.rs",
+        "sha256": "47a307a0b262970c15839791576735996e8409323e9e9b617f3898c22e10462f"
+      },
+      {
+        "path": "crates/rustra/benches/support/tree_wire.rs",
+        "sha256": "7c6061ae5df5d26fb97d5af9aa27b2a5d09b32e896d7d637e811c8c27cdd49e1"
+      },
+      {
+        "path": "crates/rustra/benches/tier_compare.rs",
+        "sha256": "252c18467031d5fb7048d13cb1b463fd57fbc431ab2658bd0a648fe7e6ad0204"
+      },
+      {
+        "path": "crates/rustra/benches/tree_route.rs",
+        "sha256": "545d6f6cbdc693af39a3c197be0e0da4848f05961a9e01bc8d035a812a444a71"
+      },
+      {
+        "path": "crates/rustra/benches/type_scaling.rs",
+        "sha256": "2186851f721ca36df60d02d367d4b5aa97f4a64cced137974000feece75bbc3f"
+      },
+      {
+        "path": "crates/rustra/examples/basic.rs",
+        "sha256": "e81eed2663d4cf1acc8ac6097c0f31b0de2bff03ca21c3a0bc8c9027353b88a5"
+      },
+      {
+        "path": "crates/rustra/examples/codec_allocations.rs",
+        "sha256": "e28e21372c6452be8bb62affee4e3774b91dda31ce241a61a2b24dcfef0aa54d"
+      },
+      {
+        "path": "crates/rustra/examples/function_fixture.rs",
+        "sha256": "c614662e087c67046e66fd93509dcce031920efad3b5e999a50931c3b971f86b"
+      },
+      {
+        "path": "crates/rustra/examples/tree_allocations.rs",
+        "sha256": "89b66906c2e7cbb56e50d3766bc190389ace67e397c322d3183f146ab79a1109"
+      },
+      {
+        "path": "crates/rustra/src/builder.rs",
+        "sha256": "1d7b9d9acfdea47379fed9323e0b3f5028ed4265cd4e6131189946b4925c31be"
+      },
+      {
+        "path": "crates/rustra/src/builder_build.rs",
+        "sha256": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b"
+      },
+      {
+        "path": "crates/rustra/src/builder_capabilities.rs",
+        "sha256": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a"
+      },
+      {
+        "path": "crates/rustra/src/builder_commands.rs",
+        "sha256": "15c787db7c06053851c3de69d75e53d77f994ccb85782c283cf19b85dfb2254c"
+      },
+      {
+        "path": "crates/rustra/src/builder_devices.rs",
+        "sha256": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564"
+      },
+      {
+        "path": "crates/rustra/src/builder_errors.rs",
+        "sha256": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13"
+      },
+      {
+        "path": "crates/rustra/src/builder_events.rs",
+        "sha256": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077"
+      },
+      {
+        "path": "crates/rustra/src/builder_functions.rs",
+        "sha256": "b563748f6c64316985e772a39e567e42d8fb0307ca4cba1ba9497d7602b34e12"
+      },
+      {
+        "path": "crates/rustra/src/builder_platform.rs",
+        "sha256": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819"
+      },
+      {
+        "path": "crates/rustra/src/byte_buffer.rs",
+        "sha256": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd"
+      },
+      {
+        "path": "crates/rustra/src/cancel.rs",
+        "sha256": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b"
+      },
+      {
+        "path": "crates/rustra/src/cancel_tests.rs",
+        "sha256": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5"
+      },
+      {
+        "path": "crates/rustra/src/channels.rs",
+        "sha256": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45"
+      },
+      {
+        "path": "crates/rustra/src/channels_handles.rs",
+        "sha256": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234"
+      },
+      {
+        "path": "crates/rustra/src/channels_host.rs",
+        "sha256": "92c0c3eb5e337f718ca08fe59fd956d51c0af8f4686f408f008c02efdbde4b91"
+      },
+      {
+        "path": "crates/rustra/src/channels_tests.rs",
+        "sha256": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f"
+      },
+      {
+        "path": "crates/rustra/src/codegen.rs",
+        "sha256": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb"
+      },
+      {
+        "path": "crates/rustra/src/codegen_names.rs",
+        "sha256": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210"
+      },
+      {
+        "path": "crates/rustra/src/codegen_objects.rs",
+        "sha256": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd"
+      },
+      {
+        "path": "crates/rustra/src/codegen_types.rs",
+        "sha256": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac"
+      },
+      {
+        "path": "crates/rustra/src/command.rs",
+        "sha256": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09"
+      },
+      {
+        "path": "crates/rustra/src/command_build.rs",
+        "sha256": "376832b68d4860e847316965f067869db2f5a031e826f38aa812178d611f073b"
+      },
+      {
+        "path": "crates/rustra/src/command_execution.rs",
+        "sha256": "92beecef6fc6575c67d07c28fa696b3bcabd5f3faa0d50c7d69fdb609d56e47f"
+      },
+      {
+        "path": "crates/rustra/src/command_handlers.rs",
+        "sha256": "6475fbaddb2e8f2a11453ab53f758288142a24286db8559f6577a88f82103c41"
+      },
+      {
+        "path": "crates/rustra/src/command_into.rs",
+        "sha256": "44cfcb791d4a204ba2573aadd71b18a9317c8d018bdf511683ac8de124f2142a"
+      },
+      {
+        "path": "crates/rustra/src/command_raw.rs",
+        "sha256": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e"
+      },
+      {
+        "path": "crates/rustra/src/command_raw_wire.rs",
+        "sha256": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0"
+      },
+      {
+        "path": "crates/rustra/src/command_schema.rs",
+        "sha256": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb"
+      },
+      {
+        "path": "crates/rustra/src/command_types.rs",
+        "sha256": "987aa4745c671f725acf242ed2d63b7dca5cf22f5c206cc4f1ddfd4ed029c2c9"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec.rs",
+        "sha256": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_decode.rs",
+        "sha256": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_encode.rs",
+        "sha256": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_encode_object.rs",
+        "sha256": "c6ca046d21ca39032054973aef71acb61e29750bdcd2d2abb38b662414d8832b"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_schema.rs",
+        "sha256": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_tests.rs",
+        "sha256": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_variants.rs",
+        "sha256": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c"
+      },
+      {
+        "path": "crates/rustra/src/complex_codec_wire.rs",
+        "sha256": "1c11306eefb2eafafef42588869ec38e4db58fa5ea02785fd78d5bdc9f2d0918"
+      },
+      {
+        "path": "crates/rustra/src/complex_schema_ir.rs",
+        "sha256": "3f3af4cffcb22628305ec7d9cc7d75b49f8fb3b587d0deefd720de6e940e68b6"
+      },
+      {
+        "path": "crates/rustra/src/complex_schema_ir_compile.rs",
+        "sha256": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde.rs",
+        "sha256": "f5ca25c386191418f55944baf99d0c14d883671612e717b7470cf3bdfbcca820"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_compat_tests.rs",
+        "sha256": "9d60a0c37d88b4e9ded5ed66305a3ebbed49e82c6da3c6b4ed93c85665fde80e"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_de_access.rs",
+        "sha256": "f51659924ad8826daa7eb8194b44129e0c816dd7ab022dc5c0267fcf33329cb1"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_de_aux.rs",
+        "sha256": "2cb641b40799b55615622bacabfde88f7720e1e5385adc998c2f8bcb873ab1d2"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_de_core.rs",
+        "sha256": "6a240cbbd5b37b9ca7402143ee961d7ae2fdd463b15754db3ecdc3e06de4c0c1"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_de_entry.rs",
+        "sha256": "100189b35972005ccaba2f2918f15b626e6aa1c049e26bc6974fe94ab52b0a71"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_de_enum.rs",
+        "sha256": "be5923bee08ac5befce7e0d91237ebe5de03d5a7bca335f38522ebb002884654"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_de_integer_seq.rs",
+        "sha256": "1c2cdda1d4b695c530330b23776e256382b5930185f2a024c164de0bc1335393"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_integer_seq_tests.rs",
+        "sha256": "3148069a26719c31158d983289e23c17ae48c7ed5fa900b41cbfbb5bc05581d2"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_map_scratch.rs",
+        "sha256": "99c2ec08df9913c35f2b3a6fd0f1a1f998df75bd670d8d5f427c847f79251255"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_pair_tests.rs",
+        "sha256": "5e385c370b83ad59ebe6b78cef2222e66f28684f7a6da2f4d6939f65fe56bdc5"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_recursive_tests.rs",
+        "sha256": "5670afe3e9bce51eb2dcd32e5e153b5338d0f92121d42320c343acf972227914"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_refs.rs",
+        "sha256": "f1914fada36141ee424ece26684c309a9015375a9e2022c7fc9595a5edd726dc"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_scratch_tests.rs",
+        "sha256": "f861afa0269e493b63ed46468e26636df4e2fcbfe4f2931642f24dd1d9073dc0"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_ser_access.rs",
+        "sha256": "e5f8159cee7943a4142c210cde2ac8fd6c3a4befd51aaf615d04dfbdeb2250ea"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_ser_core.rs",
+        "sha256": "d0d08b6196efc9982995330e17dfca0ce8c773db88b593391610505a62ea1780"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_ser_entry.rs",
+        "sha256": "e97e7ed79422d4c808d97d53d1bd265fb7977c411161e0b1322cb4839e6f5504"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_ser_map_key.rs",
+        "sha256": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_ser_struct.rs",
+        "sha256": "963479a71758195c3706e5beff469f583c16e7a8482b9a5e98e1f3f9f7997609"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_support.rs",
+        "sha256": "b4b0784ea8e50b25f4a2ffca62ddc24bd0d3f63c19fd3ef4852a83ab2158f9ef"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_tests.rs",
+        "sha256": "ebf574e1ff0eb1f94888b247ae76503b37c031bae6a3be89111a1f8b9ee22d47"
+      },
+      {
+        "path": "crates/rustra/src/complex_serde_validation_tests.rs",
+        "sha256": "f86d64b92a11ce1905abb703095039d328631fcde679bac1d12189b677c95eab"
+      },
+      {
+        "path": "crates/rustra/src/device_capabilities.rs",
+        "sha256": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56"
+      },
+      {
+        "path": "crates/rustra/src/entry.rs",
+        "sha256": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba"
+      },
+      {
+        "path": "crates/rustra/src/error.rs",
+        "sha256": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94"
+      },
+      {
+        "path": "crates/rustra/src/error_tests.rs",
+        "sha256": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f"
+      },
+      {
+        "path": "crates/rustra/src/events.rs",
+        "sha256": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960"
+      },
+      {
+        "path": "crates/rustra/src/events_bus.rs",
+        "sha256": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2"
+      },
+      {
+        "path": "crates/rustra/src/events_state.rs",
+        "sha256": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977"
+      },
+      {
+        "path": "crates/rustra/src/events_tests.rs",
+        "sha256": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849"
+      },
+      {
+        "path": "crates/rustra/src/executor.rs",
+        "sha256": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0"
+      },
+      {
+        "path": "crates/rustra/src/ffi.rs",
+        "sha256": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b"
+      },
+      {
+        "path": "crates/rustra/src/ffi_async_entries.rs",
+        "sha256": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165"
+      },
+      {
+        "path": "crates/rustra/src/ffi_buffer_entries.rs",
+        "sha256": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c"
+      },
+      {
+        "path": "crates/rustra/src/ffi_channel.rs",
+        "sha256": "1c920cc33cce13182f5752b208cd6cd585e4a4eb488a21d79739cbcc3cc9c170"
+      },
+      {
+        "path": "crates/rustra/src/ffi_dispatch.rs",
+        "sha256": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd"
+      },
+      {
+        "path": "crates/rustra/src/ffi_event_core.rs",
+        "sha256": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356"
+      },
+      {
+        "path": "crates/rustra/src/ffi_event_entries.rs",
+        "sha256": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52"
+      },
+      {
+        "path": "crates/rustra/src/ffi_free_guard.rs",
+        "sha256": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943"
+      },
+      {
+        "path": "crates/rustra/src/ffi_hot_reload.rs",
+        "sha256": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2"
+      },
+      {
+        "path": "crates/rustra/src/ffi_hot_reload_tests.rs",
+        "sha256": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5"
+      },
+      {
+        "path": "crates/rustra/src/ffi_lifecycle_entries.rs",
+        "sha256": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e"
+      },
+      {
+        "path": "crates/rustra/src/ffi_pool.rs",
+        "sha256": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47"
+      },
+      {
+        "path": "crates/rustra/src/ffi_prelude.rs",
+        "sha256": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3"
+      },
+      {
+        "path": "crates/rustra/src/ffi_schema_entries.rs",
+        "sha256": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1"
+      },
+      {
+        "path": "crates/rustra/src/ffi_snapshot.rs",
+        "sha256": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90"
+      },
+      {
+        "path": "crates/rustra/src/ffi_snapshot_tests.rs",
+        "sha256": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5"
+      },
+      {
+        "path": "crates/rustra/src/ffi_sync_entries.rs",
+        "sha256": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72"
+      },
+      {
+        "path": "crates/rustra/src/ffi_tests.rs",
+        "sha256": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4"
+      },
+      {
+        "path": "crates/rustra/src/ffi_typed_async.rs",
+        "sha256": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544"
+      },
+      {
+        "path": "crates/rustra/src/ffi_typed_buffer.rs",
+        "sha256": "f62ba581f7e0bb8125ae607cadc7c299e38c0123a6205b7281de0e02e1813d82"
+      },
+      {
+        "path": "crates/rustra/src/ffi_typed_entries.rs",
+        "sha256": "342c572a9ac2564e7b211873a2e82c48ce4d7565eb84c8e50bddd526ee27ba9d"
+      },
+      {
+        "path": "crates/rustra/src/ffi_workers.rs",
+        "sha256": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7"
+      },
+      {
+        "path": "crates/rustra/src/frame_codec.rs",
+        "sha256": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da"
+      },
+      {
+        "path": "crates/rustra/src/frame_decode.rs",
+        "sha256": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d"
+      },
+      {
+        "path": "crates/rustra/src/frame_error.rs",
+        "sha256": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb"
+      },
+      {
+        "path": "crates/rustra/src/frame_fields.rs",
+        "sha256": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18"
+      },
+      {
+        "path": "crates/rustra/src/frame_raw.rs",
+        "sha256": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702"
+      },
+      {
+        "path": "crates/rustra/src/frame_response.rs",
+        "sha256": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f"
+      },
+      {
+        "path": "crates/rustra/src/frame_support.rs",
+        "sha256": "c5f89d7cc87107e3d5b203f456c41c5ab77ac651968ce407b7eaab30e34281ab"
+      },
+      {
+        "path": "crates/rustra/src/frame_support_extra.rs",
+        "sha256": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67"
+      },
+      {
+        "path": "crates/rustra/src/frame_tier3.rs",
+        "sha256": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4"
+      },
+      {
+        "path": "crates/rustra/src/frame_vec.rs",
+        "sha256": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657"
+      },
+      {
+        "path": "crates/rustra/src/function.rs",
+        "sha256": "8f6c526278c4898fb9d70023b26e762a52e9a9e69b1c41e0632bf1b686e75ef5"
+      },
+      {
+        "path": "crates/rustra/src/hot_core.rs",
+        "sha256": "3b007f7c07a31a019a4e4d8283e04d51dd1e3a9b33c93289937c3aff0fcbaa47"
+      },
+      {
+        "path": "crates/rustra/src/hot_core_dylib.rs",
+        "sha256": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d"
+      },
+      {
+        "path": "crates/rustra/src/hot_core_retention.rs",
+        "sha256": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0"
+      },
+      {
+        "path": "crates/rustra/src/hot_core_tests.rs",
+        "sha256": "551767fc2551ed782ff0cf1c8765ff6ca7c19cf94edbb05205b374905083a271"
+      },
+      {
+        "path": "crates/rustra/src/hot_core_watch.rs",
+        "sha256": "b2720bd7929ed6378e141d10a863da2e7cd68f229402b3b829885baa1e1c801c"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests.rs",
+        "sha256": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/buffer_invoke_tests.rs",
+        "sha256": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/builder_devices_tests.rs",
+        "sha256": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/builder_errors_tests.rs",
+        "sha256": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/builder_platform_tests.rs",
+        "sha256": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs",
+        "sha256": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs",
+        "sha256": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/complex_into_tests.rs",
+        "sha256": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/raw_invoke_tests.rs",
+        "sha256": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7"
+      },
+      {
+        "path": "crates/rustra/src/internal_tests/runtime_registry_tests.rs",
+        "sha256": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657"
+      },
+      {
+        "path": "crates/rustra/src/invoke.rs",
+        "sha256": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d"
+      },
+      {
+        "path": "crates/rustra/src/invoke_buffer.rs",
+        "sha256": "752c36c38b71e1bc9dcfb38fdec801b706147cc6dacaaff581632f3a7b5742a1"
+      },
+      {
+        "path": "crates/rustra/src/invoke_dispatch.rs",
+        "sha256": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2"
+      },
+      {
+        "path": "crates/rustra/src/invoke_frame.rs",
+        "sha256": "d54776c2db79a9859c27c6078732e6876e86d23656ea4e30f3aa20eb5812df3f"
+      },
+      {
+        "path": "crates/rustra/src/invoke_typed.rs",
+        "sha256": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d"
+      },
+      {
+        "path": "crates/rustra/src/lib.rs",
+        "sha256": "e62ab6bce6f46ca92791a65a9c70f926d9131e7dcbb22e2ace0f45d9366a6f4e"
+      },
+      {
+        "path": "crates/rustra/src/limits.rs",
+        "sha256": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0"
+      },
+      {
+        "path": "crates/rustra/src/package.rs",
+        "sha256": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995"
+      },
+      {
+        "path": "crates/rustra/src/package_codegen.rs",
+        "sha256": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf"
+      },
+      {
+        "path": "crates/rustra/src/package_commands_gen.rs",
+        "sha256": "dbb3ddecf95d5e6577bc92e13285b858c3ed57c0908c850a4eeb778684c2e09e"
+      },
+      {
+        "path": "crates/rustra/src/package_core.rs",
+        "sha256": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a"
+      },
+      {
+        "path": "crates/rustra/src/package_events.rs",
+        "sha256": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46"
+      },
+      {
+        "path": "crates/rustra/src/package_json.rs",
+        "sha256": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13"
+      },
+      {
+        "path": "crates/rustra/src/package_schema.rs",
+        "sha256": "1b41d7f1474f5798ec95e487b033d850e6f2f554a90110b06bb325a191151629"
+      },
+      {
+        "path": "crates/rustra/src/package_types.rs",
+        "sha256": "3c09ee7cc3be37d058fe897bb96221149b1c99e9959409a22ef7e80ef52da4c7"
+      },
+      {
+        "path": "crates/rustra/src/package_types_gen.rs",
+        "sha256": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533"
+      },
+      {
+        "path": "crates/rustra/src/platform.rs",
+        "sha256": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602"
+      },
+      {
+        "path": "crates/rustra/src/prelude.rs",
+        "sha256": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d"
+      },
+      {
+        "path": "crates/rustra/src/private.rs",
+        "sha256": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed"
+      },
+      {
+        "path": "crates/rustra/src/registry.rs",
+        "sha256": "819c862e9b89268d17ab395230aa9ef0d7e2198b8675607137ff4b52d606238f"
+      },
+      {
+        "path": "crates/rustra/src/schema.rs",
+        "sha256": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053"
+      },
+      {
+        "path": "crates/rustra/src/state.rs",
+        "sha256": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895"
+      },
+      {
+        "path": "crates/rustra/src/tauri_channel_ipc.rs",
+        "sha256": "a3203f315b4e396077843999cb68b86e021d314e2a9d814dad732193429d3df2"
+      },
+      {
+        "path": "crates/rustra/src/tauri_channel_ownership.rs",
+        "sha256": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67"
+      },
+      {
+        "path": "crates/rustra/src/tauri_channels.rs",
+        "sha256": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18"
+      },
+      {
+        "path": "crates/rustra/src/tauri_support.rs",
+        "sha256": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61"
+      },
+      {
+        "path": "crates/rustra/src/tauri_support_swap_report.rs",
+        "sha256": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16"
+      },
+      {
+        "path": "crates/rustra/src/tauri_support_tests.rs",
+        "sha256": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856"
+      },
+      {
+        "path": "crates/rustra/tests/cancel_tests.rs",
+        "sha256": "a32efd12c6a5159f7a4d1eb1a79425126a8fa25809a3fc71687cddd6b37fad63"
+      },
+      {
+        "path": "crates/rustra/tests/channel_nul_fail_closed.rs",
+        "sha256": "525959cf7512dfeea4936db0d8413f18e939683804893e53582b749f1213e51b"
+      },
+      {
+        "path": "crates/rustra/tests/channel_send_limit.rs",
+        "sha256": "dc3f5d5dac979197519744b1827db620f5e0e3783f410201ed10c2d14cc354d2"
+      },
+      {
+        "path": "crates/rustra/tests/event_sink_tests.rs",
+        "sha256": "e87b8b8aec30d75a10baf4cddbf821211484567fde9e58a16f6f4e436217483e"
+      },
+      {
+        "path": "crates/rustra/tests/ffi_concurrency.rs",
+        "sha256": "fa21ef5d604fc518ffee0c01b03b9121586e2c6b6ea88d9f3e4a892c3b7ec020"
+      },
+      {
+        "path": "crates/rustra/tests/field_order_drift.rs",
+        "sha256": "01d011d87e89019750ed4d63ce77920483753bc80c2a4e2a1bb48a5b84cacb3c"
+      },
+      {
+        "path": "crates/rustra/tests/fixtures/inspector-golden.hex.txt",
+        "sha256": "a39f5c6ef615c53a00775c87721bf5aeeaf1ad8ee6dd2a0b4814996c8089bdb1"
+      },
+      {
+        "path": "crates/rustra/tests/frame_concurrency.rs",
+        "sha256": "b2f428f7277a424323673ef249d71a9cd5a8290e98f933650bd5534cfa43ed9b"
+      },
+      {
+        "path": "crates/rustra/tests/frame_fuzz.rs",
+        "sha256": "5e53b186c903e00326c1b2d58294633fc02c3f8ff320bf2898e784dc3b0fdd43"
+      },
+      {
+        "path": "crates/rustra/tests/frame_panic.rs",
+        "sha256": "5c1df7e54fb4c391ae96d060b59938d1341b4ffe7b2e64e2598500f658f33004"
+      },
+      {
+        "path": "crates/rustra/tests/frame_wire.rs",
+        "sha256": "c59eb39648ae760725644b33cfe9ea728adeca04a20d80a4c475f1757239259a"
+      },
+      {
+        "path": "crates/rustra/tests/function_allocations.rs",
+        "sha256": "69c905c0af872ad0bb6130aa29a277232ce5b4b5b0d4b7b25400f37a103e5748"
+      },
+      {
+        "path": "crates/rustra/tests/function_registration.rs",
+        "sha256": "167c979a035f7730754952bbffc62fd07bc9dc22d9516df6879b97c064f2f8ae"
+      },
+      {
+        "path": "crates/rustra/tests/inspector_golden.rs",
+        "sha256": "59c84d5256e352282ca539b86b702e8b47ed86669dc41a15bfe5f998f640e51f"
+      },
+      {
+        "path": "crates/rustra/tests/integer_sequence_route.rs",
+        "sha256": "df96dd72bcc21f6f7d6fde23b2a9b0f498f715a36a1be22677a5ad0ab4cdeba3"
+      },
+      {
+        "path": "crates/rustra/tests/invocation_isolation.rs",
+        "sha256": "a049eb0aad5c420475501b67e662757f448ea8dd851f19c0b0d0e8dbc7494a53"
+      },
+      {
+        "path": "crates/rustra/tests/invoke_typed_tests.rs",
+        "sha256": "514ed7c60ef0e39e0e8b59c0d18bf1b1e6e4ecdbe44dc5fa4588fa3080b5c35d"
+      },
+      {
+        "path": "crates/rustra/tests/ota_compat_tests.rs",
+        "sha256": "63b51497feba49a737739d3f75fc06b4dca67f20bd3b9784a0827ee789b860ed"
+      },
+      {
+        "path": "crates/rustra/tests/payload_robustness.rs",
+        "sha256": "5ea0ded65da7c6d42784dfcf3ef50e518509b645305473e4f8a41a302473cdc1"
+      },
+      {
+        "path": "crates/rustra/tests/public_authoring_api_tests.rs",
+        "sha256": "ac2a1cde789a5f54e0378cde24baedffc77900613064838353143094b655e24f"
+      },
+      {
+        "path": "crates/rustra/tests/raw_dispatch_contract.rs",
+        "sha256": "e00eda15836eac671737866ebba180aad9ce87576389468173e93dc4b57108c9"
+      },
+      {
+        "path": "crates/rustra/tests/raw_ffi_allocations.rs",
+        "sha256": "1b872e2123ed2cfc77d5481b72667d934779a0912d02118bb91ef7fb4a8e7f02"
+      },
+      {
+        "path": "crates/rustra/tests/response_limits.rs",
+        "sha256": "35235155a4a9988023344f574d8ab8f673808a55baebb9e310bb7b32f353d67f"
+      },
+      {
+        "path": "crates/rustra/tests/sync_execution.rs",
+        "sha256": "dfc84817043e54004a2de7c8cc843352e95d5c61465157dbf0984e760b55368f"
+      },
+      {
+        "path": "crates/rustra/tests/tree_benchmark_fixtures.rs",
+        "sha256": "5d1e9b755e0f01d93792c7d59ee42220b4662b2ba9ffd895144815c35300f24f"
+      },
+      {
+        "path": "crates/rustra/tests/trust_baseline_ffi.rs",
+        "sha256": "e037ca2a7a6da23380624d676f6fe23dfe071f5003a03586ba6f6a85f4b953a7"
+      },
+      {
+        "path": "examples/calculator/Cargo.toml",
+        "sha256": "2773aa4459036577a7667fcdcfd299f2df654e2b2f68dcd8eb522dda63076ba8"
+      },
+      {
+        "path": "examples/calculator/README.ko.md",
+        "sha256": "015ea69bf7af3ea0ca2f52ef39ba6c531412dee61e71f73775a1726ee5640afe"
+      },
+      {
+        "path": "examples/calculator/README.md",
+        "sha256": "2c244dcb91c7c9eface733efd24d8fdcbf705535fe2c37cb6875bc27d00db73b"
+      },
+      {
+        "path": "examples/calculator/apps/bun-app.ts",
+        "sha256": "7f0ce6c4f5024f7dbd8385c8efa617a41eb43bd956bf1bc5f88cd9f91558e2d9"
+      },
+      {
+        "path": "examples/calculator/apps/bun-ffi-app.ts",
+        "sha256": "d01ec774fa13abf01d731cd74e0b4e6dc90425b69e242f6ef514b9906adf3e5e"
+      },
+      {
+        "path": "examples/calculator/apps/bun-performance.ts",
+        "sha256": "e8f300df5e9eb88221b6283aed7c2a12f4bf1b0fbb027195b3a4aaf627211eb4"
+      },
+      {
+        "path": "examples/calculator/apps/node-app.ts",
+        "sha256": "dd30bf6ac74faed5937a302f5001c1df7936d28fd045b63d3cb1f8e4d90709f5"
+      },
+      {
+        "path": "examples/calculator/apps/node-napi-app.ts",
+        "sha256": "f0962cf5d3c959737468c78fb48b9c0876f25ea8c9b191a01263a39750391d65"
+      },
+      {
+        "path": "examples/calculator/apps/node-performance.ts",
+        "sha256": "36cca94ce9a5cb5f52c555f65c54540f333760892ed1cda9b34ba9aa8ea54039"
+      },
+      {
+        "path": "examples/calculator/apps/performance-stats.ts",
+        "sha256": "05bc670acff8dd695be81243598efa7f270ae3eca47246d2da2b6f7d0306c455"
+      },
+      {
+        "path": "examples/calculator/apps/react-native-app.ts",
+        "sha256": "f462baec84ddce9c585ad1c51d8e2cb2d4a006eb05dcea3ed071caeaf0f4167c"
+      },
+      {
+        "path": "examples/calculator/apps/tauri-app.ts",
+        "sha256": "5266ba565a40f9c8b17db02db21cf058501e6a5ebe3c79ff39fcb186dae2c3cb"
+      },
+      {
+        "path": "examples/calculator/bun.lock",
+        "sha256": "7c2d831cd8c39027729fd20b95da140bddd85ac0a24129edd02528077f28209f"
+      },
+      {
+        "path": "examples/calculator/examples/nitro_core_dfs.rs",
+        "sha256": "1b09e3713df2ef4f16c9207c6d8025d348b6660a0c1ea452b9798af15b00539a"
+      },
+      {
+        "path": "examples/calculator/generated/.rustra-generated.json",
+        "sha256": "24cf8057f5257e403803bbb9a2c9019ef8e91e056798c8479a148cc38f292636"
+      },
+      {
+        "path": "examples/calculator/generated/bun.ts",
+        "sha256": "2a15c00390992b0d802402e4b457cfbe908112724bccaf29227e3ac7cc56a7a8"
+      },
+      {
+        "path": "examples/calculator/generated/commands.ts",
+        "sha256": "2dee02a2675f4b71db4abeed120085332e12ac1ffd3077479395856f81c210c2"
+      },
+      {
+        "path": "examples/calculator/generated/contract.ts",
+        "sha256": "68a92f4a96ae09133e70b696b175ca0dc9fd27b6d80dee33d2462d26727ac6b3"
+      },
+      {
+        "path": "examples/calculator/generated/devices.ts",
+        "sha256": "2be579d552f36a83114ff751934b58b2e8cf764ce2970f79b5273a045127a7e9"
+      },
+      {
+        "path": "examples/calculator/generated/errors.ts",
+        "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
+      },
+      {
+        "path": "examples/calculator/generated/frame-codecs.ts",
+        "sha256": "a1e5ee165e733a63c8bd340b3893018a22ec806850f4952a5b17d7fd6432e415"
+      },
+      {
+        "path": "examples/calculator/generated/frame-registry.ts",
+        "sha256": "5c0b5eaaf01fd732f9aa1b25e13190e6fc328871544af451a48587a60e6de136"
+      },
+      {
+        "path": "examples/calculator/generated/node.ts",
+        "sha256": "213f340d155cda5da00000378ce2ee1b8ef90a4892d26084178c9124da37a657"
+      },
+      {
+        "path": "examples/calculator/generated/react-native.ts",
+        "sha256": "28eef4891432d5833c1d8516127a00a8c5d2cd6a4ed46592ed5139aa9fb055f6"
+      },
+      {
+        "path": "examples/calculator/generated/schema.json",
+        "sha256": "e70c24c62944ff78fb6ca58b5658d85bb5cff49af4acc96b3a78bedcbdfb0a58"
+      },
+      {
+        "path": "examples/calculator/generated/tauri.ts",
+        "sha256": "319daaef0071b3bd6f235f4ab16091da635a0e705f1710ef9510f30429050b16"
+      },
+      {
+        "path": "examples/calculator/generated/types.ts",
+        "sha256": "d560df706490350eaa997375bf7abae9eff3768c152b1e72a2349cd6ed55703d"
+      },
+      {
+        "path": "examples/calculator/package.json",
+        "sha256": "af1130f1f57eca80a4916b0d262f235a5a952ea065dbe0a30ecf328b0e175bc0"
+      },
+      {
+        "path": "examples/calculator/rustra.json",
+        "sha256": "eaf1e7f5275b458e359400043762ad7b2dc46bdbf03cd47ff36a24bdfd06ab4b"
+      },
+      {
+        "path": "examples/calculator/src/bin/generate.rs",
+        "sha256": "12c8d3ea3a387d9228e8908cca9b0225eacd9dd9d71fde110ef30ae9c1e2f262"
+      },
+      {
+        "path": "examples/calculator/src/bin/loop-stdio.rs",
+        "sha256": "f58f2db527d5a61b4ba44752da34143b8fd1365974cf40bfa94c12273c24847e"
+      },
+      {
+        "path": "examples/calculator/src/bin/uniffi-bindgen.rs",
+        "sha256": "b2f9bdb7089dc718a60380c2c385c5cb71f60e742c04cc62bdda5862f1d52ea6"
+      },
+      {
+        "path": "examples/calculator/src/bin/wire-bench.rs",
+        "sha256": "b2a638ad903dc580cbf61ef5cdd1f3291b583b89d83cd0b1beff181ae9f90219"
+      },
+      {
+        "path": "examples/calculator/src/lib.rs",
+        "sha256": "6910a7a8a9d3cfa3a1e0d37f16d51a54b104e307d3bf8c0f15625c598755fa7e"
+      },
+      {
+        "path": "examples/calculator/src/loop_stdio.rs",
+        "sha256": "e8062e3f9bd4ba9dd677cd658fd057f3de70183dc77940ce4e607dfad037e7a9"
+      },
+      {
+        "path": "examples/calculator/src/main.rs",
+        "sha256": "31246e90e84b5e623ad6c203eacebffa8ade7eca3ab1fd6307b5afa60e72cc1a"
+      },
+      {
+        "path": "examples/calculator/src/ordinary_functions.rs",
+        "sha256": "994def507494cd07af9a0be20b3928c2f7dba3788f0b23d1161b12737fe973ad"
+      },
+      {
+        "path": "examples/calculator/src/parity_bench.rs",
+        "sha256": "5fe2864c1d3ff086bdb751ba08176e80a98f945682b09caa2cb0c45d87592cdb"
+      },
+      {
+        "path": "examples/calculator/src/uniffi_generated.rs",
+        "sha256": "b5c58cf56e3c0d5f1904dccc98714dd6c1b2f7e672affa940cefe836f7e030d0"
+      },
+      {
+        "path": "examples/calculator/src/uniffi_render.rs",
+        "sha256": "d51a8122e9b61cf62b0610fb7697ee408bc9a940a01e52ff192ef843a4c0bbd2"
+      },
+      {
+        "path": "examples/calculator/tests/example_contract.rs",
+        "sha256": "131f99311233467f9c9ded20a18fa0ec637cfc363bd86509e94bd0ade0189819"
+      },
+      {
+        "path": "examples/calculator/tests/frame_panic_guard.rs",
+        "sha256": "d71cd61d1551862524dd9fe6b5ddab0b66b2c37f3129bf7a3d46b0f89aa8cbc2"
+      },
+      {
+        "path": "examples/calculator/tests/loop_stdio_channels.rs",
+        "sha256": "3a1442cb6307589026419fe59cebccb57ee81099523ccfba2e60ecba3e8a7475"
+      },
+      {
+        "path": "examples/calculator/tests/loop_stdio_events.rs",
+        "sha256": "12e0b3d358fba1e157be2e13b03ce26b8887d6a4cd95fe9df6f2bc61c1971a81"
+      },
+      {
+        "path": "examples/calculator/tests/ordinary_functions.rs",
+        "sha256": "a46d301a06396b64e8ff0531c97f87b974ec107ae0e63d25c2ade56ed4ba13a6"
+      },
+      {
+        "path": "examples/calculator/tests/parity_fixtures.rs",
+        "sha256": "b47f9866e4341f1cd1c79bc9df44a5b10e8d7a6942f03c86daac3cca9327bf91"
+      },
+      {
+        "path": "examples/calculator/tests/uniffi_api.rs",
+        "sha256": "b6f106264cf95c4b90209252f58535f378d9157d412cdef5eb6e27bae8e50644"
+      },
+      {
+        "path": "examples/calculator/tests/wire_fixtures.rs",
+        "sha256": "8c04efa3cca0bcd2792668b0e0397d330395f326bbd03428c6f4889b733968f1"
+      },
+      {
+        "path": "examples/calculator/ts/adapter-compat.test.ts",
+        "sha256": "c9bf193f7abc483bf1cc4fe26cb4725bac5512816626a106ba36b0764d68ebd7"
+      },
+      {
+        "path": "examples/calculator/ts/cross-wire.test.ts",
+        "sha256": "8acd04ac59da175a7cfd7c6c360c60d7b1155eec0fd9dca5a7c2bf3d4cbe4d6e"
+      },
+      {
+        "path": "examples/calculator/ts/devices.test.ts",
+        "sha256": "971c250998ac75df675a24f3c9fbb113772b5a500de1b1b74c8217d76c049ea8"
+      },
+      {
+        "path": "examples/calculator/ts/field-order-drift.test.ts",
+        "sha256": "da1fb2ce7f092bf78f18bbe81d37196fd1271f8de50a2520365538411d995821"
+      },
+      {
+        "path": "examples/calculator/ts/generated-client.test.ts",
+        "sha256": "6bf2fdb0ef84c653c590e9e61651d4452994b08dd9ff38d5c62aa4af4fb26d30"
+      },
+      {
+        "path": "examples/calculator/ts/journey.test.ts",
+        "sha256": "aae7d0d8235d3382952cbfee4378b18431002262fb8ca253a2e6b959352b62fb"
+      },
+      {
+        "path": "examples/calculator/ts/loose-invoke.test.ts",
+        "sha256": "fae3d70b2d5ebc1a328d209bd430c1b7a3f826f886a50287eeb914d511f4d5c6"
+      },
+      {
+        "path": "examples/calculator/ts/payload-robustness.test.ts",
+        "sha256": "21bf2a904b443862b57dde522025499914033585af497d71d95b50a0e0f2db73"
+      },
+      {
+        "path": "examples/calculator/ts/runtime-contract.test.ts",
+        "sha256": "dd65bc0faf861d0ea9390b6ff429ca83321d9e25f25f723d7735b166c9a00831"
+      },
+      {
+        "path": "examples/calculator/ts/transport-bench.test.ts",
+        "sha256": "055b332bc145ac4eac4f9715faabf435680ee6e326863b2793bd69980f1f25d7"
+      },
+      {
+        "path": "examples/calculator/ts/typed-errors.test.ts",
+        "sha256": "a72cfae7ce2cfed47d9b93392721069f1542313b3606e8958396872e743ab15a"
+      },
+      {
+        "path": "examples/calculator/tsconfig.json",
+        "sha256": "4f2c9360dc79b401dc35383396bfae637db2fca3e5831c348c3956c4f96399f2"
+      },
+      {
+        "path": "examples/calculator/uniffi/rustra_calculator_example.swift",
+        "sha256": "28e7b1fe82fec0147a96e4d080ac932fb9a4fe3ecbb2cc2b5ed9267d8dc6d741"
+      },
+      {
+        "path": "examples/calculator/uniffi/rustra_calculator_exampleFFI.h",
+        "sha256": "eeabec5aa535f9a083f9e7e59c6809962d3088193d92b80a61ba3bac4e59ccb9"
+      },
+      {
+        "path": "examples/calculator/uniffi/rustra_calculator_exampleFFI.modulemap",
+        "sha256": "87a2dd68029f90d3b27c044e36ab532fc80a91502b20c2b16bd98f38c2316f11"
+      },
+      {
+        "path": "examples/calculator/uniffi/uniffi/rustra_calculator_example/rustra_calculator_example.kt",
+        "sha256": "ec4ed177fdbe16395f4fe419b6b4c0f0a7fca8b19995993d462fc2ce5cc8c842"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/.rustra-generated.json",
+        "sha256": "ab87a34dec7792bf08318d7c40590c112ce962021dcaa9fbca1a641cd3c39a47"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/commands.ts",
+        "sha256": "2dee02a2675f4b71db4abeed120085332e12ac1ffd3077479395856f81c210c2"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/contract.ts",
+        "sha256": "68a92f4a96ae09133e70b696b175ca0dc9fd27b6d80dee33d2462d26727ac6b3"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/devices.ts",
+        "sha256": "2be579d552f36a83114ff751934b58b2e8cf764ce2970f79b5273a045127a7e9"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/errors.ts",
+        "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/frame-codecs.ts",
+        "sha256": "a1e5ee165e733a63c8bd340b3893018a22ec806850f4952a5b17d7fd6432e415"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/frame-registry.ts",
+        "sha256": "5c0b5eaaf01fd732f9aa1b25e13190e6fc328871544af451a48587a60e6de136"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/positional-facade.ts",
+        "sha256": "9851448a8e98803fdeba9198ad21c4c9cb998190ed1a71ea1e0f3d0816cb8081"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/react-native.ts",
+        "sha256": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/schema.json",
+        "sha256": "7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039"
+      },
+      {
+        "path": "examples/react-native-calculator/generated/types.ts",
+        "sha256": "d560df706490350eaa997375bf7abae9eff3768c152b1e72a2349cd6ed55703d"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/RustraBridge.podspec",
+        "sha256": "4f55ec5ef3af8d6b4aad8c9237749fcf0517732cbac8b6efe9723ce035cd50ae"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/android/CMakeLists.txt",
+        "sha256": "9ca4eccc6db13c1d584551c4901847c84188eb7e7d74765e7884770b51501656"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/android/build-rust-android.sh",
+        "sha256": "a915117c69c6ad73b9d42a89ea5d67f6ee238c242f194b6fc67d8d02c074a485"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/android/build.gradle",
+        "sha256": "93186e3c6b9e97a502eab63b6efc2ff3d8571fa6e73f5e368ee9f02f9ff79601"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/AndroidManifest.xml",
+        "sha256": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
+        "sha256": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt",
+        "sha256": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
+        "sha256": "b25b98046764e60bb30aebe776487a14b007a48ca37cb2433603839a83079f87"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
+        "sha256": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/.gitignore",
+        "sha256": "f8042134be9ad24176d8d630255be93f8a0223925ae88c34b603c8989baa8345"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/.xcode.env",
+        "sha256": "3c02dca07775b31ce4e77dfb3bb660d7c6e577474d65a6216f1ea9bef54e1ca6"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/Podfile",
+        "sha256": "d4c07078b71f6041d7a0c849e20a4a7e10d05c0cf51d68cbe922040d45aa1d09"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/Podfile.properties.json",
+        "sha256": "4222d802ab80961762b71603a713160c16c0fa3ce5d6c74a111c67785872331a"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/RustraBridge.cpp",
+        "sha256": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/RustraBridgeModule.mm",
+        "sha256": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/build-rust-ios.sh",
+        "sha256": "e65e51258d0cfc5476d6dfc7fb5ddca41d5bbf54684013789a6005095557f00e"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-codec-tests.inc",
+        "sha256": "bed9769392c37d79e1edc2d070f614cde98eb0d5d6bca78ee7d19d6bd3e584fb"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-ffi-stubs.inc",
+        "sha256": "022d22c1a14044c5146e1333c28b3a9acf2c7c1734945a5c6f76c3e37966890f"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-peers.inc",
+        "sha256": "dbb619407eb164e0fd39a57bfe81719dbe1ac9b60b7094d7e09b1fb7040017c5"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-runtime-tests.inc",
+        "sha256": "934b9ed9d39e912192beed4f1ff5b0ac57184b47a2a0a52eb1a2a131faa90d00"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/run-cpp-codec-tests.sh",
+        "sha256": "baa0c36fc7a1bef10674ebe79f1d09d892ded06c447a84e1ae2f99ca982ec201"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi.xcodeproj/project.pbxproj",
+        "sha256": "f8f217f6ac6146adb8647e90d0a11754d4f4f21b9f590e4a189d51cbcb33c9c2"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi.xcodeproj/xcshareddata/xcschemes/rustrajsi.xcscheme",
+        "sha256": "3f1e385ba5d73a82ffdbc0fc458a893aae73481a8e680a3c244b7c269874caf9"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/AppDelegate.swift",
+        "sha256": "614cbb9b09ac561c762a384c658d3c2a0cd28b30cc29b6e72cb25def9783e3d5"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/Images.xcassets/AppIcon.appiconset/Contents.json",
+        "sha256": "2f1b8a0c5efd596703501e97c9c5ca878463dca6e43ad08c5a9c108cb2ae3711"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/Images.xcassets/Contents.json",
+        "sha256": "940968520a462215ccf98317a12e4c3b90875bf9c51a5f473a8ffb97e8cd1464"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/Images.xcassets/SplashScreenLegacy.imageset/Contents.json",
+        "sha256": "a0cffb85cf663b7bd564b178e08b5aa147dc36b208ee148f289afc814869d8be"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/Images.xcassets/SplashScreenLegacy.imageset/SplashScreenLegacy.png",
+        "sha256": "f49fa5651c0298154e38a24ea276159edfb6900d4d41c5961ae803d078ba8834"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/Info.plist",
+        "sha256": "7ab1a1bf1eeb2b06d16cd6ec854e2351a8e3604b76225c2fe2c81abbf2d53ee6"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/SplashScreen.storyboard",
+        "sha256": "0763588212466aaec0b9121db1e318eba07aff23b29940f7df97728c6f69f2d1"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/Supporting/Expo.plist",
+        "sha256": "d9b06c202956033b01e62b21c727eea89b6a4fd456ef71d420c39f460426b9f3"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/rustrajsi-Bridging-Header.h",
+        "sha256": "4a625b53abd4333ca454a4161ba62ab1b0cb44e8a4581326c0bcfe03dc26dd5c"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-jsi-shim.hpp",
+        "sha256": "3fd8cb55f73682fb88697da98397629738b9a2795638cac9a24f4f1aafdc18fc"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-codec.cpp",
+        "sha256": "4968a1baa4b0f8c181dfc9ab1e535cb06ea492ab32fc2e240aad607d1b7656c4"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-generated-codecs.cpp",
+        "sha256": "114dc499f5075077105a01546ae4c9720ddf754bb5f9540965d4eb60ffd1173d"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-native-sync.cpp",
+        "sha256": "4e5a39cf671670b33e06287d9471f0cde8a91727629cb8d75ec424dc2e7a158d"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-sync-core.cpp",
+        "sha256": "72eb08189e28b4a54e6fcfcc83d0b5f9560cfc67254ba9ad0268910a2785ad26"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/package.json",
+        "sha256": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/react-native.config.js",
+        "sha256": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/src/index.ts",
+        "sha256": "6c9d182eb5a4132aea132226c4755ffd3866bf3da5617b3543561407b327e5eb"
+      },
+      {
+        "path": "examples/react-native-calculator/modules/rustra-jsi/tsconfig.json",
+        "sha256": "4af4fb55af99d2b243dd8dfd86c66d0dc5ad63998ee20496e150116dd8da77a0"
+      },
+      {
+        "path": "packages/react-native/native/android/rustra-jsi-jni.cpp",
+        "sha256": "e0e335e2e05745e5af7eadf5c53b133bfa32154f3429092c02e8c6b143ea0189"
+      },
+      {
+        "path": "packages/react-native/native/cpp/RustraJSIBridge.cpp",
+        "sha256": "4d7026020ed4f433778a7ea67e0e9cc855ce9aba60da9a79c3d8f64492619698"
+      },
+      {
+        "path": "packages/react-native/native/cpp/RustraJSIBridge.hpp",
+        "sha256": "a0c6d17e2c6e5a6bf64d23d2144bae4b5359c8034b41dbaf8c992dd76bd5e60c"
+      },
+      {
+        "path": "packages/react-native/native/cpp/RustraSyncBinding.inc",
+        "sha256": "8f860c7571012cee50703cff1d0128bd1850a6edb5a203a3fc9ac13863a93012"
+      },
+      {
+        "path": "packages/react-native/native/cpp/RustraTurboInterop.hpp",
+        "sha256": "6bb7b7b2ae0baa837120d1997b602cb8bf5ee387f215cfe525ebb86505531a7d"
+      },
+      {
+        "path": "packages/react-native/native/cpp/rustra-codec.hpp",
+        "sha256": "91b88699c64834df50af3e726f2220698a22719a2be664eabd7fc06befe9bf9c"
+      },
+      {
+        "path": "packages/react-native/native/cpp/rustra-sync-contract.hpp",
+        "sha256": "7d3f799d1f9cc323daf0423b102164e972d0b2c2420abf868e8e72ee9d207da1"
+      },
+      {
+        "path": "packages/react-native/native/cpp/rustra-sync-core.hpp",
+        "sha256": "91470e07fbf481ebf34f7da1ca1cb43a7644b6f6418ef549c07108b95a4e3248"
+      },
+      {
+        "path": "packages/react-native/native/ios/RustraJSIModule.mm",
+        "sha256": "8ce2ae0223be65ea09f543924a9e5ec01de992609bf03e2da802bffe96155a70"
+      },
+      {
+        "path": "packages/react-native/src/index.test.ts",
+        "sha256": "1459c57a4708df99c963a41a1a86cd3085b7dc66089706a06b01758e6b538768"
+      },
+      {
+        "path": "packages/react-native/src/index.ts",
+        "sha256": "37412636bf45cf944fb1d85bda37f02c33e9b4b9997fb5be718dc4bb62dc101f"
+      },
+      {
+        "path": "packages/react-native/src/react-native-async.ts",
+        "sha256": "a6023a8c572ab8178045a5313cedb0c7c1a1fe7c79c8dd8cf7ba1d5bda360775"
+      },
+      {
+        "path": "packages/react-native/src/react-native-core.ts",
+        "sha256": "b5246c540899c0fb33d8d39e1608ff353dd835d2e84ad2e331158a8f3ac6d5aa"
+      },
+      {
+        "path": "packages/react-native/src/react-native-events.ts",
+        "sha256": "d1332a49cdbd3f3b40064c82f3eae1b9fd67a2fd6fb7a1c4050ed8904b277351"
+      },
+      {
+        "path": "packages/types/src/backcompat.test.ts",
+        "sha256": "f4028c808da9a9fc4dc5641036c285a13ea2f5191654c0bd0dda070cd9c55ace"
+      },
+      {
+        "path": "packages/types/src/bind-sync.test.ts",
+        "sha256": "ac0945a3c3f749bad5303d668157fa13dbd3388b117ae0234d23bb836dee66c9"
+      },
+      {
+        "path": "packages/types/src/bootstrap-lifecycle.ts",
+        "sha256": "10521099b807683fc7e4bfd821ce60c026a17fa4d65f6c04005be1baedd3f1cc"
+      },
+      {
+        "path": "packages/types/src/cancel-abort.ts",
+        "sha256": "16d90575c20dc1a3270ef662331c0468f3057083118efeebab9efd0ff508618a"
+      },
+      {
+        "path": "packages/types/src/cancel-by-id.ts",
+        "sha256": "99696cd6f9edbec9c6fd697aec54c9712f34f532b647c4275c40d9c9bab075e0"
+      },
+      {
+        "path": "packages/types/src/cancel.ts",
+        "sha256": "135325188ff4cd50f4847c06fc32ee3562aba92e2f76002475eeb677f683888a"
+      },
+      {
+        "path": "packages/types/src/complex-codec-compiled.ts",
+        "sha256": "3601f46d76f3a59822df53b296e4806c9da6ee980a1fcf07f7d7ae5303ea286b"
+      },
+      {
+        "path": "packages/types/src/complex-codec-decode-node.ts",
+        "sha256": "a48a1858769039d9fe18f366eb272290cc32e909844fdbbf5a953b2b3763dd64"
+      },
+      {
+        "path": "packages/types/src/complex-codec-encode-node.ts",
+        "sha256": "3d4fe69e55f23aaf53ae7540b8fe15af8f6c1fafd0fffef6a19564a3a3762d2b"
+      },
+      {
+        "path": "packages/types/src/complex-codec-error.ts",
+        "sha256": "d9491753c25c41be454cfd58a9ae2553d309fda647edce96d8972b507d16aefd"
+      },
+      {
+        "path": "packages/types/src/complex-codec-malformed.test.ts",
+        "sha256": "cf2ef39c3fef97d1f9cdd282fde7d689955ecb9df97c856eb8883750263e6944"
+      },
+      {
+        "path": "packages/types/src/complex-codec-reader.ts",
+        "sha256": "2e0c3577e385fe3cd4818a12a067a30a9e6ca667575765319e05116b461e2c38"
+      },
+      {
+        "path": "packages/types/src/complex-codec-schema.ts",
+        "sha256": "ed2b3d38efea547ad639da69d028db3f7cfe6baa0f2126ad715fe727c0e98f9a"
+      },
+      {
+        "path": "packages/types/src/complex-codec-types.ts",
+        "sha256": "73358d042fad2986e045e79e538fd17fb647a852af65f0b99710346cb5c42bc2"
+      },
+      {
+        "path": "packages/types/src/complex-codec-variants.ts",
+        "sha256": "f9669f9627889a80931283391ecdffb72c44214b1bd867108c820fc6424f9edd"
+      },
+      {
+        "path": "packages/types/src/complex-codec-wire.ts",
+        "sha256": "f018de8672f737171424ad72b9f5aee8e2edfac2bd46902b5b9277e89a24c844"
+      },
+      {
+        "path": "packages/types/src/complex-codec.test.ts",
+        "sha256": "e3240a3d3733a0a36d25d6adb506c27e39a31f6d1cd82997fbd9dc43aecfcff7"
+      },
+      {
+        "path": "packages/types/src/complex-codec.ts",
+        "sha256": "0645ab0be65cbbfa918127aad736db8cc83f013c42c42be01a934d480b281485"
+      },
+      {
+        "path": "packages/types/src/debug.test.ts",
+        "sha256": "de0fdc42db4594df2c32bc5caba9e12b5492c1c6d9cd359c5cab55c452f55e5d"
+      },
+      {
+        "path": "packages/types/src/debug.ts",
+        "sha256": "3f0d7eabdabc56adf9e0c1a32c50f634a4472dbc82ccb67ce0913d68c5ae7991"
+      },
+      {
+        "path": "packages/types/src/device-status.ts",
+        "sha256": "884067f0ec6bc775ff48e8be28623fdb073210120ee25b19d6276ddc53bc287b"
+      },
+      {
+        "path": "packages/types/src/error-codes-sync.test.ts",
+        "sha256": "2789f981e530557d6ced5aa07bdf5ea8eb2fc7f092f08df651c725b0517e1ee5"
+      },
+      {
+        "path": "packages/types/src/errors.ts",
+        "sha256": "b9cf18c7f2f17c3a2a0504d5029db608582807bd89bed5f7987de97cd5ddbafb"
+      },
+      {
+        "path": "packages/types/src/frame-engine-async.ts",
+        "sha256": "0d9dc3ae87c46956c7cb79f58a2a8e97d117f5335d11904a39c05f56cf2c194c"
+      },
+      {
+        "path": "packages/types/src/frame-engine-capabilities.ts",
+        "sha256": "6a805daa633353d6fcb6b7020ef8f8ff7a5df88401d5726e7af928d0da781292"
+      },
+      {
+        "path": "packages/types/src/frame-engine-context.ts",
+        "sha256": "6bc85d6cc3abf7956f5bba5c196d06285774bea6a924e438bb595f0f1d71621f"
+      },
+      {
+        "path": "packages/types/src/frame-engine-contract.ts",
+        "sha256": "b837d1fc40f5521ebf1e149839e2f5783e64e964430d274075ed2aff5c99d845"
+      },
+      {
+        "path": "packages/types/src/frame-engine-dispatch.ts",
+        "sha256": "8d1225a9e1b81b5f4328ebb801956e46cfe63420dfbcca5ce8b40753d3099096"
+      },
+      {
+        "path": "packages/types/src/frame-engine-dynamic-codec.ts",
+        "sha256": "e13ff35a540ef04423928dfa186ea92cf928cf3a7f6d56ec7ab793ccd6789373"
+      },
+      {
+        "path": "packages/types/src/frame-engine-options.ts",
+        "sha256": "ee4a8d3d24afa18587123af1e32093c1e98a5db7dcbe3b341664e036a6cb295d"
+      },
+      {
+        "path": "packages/types/src/frame-engine-routes.ts",
+        "sha256": "316a59d7262b3a8759ccd9b8d9ba1fae67f1e49a29744748ee8f0f18d99d33de"
+      },
+      {
+        "path": "packages/types/src/frame-engine-schema.ts",
+        "sha256": "13a35b4ac74689d4072870d93f06b80b56dde797fc3cb1e2b57928ee4771f734"
+      },
+      {
+        "path": "packages/types/src/frame-engine-surface.ts",
+        "sha256": "451bc1204bfa6c022b8b8a44a301957e207f7cd43500b896dfeb03ed1b7bf25d"
+      },
+      {
+        "path": "packages/types/src/frame-engine-sync.ts",
+        "sha256": "126f2fe8b032ea6078dec35fde0a3781a02f34baa4d36f5eae60c1aa2cafbe47"
+      },
+      {
+        "path": "packages/types/src/frame-engine.ts",
+        "sha256": "ad69a9f3cd7a5948eaa75b5d1183a0eb3cba5f44326d675172a2a1fd2eac1a97"
+      },
+      {
+        "path": "packages/types/src/function-roots.test.ts",
+        "sha256": "b19cfbdcb156af7e90d53964e8b18296a1b80cc7b39ea1bc61ce7ec8cd4a3088"
+      },
+      {
+        "path": "packages/types/src/global-batch-settled.ts",
+        "sha256": "09d6a3f79fcc2ccaa6991dcdae109805cec4397c263a01912c35b737806e43b4"
+      },
+      {
+        "path": "packages/types/src/global-batch.ts",
+        "sha256": "ad03528ae6177c08ef3b94755b877fbf6a3884dad364f83c963fef7e733b1261"
+      },
+      {
+        "path": "packages/types/src/global-bytes.ts",
+        "sha256": "77a699d61924df740959fa21ec35f6b4a13ecfccb8bbe415655b03967be1bf01"
+      },
+      {
+        "path": "packages/types/src/global-config.ts",
+        "sha256": "8143c7a0d309f1d2c4aa1ee5d75a9cccec2e096e7480d4ad2e3fd85b29ed761f"
+      },
+      {
+        "path": "packages/types/src/global-fields.ts",
+        "sha256": "a2ced4928f52986850e3f31f9ccf0a00cd1e86da1cf63201112d0063a69a0d86"
+      },
+      {
+        "path": "packages/types/src/global-state.ts",
+        "sha256": "660644e0d3b827c8c2da3421757638b30ec638b161dd4836c1367c23ac6d8b48"
+      },
+      {
+        "path": "packages/types/src/global-sync.ts",
+        "sha256": "76beacbaed214005c9dd12820e82b5ff372bce88752e6720e5038eb5517718fa"
+      },
+      {
+        "path": "packages/types/src/global.ts",
+        "sha256": "e11f17d3ef3a02002e0f66bd573b7ec17d4705f59865cfb068b795918424db8f"
+      },
+      {
+        "path": "packages/types/src/index.test.ts",
+        "sha256": "a1f54925c3ae26dfbb4a7e028646f5183f7cd1ea2fd2695e8ecd3ed6ae551d6f"
+      },
+      {
+        "path": "packages/types/src/index.ts",
+        "sha256": "2e533cf86a8e9bb8d493481160635b34e903e56c282550ef287810d60dfd550a"
+      },
+      {
+        "path": "packages/types/src/inspector.test.ts",
+        "sha256": "af779d6abb7c370fee5f8647e3cda7fb37f59636702828774da75a06203891f1"
+      },
+      {
+        "path": "packages/types/src/inspector.ts",
+        "sha256": "726fd72e8e4b134bd920d10a6964eb7f0d5b1413e87e20acbfa1de120aefa1bd"
+      },
+      {
+        "path": "packages/types/src/invoke-loose.test.ts",
+        "sha256": "0d1a2edb221c18e8acc3532ffb182fbd2162000d2bae1aa4819ad4fabfbade9a"
+      },
+      {
+        "path": "packages/types/src/invoke-loose.ts",
+        "sha256": "3ef83f100080c9404de8d5d65db6d7a227430fc7c6792e087c6c12bb325775af"
+      },
+      {
+        "path": "packages/types/src/json-engine.ts",
+        "sha256": "060fa166c89c6fca8dbaafcafa8ccd4db0412a446a52e54a35c136fbd4a18840"
+      },
+      {
+        "path": "packages/types/src/json-wire.ts",
+        "sha256": "e3affc5600d421366643237a10fc175f192aac43b1bc7bea990bcd241c452112"
+      },
+      {
+        "path": "packages/types/src/live-schema.ts",
+        "sha256": "c7a79c7f4b7e7df6f2cf5cf8e6c795b6fb158bd36c081e4c5679599608f57d56"
+      },
+      {
+        "path": "packages/types/src/public.ts",
+        "sha256": "d5cf9241d2fe91b4bca43b20ccaa0104391fee15bff71f25496e21d1197425ef"
+      },
+      {
+        "path": "packages/types/src/retry.ts",
+        "sha256": "db077b2c801968d4f6a9930b20ce87856886fd5fda016c2349ec2ede7908e84e"
+      },
+      {
+        "path": "packages/types/src/runtime-boundaries.test.ts",
+        "sha256": "64bd9b02b53ee511c0176e86c67f86c788dcaabf6e64199a9570de3f3b3dd19c"
+      },
+      {
+        "path": "packages/types/src/schema-postcard-codec.ts",
+        "sha256": "ddda378e14c06d1e2844cb6ebf08ee1dfcfe45c415c37925151929c3e87d3d93"
+      },
+      {
+        "path": "packages/types/src/schema-postcard-fixed-array.ts",
+        "sha256": "533343759185ae5e7ed3a48e538f56292d6ea55c1114e5d2da0e988ca3adf012"
+      },
+      {
+        "path": "packages/types/src/schema-postcard-node.ts",
+        "sha256": "79815fb3ae193679104da932cda5bce4ee0ea5207d8780669a93f656ac842fe0"
+      },
+      {
+        "path": "packages/types/src/schema-postcard-support.ts",
+        "sha256": "1ddd9d7b933749e73b512384264e1d488490ea80082f07aa46a9e8a166a0f9a2"
+      },
+      {
+        "path": "packages/types/src/schema-postcard-wire.ts",
+        "sha256": "c6ca519cb77c9f200ced50d7464bff3acf11097e527e47159ff427b05571faed"
+      },
+      {
+        "path": "packages/types/src/utf8.ts",
+        "sha256": "19170eef9d879d2c0f968d7d092fdcf6ee4eaf0c38aaef2a595c7360e5822eb6"
+      }
+    ],
+    "note": "Byte equality checked against current main workspace; the Hermes standalone helper is excluded because the app does not compile it."
+  },
+  "executedFixture": {
+    "path": "/tmp/rustra-ios-audit-20260922/reload/executed-ReloadStressApp.tsx",
+    "sha256": "6c49bc49e18aaa5c8353042a103dc67a4a8ad13094602f0982646e6f170ab57e",
+    "text": "import { useEffect, useState } from 'react';\nimport { StyleSheet, Text, View } from 'react-native';\nimport { configure } from '@rustra/types';\nimport { createAsyncEngine, createFastEngine } from '../../packages/react-native/src';\nimport { benchEchoBytes } from '../calculator/generated/commands';\nimport { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from '../calculator/generated/contract';\nimport { frameRegistry } from '../calculator/generated/frame-registry';\nimport { getRustraNative, installRustraJSI } from '@rustra/generated-react-native';\n\nconst LOG_PREFIX = '[RustraReloadStress]';\n\nfunction log(message: string): void {\n  console.log(`${LOG_PREFIX} ${message}`);\n}\n\n/**\n * Development-only runtime reload probe.\n *\n * Each JS runtime installs JSI, proves a sync positional command, then leaves a\n * native async command in flight. The external stress runner reloads Metro as\n * soon as READY appears. A stale callback touching the old runtime would crash\n * the app; successful re-installation produces a new READY token instead.\n */\nexport default function ReloadStressApp() {\n  const [status, setStatus] = useState('Installing JSI…');\n\n  useEffect(() => {\n    const token = String(Date.now());\n    let active = true;\n\n    async function run(): Promise<void> {\n      try {\n        await installRustraJSI();\n        const native = getRustraNative();\n        if (typeof native.invokeTypedPos !== 'function') {\n          throw new Error('invokeTypedPos is unavailable');\n        }\n\n        const syncResult = native.invokeTypedPos(1, 42, 58) as { value?: unknown };\n        if (syncResult?.value !== 100) {\n          throw new Error(`sync probe returned ${JSON.stringify(syncResult)}`);\n        }\n\n        // Keep one Rust-owned external ArrayBuffer reachable from the old\n        // Runtime until reload destroys it. Its finalizer must free the exact\n        // Rust allocation without retaining or touching the superseded JSI\n        // Runtime. Debug allocator guards turn a double/wrong free into a loud\n        // process failure instead of allowing silent corruption.\n        const engineOptions = {\n          frameCodecs: frameRegistry,\n          contractHash: GENERATED_CONTRACT_HASH,\n          schemaVersion: SCHEMA_VERSION,\n        };\n        configure(createFastEngine(native, engineOptions));\n        const byteInput = new Uint8Array(64 * 1024);\n        byteInput[0] = 17;\n        byteInput[byteInput.length - 1] = 239;\n        const byteResult = await benchEchoBytes({ data: byteInput });\n        if (!(byteResult.data instanceof ArrayBuffer)) {\n          throw new Error('direct byte probe did not return an ArrayBuffer');\n        }\n        const byteOutput = new Uint8Array(byteResult.data);\n        if (\n          byteOutput.length !== byteInput.length ||\n          byteOutput[0] !== 17 ||\n          byteOutput[byteOutput.length - 1] !== 239\n        ) {\n          throw new Error('direct byte probe returned different bytes');\n        }\n        (\n          globalThis as typeof globalThis & { __rustraReloadOwnedBuffer?: ArrayBuffer }\n        ).__rustraReloadOwnedBuffer = byteResult.data;\n        log(`BUFFER_READY token=${token} bytes=${byteOutput.length}`);\n\n        const engine = createAsyncEngine(native, engineOptions);\n        configure(engine);\n        if (active) setStatus(`READY ${token}`);\n        log(`READY token=${token} value=100`);\n\n        // Keep native work pending long enough for the external runner to\n        // replace this Runtime. The C++ generation guard must discard the old\n        // JS callbacks after module invalidation/re-installation.\n        log(`PENDING token=${token}`);\n        void engine\n          .invoke<{ emitted: number }>('emitDemo', { ticks: 300, stepDelayMs: 10 })\n          .then((result) => log(`ASYNC_COMPLETED token=${token} emitted=${result.emitted}`))\n          .catch((error: unknown) =>\n            log(\n              `ASYNC_REJECTED token=${token} message=${\n                error instanceof Error ? error.message : String(error)\n              }`,\n            ),\n          );\n      } catch (error: unknown) {\n        const message = error instanceof Error ? error.message : String(error);\n        if (active) setStatus(`FAILED ${message}`);\n        console.error(`${LOG_PREFIX} FAILED token=${token} message=${message}`);\n      }\n    }\n\n    void run();\n    return () => {\n      active = false;\n    };\n  }, []);\n\n  return (\n    <View style={styles.container}>\n      <Text style={styles.title}>Rustra reload stress</Text>\n      <Text selectable style={styles.status} testID=\"reload-stress-status\">\n        {status}\n      </Text>\n    </View>\n  );\n}\n\nconst styles = StyleSheet.create({\n  container: {\n    alignItems: 'center',\n    backgroundColor: '#111827',\n    flex: 1,\n    gap: 16,\n    justifyContent: 'center',\n    padding: 24,\n  },\n  status: {\n    color: '#93c5fd',\n    fontFamily: 'Courier',\n    fontSize: 14,\n    textAlign: 'center',\n  },\n  title: {\n    color: '#f9fafb',\n    fontSize: 24,\n    fontWeight: '700',\n  },\n});\n"
+  },
+  "executedRunner": {
+    "path": "/tmp/rustra-ios-audit-20260922/reload/executed-reload-stress.mjs",
+    "sha256": "097cdedc8d280b743cf2acbbc306abba9d00d617e9b91e467c52028a044b783c",
+    "text": "const LOG_PREFIX = '[RustraReloadStress]';\nconst DEFAULT_BUNDLE_ID = 'com.alt-shifted.react-native-calculator';\n\nfunction readFlag(argv, name, fallback) {\n  const index = argv.indexOf(name);\n  if (index === -1) return fallback;\n  const value = argv[index + 1];\n  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`);\n  return value;\n}\n\nfunction positiveInteger(value, name) {\n  const parsed = Number(value);\n  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${name} must be positive`);\n  return parsed;\n}\n\nfunction run(command, args) {\n  const result = Bun.spawnSync({ cmd: [command, ...args], stdout: 'pipe', stderr: 'pipe' });\n  if (result.exitCode !== 0) {\n    const error = result.stderr.toString().trim() || result.stdout.toString().trim();\n    throw new Error(`${command} ${args.join(' ')} failed: ${error}`);\n  }\n  return result.stdout.toString().trim();\n}\n\nasync function requestReload(url) {\n  await new Promise((resolve, reject) => {\n    const socket = new WebSocket(url);\n    const timeout = setTimeout(() => {\n      socket.close();\n      reject(new Error('Metro message socket did not open'));\n    }, 5_000);\n    socket.addEventListener('error', () => {\n      clearTimeout(timeout);\n      reject(new Error('Metro message socket failed'));\n    });\n    socket.addEventListener('open', () => {\n      clearTimeout(timeout);\n      socket.send(JSON.stringify({ method: 'reload', version: 2 }));\n      setTimeout(() => {\n        socket.close();\n        resolve();\n      }, 50);\n    });\n  });\n}\n\nexport async function main(argv = Bun.argv.slice(2)) {\n  const cycles = positiveInteger(readFlag(argv, '--cycles', '30'), '--cycles');\n  const timeoutMs = positiveInteger(readFlag(argv, '--timeout-ms', '180000'), '--timeout-ms');\n  const device = readFlag(argv, '--device', 'booted');\n  const bundleId = readFlag(argv, '--bundle-id', DEFAULT_BUNDLE_ID);\n  const reloadUrl = readFlag(argv, '--reload-url', 'ws://127.0.0.1:8081/message');\n\n  const logProcess = Bun.spawn({\n    cmd: [\n      'xcrun',\n      'simctl',\n      'spawn',\n      device,\n      'log',\n      'stream',\n      '--style',\n      'compact',\n      '--level',\n      'debug',\n      '--predicate',\n      `eventMessage CONTAINS \"${LOG_PREFIX}\"`,\n    ],\n    stdout: 'pipe',\n    stderr: 'pipe',\n  });\n\n  const buffers = new Set();\n  const ready = new Set();\n  const pending = new Set();\n  const reloaded = new Set();\n  let settled = false;\n  let lineBuffer = '';\n\n  const completion = new Promise((resolve, reject) => {\n    const timer = setTimeout(\n      () =>\n        reject(\n          new Error(\n            `reload stress timed out after ${timeoutMs}ms (${ready.size}/${cycles + 1} runtimes)`,\n          ),\n        ),\n      timeoutMs,\n    );\n\n    const fail = (error) => {\n      if (settled) return;\n      settled = true;\n      clearTimeout(timer);\n      reject(error instanceof Error ? error : new Error(String(error)));\n    };\n\n    const pass = () => {\n      if (settled) return;\n      settled = true;\n      clearTimeout(timer);\n      resolve();\n    };\n\n    const maybeAdvance = async (token) => {\n      if (!buffers.has(token) || !ready.has(token) || !pending.has(token) || reloaded.has(token)) {\n        return;\n      }\n      if (ready.size === cycles + 1) {\n        pass();\n        return;\n      }\n      if (ready.size > cycles + 1) {\n        fail(new Error(`received too many runtime tokens: ${ready.size}`));\n        return;\n      }\n      reloaded.add(token);\n      try {\n        await requestReload(reloadUrl);\n        console.log(`reload ${reloaded.size}/${cycles} requested after token=${token}`);\n      } catch (error) {\n        fail(error);\n      }\n    };\n\n    const handleLine = (line) => {\n      if (!line.includes(LOG_PREFIX)) return;\n      const failed = line.match(/FAILED token=(\\d+) message=(.*)$/);\n      if (failed) {\n        fail(new Error(`runtime ${failed[1]} failed: ${failed[2]}`));\n        return;\n      }\n      const bufferMatch = line.match(/BUFFER_READY token=(\\d+) bytes=(\\d+)/);\n      if (bufferMatch) {\n        if (bufferMatch[2] !== '65536')\n          fail(new Error(`unexpected buffer size: ${bufferMatch[2]}`));\n        buffers.add(bufferMatch[1]);\n        void maybeAdvance(bufferMatch[1]);\n      }\n      const readyMatch = line.match(/READY token=(\\d+) value=100/);\n      if (readyMatch) {\n        ready.add(readyMatch[1]);\n        console.log(`runtime ${ready.size}/${cycles + 1} ready token=${readyMatch[1]}`);\n        void maybeAdvance(readyMatch[1]);\n      }\n      const pendingMatch = line.match(/PENDING token=(\\d+)/);\n      if (pendingMatch) {\n        pending.add(pendingMatch[1]);\n        void maybeAdvance(pendingMatch[1]);\n      }\n    };\n\n    void (async () => {\n      try {\n        const decoder = new TextDecoder();\n        for await (const chunk of logProcess.stdout) {\n          lineBuffer += decoder.decode(chunk, { stream: true });\n          const lines = lineBuffer.split('\\n');\n          lineBuffer = lines.pop() ?? '';\n          for (const line of lines) handleLine(line);\n          if (settled) break;\n        }\n        if (!settled)\n          fail(new Error('simulator log stream ended before the stress test completed'));\n      } catch (error) {\n        fail(error);\n      }\n    })();\n  });\n\n  try {\n    await Bun.sleep(500);\n    console.log(run('xcrun', ['simctl', 'launch', '--terminate-running-process', device, bundleId, '-RCT_jsLocation', '127.0.0.1:18081']));\n    await completion;\n    console.log(`RN reload stress passed: ${cycles}/${cycles}`);\n  } finally {\n    logProcess.kill();\n    await logProcess.exited;\n  }\n}\n\nif (import.meta.main) {\n  main().catch((error) => {\n    console.error(error instanceof Error ? error.message : String(error));\n    process.exitCode = 1;\n  });\n}\n"
+  },
+  "logs": [
+    {
+      "path": "/tmp/rustra-ios-audit-20260922/reload/stress-v2.log",
+      "sha256": "1d980aa03dcca7176e0c0c87d190ac1bda154d60c117ec546956e8939651a533",
+      "text": "dev.rustra.audit20260922: 13825\nruntime 1/31 ready token=1790059226014\nreload 1/30 requested after token=1790059226014\nruntime 2/31 ready token=1790059226455\nreload 2/30 requested after token=1790059226455\nruntime 3/31 ready token=1790059226890\nreload 3/30 requested after token=1790059226890\nruntime 4/31 ready token=1790059227333\nreload 4/30 requested after token=1790059227333\nruntime 5/31 ready token=1790059227771\nreload 5/30 requested after token=1790059227771\nruntime 6/31 ready token=1790059228201\nreload 6/30 requested after token=1790059228201\nruntime 7/31 ready token=1790059228627\nreload 7/30 requested after token=1790059228627\nruntime 8/31 ready token=1790059229057\nreload 8/30 requested after token=1790059229057\nruntime 9/31 ready token=1790059229483\nreload 9/30 requested after token=1790059229483\nruntime 10/31 ready token=1790059229909\nreload 10/30 requested after token=1790059229909\nruntime 11/31 ready token=1790059230339\nreload 11/30 requested after token=1790059230339\nruntime 12/31 ready token=1790059230762\nreload 12/30 requested after token=1790059230762\nruntime 13/31 ready token=1790059231196\nreload 13/30 requested after token=1790059231196\nruntime 14/31 ready token=1790059231628\nreload 14/30 requested after token=1790059231628\nruntime 15/31 ready token=1790059232063\nreload 15/30 requested after token=1790059232063\nruntime 16/31 ready token=1790059232500\nreload 16/30 requested after token=1790059232500\nruntime 17/31 ready token=1790059232933\nreload 17/30 requested after token=1790059232933\nruntime 18/31 ready token=1790059233366\nreload 18/30 requested after token=1790059233366\nruntime 19/31 ready token=1790059233789\nreload 19/30 requested after token=1790059233789\nruntime 20/31 ready token=1790059234214\nreload 20/30 requested after token=1790059234214\nruntime 21/31 ready token=1790059234642\nreload 21/30 requested after token=1790059234642\nruntime 22/31 ready token=1790059235070\nreload 22/30 requested after token=1790059235070\nruntime 23/31 ready token=1790059235503\nreload 23/30 requested after token=1790059235503\nruntime 24/31 ready token=1790059235943\nreload 24/30 requested after token=1790059235943\nruntime 25/31 ready token=1790059236377\nreload 25/30 requested after token=1790059236377\nruntime 26/31 ready token=1790059236807\nreload 26/30 requested after token=1790059236807\nruntime 27/31 ready token=1790059237241\nreload 27/30 requested after token=1790059237241\nruntime 28/31 ready token=1790059237667\nreload 28/30 requested after token=1790059237667\nruntime 29/31 ready token=1790059238095\nreload 29/30 requested after token=1790059238095\nruntime 30/31 ready token=1790059238520\nreload 30/30 requested after token=1790059238520\nruntime 31/31 ready token=1790059238950\nRN reload stress passed: 30/30\n"
+    },
+    {
+      "path": "/tmp/rustra-ios-audit-20260922/reload/runtime.log",
+      "sha256": "6b0455c5d7dad47483ede562dbba1974adc64025a4d311dd77ca468d53500772",
+      "text": "Timestamp               Ty Process[PID:TID]\n2026-09-22 15:40:26.044 I  reactnativecalculator[13825:1024c5a2] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059226014 bytes=65536\n2026-09-22 15:40:26.048 I  reactnativecalculator[13825:1024c5a2] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059226014 value=100\n2026-09-22 15:40:26.048 I  reactnativecalculator[13825:1024c5a2] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059226014\n2026-09-22 15:40:26.480 I  reactnativecalculator[13825:1024caad] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059226455 bytes=65536\n2026-09-22 15:40:26.484 I  reactnativecalculator[13825:1024caad] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059226455 value=100\n2026-09-22 15:40:26.484 I  reactnativecalculator[13825:1024caad] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059226455\n2026-09-22 15:40:26.916 I  reactnativecalculator[13825:1024cafd] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059226890 bytes=65536\n2026-09-22 15:40:26.920 I  reactnativecalculator[13825:1024cafd] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059226890 value=100\n2026-09-22 15:40:26.920 I  reactnativecalculator[13825:1024cafd] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059226890\n2026-09-22 15:40:27.359 I  reactnativecalculator[13825:1024cb55] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059227333 bytes=65536\n2026-09-22 15:40:27.363 I  reactnativecalculator[13825:1024cb55] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059227333 value=100\n2026-09-22 15:40:27.363 I  reactnativecalculator[13825:1024cb55] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059227333\n2026-09-22 15:40:27.796 I  reactnativecalculator[13825:1024cbdd] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059227771 bytes=65536\n2026-09-22 15:40:27.800 I  reactnativecalculator[13825:1024cbdd] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059227771 value=100\n2026-09-22 15:40:27.800 I  reactnativecalculator[13825:1024cbdd] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059227771\n2026-09-22 15:40:28.226 I  reactnativecalculator[13825:1024cc2d] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059228201 bytes=65536\n2026-09-22 15:40:28.230 I  reactnativecalculator[13825:1024cc2d] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059228201 value=100\n2026-09-22 15:40:28.230 I  reactnativecalculator[13825:1024cc2d] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059228201\n2026-09-22 15:40:28.653 I  reactnativecalculator[13825:1024cc7f] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059228627 bytes=65536\n2026-09-22 15:40:28.657 I  reactnativecalculator[13825:1024cc7f] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059228627 value=100\n2026-09-22 15:40:28.657 I  reactnativecalculator[13825:1024cc7f] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059228627\n2026-09-22 15:40:29.082 I  reactnativecalculator[13825:1024cccd] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059229057 bytes=65536\n2026-09-22 15:40:29.087 I  reactnativecalculator[13825:1024cccd] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059229057 value=100\n2026-09-22 15:40:29.087 I  reactnativecalculator[13825:1024cccd] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059229057\n2026-09-22 15:40:29.509 I  reactnativecalculator[13825:1024cd5c] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059229483 bytes=65536\n2026-09-22 15:40:29.513 I  reactnativecalculator[13825:1024cd5c] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059229483 value=100\n2026-09-22 15:40:29.513 I  reactnativecalculator[13825:1024cd5c] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059229483\n2026-09-22 15:40:29.935 I  reactnativecalculator[13825:1024cdbe] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059229909 bytes=65536\n2026-09-22 15:40:29.939 I  reactnativecalculator[13825:1024cdbe] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059229909 value=100\n2026-09-22 15:40:29.939 I  reactnativecalculator[13825:1024cdbe] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059229909\n2026-09-22 15:40:30.365 I  reactnativecalculator[13825:1024ce17] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059230339 bytes=65536\n2026-09-22 15:40:30.369 I  reactnativecalculator[13825:1024ce17] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059230339 value=100\n2026-09-22 15:40:30.369 I  reactnativecalculator[13825:1024ce17] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059230339\n2026-09-22 15:40:30.786 I  reactnativecalculator[13825:1024ce6a] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059230762 bytes=65536\n2026-09-22 15:40:30.790 I  reactnativecalculator[13825:1024ce6a] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059230762 value=100\n2026-09-22 15:40:30.791 I  reactnativecalculator[13825:1024ce6a] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059230762\n2026-09-22 15:40:31.221 I  reactnativecalculator[13825:1024cec0] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059231196 bytes=65536\n2026-09-22 15:40:31.225 I  reactnativecalculator[13825:1024cec0] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059231196 value=100\n2026-09-22 15:40:31.225 I  reactnativecalculator[13825:1024cec0] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059231196\n2026-09-22 15:40:31.653 I  reactnativecalculator[13825:1024cf4c] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059231628 bytes=65536\n2026-09-22 15:40:31.657 I  reactnativecalculator[13825:1024cf4c] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059231628 value=100\n2026-09-22 15:40:31.658 I  reactnativecalculator[13825:1024cf4c] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059231628\n2026-09-22 15:40:32.088 I  reactnativecalculator[13825:1024cfac] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059232063 bytes=65536\n2026-09-22 15:40:32.093 I  reactnativecalculator[13825:1024cfac] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059232063 value=100\n2026-09-22 15:40:32.093 I  reactnativecalculator[13825:1024cfac] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059232063\n2026-09-22 15:40:32.526 I  reactnativecalculator[13825:1024d019] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059232500 bytes=65536\n2026-09-22 15:40:32.530 I  reactnativecalculator[13825:1024d019] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059232500 value=100\n2026-09-22 15:40:32.530 I  reactnativecalculator[13825:1024d019] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059232500\n2026-09-22 15:40:32.959 I  reactnativecalculator[13825:1024d069] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059232933 bytes=65536\n2026-09-22 15:40:32.963 I  reactnativecalculator[13825:1024d069] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059232933 value=100\n2026-09-22 15:40:32.963 I  reactnativecalculator[13825:1024d069] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059232933\n2026-09-22 15:40:33.392 I  reactnativecalculator[13825:1024d0b9] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059233366 bytes=65536\n2026-09-22 15:40:33.396 I  reactnativecalculator[13825:1024d0b9] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059233366 value=100\n2026-09-22 15:40:33.396 I  reactnativecalculator[13825:1024d0b9] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059233366\n2026-09-22 15:40:33.815 I  reactnativecalculator[13825:1024d13a] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059233789 bytes=65536\n2026-09-22 15:40:33.819 I  reactnativecalculator[13825:1024d13a] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059233789 value=100\n2026-09-22 15:40:33.819 I  reactnativecalculator[13825:1024d13a] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059233789\n2026-09-22 15:40:34.240 I  reactnativecalculator[13825:1024d189] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059234214 bytes=65536\n2026-09-22 15:40:34.244 I  reactnativecalculator[13825:1024d189] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059234214 value=100\n2026-09-22 15:40:34.244 I  reactnativecalculator[13825:1024d189] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059234214\n2026-09-22 15:40:34.667 I  reactnativecalculator[13825:1024d1f0] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059234642 bytes=65536\n2026-09-22 15:40:34.671 I  reactnativecalculator[13825:1024d1f0] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059234642 value=100\n2026-09-22 15:40:34.671 I  reactnativecalculator[13825:1024d1f0] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059234642\n2026-09-22 15:40:35.096 I  reactnativecalculator[13825:1024d239] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059235070 bytes=65536\n2026-09-22 15:40:35.101 I  reactnativecalculator[13825:1024d239] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059235070 value=100\n2026-09-22 15:40:35.101 I  reactnativecalculator[13825:1024d239] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059235070\n2026-09-22 15:40:35.529 I  reactnativecalculator[13825:1024d2ca] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059235503 bytes=65536\n2026-09-22 15:40:35.533 I  reactnativecalculator[13825:1024d2ca] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059235503 value=100\n2026-09-22 15:40:35.533 I  reactnativecalculator[13825:1024d2ca] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059235503\n2026-09-22 15:40:35.969 I  reactnativecalculator[13825:1024d31e] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059235943 bytes=65536\n2026-09-22 15:40:35.973 I  reactnativecalculator[13825:1024d31e] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059235943 value=100\n2026-09-22 15:40:35.973 I  reactnativecalculator[13825:1024d31e] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059235943\n2026-09-22 15:40:36.403 I  reactnativecalculator[13825:1024d36b] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059236377 bytes=65536\n2026-09-22 15:40:36.407 I  reactnativecalculator[13825:1024d36b] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059236377 value=100\n2026-09-22 15:40:36.407 I  reactnativecalculator[13825:1024d36b] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059236377\n2026-09-22 15:40:36.833 I  reactnativecalculator[13825:1024d3b5] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059236807 bytes=65536\n2026-09-22 15:40:36.837 I  reactnativecalculator[13825:1024d3b5] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059236807 value=100\n2026-09-22 15:40:36.837 I  reactnativecalculator[13825:1024d3b5] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059236807\n2026-09-22 15:40:37.268 I  reactnativecalculator[13825:1024d400] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059237241 bytes=65536\n2026-09-22 15:40:37.272 I  reactnativecalculator[13825:1024d400] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059237241 value=100\n2026-09-22 15:40:37.272 I  reactnativecalculator[13825:1024d400] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059237241\n2026-09-22 15:40:37.693 I  reactnativecalculator[13825:1024d489] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059237667 bytes=65536\n2026-09-22 15:40:37.697 I  reactnativecalculator[13825:1024d489] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059237667 value=100\n2026-09-22 15:40:37.697 I  reactnativecalculator[13825:1024d489] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059237667\n2026-09-22 15:40:38.120 I  reactnativecalculator[13825:1024d4d4] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059238095 bytes=65536\n2026-09-22 15:40:38.124 I  reactnativecalculator[13825:1024d4d4] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059238095 value=100\n2026-09-22 15:40:38.124 I  reactnativecalculator[13825:1024d4d4] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059238095\n2026-09-22 15:40:38.545 I  reactnativecalculator[13825:1024d520] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059238520 bytes=65536\n2026-09-22 15:40:38.549 I  reactnativecalculator[13825:1024d520] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059238520 value=100\n2026-09-22 15:40:38.549 I  reactnativecalculator[13825:1024d520] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059238520\n2026-09-22 15:40:38.976 I  reactnativecalculator[13825:1024d56c] [com.facebook.react.log:javascript] [RustraReloadStress] BUFFER_READY token=1790059238950 bytes=65536\n2026-09-22 15:40:38.980 I  reactnativecalculator[13825:1024d56c] [com.facebook.react.log:javascript] [RustraReloadStress] READY token=1790059238950 value=100\n2026-09-22 15:40:38.980 I  reactnativecalculator[13825:1024d56c] [com.facebook.react.log:javascript] [RustraReloadStress] PENDING token=1790059238950\n2026-09-22 15:40:44.979 I  reactnativecalculator[13825:1024d56c] [com.facebook.react.log:javascript] [RustraReloadStress] ASYNC_COMPLETED token=1790059238950 emitted=301\n"
+    },
+    {
+      "path": "/tmp/rustra-ios-audit-20260922/reload/process-after.log",
+      "sha256": "a1304e531c1a2dcb57b09a10aa58a9f0cc58e665bc4292445464aa9494d7a773",
+      "text": "13825 Ss   373120 02:39 /Users/loopy/Library/Developer/CoreSimulator/Devices/99B087B5-DEF6-4CF1-9177-81A5DE564CFC/data/Containers/Bundle/Application/59024C44-43D0-4F27-89B5-42AD1B1308C0/reactnativecalculator.app/reactnativecalculator\n"
+    }
+  ],
+  "setupAttempts": [
+    {
+      "log": {
+        "path": "/tmp/rustra-ios-audit-20260922/reload/metro.log",
+        "sha256": "4a0a95f3d977c178e061acca7db56e5e6e30004a303f60d1d2b7d2341582173f"
+      },
+      "outcome": "CI mode disabled reloads; stopped that server before switching to watch mode"
+    },
+    {
+      "log": {
+        "path": "/tmp/rustra-ios-audit-20260922/reload/metro-watch.log",
+        "sha256": "9959cfaf5c703aa28689d9713c3051974fcd1191aecc8264133b9b0833d3a7c1"
+      },
+      "outcome": "Sandboxed watcher failed with EMFILE; that server exited and dependent probe was stopped"
+    },
+    {
+      "log": {
+        "path": "/tmp/rustra-ios-audit-20260922/reload/metro-watch-v2.log",
+        "sha256": "da6e8534f36e58b5bcabca53de43672a784816212be301197cbef0eda02609de"
+      },
+      "outcome": "Scoped server with access to existing Watchman ran successfully; no global Watchman installation or configuration change"
+    }
+  ],
+  "limitations": [
+    "Debug simulator timings are not performance results",
+    "Old-runtime callbacks were not observed; this is not a proof of absence of all memory leaks",
+    "No native library hot swap, Android runtime, physical device or 100-cycle/two-hour acceptance claim",
+    "JavaScript came from a dedicated Metro instance; fixture/product source identities are recorded separately from native executable identity"
+  ],
+  "cleanup": {
+    "appTerminatedAndUninstalled": true,
+    "simulatorState": "Shutdown",
+    "metroProcessStopped": true,
+    "watchmanRootRemoved": "/private/tmp/rustra-ios-audit-20260922/repo",
+    "stateLogSha256": "36943ab9be924ed413b6a2e5bbd40b0ac2d1c158d2b89810189606f21160da23",
+    "watchmanLogSha256": "19d65b47423595744fa4122bf5af34b927c58fa95ca0d6739d5823a977991ec8"
+  }
+}

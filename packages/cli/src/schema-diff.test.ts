@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { diffSchemas, formatDiffResult } from './schema-diff.js';
-import type { PackageSchema } from './schema.js';
+import type { PackageSchema, JsonSchema } from './schema.js';
 
 const baseSchema: PackageSchema = {
   packageId: 'test',
@@ -477,8 +477,13 @@ test('payload definition removal folds to event_payload_changed', () => {
     },
   ]);
   const result = diffSchemas(oldSchema, nextSchema);
-  const change = result.breaking.find((c) => c.type === 'event_payload_changed');
-  assert.ok(change, `definition removal must be breaking, got: ${JSON.stringify(result.breaking)}`);
+  const change = result.breaking.find(
+    (c) => c.type === 'event_payload_changed' && c.path === 'events.progress.tick.payload.Detail',
+  );
+  assert.ok(
+    change?.type === 'event_payload_changed',
+    `definition removal must be breaking, got: ${JSON.stringify(result.breaking)}`,
+  );
   assert.equal(change.path, 'events.progress.tick.payload.Detail');
   assert.equal(change.before, '(definition)');
   assert.equal(change.after, '(removed)');
@@ -563,4 +568,175 @@ test('runDiff wraps a missing schema file instead of leaking raw ENOENT', async 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+function payloadPackage(input: PackageSchema['commands'][number]['inputSchema']): PackageSchema {
+  return {
+    packageId: 'diff.wire',
+    fieldOrder: 'declaration',
+    commands: [
+      {
+        name: 'echo',
+        commandId: 1,
+        inputType: 'Input',
+        outputType: 'Output',
+        inputSchema: input,
+        outputSchema: { type: 'null' },
+      },
+    ],
+  };
+}
+
+const wireChanges: Array<[string, JsonSchema, JsonSchema]> = [
+  ['enum ordinal', { type: 'string', enum: ['A', 'B'] }, { type: 'string', enum: ['B', 'A'] }],
+  [
+    'integer signedness',
+    { type: 'integer', format: 'int64' },
+    { type: 'integer', format: 'uint64' },
+  ],
+  ['float width', { type: 'number', format: 'float' }, { type: 'number', format: 'double' }],
+  [
+    'tuple positions',
+    { type: 'array', items: [{ type: 'string' }, { type: 'integer' }] },
+    { type: 'array', items: [{ type: 'integer' }, { type: 'string' }] },
+  ],
+  [
+    'map values',
+    { type: 'object', additionalProperties: { type: 'string' } },
+    { type: 'object', additionalProperties: { type: 'integer' } },
+  ],
+  [
+    'option contents',
+    { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+  ],
+  [
+    'variant payload',
+    { oneOf: [{ type: 'object', properties: { x: { type: 'string' } } }] },
+    { oneOf: [{ type: 'object', properties: { x: { type: 'integer' } } }] },
+  ],
+  ['allOf contents', { allOf: [{ type: 'string' }] }, { allOf: [{ type: 'integer' }] }],
+  [
+    'field order',
+    { type: 'object', properties: { a: { type: 'integer' }, b: { type: 'integer' } } },
+    { type: 'object', properties: { b: { type: 'integer' }, a: { type: 'integer' } } },
+  ],
+  [
+    'optional field addition',
+    { type: 'object', properties: { a: { type: 'integer' } } },
+    { type: 'object', properties: { a: { type: 'integer' }, b: { type: ['integer', 'null'] } } },
+  ],
+  [
+    'variant order',
+    { oneOf: [{ const: 'A' }, { const: 'B' }] },
+    { oneOf: [{ const: 'B' }, { const: 'A' }] },
+  ],
+  [
+    'fixed array size',
+    { type: 'array', items: { type: 'integer' }, minItems: 2, maxItems: 2 },
+    { type: 'array', items: { type: 'integer' }, minItems: 3, maxItems: 3 },
+  ],
+];
+
+for (const [name, before, after] of wireChanges) {
+  test(`diff rejects wire change: ${name}`, () => {
+    const result = diffSchemas(
+      payloadPackage(structuredClone(before)),
+      payloadPackage(structuredClone(after)),
+    );
+    assert.ok(result.breaking.length > 0, name);
+    assert.equal(result.compatible.length, 0);
+  });
+}
+
+test('recursive references terminate while changes are reported at both sibling paths', () => {
+  const node = {
+    type: 'object',
+    properties: {
+      value: { type: 'integer' },
+      children: { type: 'array', items: { $ref: '#/$defs/Node' } },
+    },
+  };
+  const before = payloadPackage({
+    type: 'object',
+    properties: {
+      left: { $ref: '#/$defs/Node' },
+      right: { $ref: '#/$defs/Node' },
+    },
+    $defs: { Node: node },
+  });
+  assert.equal(diffSchemas(before, structuredClone(before)).breaking.length, 0);
+  const after = structuredClone(before);
+  after.commands[0].inputSchema.$defs = {
+    Node: {
+      ...node,
+      properties: {
+        ...node.properties,
+        value: { type: 'string' },
+      },
+    },
+  };
+  const result = diffSchemas(before, after);
+  for (const side of ['left', 'right'])
+    assert.ok(
+      result.breaking.some(
+        (change) =>
+          change.type === 'field_type_changed' && change.command === `echo.input.${side}.value`,
+      ),
+    );
+});
+
+test('metadata edits remain nonbreaking', () => {
+  const before = payloadPackage({ type: 'integer', title: 'Old', description: 'old', default: 1 });
+  const after = payloadPackage({ type: 'integer', title: 'New', description: 'new', default: 2 });
+  assert.equal(diffSchemas(before, after).breaking.length, 0);
+});
+
+test('migration gate rejects schema pairs that silently reinterpret actual postcard bytes', async () => {
+  const { createSchemaPostcardCodec } = await import('@rustra/types');
+  const before = { type: 'object', properties: { value: { type: 'integer', format: 'int64' } } };
+  const after = { type: 'object', properties: { value: { type: 'integer', format: 'uint64' } } };
+  const encoder = createSchemaPostcardCodec(1, before, before)!;
+  const decoder = createSchemaPostcardCodec(1, after, after)!;
+  const body = new Uint8Array(encoder.encode({ value: 7 })).subarray(2);
+  const response = new Uint8Array(8 + body.length);
+  response[0] = 1;
+  new DataView(response.buffer).setUint32(4, body.length, true);
+  response.set(body, 8);
+  assert.deepEqual(decoder.decode(response), { ok: true, result: { value: 14 } });
+  assert.ok(diffSchemas(payloadPackage(before), payloadPackage(after)).breaking.length > 0);
+});
+
+test('removed command-level ref targets are breaking even when the ref object is reused', () => {
+  const shared: JsonSchema = { $ref: '#/definitions/Detail' };
+  const before = payloadPackage(shared);
+  before.commands[0].definitions = { Detail: { type: 'string' } };
+  const after = payloadPackage(shared);
+  after.commands[0].definitions = {};
+  assert.ok(
+    diffSchemas(before, after).breaking.some((change) => change.type === 'definition_removed'),
+  );
+});
+
+test('oneOf fallback titles are discriminator keys rather than inert metadata', () => {
+  const before = payloadPackage({
+    oneOf: [
+      {
+        title: 'A',
+        type: 'object',
+        properties: { left: { type: 'integer' }, right: { type: 'integer' } },
+      },
+      {
+        title: 'B',
+        type: 'object',
+        properties: { x: { type: 'integer' }, y: { type: 'integer' } },
+      },
+    ],
+  });
+  const after = structuredClone(before);
+  after.commands[0].inputSchema.oneOf![0].title = 'Z';
+  assert.ok(diffSchemas(before, after).breaking.length > 0);
+  before.commands[0].inputSchema['x-rustra-variant-order'] = ['first', 'second'];
+  after.commands[0].inputSchema['x-rustra-variant-order'] = ['first', 'second'];
+  assert.equal(diffSchemas(before, after).breaking.length, 0);
 });
