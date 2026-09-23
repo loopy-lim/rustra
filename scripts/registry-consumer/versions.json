@@ -1,26 +1,30 @@
 {
   "schemaVersion": 1,
   "npm": {
-    "@rustra/cli": "0.10.0",
-    "@rustra/types": "0.10.0",
-    "@rustra/node": "0.10.0",
-    "@rustra/bun": "0.10.0"
+    "@rustra/cli": "0.11.3",
+    "@rustra/types": "0.12.0",
+    "@rustra/node": "0.10.2",
+    "@rustra/bun": "0.10.2"
+  },
+  "hosts": {
+    "@rustra/tauri": "0.9.3",
+    "@rustra/react-native": "0.9.2"
   },
   "phases": {
     "baseline": {
-      "rustra": "0.10.0",
-      "rustra-macros": "0.10.0",
-      "rustra-naming": "0.10.0"
+      "rustra": "0.10.2",
+      "rustra-macros": "0.10.2",
+      "rustra-naming": "0.10.2"
     },
     "candidate": {
-      "rustra": "0.10.1",
-      "rustra-macros": "0.10.1",
-      "rustra-naming": "0.10.1"
+      "rustra": "0.11.0",
+      "rustra-macros": "0.11.0",
+      "rustra-naming": "0.11.0"
     },
     "rollback": {
-      "rustra": "0.10.0",
-      "rustra-macros": "0.10.0",
-      "rustra-naming": "0.10.0"
+      "rustra": "0.10.2",
+      "rustra-macros": "0.10.2",
+      "rustra-naming": "0.10.2"
     }
   }
 }

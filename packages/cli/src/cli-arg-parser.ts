@@ -57,7 +57,9 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
       continue;
     }
 
-    const [name, inlineValue] = argument.slice(2).split('=', 2);
+    const separator = argument.indexOf('=');
+    const name = argument.slice(2, separator === -1 ? undefined : separator);
+    const inlineValue = separator === -1 ? undefined : argument.slice(separator + 1);
     if (booleanFlags.has(name!)) {
       if (inlineValue !== undefined) {
         throw new UsageError(

@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { GENERATED_REACT_NATIVE_PACKAGE } from './react-native.js';
 import { portablePackagePath, type HostEntries } from './host-entries.js';
+import { findWorkspaceOwner, workspaceExcludes, workspaceIncludes } from './workspace-owner.js';
 
 export async function ensureReactNativeDependency(
   appRoot: string,
@@ -52,7 +53,21 @@ export async function ensureReactNativeDependency(
   if (!Array.isArray(workspaces) || workspaces.some((entry) => typeof entry !== 'string')) {
     throw new Error('React Native setup requires package.json workspaces to be a string array');
   }
-  if (!workspaces.includes(workspacePath)) {
+  const owner = await findWorkspaceOwner(appRoot);
+  if (owner) {
+    const path = portablePackagePath(owner.directory, moduleDir).replace(/^\.\//, '');
+    if (workspaceExcludes(owner.patterns, path))
+      throw new Error(
+        `Generated module ${path} is excluded by workspaces in ${owner.path}; review that workspace configuration.`,
+      );
+    if (!workspaceIncludes(owner.patterns, path)) {
+      const entries = [...owner.patterns, path].sort();
+      owner.manifest.workspaces = owner.objectForm
+        ? { ...(owner.manifest.workspaces as object), packages: entries }
+        : entries;
+      await writeFile(owner.path, `${JSON.stringify(owner.manifest, null, 2)}\n`);
+    }
+  } else if (!workspaces.includes(workspacePath)) {
     manifest.workspaces = [...workspaces, workspacePath].sort();
   }
   const next = `${JSON.stringify(manifest, null, 2)}\n`;

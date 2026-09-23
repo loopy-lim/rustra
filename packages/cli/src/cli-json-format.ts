@@ -37,7 +37,7 @@ export const formatExplainJson = (report: ExplainJsonReport): string => stringif
 
 /**
  * `codegen --format json` 보고 입력 — written 은 runGenerate 의 진행 표기
- * 문자열(`(updated)`/`(unchanged)` 접미어, 신규 파일은 순수 경로).
+ * 문자열(`(updated)`/`(unchanged)`/`(removed)` 접미어, 신규 파일은 순수 경로).
  */
 export interface CodegenJsonReport {
   written: string[];

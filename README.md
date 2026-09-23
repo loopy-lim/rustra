@@ -3,7 +3,7 @@ English | [한국어](./README.ko.md)
 # rustra
 
 The current release line targets Rust crates 0.11.0 and the coordinated package
-versions below (`@rustra/types`/`@rustra/cli` 0.11.0, adapters at their own
+versions below (`@rustra/types` 0.12.0 / `@rustra/cli` 0.11.3, adapters at their own
 versions). Upgrade native libraries, JS adapters, and generated output together;
 see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
 checks and rollback.

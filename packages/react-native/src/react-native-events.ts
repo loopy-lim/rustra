@@ -64,11 +64,13 @@ export function createChannel(
     (isClosed) =>
       native.createChannel!((payloadJson) => {
         if (isClosed()) return;
+        let payload: unknown = null;
         try {
-          callback(JSON.parse(payloadJson));
+          payload = JSON.parse(payloadJson);
         } catch {
-          callback(null);
+          /* malformed payload stays null */
         }
+        callback(payload);
       }),
   );
 }
@@ -192,10 +194,12 @@ export function subscribeEvent(
       } catch {
         /* malformed payload stays null */
       }
-      // Array.from — Expo 의 ES5 타겟에서 Set 순회는 downlevelIteration 이 필요하다.
-      // forEach — 이벤트마다 Array.from 이 배열을 할당하지 않는다(핫패스).
+      // Snapshot before callbacks: Set.forEach revisits deleted/re-added listeners
+      // and can loop forever when a callback resubscribes itself.
       const listeners = events?.get(name);
-      listeners?.forEach((listener) => {
+      if (!listeners) return;
+      Array.from(listeners).forEach((listener) => {
+        if (!listeners.has(listener)) return;
         try {
           listener(payload);
         } catch (error) {

@@ -388,6 +388,101 @@ test('createChannel exposes a typed handle and idempotent close', () => {
   assert.deepEqual(dropped, [42]);
 });
 
+test('createChannel delivers once when a user callback throws', () => {
+  let deliver: ((payloadJson: string) => void) | undefined;
+  const received: unknown[] = [];
+  const failure = new Error('consumer failed');
+  const channel = createChannel(
+    (payload) => {
+      received.push(payload);
+      throw failure;
+    },
+    {
+      createChannel(callback) {
+        deliver = callback;
+        return 1;
+      },
+      dropChannel() {
+        return true;
+      },
+    },
+  );
+  try {
+    assert.throws(
+      () => deliver!('{"ok":true}'),
+      (error) => error === failure,
+    );
+    assert.deepEqual(received, [{ ok: true }]);
+    assert.throws(
+      () => deliver!('malformed'),
+      (error) => error === failure,
+    );
+    assert.deepEqual(received, [{ ok: true }, null]);
+  } finally {
+    channel.close();
+  }
+});
+
+test('event resubscription cannot revisit a listener during the same delivery', () => {
+  const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
+  let unsubscribe = () => {};
+  let calls = 0;
+  const keepAlive = subscribeEvent('reentrant.tick', () => {});
+  const listener = () => {
+    calls += 1;
+    // Bound the old Set.forEach bug so a regression fails rather than hangs.
+    if (calls < 4) {
+      unsubscribe();
+      unsubscribe = subscribeEvent('reentrant.tick', listener);
+    }
+  };
+  try {
+    unsubscribe = subscribeEvent('reentrant.tick', listener);
+    h.emit('reentrant.tick', '{}');
+    assert.equal(calls, 1);
+    h.emit('reentrant.tick', '{}');
+    assert.equal(calls, 2);
+  } finally {
+    unsubscribe();
+    keepAlive();
+    root.__rustraNative = previous;
+  }
+});
+
+test('event delivery skips listeners removed before their turn and defers new listeners', () => {
+  const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
+  const seen: string[] = [];
+  let stopSecond = () => {};
+  let stopThird = () => {};
+  let added = false;
+  const stopFirst = subscribeEvent('snapshot.tick', () => {
+    seen.push('first');
+    stopSecond();
+    if (!added) {
+      added = true;
+      stopThird = subscribeEvent('snapshot.tick', () => seen.push('third'));
+    }
+  });
+  try {
+    stopSecond = subscribeEvent('snapshot.tick', () => seen.push('second'));
+    h.emit('snapshot.tick', '{}');
+    assert.deepEqual(seen, ['first']);
+    h.emit('snapshot.tick', '{}');
+    assert.deepEqual(seen, ['first', 'first', 'third']);
+  } finally {
+    stopFirst();
+    stopSecond();
+    stopThird();
+    root.__rustraNative = previous;
+  }
+});
+
 test('createBytesChannel round-trips binary frames without JSON parsing', () => {
   let callback: ((payload: ArrayBuffer) => void) | undefined;
   const dropped: number[] = [];
