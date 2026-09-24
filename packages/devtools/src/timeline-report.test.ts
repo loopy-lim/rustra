@@ -230,3 +230,49 @@ test('circular payload falls back to String(value) without crashing, determinist
   // 직렬화 실패 경로도 같은 입력엔 같은 문서를 만든다.
   assert.equal(first, renderTimelineReport([log]));
 });
+
+test('failure rows render the frame forensics line; others stay byte-identical (M8)', () => {
+  const frameLog: DevtoolsLog = {
+    kind: 'invoke',
+    command: 'addNumbers',
+    durationMs: 2,
+    ok: false,
+    error: { code: 'invoke.malformed', message: "decode failed for 'addNumbers' at offset 4" },
+    frameBytesHex: 'deadbeef',
+    frameByteLength: 4,
+  };
+  const html = renderTimelineReport([frameLog]);
+  // 상태 셀에 에러 요약 뒤 포렌식 라인이 붙는다 — 정적 <br>, 이스케이프된 동적 문자열.
+  assert.ok(
+    html.includes(
+      '<td class="error">error — invoke.malformed: decode failed for &#39;addNumbers&#39;' +
+        ' at offset 4<br>frame 4B: deadbeef</td>',
+    ),
+  );
+  // 256B 를 넘는 프레임은 절단 마커로 원본 길이를 숨기지 않는다.
+  const clipped = renderTimelineReport([
+    { ...frameLog, frameBytesHex: 'ab'.repeat(256), frameByteLength: 300 },
+  ]);
+  assert.ok(clipped.includes('frame 300B (first 256B): '));
+  assert.ok(clipped.includes(`${'ab'.repeat(256)}…</td>`));
+  // 기존 소비자 호환: 프레임 필드가 없으면 골든 문서와 바이트 단위로 동일하다.
+  const legacy: DevtoolsLog = {
+    kind: 'invoke',
+    command: 'fail',
+    durationMs: 0.25,
+    ok: false,
+    payload: null,
+    error: { code: 'E_FAIL', message: 'boom' },
+  };
+  assert.ok(renderTimelineReport([legacy]).includes('<td class="error">error — E_FAIL: boom</td>'));
+  // 성공 로그에 프레임 필드가 섞여 있어도 렌더하지 않는다(실패 한정 계약).
+  const straySuccess: DevtoolsLog = {
+    kind: 'invoke',
+    command: 'ok',
+    durationMs: 1,
+    ok: true,
+    frameBytesHex: 'deadbeef',
+    frameByteLength: 4,
+  };
+  assert.ok(!renderTimelineReport([straySuccess]).includes('frame 4B'));
+});

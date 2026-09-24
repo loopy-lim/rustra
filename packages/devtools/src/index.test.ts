@@ -30,6 +30,69 @@ test('errors propagate unchanged after being recorded', async () => {
   assert.equal(engine.report().commandStats.fail.errors, 1);
 });
 
+test('failure logs capture frame forensics when the error carries frameBytes (M8)', async () => {
+  // tier2 디코드 실패 정규화(@rustra/types M3) 는 RustraCommandError.frameBytes 에
+  // 응답 프레임 복사본을 싣는다 — 계측기는 이를 hex 절단(앞 256B)과 전체 길이로
+  // 실패 로그에 남긴다. 프로세스가 끝난 뒤 와이어를 재해석할 수 있는 유일한 흔적이다.
+  const frame = new Uint8Array(300);
+  frame[0] = 0xde;
+  frame[1] = 0xad;
+  frame[255] = 0xff;
+  frame[256] = 0x01; // 256B 창 밖 — hex 에 나오면 안 된다
+  const inner = {
+    async invoke<T>(command: string): Promise<T> {
+      const error = new Error(`decode failed for '${command}' at offset 300`);
+      (error as { frameBytes?: Uint8Array }).frameBytes = frame;
+      throw error;
+    },
+  };
+  const engine = createInstrumentedEngine(inner);
+  await engine.invoke('addNumbers', { a: 1 }).catch(() => {});
+  const log = engine.report().logs[0]!;
+  assert.equal(log.ok, false);
+  assert.equal(log.frameByteLength, 300);
+  assert.equal(log.frameBytesHex?.length, 512); // 256B × 2 자리
+  assert.ok(log.frameBytesHex?.startsWith('dead'));
+  assert.ok(log.frameBytesHex?.endsWith('ff')); // 255번째 바이트가 창의 끝
+});
+
+test('frame forensics stay absent for successes and frame-less failures (M8)', async () => {
+  const engine = createInstrumentedEngine(makeInner());
+  await engine.invoke('addNumbers', { a: 1 });
+  await engine.invoke('fail').catch(() => {});
+  const [success, failure] = engine.report().logs;
+  assert.equal(success!.ok, true);
+  assert.equal(success!.frameBytesHex, undefined);
+  assert.equal(success!.frameByteLength, undefined);
+  assert.equal(failure!.ok, false);
+  assert.equal(failure!.frameBytesHex, undefined);
+  assert.equal(failure!.frameByteLength, undefined);
+});
+
+test('frame forensics on batch failures surface through onLog entries too (M8)', async () => {
+  const seen: unknown[] = [];
+  const frame = new Uint8Array([0x01, 0x02]);
+  const inner = {
+    async invoke<T>(): Promise<T> {
+      throw new Error('unreachable');
+    },
+    async invokeBatch<T>(): Promise<T[]> {
+      const error = new Error('batch decode failed');
+      (error as { frameBytes?: Uint8Array }).frameBytes = frame;
+      throw error;
+    },
+  };
+  const engine = createInstrumentedEngine(inner, {
+    onLog: (entry) => seen.push(entry),
+  });
+  const batch = engine.invokeBatch!;
+  await batch([{ command: 'addNumbers' }]).catch(() => {});
+  const log = seen[0] as { ok: boolean; frameBytesHex?: string; frameByteLength?: number };
+  assert.equal(log.ok, false);
+  assert.equal(log.frameBytesHex, '0102');
+  assert.equal(log.frameByteLength, 2);
+});
+
 test('slowest list is ordered desc and capped at 10', async () => {
   const engine = createInstrumentedEngine(makeInner());
   for (let i = 0; i < 12; i++) await engine.invoke('tick');

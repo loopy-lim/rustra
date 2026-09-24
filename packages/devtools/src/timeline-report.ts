@@ -49,6 +49,20 @@ function preview(value: unknown): string {
   return `${text.slice(0, cut)}…`;
 }
 
+/**
+ * (M8) 실패 프레임 포렌식 라인 — 로그가 프레임 바이트를 남겼을 때만 상태 셀에
+ * 덧붙인다. hex 는 [0-9a-f] 만으로 구성되지만 렌더 경로 일관성을 위해 다른
+ * 동적 문자열과 마찬가지로 escapeHtml 을 통과시킨다. 256B 를 넘는 프레임은
+ * 절단 마커(`first 256B`, `…`) 로 원본이 더 길다는 사실을 숨기지 않는다.
+ */
+function renderFrameLine(log: DevtoolsLog): string {
+  if (log.ok || log.frameByteLength === undefined) return '';
+  const hex = escapeHtml(log.frameBytesHex ?? '');
+  return log.frameByteLength > 256
+    ? `<br>frame ${log.frameByteLength}B (first 256B): ${hex}…`
+    : `<br>frame ${log.frameByteLength}B: ${hex}`;
+}
+
 /** 로그 한 건을 타임라인 테이블 행 하나로 렌더한다. */
 function renderRow(log: DevtoolsLog): string {
   const status = log.ok ? 'ok' : 'error';
@@ -61,7 +75,7 @@ function renderRow(log: DevtoolsLog): string {
     `        <td>${escapeHtml(log.command)}</td>`,
     // durationMs 는 숫자 — 메타문자를 운반할 수 없으므로 이스케이프 불필요.
     `        <td class="num">${log.durationMs}</td>`,
-    `        <td class="${status}">${status}${escapeHtml(summary)}</td>`,
+    `        <td class="${status}">${status}${escapeHtml(summary)}${renderFrameLine(log)}</td>`,
     `        <td>${escapeHtml(preview(log.payload))}</td>`,
     `        <td>${escapeHtml(preview(log.result))}</td>`,
     '      </tr>',
