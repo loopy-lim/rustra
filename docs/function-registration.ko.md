@@ -46,6 +46,30 @@ await reset(); // Promise<void>
 const message: string = await read(7, { timeoutMs: 1000 });
 ```
 
+## 저작 모델 선택: `#[command]` vs `PackageBuilder::function`
+
+rustra 에는 명령을 등록하는 방법이 두 가지 있고, 차이는 문법만이 아니다.
+매크로 경로(`#[command]` + `#[bridge_type]` 구조체, `rustra::build!` 로 연결)와
+일반 함수 경로(`.function`/`.try_function`)는 같은 `PackageBuilder` 에 등록되므로
+한 패키지에서 섞어 쓸 수 있다 — 다만 명령마다 아래 표로 선택하라:
+
+| 기능                   | `#[command]` 매크로 (+ `#[bridge_type]` 구조체)                                                                                        | `PackageBuilder::function` / `try_function`                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 래퍼 구조체            | 필수 — 명령마다 입력·출력 구조체 하나씩(crud 예제는 명령 5개에 구조체 10개: [`examples/crud/src/lib.rs`](../examples/crud/src/lib.rs)) | 없음 — 일반 함수나 클로저, 인자 0~12개                                                                                                                                   |
+| TS 호출 규약           | 이름 있는 필드의 입력 객체 하나 — `addNumbers({ a, b })`                                                                               | 위치 인자 — `add(2, 3)`                                                                                                                                                  |
+| 생성 인자 이름         | 구조체 필드 이름(`#[serde(rename_all = "camelCase")]` 로 camelCase)                                                                    | `arg0`, `arg1`, … — Rust `Fn` 트레잇은 원본 인자 이름을 노출하지 않는다                                                                                                  |
+| 비동기 핸들러          | ✅ `async fn` 지원(rustra 의 고정 FFI 워커 풀에서 실행 — [rust-api-guide.ko.md](rust-api-guide.ko.md) 참고)                            | ❌ 동기 함수·클로저만                                                                                                                                                    |
+| 자동 상태 주입         | ✅ `State<T>` 파라미터 + `.manage(state)`                                                                                              | ❌ 클로저로 상태를 직접 캡처                                                                                                                                             |
+| Result / 오류 표면     | `Result<Output>` + `#[command(error(...))]` 로 명령별 타입 오류 코드 선언(`generated/errors.ts` 로 렌더링)                             | `try_function(name, handler, map_error)` 이 임의의 `Result<T, E>` 를 매퍼에서 정한 `RustraError` 코드로 변환; `function` 은 직렬화 가능한 `Result` 를 일반 데이터로 반환 |
+| React Native 빠른 경로 | 조건을 만족하는 형태에 네이티브 스칼라 raw/positional 숏컷                                                                             | 네이티브 스칼라 숏컷 없음 — 네이티브 정적 코덱이 거부한 형태는 생성 JS 바이너리 코덱이 처리                                                                              |
+| 타입 바이너리 코덱     | ✅ 스키마에서 렌더링(`frame-codecs.ts`)                                                                                                | ✅ 지원 인자 튜플·반환값, JSON 트리를 건너뛰는 스칼라 호출자 버퍼 경로 포함                                                                                              |
+
+경험칙: 비동기 실행, 상태 주입, 타입 오류 코드, 이름 있는 TypeScript 필드가
+필요하면 매크로를 쓰고, 래퍼 구조체가 순수한 보일러플레이트가 되고 위치 인자로
+충분한 경우(내부 헬퍼, 계산, 어댑터)는 일반 함수로 등록한다. 래퍼 구조체
+보일러플레이트 자체는 장기적으로 줄어들 계획이다 — 코드젠/매크로 흡수는 DX
+감사의 구조적 항목으로 추적된다.
+
 ## 인자와 반환값
 
 - 인자 타입은 `DeserializeOwned + JsonSchema + 'static`, 반환 타입은

@@ -47,6 +47,32 @@ await reset(); // Promise<void>
 const message: string = await read(7, { timeoutMs: 1000 });
 ```
 
+## Choosing an authoring model: `#[command]` vs `PackageBuilder::function`
+
+Rustra has two ways to register a command, and they differ in more than syntax.
+The macro path (`#[command]` + `#[bridge_type]` structs, wired by
+`rustra::build!`) and the plain-function path (`.function`/`.try_function`)
+register into the same `PackageBuilder`, so one package can mix them — but pick
+per command with this matrix in mind:
+
+| Capability                | `#[command]` macro (+ `#[bridge_type]` structs)                                                                                                              | `PackageBuilder::function` / `try_function`                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wrapper structs           | Required — one input and one output struct per command (the crud example's 5 commands declare 10: [`examples/crud/src/lib.rs`](../examples/crud/src/lib.rs)) | None — plain functions or closures, 0–12 arguments                                                                                                                        |
+| TS call convention        | One input object with named fields — `addNumbers({ a, b })`                                                                                                  | Positional arguments — `add(2, 3)`                                                                                                                                        |
+| Generated parameter names | The struct's field names (camelCase via `#[serde(rename_all = "camelCase")]`)                                                                                | `arg0`, `arg1`, … — Rust's `Fn` traits do not expose source names                                                                                                         |
+| Async handlers            | ✅ `async fn` supported (runs on rustra's fixed FFI worker pool — see [rust-api-guide.md](rust-api-guide.md))                                                | ❌ synchronous functions/closures only                                                                                                                                    |
+| Automatic state injection | ✅ `State<T>` parameters + `.manage(state)`                                                                                                                  | ❌ capture the state in the closure yourself                                                                                                                              |
+| Result / error surface    | `Result<Output>` with `#[command(error(...))]` declaring typed per-command error codes (rendered to `generated/errors.ts`)                                   | `try_function(name, handler, map_error)` maps any `Result<T, E>` to a `RustraError` code chosen in the mapper; `function` treats a serializable `Result` as ordinary data |
+| React Native fast path    | Native scalar raw/positional shortcut for eligible shapes                                                                                                    | No native scalar shortcut — the generated JS binary codec covers the shape when the native static codec declines it                                                       |
+| Typed binary codecs       | ✅ rendered from the schema (`frame-codecs.ts`)                                                                                                              | ✅ supported argument tuples and returns, including the scalar caller-buffer path that skips the JSON tree                                                                |
+
+Rule of thumb: reach for the macro when you need async execution, state
+injection, typed error codes, or named TypeScript fields; register plain
+functions when wrapper structs would be pure boilerplate and positional
+arguments are acceptable (internal helpers, math, adapters). Long-term the
+wrapper-struct boilerplate itself is expected to shrink — codegen and macro
+absorption is tracked as a structural item in the DX audit.
+
 ## Arguments and returns
 
 - Argument types need `DeserializeOwned + JsonSchema + 'static`; return types

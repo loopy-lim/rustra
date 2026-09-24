@@ -183,6 +183,15 @@ JS 콜백을 정리하며, 페이지 이동·파괴·앱 종료에서도 소유�
 | `channels`          | `false`     | `false` / `false`         | `false`     | `true`      | `true`            |
 | `timeoutPreemption` | `true`      | `true` / `true`           | `true`      | `false`     | `true`            |
 
+> **engine-level 한정.** 이 필드들은 엔진 _팩토리_ 자체의 능력을 서술한다 —
+> 호스트 플랫폼의 transport 수준 API 에 대한 진술이 아니다. `channels: false`
+> (Node)가 Node 에 채널이 없다는 뜻은 아니다 — `createNodeChannel(transport, cb)`
+> 가 loop-stdio transport 로 채널을 전달한다(위 `Channels` 행). 마찬가지로
+> `events: 'none'`(RN JSON 엔진)이 RN JSON 어댑터가 이벤트를 받을 수 없다는
+> 뜻도 아니다 — 어댑터의 `subscribeEvent` JSI 싱크는 여전히 push 한다(위
+> `Events` 행). `supports` 로 기능을 게이트할 때는 engine-level 프로브로만
+> 다루고, 실제로 호출하려는 transport 수준 API 는 위 매트릭스 행에서 확인하라.
+
 엔벌레 하나에 담지 않는 뉘앙스는 열거값이 아니라 매트릭스 산문에 남아 있다:
 RN Frame 의 `cancellation: 'cooperative'` 는 매트릭스의 "조건부 전파" 셀을
 뜻한다(`invokeAsync`+`invokeCancel` 이 노출되고 commandId/코덱 경로가 확인될

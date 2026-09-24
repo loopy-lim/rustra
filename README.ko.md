@@ -715,6 +715,19 @@ try {
 
 ## 개발
 
+전제 조건(저장소 작업 — 라이브러리 사용자는
+[시작하기 전제 조건](docs/getting-started.ko.md#전제-조건) 참고):
+
+- **Rust 1.95.0** — [`rust-toolchain.toml`](rust-toolchain.toml) 이 고정한다.
+  CI Rust 잡과 같은 툴체인이며, 첫 `cargo` 명령에서 rustup 이 자동 설치한다.
+  크레이트 MSRV(1.88)는 별도로 `Cargo.toml` `rust-version` 에 선언된다.
+- **Node.js >= 22.6 (22.x)** — 저장소 테스트 스크립트(`test:docs`,
+  `test:onboarding:check`, `test:codegen-fresh:check`, `test:release-tools`)는
+  `node --experimental-strip-types` 로 스위트를 돌리며, 더 낮은 Node 에서는
+  `bad option: --experimental-strip-types` 에러로 실패한다.
+  [`nvm use`](.nvmrc) 로 고정한다(`.nvmrc`/`.node-version` 은 `22`).
+- **Bun 1.4 이상** — 모든 JS 측 저장소 명령(install, build, lint, 테스트).
+
 ```bash
 # Rust 워크스페이스 전체 테스트
 # (--workspace 는 default-members 를 무시하므로 macOS 전용 tauri-calculator 까지
@@ -757,17 +770,18 @@ bunx --bun @rustra/cli@0.11.3 dev --config rustra.json
 
 전체 문서는 [`docs/`](docs/)에 있다.
 
-| 문서                                                             | 내용                                                |
-| ---------------------------------------------------------------- | --------------------------------------------------- |
-| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택                 |
-| [이벤트·채널 가이드](docs/events-and-channels.md)                | 호스트별 `subscribeEvent`/`createChannel` 사용법    |
-| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리      |
-| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                          |
-| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅               |
-| [Tauri 설정 가이드](docs/extending/tauri-setup.md)               | 기존 Tauri 앱에 rustra 얹기, 파일별 워크스루        |
-| [개발 허들 가이드](docs/development-hurdles.md)                  | doctor, 통합 codegen, drift, native 경계, mock 엔진 |
-| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가                    |
-| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                         |
+| 문서                                                             | 내용                                                        |
+| ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택                         |
+| [이벤트·채널 가이드](docs/events-and-channels.md)                | 호스트별 `subscribeEvent`/`createChannel` 사용법            |
+| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리              |
+| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                                  |
+| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅                       |
+| [Tauri 설정 가이드](docs/extending/tauri-setup.md)               | 기존 Tauri 앱에 rustra 얹기, 파일별 워크스루                |
+| [개발 허들 가이드](docs/development-hurdles.md)                  | doctor, 통합 codegen, drift, native 경계, mock 엔진         |
+| [API 레퍼런스(생성)](docs/README.ko.md#api-레퍼런스typedoc)      | 모든 `@rustra/*` 패키지의 TypeDoc HTML — `bun run docs:api` |
+| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가                            |
+| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                                 |
 
 ## 기여
 
