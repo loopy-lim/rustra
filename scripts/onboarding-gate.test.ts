@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { renderInitProjectFiles, templateVersions } from '../packages/cli/dist/init-template.js';
 import {
@@ -207,6 +207,48 @@ test('scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)', 
   assert.match(generateRs, /std::fs::write\(&out/);
   // write_to_dir, write_schema_to_dir 모두 금지 — 발행 보장이 없는 헬퍼 의존 차단.
   assert.doesNotMatch(generateRs, /write(_schema)?_to_dir/);
+});
+
+test('cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR; unset stays env-free', async () => {
+  // 웜 캐시 옵트인 — 설정 시 cargo 스텝들이 공유 타깃을 상속한다. 상대 경로는 스텝 cwd 가
+  // 제각각이므로 게이트 프로세스 cwd 기준 절대 경로로 정규화된다. build/rebuild 뿐 아니라
+  // codegen/regen 도 함께 운반한다 — codegen 이 cargo metadata 로 생성 엔트리의 바이너리
+  // 조회 경로를 굽기 때문에 부분 주입하면 demo 가 런타임을 찾지 못한다.
+  const capture = async (env: NodeJS.ProcessEnv) => {
+    const commands: { step: string; env?: Record<string, string> }[] = [];
+    const { root, cleanup } = scratchProject({ typesTs: '  repeat: number;' });
+    try {
+      const report = await runOnboardingSteps({
+        root,
+        env,
+        mutate: () => {},
+        runner: async (step, cmd) => {
+          commands.push({ step, env: cmd.env });
+          return { ok: true, output: '' };
+        },
+      });
+      assert.ok(report.ok, report.error);
+      return commands;
+    } finally {
+      cleanup();
+    }
+  };
+  const expected = { CARGO_TARGET_DIR: resolve('target/onboarding-shared') };
+  const warm = await capture({ RUSTRA_ONBOARDING_CARGO_TARGET_DIR: 'target/onboarding-shared' });
+  for (const name of ['build', 'rebuild', 'codegen', 'regen']) {
+    const hit = warm.find((command) => command.step === name);
+    assert.ok(hit, `${name} step must spawn`);
+    assert.deepEqual(hit.env, expected, `${name} must carry the shared target dir`);
+  }
+  // 미설정(빈 값 포함) — 어느 커맨드에도 env 주입이 없다. 콜드 캐시(fresh scaffold)
+  // 검증이라는 게이트의 기본 동작 보존.
+  for (const cold of [
+    await capture({}),
+    await capture({ RUSTRA_ONBOARDING_CARGO_TARGET_DIR: '   ' }),
+  ]) {
+    assert.ok(cold.length > 0);
+    for (const command of cold) assert.equal(command.env, undefined);
+  }
 });
 
 test('every runner command runs inside the onboarding scratch project; verify reruns the demo', async () => {

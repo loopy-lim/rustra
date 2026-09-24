@@ -37,7 +37,7 @@
     "test:codegen-fresh": "bun run build:cli && bun run test:codegen-fresh:check",
     "test:codegen-fresh:check": "node --experimental-strip-types --test scripts/check-codegen-fresh.test.ts && node scripts/check-codegen-fresh.mjs",
     "test:onboarding": "bun run build:cli && bun run test:onboarding:check",
-    "test:onboarding:check": "node --experimental-strip-types --test scripts/onboarding-gate.test.ts && node scripts/onboarding-gate.mjs",
+    "test:onboarding:check": "node --experimental-strip-types --test scripts/onboarding-gate.test.ts && RUSTRA_ONBOARDING_CARGO_TARGET_DIR=target/onboarding-shared node scripts/onboarding-gate.mjs",
     "test:docs": "node --experimental-strip-types --test scripts/docs-gate.test.ts scripts/check-release-docs.test.ts && node scripts/docs-gate.mjs && node scripts/check-release-docs.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
     "verify:consumer:react-native": "bun scripts/check-packed-react-native-consumer.mjs",
