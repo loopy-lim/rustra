@@ -54,4 +54,33 @@ describe('spawnInherit progress spinner', () => {
       assert.ok(!output.includes('still running'));
     },
   );
+
+  // Q3 — 성공 체크마크는 exit 코드 판정 후에만. 비정상 종료 시 ✗ failed 로그와
+  // exit 코드 reject가 함께 나와야 CI 로그를 오독하지 않는다.
+  test(
+    'failure verdict replaces the done mark and the rejection keeps the exit code',
+    { timeout: 10000 },
+    async () => {
+      const chunks: string[] = [];
+      const originalError = console.error;
+      console.error = (...parts: unknown[]) => {
+        chunks.push(parts.join(' '));
+      };
+      try {
+        await assert.rejects(
+          spawnInherit('node', ['-e', 'process.exit(101)'], process.cwd(), {
+            progressLabel: 'doomed build',
+            progressStream: 'stderr',
+            childOutput: 'stderr',
+          }),
+          /exit 101/,
+        );
+      } finally {
+        console.error = originalError;
+      }
+      const output = chunks.join('\n');
+      assert.match(output, /✗ doomed build failed in 0\.\ds/);
+      assert.ok(!output.includes('✓'), `success mark leaked after failure:\n${output}`);
+    },
+  );
 });

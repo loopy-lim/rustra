@@ -19,6 +19,12 @@ export function manifestPathFor(root: string, target: string): string {
   return toPosixPath(relative(root, target)) || '.';
 }
 
+/**
+ * 모든 `Generated drift` 변형에 붙는 재생성 힌트 — doctor의 `fix:` 라인과 같은
+ * 명령문(동사 원형 + 설정 파일 경로)으로, CI 로그에서 다음 행동을 바로 실행하게 한다.
+ */
+const REGENERATE_HINT = 'Run rustra codegen --config rustra.json.';
+
 /** Build the sidecar that lets CI detect stale generated code without writing files. */
 export function buildGeneratedManifest(
   schemaContent: string,
@@ -46,7 +52,7 @@ export async function checkGeneratedFiles(
   try {
     manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as GeneratedManifest;
   } catch (error) {
-    throw new Error(`Generated drift (missing): ${manifestPath}. Run rustra codegen first.`, {
+    throw new Error(`Generated drift (missing): ${manifestPath}. ${REGENERATE_HINT}`, {
       cause: error,
     });
   }
@@ -56,20 +62,20 @@ export async function checkGeneratedFiles(
     typeof manifest.schemaHash !== 'string' ||
     !Array.isArray(manifest.files)
   ) {
-    throw new Error(`Generated drift (invalid manifest): ${manifestPath}`);
+    throw new Error(`Generated drift (invalid manifest): ${manifestPath}. ${REGENERATE_HINT}`);
   }
   if (
     metadata?.schemaContent !== undefined &&
     manifest.schemaHash !== sha256(metadata.schemaContent)
   ) {
-    throw new Error('Generated drift (schema changed): schema.json');
+    throw new Error(`Generated drift (schema changed): schema.json. ${REGENERATE_HINT}`);
   }
   if (
     metadata?.generatorVersion !== undefined &&
     manifest.generatorVersion !== metadata.generatorVersion
   ) {
     throw new Error(
-      `Generated drift (generator changed): ${manifest.generatorVersion} -> ${metadata.generatorVersion}`,
+      `Generated drift (generator changed): ${manifest.generatorVersion} -> ${metadata.generatorVersion}. ${REGENERATE_HINT}`,
     );
   }
 
@@ -84,26 +90,27 @@ export async function checkGeneratedFiles(
     [...expected].map(async ([path, file]) => {
       const recordedFile = recorded.get(path);
       if (!recordedFile) {
-        throw new Error(`Generated drift (missing manifest entry): ${path}`);
+        throw new Error(`Generated drift (missing manifest entry): ${path}. ${REGENERATE_HINT}`);
       }
       let actual: string;
       try {
         actual = await readFile(file.path, 'utf8');
       } catch {
-        throw new Error(`Generated drift (missing): ${path}`);
+        throw new Error(`Generated drift (missing): ${path}. ${REGENERATE_HINT}`);
       }
       return { path, file, actual, recordedFile };
     }),
   );
   for (const { path, file, actual, recordedFile } of inspected) {
-    if (actual !== file.content) throw new Error(`Generated drift (disk changed): ${path}`);
+    if (actual !== file.content)
+      throw new Error(`Generated drift (disk changed): ${path}. ${REGENERATE_HINT}`);
     if (sha256(file.content) !== recordedFile.sha256) {
-      throw new Error(`Generated drift (manifest stale): ${path}`);
+      throw new Error(`Generated drift (manifest stale): ${path}. ${REGENERATE_HINT}`);
     }
   }
   for (const path of recorded.keys()) {
     if (!expected.has(path)) {
-      throw new Error(`Generated drift (unexpected): ${path}`);
+      throw new Error(`Generated drift (unexpected): ${path}. ${REGENERATE_HINT}`);
     }
   }
 }
