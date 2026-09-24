@@ -46,8 +46,18 @@ export type ParityTree = {
  */
 export type ResourceHandle = number;
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_int32_and_int32`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_int32_and_int32 = [number, number];
 
+/**
+ * @deprecated Rust 내부 타입명(`int32`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type int32 = number;
 
 export type AddNumbersInput = {
@@ -182,8 +192,18 @@ export type GreetOutput = {
   message: string;
 };
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_String`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_String = [string];
 
+/**
+ * @deprecated Rust 내부 타입명(`String`)이 그대로 노출된 레거시 별칭입니다. 이 이름은 JS 내장 타입과 충돌하므로 특히 직접 import 하지 마세요.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type String = string;
 
 export type IsEvenInput = {
@@ -252,6 +272,11 @@ export type ProcessItemOutput = {
   item: Item;
 };
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_int32`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_int32 = [number];
 
 export type ResourceCloseInput = {
@@ -300,8 +325,18 @@ export type RegistryDemoOutput = {
   message: string;
 };
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_double_and_double`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_double_and_double = [number, number];
 
+/**
+ * @deprecated Rust 내부 타입명(`double`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type double = number;
 
 export type ScoreTotalInput = {

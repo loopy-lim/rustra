@@ -171,8 +171,9 @@ pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) use std::sync::{Arc, OnceLock, RwLock};
 
 pub(crate) use codegen::{
-    clear_codegen_warnings, command_function_name, contract_hash, set_codegen_command_context,
-    take_codegen_warnings, ts_type_from_schema,
+    INVOKE_OPTIONS_JS_DOC, MIXED_CONVENTION_NOTE, clear_codegen_warnings, collect_ref_type_names,
+    command_function_name, contract_hash, deprecated_alias_js_doc, is_rust_internal_type_name,
+    set_codegen_command_context, take_codegen_warnings, ts_type_from_schema,
 };
 pub use error::{CommandErrorVariant, Result, RustraError};
 pub(crate) use schema::{command_name_from_handler, contract_type_name, schema_value};

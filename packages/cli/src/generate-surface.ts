@@ -7,6 +7,7 @@
 
 import type { PackageSchema } from './schema.js';
 import { collectDefinitions, escapeJsDoc, tsTypeFromSchema } from './codegen.js';
+import { isJsBuiltinTypeName, isRustInternalTypeName } from './codegen-definitions.js';
 import { setCodegenContext } from './codegen-warnings.js';
 import { sha256 } from './hash.js';
 
@@ -16,6 +17,27 @@ export function generatedJsDoc(description: string): string {
     .map((line) => (line.length > 0 ? ` * ${line}` : ' *'))
     .join('\n');
   return `/**\n${body}\n */\n`;
+}
+
+/**
+ * (S1) Rust 내부 타입명 누출 별칭에 붙는 하위 호환 deprecated JSDoc.
+ *
+ * `String`·`int32`·`Tuple_of_…` 같은 schemars 스키마 이름은 Rust 내부 명명이 그대로
+ * TS 표면으로 흘러나온 것이고(`String` 은 JS 내장 이름과 충돌 — DX_AUDIT S1),
+ * commands.ts 시그니처는 이미 인라인 타입으로 정화됐다. 기존 코드 호환을 위해
+ * 별칭 자체는 유지하되 새 사용을 막는다.
+ */
+function deprecatedAliasJsDoc(name: string): string {
+  const collision = isJsBuiltinTypeName(name)
+    ? ' 이 이름은 JS 내장 타입과 충돌하므로 특히 직접 import 하지 마세요.'
+    : '';
+  return (
+    `/**\n` +
+    ` * @deprecated Rust 내부 타입명(\`${name}\`)이 그대로 노출된 레거시 별칭입니다.${collision}\n` +
+    ` * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,\n` +
+    ` * 이 별칭은 기존 코드 호환을 위해 유지됩니다.\n` +
+    ` */\n`
+  );
 }
 
 export function finishGeneratedText(output: string): string {
@@ -109,14 +131,19 @@ export function generateTypesTs(schema: PackageSchema): string {
   }
 
   const emitted = new Set<string>();
+  // description 은 JsonSchema 인덱스 시그니처로 unknown 이다 — 통과 전에 좁힌다.
+  const docFor = (name: string, description: unknown): string =>
+    isRustInternalTypeName(name)
+      ? deprecatedAliasJsDoc(name)
+      : typeof description === 'string'
+        ? generatedJsDoc(description)
+        : '';
 
   for (const [name, defSchema] of Object.entries(allDefinitions)) {
     if (emitted.has(name)) continue;
     emitted.add(name);
     setCodegenContext(name);
-    if (typeof defSchema.description === 'string') {
-      output += generatedJsDoc(defSchema.description);
-    }
+    output += docFor(name, defSchema.description);
     output += `export type ${name} = ${tsTypeFromSchema(defSchema, allDefinitions)};\n\n`;
   }
 
@@ -124,18 +151,14 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (command.inputType !== '()' && !emitted.has(command.inputType)) {
       emitted.add(command.inputType);
       setCodegenContext(command.inputType);
-      if (typeof command.inputSchema.description === 'string') {
-        output += generatedJsDoc(command.inputSchema.description);
-      }
+      output += docFor(command.inputType, command.inputSchema.description);
       output += `export type ${command.inputType} = ${tsTypeFromSchema(command.inputSchema, allDefinitions)};\n\n`;
     }
     // unit 출력 타입 `()` 은 TS 타입명으로 쓸 수 없다 — Promise<void> 로 표현.
     if (command.outputType !== '()' && !emitted.has(command.outputType)) {
       emitted.add(command.outputType);
       setCodegenContext(command.outputType);
-      if (typeof command.outputSchema.description === 'string') {
-        output += generatedJsDoc(command.outputSchema.description);
-      }
+      output += docFor(command.outputType, command.outputSchema.description);
       output += `export type ${command.outputType} = ${tsTypeFromSchema(command.outputSchema, allDefinitions)};\n\n`;
     }
   }

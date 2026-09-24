@@ -34,6 +34,15 @@ fn run_invoke_stdio() -> rustra::Result<()> {
         .get("command")
         .and_then(Value::as_str)
         .ok_or_else(|| rustra::RustraError::invalid_args("missing command"))?;
+    // 생성 node 엔트리의 strict 계약 검증이 이 엔드포인트를 요구한다(
+    // contractVerification: 'strict' — calculator 예제와 동일 프로토콜).
+    if command == "__rustra_contract" {
+        let hash = crud_package().generate_typescript()?.contract_hash;
+        let response = serde_json::to_vec(&json!({ "ok": true, "result": hash }))
+            .map_err(rustra::RustraError::internal)?;
+        std::io::stdout().write_all(&response)?;
+        return Ok(());
+    }
     let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
     let result = crud_package().invoke_json(command, args)?;
     let response = serde_json::to_vec(&json!({ "ok": true, "result": result }))

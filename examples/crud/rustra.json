@@ -1,4 +1,5 @@
 {
   "schema": "./generated/schema.json",
-  "output": "./generated"
+  "output": "./generated",
+  "node": {}
 }
