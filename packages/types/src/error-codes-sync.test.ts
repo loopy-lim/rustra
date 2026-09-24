@@ -19,14 +19,31 @@
  * 이 중 TS 상수가 있는 것은 OUTSIDE_ERROR_RS 에 사유와 함께 선언된다 — 문서는
  * docs/error-codes.md 를 본다.
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { RustraErrorCode } from './errors.js';
 
-/** packages/types 기준 `../../crates/rustra/src/error.rs` (이 파일은 src/ 아래). */
-const RUST_ERROR_RS = resolve(import.meta.dir, '../../../crates/rustra/src/error.rs');
+/**
+ * crates/rustra/src/error.rs 위치 — 이 테스트는 소스 트리(packages/types/src) 와
+ * tsc 산출물(dist-ts/packages/types/src, bun test 경로 필터가 substring 매칭으로
+ * 수집) 양쪽에서 실행될 수 있어 고정 상대경로 대신 crates/rustra 를 기준 삼아
+ * 상향 탐색한다. 찾지 못하면 loud 하게 실패한다(조용한 스킵 없음).
+ */
+function locateRustErrorRs(): string {
+  let dir = import.meta.dir;
+  for (;;) {
+    const candidate = resolve(dir, 'crates/rustra/src/error.rs');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) {
+      throw new Error(`crates/rustra/src/error.rs not found above ${import.meta.dir}`);
+    }
+    dir = parent;
+  }
+}
+const RUST_ERROR_RS = locateRustErrorRs();
 
 /** TS 파서(parseRustraErrorString)와 Rust validate_error_code 가 공유하는 코드 토큰 패턴. */
 const CODE_TOKEN = /^[a-z][a-z0-9_.]*$/;

@@ -122,7 +122,11 @@ test('a newer lazy configuration wins an older initializer that finishes late', 
 });
 
 test('duplicate package copies share one runtime configuration without singleton splits', async () => {
-  const duplicateUrl = new URL(`./index.ts?duplicate=${Date.now()}`, import.meta.url).href;
+  // './index.js' 로 지정해야 소스 실행(bun 이 .js → .ts 형제로 해석)과
+  // dist-ts 컴파일 산물(index.js 만 존재) 양쪽에서 해석된다 — './index.ts' 는
+  // 컴파일 디렉터리에서 모듈을 찾지 못해 게이트(bun test packages/types/src 가
+  // dist-ts 하위 테스트까지 수집)를 깨뜨린다.
+  const duplicateUrl = new URL(`./index.js?duplicate=${Date.now()}`, import.meta.url).href;
   const duplicate = (await import(duplicateUrl)) as typeof import('./index.js');
 
   duplicate.configure({ invoke: async <T>() => 'from-duplicate' as T });
@@ -2203,8 +2207,18 @@ test('propagate path settles when codec.decode throws on a malformed frame (T1)'
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal }),
     (e: unknown) => {
-      assert.ok(e instanceof Error);
-      assert.equal((e as Error).message, 'malformed frame');
+      // (M3) 디코드 throw 는 맨몸 Error 가 아니라 invoke.malformed 로
+      // 정규화된다 — code 가 있고 메시지는 명령명·오프셋·RUSTRA_DEBUG 힌트를
+      // 싣는다. 원본 코덱 예외는 cause 로 보존된다.
+      assert.ok(e instanceof RustraCommandError);
+      assert.equal((e as RustraCommandError).code, 'invoke.malformed');
+      assert.match(
+        (e as Error).message,
+        /^decode failed for 'echo' at offset 0: malformed frame \(0-byte frame\)/,
+      );
+      assert.ok((e as Error).message.includes('set RUSTRA_DEBUG=1'));
+      assert.ok((e as { cause?: unknown }).cause instanceof Error);
+      assert.equal(((e as { cause: Error }).cause as Error).message, 'malformed frame');
       return true;
     },
   );
@@ -5647,7 +5661,8 @@ test('re-registering a provider replaces the previous one (last wins)', async ()
 
 test('duplicate package copies share the registered provider', async () => {
   try {
-    const duplicateUrl = new URL(`./index.ts?device-duplicate=${Date.now()}`, import.meta.url).href;
+    // 위 duplicate 테스트와 같은 이유로 './index.js' — dist-ts 컴파일 산물 호환.
+    const duplicateUrl = new URL(`./index.js?device-duplicate=${Date.now()}`, import.meta.url).href;
     const duplicate = (await import(duplicateUrl)) as typeof import('./index.js');
     duplicate.registerDeviceStatusProvider(() => ({
       availability: 'available',
