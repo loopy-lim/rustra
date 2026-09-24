@@ -69,9 +69,15 @@ export function spawnInherit(
     });
     child.on('exit', (code, signal) => {
       finish();
+      // 성공 체크마크는 exit 코드 판정 후에만 — 실패 직후 "✓ done"이 찍히면
+      // CI 로그 독자가 "빌드는 됐는데 다른 게 죽었다"로 오독한다(Q3).
       if (options?.progressLabel) {
         const total = ((Date.now() - started) / 1000).toFixed(1);
-        stream(`[rustra] ✓ ${options.progressLabel} done in ${total}s`);
+        if (code === 0) {
+          stream(`[rustra] ✓ ${options.progressLabel} done in ${total}s`);
+        } else {
+          stream(`[rustra] ✗ ${options.progressLabel} failed in ${total}s`);
+        }
       }
       if (code === 0) {
         resolve();
