@@ -2,9 +2,55 @@ import { generatedFileHeader } from './generated-header.js';
 import { GENERATED_REACT_NATIVE_PACKAGE } from './react-native.js';
 import type { CargoHostEntry } from './host-entries.js';
 
+/**
+ * (M9) 호스트 엔트리 공통 계약 검증 정책 주석 — 4개 엔트리(node/bun/tauri/
+ * react-native)가 같은 첫 두 줄로 시작한다. “내 플랫폼에서 contract mismatch 가
+ * strict 인가”를 어댑터 소스를 열지 않고 생성 엔트리만으로 답하게 하는 것이
+ * 목적이다(DX_AUDIT M9). adapterLines 로 각 엔트리의 전달 옵션 차이를 밝힌다.
+ */
+const contractPolicyNote = (adapter: string, adapterLines: string[]): string =>
+  [
+    `// ── 계약 검증 정책(호스트 엔트리 공통) ───────────────────────────`,
+    `// 공통 기본값: contractVerification = 'strict' — 스키마/바이너리 불일치는`,
+    `// contract.mismatch 로 즉시 실패한다. OTA 롤백 등 의도적 드리프트에만`,
+    `// 'warn'/'off' 로 바꿔 쓴다(생성 파일의 이 한 줄이 공식 탈출구).`,
+    ...adapterLines.map((line) => `// 이 엔트리(${adapter}): ${line}`),
+    ``,
+  ].join('\n');
+
+/** (M9) 엔트리별 옵션 정합 변경 이력 — 생성물 헤더 영역에 기록된다. */
+const OPTION_UNIFICATION_CHANGELOG = [
+  `// Changelog(M9 옵션 정합): node/bun/tauri/react-native 4개 엔트리가 동일한`,
+  `//   계약 검증 기본값('strict')과 옵션명을 명시한다. 옵션명 변경/제거는`,
+  `//   없다 — 기존 생성 엔트리 코드는 그대로 동작한다(하위 호환).`,
+  ``,
+].join('\n');
+
+const NODE_POLICY = contractPolicyNote('node', [
+  `contractHash + contractVerification: 'strict' 전달.`,
+  `schemaVersion(OTA stale 검사)은 bun·react-native 엔트리만 전달 — node`,
+  `어댑터(NodeBootstrapOptions)는 해당 옵션을 지원하지 않는다.`,
+]);
+
+const BUN_POLICY = contractPolicyNote('bun', [
+  `contractHash + contractVerification: 'strict' + schemaVersion 전달`,
+  `(프레임 엔진 전체 옵션 집합 — react-native 엔트리와 동일).`,
+]);
+
+const RN_POLICY = contractPolicyNote('react-native', [
+  `contractHash + contractVerification: 'strict' + schemaVersion 전달`,
+  `(프레임 엔진 전체 옵션 집합 — bun 엔트리와 동일).`,
+]);
+
+const TAURI_POLICY = contractPolicyNote('tauri', [
+  `JSON 엔진 경로 — 클라이언트측 contractHash 핸드셰이크가 없어`,
+  `contractVerification/schemaVersion 옵션을 받지 않는다(와이어가 JSON).`,
+  `계약 드리프트는 네이티브 rustra_dispatch 실행 오류로 표면화된다.`,
+]);
+
 export function generateReactNativeEntryTs(): string {
   const moduleLiteral = JSON.stringify(GENERATED_REACT_NATIVE_PACKAGE);
-  return `${generatedFileHeader('react-native.ts', 'schema → host entry')}import { createRustraBootstrap } from '@rustra/react-native';
+  return `${generatedFileHeader('react-native.ts', 'schema → host entry')}${RN_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { createRustraBootstrap } from '@rustra/react-native';
 import { installRustraJSI, getRustraNative } from ${moduleLiteral};
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
 import { frameRegistry } from './frame-registry.js';
@@ -39,7 +85,7 @@ export function generateNodeEntryTs(
   options?: HostEntryRenderOptions,
 ): string {
   if (options?.events === true) {
-    return `${generatedFileHeader('node.ts', 'schema → host entry')}import { fileURLToPath } from 'node:url';
+    return `${generatedFileHeader('node.ts', 'schema → host entry')}${NODE_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { createNodeBootstrap, createNodeEventSubscription } from '@rustra/node';
 import { GENERATED_CONTRACT_HASH } from './contract.js';
 
@@ -69,7 +115,7 @@ export const events = createNodeEventSubscription({
 export const subscribeEvent = events.subscribeEvent;
 `;
   }
-  return `${generatedFileHeader('node.ts', 'schema → host entry')}import { fileURLToPath } from 'node:url';
+  return `${generatedFileHeader('node.ts', 'schema → host entry')}${NODE_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { createNodeBootstrap } from '@rustra/node';
 import { GENERATED_CONTRACT_HASH } from './contract.js';
 
@@ -96,7 +142,7 @@ export function generateBunEntryTs(
   options?: HostEntryRenderOptions,
 ): string {
   if (options?.events === true) {
-    return `${generatedFileHeader('bun.ts', 'schema → host entry')}import { fileURLToPath } from 'node:url';
+    return `${generatedFileHeader('bun.ts', 'schema → host entry')}${BUN_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { suffix } from 'bun:ffi';
 import { createBunBootstrap, createBunEventSubscription } from '@rustra/bun';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
@@ -131,7 +177,7 @@ export const events = createBunEventSubscription({
 export const subscribeEvent = events.subscribeEvent;
 `;
   }
-  return `${generatedFileHeader('bun.ts', 'schema → host entry')}import { fileURLToPath } from 'node:url';
+  return `${generatedFileHeader('bun.ts', 'schema → host entry')}${BUN_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { suffix } from 'bun:ffi';
 import { createBunBootstrap } from '@rustra/bun';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
@@ -157,7 +203,7 @@ export const rustra = createBunBootstrap({
 }
 
 export function generateTauriEntryTs(): string {
-  return `${generatedFileHeader('tauri.ts', 'schema → host entry')}import { createTauriBootstrap } from '@rustra/tauri';
+  return `${generatedFileHeader('tauri.ts', 'schema → host entry')}${TAURI_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { createTauriBootstrap } from '@rustra/tauri';
 
 export * from './commands.js';
 export { subscribeTauriEvent as subscribeEvent } from '@rustra/tauri';

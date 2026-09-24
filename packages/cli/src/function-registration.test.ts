@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { generateCommandsTs } from './generate-commands.js';
+import { generateTypesTs } from './generate-surface.js';
 import { generateFrameCodecsTs, commandCodecSupported } from './generate-postcard-codec.js';
 import { analyzeCppCommands } from './generate-cpp-analysis.js';
 import { parsePackageSchema } from './schema-validation.js';
@@ -18,9 +19,11 @@ const add = {
 const schema: PackageSchema = { packageId: 'test', commands: [add] };
 test('function tuple roots use postcard and positional helpers, with no native object codec', () => {
   assert.equal(commandCodecSupported(add, {}), true);
+  // (S1) positional 파라미터는 튜플 별칭 이름(`Args[0]`) 대신 인라인 원소
+  // 타입으로 렌더링된다 — Rust 내부 타입명 누출 정화.
   assert.match(
     generateCommandsTs(schema),
-    /add\(arg0: Args\[0\], arg1: Args\[1\], options\?: InvokeOptions\)/,
+    /add\(arg0: number, arg1: number, options\?: InvokeOptions\): Promise<Out>/,
   );
   const source = generateFrameCodecsTs(schema);
   assert.match(source, /args\[0\]/);
@@ -36,6 +39,54 @@ test('function tuple roots use postcard and positional helpers, with no native o
     'bufferInputCommands',
   ] as const)
     assert.equal(native[key].length, 0, key);
+});
+
+test('rust-internal root type names are sanitized to inline types with deprecated aliases', () => {
+  // (S1/DX_AUDIT) schemars 가 명령 루트에 붙이는 내부명(String·Tuple_of_…)은
+  // commands.ts 시그니처에서 인라인 타입으로 정화되고, types.ts 에서는 하위
+  // 호환 deprecated alias 로만 남는다.
+  const stringArg = { type: 'string' };
+  const leaked: PackageSchema = {
+    packageId: 'test.sanitize',
+    commands: [
+      {
+        name: 'greetPerson',
+        commandId: 1,
+        functionArgs: 1,
+        inputType: 'Tuple_of_String',
+        outputType: 'String',
+        inputSchema: { type: 'array', items: [stringArg], minItems: 1, maxItems: 1 },
+        outputSchema: stringArg,
+      },
+      {
+        name: 'echoNames',
+        commandId: 2,
+        inputType: 'Array_of_String',
+        outputType: 'uint8',
+        inputSchema: { type: 'array', items: stringArg },
+        outputSchema: { type: 'integer', format: 'uint8', minimum: 0 },
+      },
+    ],
+  };
+  const commands = generateCommandsTs(leaked);
+  assert.match(commands, /greetPerson\(arg0: string, options\?: InvokeOptions\): Promise<string>/);
+  assert.match(
+    commands,
+    /echoNames\(input: string\[\], options\?: InvokeOptions\): Promise<number>/,
+  );
+  // 정화된 시그니처가 더 이상 레거시 이름을 import 하지 않는다.
+  assert.ok(!commands.includes('Tuple_of_String'));
+  assert.ok(!commands.includes('Array_of_String'));
+  // 두 규약(positional + struct)이 혼재하면 상단에 안내 주석이 붙는다.
+  assert.ok(commands.includes('호출 규약 알림'));
+
+  const types = generateTypesTs(leaked);
+  // 레거시 이름은 하위 호환 deprecated alias 로 유지된다 — String 은 JS 내장
+  // 이름과 충돌함을 경고문이 밝힌다.
+  assert.match(types, /@deprecated Rust 내부 타입명\(`String`\).*충돌/);
+  assert.ok(types.includes('export type Tuple_of_String = [string];'));
+  assert.ok(types.includes('export type Array_of_String = string[];'));
+  assert.ok(types.includes('export type uint8 = number;'));
 });
 test('function arity metadata requires a matching fixed tuple or unit', () => {
   parsePackageSchema(schema);

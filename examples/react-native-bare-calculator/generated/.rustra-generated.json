@@ -65,7 +65,7 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "2dee02a2675f4b71db4abeed120085332e12ac1ffd3077479395856f81c210c2"
+      "sha256": "3659b19a39e8a834f2e163419ab7d8608418a141ee89f57727b9ee308f151546"
     },
     {
       "path": "contract.ts",
@@ -93,11 +93,11 @@
     },
     {
       "path": "react-native.ts",
-      "sha256": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8"
+      "sha256": "dc840641ade3347c1cf0eaa4929caf8c913e4b93eee868cf8bca36b6f78ffc54"
     },
     {
       "path": "types.ts",
-      "sha256": "d560df706490350eaa997375bf7abae9eff3768c152b1e72a2349cd6ed55703d"
+      "sha256": "67b0029f8864f8fd24df3850bc496f1ea9536bc0c83425e9489d6a19084820dc"
     }
   ]
 }
