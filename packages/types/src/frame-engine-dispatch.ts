@@ -40,7 +40,7 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
     traceWire('response', command, resultBytes);
     // Reject (do not throw) so the declared Promise<T> contract holds and
     // callers can use .catch() / await-try-consistently for command errors.
-    const outcome = tier2Outcome<T>(codec, resultBytes);
+    const outcome = tier2Outcome<T>(codec, resultBytes, command);
     if (!outcome.ok) throw outcome.error;
     return outcome.value;
   };

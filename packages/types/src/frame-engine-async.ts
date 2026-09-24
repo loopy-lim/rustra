@@ -35,7 +35,7 @@ export function createFrameInvokeRaw(
         if (tooLarge) throw tooLarge;
         return native.invokeAsync!(encoded, (resp) => {
           if (isSettled()) return;
-          const outcome = tier2Outcome<T>(codec, resp);
+          const outcome = tier2Outcome<T>(codec, resp, command);
           if (outcome.ok) resolve(outcome.value);
           else reject(outcome.error);
         });

@@ -12,8 +12,8 @@
 // (canonical JSON, 키 순서 고정)을 검증하는 보조 fixture 이다 — 교차 언어
 // 링크는 위 fixture 파일 하나뿐이다.
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseSnapshot, RustraCommandError, serializeSnapshot } from './index.js';
@@ -33,12 +33,26 @@ function bytesToHex(bytes: Uint8Array): string {
  * Rust↔TS 단일 아티팩트 — crates/rustra/tests/fixtures/inspector-golden.hex.txt.
  * 이 파일이 사라지면(드문 리포 구조 변경) 테스트가 실패한다 — 조용히 건너뛰지
  * 않는다(loud).
+ *
+ * 이 테스트는 소스 트리(packages/types/src) 와 tsc 산출물(dist-ts/packages/types/src,
+ * bun test 경로 필터가 substring 매칭으로 수집) 양쪽에서 실행될 수 있으므로,
+ * 고정 상대경로 대신 crates/rustra 를 기준 삼아 상향 탐색으로 리포 루트를 찾는다.
  */
+function locateRepoFile(relative: string): string {
+  let dir = import.meta.dir;
+  for (;;) {
+    const candidate = resolve(dir, relative);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) {
+      throw new Error(`repo file not found above ${import.meta.dir}: ${relative}`);
+    }
+    dir = parent;
+  }
+}
+
 function loadGoldenHex(): string {
-  const path = join(
-    import.meta.dir,
-    '../../../crates/rustra/tests/fixtures/inspector-golden.hex.txt',
-  );
+  const path = locateRepoFile('crates/rustra/tests/fixtures/inspector-golden.hex.txt');
   const text = readFileSync(path, 'utf8');
   const hex = text
     .split('\n')

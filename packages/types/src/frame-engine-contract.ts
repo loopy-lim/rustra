@@ -1,29 +1,65 @@
-import { isRetryableCode, RustraCommandError } from './errors.js';
+import { isRetryableCode, RustraCommandError, RustraErrorCode } from './errors.js';
 import { decodeUtf8 } from './utf8.js';
 import type { FrameCodec } from './public.js';
 
 /**
+ * 코덱 에러 메시지에서 실패 지점 오프셋을 회수하는 휴리스틱 — 생성 코덱
+ * (postcard) 의 plain `Error` 는 위치를 싣지 않지만, `at byte 42` / `offset 7`
+ * 형태로 위치를 싣는 코덱의 단서는 버리지 않는다(`offsets 3` 처럼 복수형이나
+ * `3 bytes` 처럼 뒤따르는 수치에는 반응하지 않는다).
+ */
+const DECODE_OFFSET_HINT = /\b(?:offset|position|byte)\s*[:=]?\s*(\d+)/i;
+
+/**
  * tier 2(JS 코덱) 응답 프레임을 결과/에러로 환산한다 — `dispatch` 와 전파
  * 경로 콜백이 공유하는 유일 경로 (T1 리뷰). `codec.decode` 가 잘못된 프레임으로
- * throw 하면 그 예외를 reject 값으로 돌린다(비-Error 는 `invoke.failed` 로
- * 래핑): 전파 경로의 콜백은 네이티브 트램펄린 안에서 실행되므로 예외가
- * 새어나가면 프라미스가 영원히 정착하지 않는다. 이 함수 자체는 throw 하지 않는다.
+ * throw 하면(M3) `invoke.malformed` `RustraCommandError` 로 정규화해 reject
+ * 값으로 돌린다 — 메시지에 명령명·실패 오프셋·프레임 길이와 `RUSTRA_DEBUG=1`
+ * 힌트를 싣고, 원본 예외는 `cause` 로, 응답 프레임은 `frameBytes` 로 보존한다.
+ * 예외가 이미 `RustraCommandError` 면 이중 래핑 대신 그대로 통과시키고, 정상
+ * 경로(구조화된 `{ok:false, error:{code,message}}` 응답)의 code/retryable
+ * 환산은 기존 계약 그대로다. 전파 경로의 콜백은 네이티브 트램펄린 안에서
+ * 실행되므로 예외가 새어나가면 프라미스가 영원히 정착하지 않는다. 이 함수
+ * 자체는 throw 하지 않는다.
  */
 export function tier2Outcome<T>(
   codec: FrameCodec<unknown, unknown>,
   frame: ArrayBuffer | ArrayBufferView,
+  command: string,
 ): { ok: true; value: T } | { ok: false; error: Error } {
   let response: ReturnType<FrameCodec<unknown, unknown>['decode']>;
   try {
     response = codec.decode(frame);
   } catch (err) {
-    return {
-      ok: false,
-      error:
-        err instanceof Error
-          ? err
-          : new RustraCommandError('invoke.failed', `codec decode failed: ${String(err)}`),
-    };
+    // 이미 구조화된 에러(코덱이 직접 던진 RustraCommandError 계열)는 코드를
+    // 보존한다 — invoke.malformed 로 덮어쓰면 기존 error.code 분기가 깨진다.
+    if (err instanceof RustraCommandError) return { ok: false, error: err };
+    const byteLength = frame.byteLength;
+    const detail = err instanceof Error ? err.message : String(err);
+    const hint = DECODE_OFFSET_HINT.exec(detail);
+    // 코덱 에러가 위치를 알려주지 않으면 프레임 끝(전체 길이)이 실패 지점의
+    // 최선 추정이다 — 'varint out of bounds' 류는 디코더가 버퍼 끝을 넘어
+    // 읽으려다 실패한 것이므로.
+    const offset = hint ? Number(hint[1]) : byteLength;
+    const error = new RustraCommandError(
+      RustraErrorCode.InvokeMalformed,
+      `decode failed for '${command}' at offset ${offset}: ${detail} (${byteLength}-byte frame)` +
+        ` — set RUSTRA_DEBUG=1 to dump wire bytes`,
+      false,
+      err,
+    );
+    // 코덱의 스택(어느 디코드 단계에서 터졌는지)이 정규화 에러의 스택보다
+    // 진단 가치가 크다 — normalizeRustraError 와 같은 관례로 보존한다.
+    if (err instanceof Error && err.stack) error.stack = err.stack;
+    // (M8) 실패 프레임 원본을 에러에 실어 devtools 포렌식이 hex 절단을 남길
+    // 수 있게 한다. slice() 로 독립 복사본을 만든다 — 네이티브가 응답 버퍼를
+    // 재사용하더라도 로그가 변조되지 않는다.
+    const view =
+      frame instanceof ArrayBuffer
+        ? new Uint8Array(frame)
+        : new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength);
+    error.frameBytes = view.slice();
+    return { ok: false, error };
   }
   if (!response.ok) {
     const e = response.error ?? { code: 'invoke.failed', message: 'Frame invoke failed' };

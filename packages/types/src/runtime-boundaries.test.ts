@@ -7,6 +7,7 @@ import {
   decodeUtf8,
   encodeUtf8,
   exactArrayBuffer,
+  RustraCommandError,
 } from './index.js';
 import type { FrameCodec } from './index.js';
 
@@ -196,7 +197,15 @@ test('frame encodeInto releases reusable buffers after native and decode errors'
     ['encode', encodeError],
   ] as const) {
     failure = kind;
-    await assert.rejects(engine.invoke('bytes', [5, 6, 7, 8]), (actual) => actual === error);
+    await assert.rejects(engine.invoke('bytes', [5, 6, 7, 8]), (actual) =>
+      kind === 'decode'
+        ? // (M3) 디코드 throw 는 invoke.malformed 로 정규화된다 — 원본 예외와의
+          // 동일성은 cause 로 확인한다(맨몸 Error 통로 제거).
+          actual instanceof RustraCommandError &&
+          actual.code === 'invoke.malformed' &&
+          actual.cause === error
+        : actual === error,
+    );
     failure = undefined;
     assert.deepEqual(await engine.invoke('bytes', [9, 10, 11, 12]), [9, 10, 11, 12]);
   }

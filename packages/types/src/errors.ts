@@ -9,6 +9,13 @@ export class RustraCommandError extends Error {
   readonly code: string;
   /** 재시도 가능한 에러인지 — Rust `RustraError::is_retryable` 와이어 값을 그대로 노출 */
   readonly retryable: boolean;
+  /**
+   * (M3) tier 2 디코드 실패 정규화 시에만 채워지는 응답 프레임 바이트의 독립
+   * 복사본 — 에러 메시지의 요약만으로 부족할 때 오프라인 포렌식(devtools 의
+   * `frameBytesHex`/`frameByteLength` 수집 등)이 원본 프레임을 재해석할 수
+   * 있게 한다. 다른 경로에서는 항상 undefined 다(additive — 기존 소비자 무영향).
+   */
+  frameBytes?: Uint8Array;
 
   constructor(code: string, message: string, retryable = false, cause?: unknown) {
     super(message, cause === undefined ? undefined : { cause });
