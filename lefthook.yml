@@ -2,7 +2,10 @@ pre-commit:
   parallel: true
   commands:
     eslint:
-      glob: 'packages/*/src/**/*.ts'
+      glob:
+        - 'packages/*/src/**/*.ts'
+        - 'scripts/**/*.ts'
+        - 'examples/**/*.ts'
       run: bunx eslint --fix {staged_files}
       stage_fixed: true
     prettier:
@@ -13,3 +16,14 @@ pre-commit:
       glob: '*.rs'
       run: rustfmt --edition 2024 -- {staged_files}
       stage_fixed: true
+
+# pre-push — 포맷/lint만 검증하던 pre-commit 과 달리 컴파일·유닛 신호를
+# push 직전에 게이트해 "push 후 수 분 뒤 CI 실패" 피드백 루프를 끊는다.
+# test:fast 는 cargo check --workspace --exclude rustra-tauri-calculator 로
+# Tauri 시스템 의존성 없이 모든 플랫폼(Linux 포함)에서 통과하도록 맞춰져
+# 있어 훅이 플랫폼을 가리지 않는다. 우산 스크립트 드리프트 방지(CI ts-checks
+# 선두의 동일 스모크)와도 한 쌍이다.
+pre-push:
+  commands:
+    fast-signal:
+      run: bun run test:fast

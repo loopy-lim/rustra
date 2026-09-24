@@ -1,0 +1,12 @@
+# 로컬 개발 툴체인 핀 — CI 정식 잡(rust / ts-checks / wasm32 / napi …)이 쓰는
+# dtolnay/rust-toolchain@1.95.0 와 동일 버전(.github/workflows/ci.yml 참고).
+# rustup 은 이 파일을 읽어 자동으로 1.95.0 을 설치한다(nvmrc 의 Node 핀과 한 쌍).
+#
+# 주의 — rust-msrv 잡은 dtolnay/rust-toolchain@1.88.0 로 MSRV(1.88) 계약을 검증한다.
+# 러스트의 toolchain 파일 우선순위는 러너의 default 툴체인보다 높으므로, 그 잡의
+# cargo 호출이 이 파일에 납치되지 않으려면 잡 단계에 RUSTUP_TOOLCHAIN: 1.88.0
+# env 를 명시해야 한다(CI 소유자 확인 사항). 크레이트 MSRV 자체는 Cargo.toml
+# rust-version = "1.88" 이 단일 출처다.
+[toolchain]
+channel = "1.95.0"
+profile = "minimal"
