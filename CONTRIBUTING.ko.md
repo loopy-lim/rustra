@@ -20,6 +20,32 @@ rustra에 기여하는 방법을 정리한다.
   CI는 Node 22를 사용한다(`.github/workflows/ci.yml`의 `setup-node`). CI와
   맞추려면 로컬에서도 22.x를 사용한다
 
+### 로컬 게이트의 시스템 사전조건
+
+일상 우산 — `test:fast`, `test`, `test:compat`, `test:local` — 는 추가 시스템
+라이브러리 없이 모든 플랫폼(Linux 포함)에서 돈다. Rust 단계가
+`rustra-tauri-calculator` 크레이트를 제외하기 때문이며, 그 Tauri/WebKit
+의존성이 문제가 되는 것은 아래 명령들뿐이다:
+
+- `cargo build/test --workspace`(전체 워크스페이스)와 `bun run
+test:runtime:tauri`는 Tauri 예제를 빌드하므로 시스템 라이브러리가 필요하다:
+  - **Linux**: `sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev
+libjavascriptcoregtk-4.1-dev` — CI `rust`/`ts-runtime` 잡이 설치하는 것과
+    동일 목록
+  - **macOS**: Xcode Command Line Tools(WebKit은 OS SDK에 포함)
+  - `test:runtime:tauri`는 예제 자체 의존성도 필요하다:
+    `bun install --cwd examples/tauri-calculator`
+- `bun run test:adapters`는 모킹 transport를 쓰므로(Tauri 라이브러리 불필요)
+  되지만, `test:app:react-native` 구간이
+  `examples/react-native-calculator`를 타입체크하며 여기엔 별도
+  node_modules가 필요하다: `bun install --cwd examples/react-native-calculator`
+
+CI는 Tauri 런타임 구간(`test:runtime:tauri`)을 모든 PR에서 실행한다
+(`ts-runtime` 잡, 위 라이브러리가 설치된 Ubuntu). 따라서 Linux 기여자는
+그 구간을 CI에 맡기면 된다 — PR 필수 `test:compat` 체인에는 더 이상
+포함되지 않는다.
+
 ### 초기 설정
 
 ```bash
@@ -27,11 +53,12 @@ git clone <repo-url> && cd rustra-bridge
 bun install                 # 워크스페이스 의존성
 
 bun run test:fast           # 웜 기준 약 15초의 첫 신호(첫 실행은 더 김): cargo check + calculator tsc + cli 유닛 테스트
+                            # Linux-safe — Tauri 시스템 라이브러리 불필요
 
-# 전체 배터리(느림; --workspace 는 macOS 전용 tauri-calculator 까지 빌드한다)
-cargo build --workspace
+# 전체 배터리(느림)
+cargo build --workspace     # Tauri 예제도 빌드 — 위 "시스템 사전조건" 참조
 cargo test --workspace
-bun run test:compat
+bun run test:local          # 로컬에서 돌릴 수 있는 CI 배터리; 전체 게이트 지도는 docs/gate-map.md
 ```
 
 ---
@@ -102,7 +129,12 @@ refactor: extract command name resolution into shared function
 
 - PR 제목은 70자 이내로 변경을 요약
 - PR 본문에 **무엇을** 변경했는지, **왜** 필요한지 설명
-- `bun run test:compat`가 통과하는지 확인
+- `bun run test:compat`가 통과하는지 확인 — Linux-safe 통합 체인
+  (`test:ts:node` + `test:ts:bun` + `test:adapters` + `test:runtime:node` +
+  `test:runtime:bun`)
+- "로컬에서 뭘 돌려야 CI가 green인가"의 전체 그림은
+  [게이트 지도](docs/gate-map.md) 참조. `bun run test:local`이 로컬 가능한
+  배터리 전부를, Rust 게이트는 `cargo fmt/clippy/test`가 담당한다
 
 ---
 
@@ -110,32 +142,40 @@ refactor: extract command name resolution into shared function
 
 ### 테스트 계층
 
+3개 우산 계층과 PR 필수 통합 체인 — 각 스크립트의 비용·CI 잡 매핑은
+[게이트 지도](docs/gate-map.md)가 정리한다:
+
 ```
-cargo test          ← Rust 단위 테스트 (필수)
+bun run test:fast    ← 계층 1 · 빠른 신호(웜 ~15초): cargo check + calculator tsc + cli 유닛
+    ↓                   (lefthook pre-push 훅이기도 하다)
+bun run test         ← 계층 2 · 패키지 유닛: types + packages + cli 스위트 + ts:bun + bench-gate 유닛 + functions
     ↓
-bun run test:ts:node  ← TS 타입 검증 (필수)
+bun run test:local   ← 계층 3 · 전체 로컬 배터리: CI TS 잡의 로컬 실행 가능한 전부
     ↓
-bun run test:adapters ← 어댑터 동작 검증 (필수)
-    ↓
-bun run test:runtime  ← 실제 Rust↔TS 실행 (필수)
-    ↓
-bun run test:compat   ← 전체 통합 (PR 필수)
+bun run test:compat  ← PR 필수 통합 체인(Linux-safe): ts:node + ts:bun + adapters + runtime node/bun
 ```
+
+`test:runtime:tauri`(실제 Tauri 앱 빌드 + 스모크)는 의도적으로
+`test:compat`에 포함하지 않았다 — Tauri 시스템 라이브러리 없는 Linux에서도
+PR 게이트가 통과해야 하기 때문이다. CI `ts-runtime` 잡이 모든 PR에서
+실행하며, 로컬 실행은 위 [시스템 사전조건](#로컬-게이트의-시스템-사전조건)이
+필요하다.
 
 ### 어떤 게이트를 언제
 
-| 명령                               | 실행 시점                                        | 검사 내용                                                     |
-| ---------------------------------- | ------------------------------------------------ | ------------------------------------------------------------- |
-| `bun run test:fast`                | 로컬 편집 루프마다                               | cargo check + calculator tsc + cli 유닛 테스트                |
-| `bun run test:docs`                | docs/ 또는 docs:sync 리전 수정 시                | en/ko 미러, 동기화 리전, 설치 문서-매니페스트 정합            |
-| `bun run test:codegen-fresh`       | 스키마·제너레이터·`examples/*/generated` 수정 시 | 커밋된 생성물이 현재 소스에서 재현되는지                      |
-| `bun run test:api-surface`         | 공개 TS/Rust 표면 변경 시                        | `api-surface/snapshot.json` 대비 diff(의도 수용은 `--update`) |
-| `bun run test:architecture`        | 모듈 경계 수정 시                                | 파일 크기·모듈 경계 상한                                      |
-| `bun run test:release-coherence`   | 버전·범위·락파일 수정 시                         | 패키지/락파일/범위 불변식                                     |
-| `bun run test:release-tools`       | scripts/ 또는 릴리스 흐름 수정 시                | 릴리스 도구 유닛 테스트                                       |
-| `bun run test:functions`           | 일반 함수 등록 수정 시                           | 함수 등록 엔드투엔드 통합                                     |
-| `bun run test:registry-consumer`   | 호스트 핀·소비자 설치 경로 수정 시               | 레지스트리 소비자 설치 게이트                                 |
-| `bun run test:complex-codec-bench` | complex codec 수정 시                            | codec receipt 회귀                                            |
+| 명령                               | 실행 시점                                        | 검사 내용                                                               |
+| ---------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+| `bun run test:fast`                | 로컬 편집 루프마다 (pre-push에서 자동 실행)      | cargo check + calculator tsc + cli 유닛 테스트 (Linux-safe)             |
+| `bun run test:local`               | PR 전, 로컬 CI 배터리 전체를 돌고 싶을 때        | CI TS 스텝의 로컬 실행 가능 분량을 한 체인으로 (느림; release 빌드 2회) |
+| `bun run test:docs`                | docs/ 또는 docs:sync 리전 수정 시                | en/ko 미러, 동기화 리전, 설치 문서-매니페스트 정합                      |
+| `bun run test:codegen-fresh`       | 스키마·제너레이터·`examples/*/generated` 수정 시 | 커밋된 생성물이 현재 소스에서 재현되는지                                |
+| `bun run test:api-surface`         | 공개 TS/Rust 표면 변경 시                        | `api-surface/snapshot.json` 대비 diff(의도 수용은 `--update`)           |
+| `bun run test:architecture`        | 모듈 경계 수정 시                                | 파일 크기·모듈 경계 상한                                                |
+| `bun run test:release-coherence`   | 버전·범위·락파일 수정 시                         | 패키지/락파일/범위 불변식                                               |
+| `bun run test:release-tools`       | scripts/ 또는 릴리스 흐름 수정 시                | 릴리스 도구 유닛 테스트                                                 |
+| `bun run test:functions`           | 일반 함수 등록 수정 시                           | 함수 등록 엔드투엔드 통합                                               |
+| `bun run test:registry-consumer`   | 호스트 핀·소비자 설치 경로 수정 시               | 레지스트리 소비자 설치 게이트                                           |
+| `bun run test:complex-codec-bench` | complex codec 수정 시                            | codec receipt 회귀                                                      |
 
 ### Rust 테스트
 
@@ -146,7 +186,7 @@ cargo test --workspace
 ### TypeScript 테스트
 
 ```bash
-# 전체
+# 전체 (PR 필수, Linux-safe)
 bun run test:compat
 
 # 개별
@@ -155,7 +195,7 @@ bun run test:ts:bun
 bun run test:adapters
 bun run test:runtime:node
 bun run test:runtime:bun
-bun run test:runtime:tauri
+bun run test:runtime:tauri   # 위 Tauri 시스템 사전조건 필요
 ```
 
 ### 테스트 파일 위치
@@ -291,14 +331,20 @@ Tauri 앱이 `rustra_dispatch`에서 에러를 반환할 때:
 `bun install`이 `prepare` 스크립트로 lefthook을 설치한다. pre-commit에서
 스테이지된 파일만 자동 포맷한다:
 
-- `packages/*/src/**/*.ts` → `eslint --fix`
+- `packages/*/src/**`, `scripts/**`, `examples/**` TS 파일(생성 코드와 자체
+  툴체인을 가진 RN/napi 예제 제외) → `eslint --fix`
 - `*.{ts,js,json,yml,md}` → `prettier --write`
 - `*.rs` → `rustfmt`
 
-세 명령 모두 `stage_fixed: true`로 실행되므로, 포맷 수정은 자동으로 재스테이징되어
-같은 커밋에 포함된다. 훅이 파일을 수정했다고(lefthook이 보고하면) 커밋을 다시
-시도하면 끝이다 — 예전의
+세 명령 모두 `stage_fixed: true`로 실행되므로, 포맷 수정은 자동으로
+재스테이징되어 같은 커밋에 포함된다. 훅이 파일을 수정했다고(lefthook이
+보고하면) 커밋을 다시 시도하면 끝이다 — 예전의
 `git add -A && git commit --amend --no-edit` 의식은 더 이상 필요 없다.
+
+**pre-push** 훅은 push가 로컬을 떠나기 전에 `bun run test:fast`(cargo check +
+calculator tsc + cli 유닛 테스트)를 추가로 실행한다. 컴파일·유닛 실패가
+CI 대기열을 거친 수 분 뒤가 아니라 수 초 안에 드러난다. 같은 명령이 CI
+`ts-checks` 잡 선두에서 스모크로 돌아가 우산 드리프트를 막는다.
 
 ### 버전 관리 (changesets)
 

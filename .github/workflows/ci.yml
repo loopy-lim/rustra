@@ -272,6 +272,13 @@ jobs:
         # tsc --noEmit 이 package exports 의 dist 타입 선언을 소비하고
         # onboarding 게이트가 repo CLI dist 를 소비하므로 검사 전에 빌드한다.
         run: bun run build
+      - name: Umbrella smoke (test:fast)
+        # 첫 신호 우산(test:fast)이 어느 CI 잡에서도 실행되지 않아 스크립트
+        # 자체가 드리프트할 수 있었다(M10) — 이하 모든 정적 검증에 앞서 실제로
+        # 돌아가는지 스모크한다. cargo check --workspace --exclude
+        # rustra-tauri-calculator 로 tauri 시스템 의존성 없이도 통과하도록
+        # Linux-safe 하다(로컬 pre-push 훅과 동일 명령).
+        run: bun run test:fast
       - name: Release version coherence
         run: bun run test:release-coherence
       - name: Lint

@@ -23,6 +23,32 @@ toolchains). Only repo-development specifics are added here:
   supported runtime, while CI runs Node 22 (`setup-node` in
   `.github/workflows/ci.yml`); use 22.x locally to match CI
 
+### System prerequisites for local gates
+
+The everyday umbrellas — `test:fast`, `test`, `test:compat`, and `test:local` —
+run on every platform (Linux included) without extra system libraries: their
+Rust steps exclude the `rustra-tauri-calculator` crate, whose Tauri/WebKit
+dependencies only matter to the commands below.
+
+- `cargo build/test --workspace` (full workspace) and
+  `bun run test:runtime:tauri` build the Tauri example and need its system
+  libraries:
+  - **Linux**: `sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev
+libjavascriptcoregtk-4.1-dev` — the same list the CI `rust`/`ts-runtime`
+    jobs install
+  - **macOS**: Xcode Command Line Tools (WebKit comes with the OS SDK)
+  - `test:runtime:tauri` also needs the example's own dependencies:
+    `bun install --cwd examples/tauri-calculator`
+- `bun run test:adapters` uses mocked transports (no Tauri libraries), but its
+  `test:app:react-native` leg typechecks `examples/react-native-calculator`,
+  which has its own node_modules: `bun install --cwd
+examples/react-native-calculator`
+
+CI runs the Tauri runtime leg (`test:runtime:tauri`) on every PR (the
+`ts-runtime` job, Ubuntu with the libraries above), so Linux contributors can
+rely on CI for it: the PR-required `test:compat` chain no longer includes it.
+
 ### Initial Setup
 
 ```bash
@@ -30,11 +56,12 @@ git clone <repo-url> && cd rustra-bridge
 bun install                 # workspace deps
 
 bun run test:fast           # first signal in ~15 s warm (first run is longer): cargo check + calculator tsc + cli unit tests
+                            # Linux-safe — no Tauri system libraries required
 
-# Full battery (slower; --workspace also builds the macOS-only tauri-calculator)
-cargo build --workspace
+# Full battery (slower)
+cargo build --workspace     # builds the Tauri example too — see "System prerequisites" above
 cargo test --workspace
-bun run test:compat
+bun run test:local          # the locally-runnable CI battery; see docs/gate-map.md for the full gate map
 ```
 
 ---
@@ -105,7 +132,12 @@ refactor: extract command name resolution into shared function
 
 - Keep the PR title within 70 characters and summarize the change
 - In the PR body, explain **what** changed and **why** it is needed
-- Verify that `bun run test:compat` passes
+- Verify that `bun run test:compat` passes — the Linux-safe integration chain
+  (`test:ts:node` + `test:ts:bun` + `test:adapters` + `test:runtime:node` +
+  `test:runtime:bun`)
+- For the complete "what to run locally vs what CI enforces" picture, see the
+  [gate map](docs/gate-map.md); `bun run test:local` covers the whole
+  locally-runnable battery and Rust gates are `cargo fmt/clippy/test`
 
 ---
 
@@ -113,23 +145,30 @@ refactor: extract command name resolution into shared function
 
 ### Test Layers
 
+Three umbrella tiers plus the PR-required integration chain — the
+[gate map](docs/gate-map.md) maps every script to its cost and CI job:
+
 ```
-cargo test          ← Rust unit tests (required)
+bun run test:fast    ← Tier 1 · fast signal (~15 s warm): cargo check + calculator tsc + cli units
+    ↓                   (also runs as the lefthook pre-push hook)
+bun run test         ← Tier 2 · package units: types + packages + cli suites + ts:bun + bench-gate units + functions
     ↓
-bun run test:ts:node  ← TS type validation (required)
+bun run test:local   ← Tier 3 · full local battery: the locally-runnable subset of the CI TS jobs
     ↓
-bun run test:adapters ← Adapter behavior validation (required)
-    ↓
-bun run test:runtime  ← Real Rust↔TS execution (required)
-    ↓
-bun run test:compat   ← Full integration (required for PRs)
+bun run test:compat  ← PR-required integration chain (Linux-safe): ts:node + ts:bun + adapters + runtime node/bun
 ```
+
+`test:runtime:tauri` (real Tauri app build + smoke) is intentionally **not**
+part of `test:compat` so the PR gate passes on Linux without Tauri system
+libraries — CI's `ts-runtime` job runs it on every PR, and locally it needs
+the [system prerequisites](#system-prerequisites-for-local-gates) above.
 
 ### Which Gate When
 
 | Command                            | When to run                                          | Checks                                                                   |
 | ---------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| `bun run test:fast`                | every local edit loop                                | cargo check + calculator tsc + cli unit tests                            |
+| `bun run test:fast`                | every local edit loop (and automatically pre-push)   | cargo check + calculator tsc + cli unit tests (Linux-safe)               |
+| `bun run test:local`               | before a PR, when you want the full local CI battery | the locally-runnable CI TS steps in one chain (slow; two release builds) |
 | `bun run test:docs`                | docs/ or docs:sync regions touched                   | en/ko mirrors, synced regions, install docs vs manifests                 |
 | `bun run test:codegen-fresh`       | schema, generator, or `examples/*/generated` touched | committed generated files reproduce from current sources                 |
 | `bun run test:api-surface`         | any public TS/Rust surface change                    | diff vs `api-surface/snapshot.json` (`--update` to accept intentionally) |
@@ -149,7 +188,7 @@ cargo test --workspace
 ### TypeScript Tests
 
 ```bash
-# All
+# All (PR-required, Linux-safe)
 bun run test:compat
 
 # Individually
@@ -158,7 +197,7 @@ bun run test:ts:bun
 bun run test:adapters
 bun run test:runtime:node
 bun run test:runtime:bun
-bun run test:runtime:tauri
+bun run test:runtime:tauri   # needs the Tauri system prerequisites above
 ```
 
 ### Test File Locations
@@ -293,7 +332,8 @@ When a Tauri app returns an error from `rustra_dispatch`:
 `bun install` installs lefthook via the `prepare` script. On pre-commit, only
 staged files are auto-formatted:
 
-- `packages/*/src/**/*.ts` → `eslint --fix`
+- `packages/*/src/**`, `scripts/**`, `examples/**` TS files (generated code and
+  the self-tooled RN/napi examples excluded) → `eslint --fix`
 - `*.{ts,js,json,yml,md}` → `prettier --write`
 - `*.rs` → `rustfmt`
 
@@ -301,6 +341,12 @@ All three commands run with `stage_fixed: true`, so formatting fixes are
 re-staged automatically and land in the same commit. If a hook modified files
 (lefthook reports it), simply re-attempt the commit — there is no
 `git add -A && git commit --amend --no-edit` ritual anymore.
+
+A **pre-push** hook additionally runs `bun run test:fast` (cargo check +
+calculator tsc + cli unit tests) before the push leaves your machine, so a
+compile or unit failure surfaces in seconds instead of after the CI queue.
+The same command is smoked at the head of CI's `ts-checks` job, keeping the
+umbrella from drifting.
 
 ### Version Management (changesets)
 
