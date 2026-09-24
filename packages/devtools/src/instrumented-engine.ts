@@ -39,6 +39,27 @@ export function createInstrumentedEngine(
     options.onLog?.(entry);
   };
   const payload = (value: unknown) => (options.capturePayload ? snapshot(value) : undefined);
+  // (M8) 실패 프레임 포렌식 — 에러가 응답 프레임 바이트를 싣고 있으면(tier2
+  // 디코드 실패 정규화의 RustraCommandError.frameBytes) hex 절단(앞 256B)과
+  // 전체 길이를 실패 로그에만 남긴다. duck-typing 으로 읽어 구 @rustra/types 와
+  //도 그대로 동작한다(필드가 없으면 아무것도 남지 않는다).
+  const frameForensics = (
+    error: unknown,
+  ): Pick<DevtoolsLog, 'frameBytesHex' | 'frameByteLength'> => {
+    const bytes =
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { frameBytes?: unknown }).frameBytes instanceof Uint8Array
+        ? (error as { frameBytes: Uint8Array }).frameBytes
+        : undefined;
+    if (bytes === undefined) return {};
+    return {
+      frameBytesHex: Array.from(bytes.subarray(0, 256), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+      ).join(''),
+      frameByteLength: bytes.byteLength,
+    };
+  };
   const finish = (command: string, start: number, failed: boolean) => {
     const ms = now() - start;
     const stat = statFor(command);
@@ -77,6 +98,7 @@ export function createInstrumentedEngine(
         ok: false,
         payload: payload(args),
         error: errorSummary(error),
+        ...frameForensics(error),
       });
       throw error;
     } finally {
@@ -138,6 +160,7 @@ export function createInstrumentedEngine(
           ok: false,
           payload: payload(entries),
           error: errorSummary(error),
+          ...frameForensics(error),
         });
         throw error;
       } finally {
