@@ -262,4 +262,8 @@
 - `test:onboarding`(전 여정 green) / `test:docs`(ko/en 78쌍 정합) ✅
 - `scripts/check-test-list-parity.mjs` — 이밋 산물 vs 스크립트 나열 일치 OK ✅
 
-남은 후속 관찰 항목: (1) onboarding-gate 스캐폴드의 콜드 cargo 캐시(공유 `CARGO_TARGET_DIR` 검토), (2) `test:fast` Linux 러너 실측 재현, (3) M9 옵션 통일에 따른 소비자 마이그레이션 노트(다음 minor 릴리스 체인지로그에 포함 권장).
+### 후속 관찰 항목 상태 (2026-09-24 2차 업데이트)
+
+1. **onboarding-gate 콜드 cargo 캐시** — ✅ 완료. `RUSTRA_ONBOARDING_CARGO_TARGET_DIR` 옵트인 환경변수 추가(`scripts/onboarding-gate.mjs`). 미설정 시 기존 콜드 캐시(fresh scaffold) 의미론 유지, `test:onboarding:check`은 `target/onboarding-shared` 공유 타깃으로 웜 실행. 유닛 테스트 21건 통과.
+2. **M9/S1 마이그레이션 노트** — ✅ 완료. `.changeset/m9-host-options-s1-type-name-sanitization.md` 작성(`@rustra/cli` minor). 기본값은 어댑터 런타임 의미론상 변화 없음, 생성 엔트리 명시화와 deprecated alias 유지 범위·마이그레이션 절차 문서화.
+3. **`test:fast` Linux 실측** — ⏳ CI push 후 확인 대상. `.github/workflows/ci.yml`의 Umbrella smoke (test:fast) 스텝이 `runs-on: ubuntu-latest` 잡에 속해 푸시 시 자동 검증됨(로컬 Linux 재현 불가 환경).
