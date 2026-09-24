@@ -765,6 +765,20 @@ try {
 
 ## Development
 
+Prerequisites (repo work — library users see the
+[getting-started prerequisites](docs/getting-started.md#prerequisites)):
+
+- **Rust 1.95.0** — pinned by [`rust-toolchain.toml`](rust-toolchain.toml), the
+  same toolchain CI's Rust jobs use; rustup installs it automatically on the
+  first `cargo` command. The crates' MSRV (1.88) is declared separately in
+  `Cargo.toml` `rust-version`.
+- **Node.js >= 22.6 (22.x)** — repo test scripts (`test:docs`,
+  `test:onboarding:check`, `test:codegen-fresh:check`, `test:release-tools`)
+  run suites via `node --experimental-strip-types`, which older Node rejects
+  with `bad option: --experimental-strip-types`. Pin with
+  [`nvm use`](.nvmrc) (`.nvmrc`/`.node-version` say `22`).
+- **Bun 1.4+** — every JS-side repo command (install, build, lint, tests).
+
 ```bash
 # Test the whole Rust workspace
 # (--workspace ignores default-members, which builds the macOS-only
@@ -807,17 +821,18 @@ bunx --bun @rustra/cli@0.11.3 dev --config rustra.json
 
 Full documentation lives in [`docs/`](docs/).
 
-| Doc                                                              | Contents                                                        |
-| ---------------------------------------------------------------- | --------------------------------------------------------------- |
-| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice                     |
-| [Events and channels guide](docs/events-and-channels.md)         | `subscribeEvent`/`createChannel` usage per host                 |
-| [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation          |
-| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                               |
-| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting                    |
-| [Tauri setup guide](docs/extending/tauri-setup.md)               | Adding rustra to an existing Tauri app, file by file            |
-| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary, mock engine |
-| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                         |
-| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                          |
+| Doc                                                               | Contents                                                                  |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)                        | Installation, first package, adapter choice                               |
+| [Events and channels guide](docs/events-and-channels.md)          | `subscribeEvent`/`createChannel` usage per host                           |
+| [Architecture overview](docs/architecture.md)                     | Data flow, EngineClient contract, transport separation                    |
+| [Transport swap guide](docs/extending/transport-guide.md)         | Bun FFI, Node napi-rs replacement                                         |
+| [React Native setup guide](docs/extending/react-native-setup.md)  | iOS JSI module setup, usage, troubleshooting                              |
+| [Tauri setup guide](docs/extending/tauri-setup.md)                | Adding rustra to an existing Tauri app, file by file                      |
+| [Development hurdles guide](docs/development-hurdles.md)          | doctor, integrated codegen, drift, native boundary, mock engine           |
+| [API reference (generated)](docs/README.md#api-reference-typedoc) | Browsable TypeDoc HTML for every `@rustra/*` package — `bun run docs:api` |
+| [Adding a new host guide](docs/extending/adding-host.md)          | Adding new adapters like Electron, Deno                                   |
+| [Full doc index](docs/README.md)                                  | Reading paths for users / contributors                                    |
 
 ## Contributing
 

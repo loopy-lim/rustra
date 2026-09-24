@@ -20,6 +20,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 10. [UniFFI Bindings Guide](extending/uniffi-bindings.md) — typed Kotlin/Swift bindings via UniFFI (Android/iOS)
 11. [Dynamic Development Tier](dev-tier.md) — loose invoke prototyping, device token experiments, `test:fast`
 12. [Synchronous Command Bindings](synchronous-bindings.md) — guarded `bindSync`, host requirements, lifecycle and errors
+13. [API Reference (TypeDoc)](#api-reference-typedoc) — generated, browsable API docs for every `@rustra/*` package
 
 ### Project Contributors
 
@@ -28,6 +29,26 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 3. [Crate and Package Structure](internal/crate-structure.md) — responsibilities and dependencies of each crate/package
 4. [TypeScript Code Generation](internal/codegen.md) — schema → TS type mapping, command name conversion
 5. [Testing Structure](internal/testing.md) — test layers, per-file roles, run commands
+
+## API Reference (TypeDoc)
+
+Every published `@rustra/*` package has a browsable, generated API reference.
+It is a local build output — not committed, not yet hosted — so generate it on
+demand when you need the exact surface (for example the `EngineClient`
+contract in `@rustra/types`):
+
+```bash
+bun install
+bun run docs:api     # typedoc → docs/api/
+open docs/api/index.html
+```
+
+- Entry points and options live in [`typedoc.json`](../typedoc.json) — the
+  `packages/*/src/index.ts` entry of all eight packages (types, node, bun,
+  tauri, react-native, react, testing, devtools).
+- The output directory `docs/api/` is gitignored — it is a build artifact, not
+  hand-written documentation; the [architecture overview](architecture.md)
+  remains the curated entry layer above it.
 
 ## Full Document List
 
@@ -56,7 +77,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [Rust API Guide](rust-api-guide.md)                                                                                                                | Users        | `#[command]`/`#[bridge_type]`/`build!` macros, Package/Builder API                                                                                                                                   |
 | [Synchronous Command Bindings](synchronous-bindings.md) ([한국어](synchronous-bindings.ko.md))                                                     | Users        | `bindSync` eligibility, frozen registry and codec identity, lifecycle, errors and limits                                                                                                             |
 | [Error Codes](error-codes.md) ([한국어](error-codes.ko.md))                                                                                        | All          | Complete `RustraErrorCode` table — code, producer layer, retryable, JSON-fallback behavior, TS↔Rust sync gate                                                                                        |
-| [Function Registration](function-registration.md) ([한국어](function-registration.ko.md))                                                          | Users        | Ordinary Rust functions via `PackageBuilder::function`/`try_function` — 0–12 args, positional TS clients, no macro                                                                                   |
+| [Function Registration](function-registration.md) ([한국어](function-registration.ko.md))                                                          | Users        | Ordinary Rust functions via `PackageBuilder::function`/`try_function` — 0–12 args, positional TS clients, no macro, authoring-model comparison to `#[command]`                                       |
 | [Registry Onboarding](registry-onboarding.md) ([한국어](registry-onboarding.ko.md))                                                                | Users        | Installing published `@rustra/*` packages — consumer gate, compatible host pins, CI verification                                                                                                     |
 | [Benchmarks](benchmarks.md)                                                                                                                        | All          | Per-adapter performance comparison, overhead analysis, payload scaling                                                                                                                               |
 | [Complex Data Codecs](complex-codecs.md)                                                                                                           | Users        | Recursive map/enum/Option wire, limits, RN boundary                                                                                                                                                  |
@@ -72,6 +93,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [Architecture Decision Records](adr/)                                                                                                              | Contributors | Numbered decisions that change a contract or its enforcement (ADR 0001: Track A contract mechanization, ADR 0002: UniFFI Kotlin/Swift carrier)                                                       |
 | [Security Policy](../.github/SECURITY.md)                                                                                                          | All          | Vulnerability reporting channels, supported versions, scope                                                                                                                                          |
 | [Contributing Guide](../CONTRIBUTING.md)                                                                                                           | Contributors | Development environment, commit rules, debugging, releases                                                                                                                                           |
+| [API Reference (generated)](#api-reference-typedoc)                                                                                                | All          | TypeDoc HTML for every `@rustra/*` package — `bun run docs:api` → `docs/api/` (gitignored local build)                                                                                               |
 
 ## Example Gallery
 
@@ -109,4 +131,6 @@ supported path.
 - [docs/verification/](verification/) — per-host manual verification evidence records
 - [docs/benchmark-receipts/](benchmark-receipts/) — benchmark run receipts (JSON + notes)
 
-`docs/api/` holds generated TypeDoc HTML (`bun run docs:api`) — a local build output, not hand-written documentation.
+`docs/api/` holds generated TypeDoc HTML — see the
+[API Reference section](#api-reference-typedoc) for how to build it. It is a
+local build output, not hand-written documentation.

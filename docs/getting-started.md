@@ -19,14 +19,14 @@ This guide aims to get a developer new to rustra building their first package an
 
 ## Prerequisites
 
-| Tool                         | Version      | Where it is checked                                                          |
-| ---------------------------- | ------------ | ---------------------------------------------------------------------------- |
-| Rust toolchain               | 1.88+ (MSRV) | root `Cargo.toml` `rust-version` / [versioning policy](versioning-policy.md) |
-| Bun                          | 1.4+         | all JS-side commands (`rustra init`, codegen, doctor)                        |
-| Node.js                      | 22.x         | Node adapter runtime (measured on v22.21.1)                                  |
-| Cargo + linker               | per host     | a C/C++ compiler is required for native builds                               |
-| Xcode / CocoaPods            | iOS only     | React Native iOS (see the [RN setup guide](extending/react-native-setup.md)) |
-| Android SDK/NDK 27+, Java 17 | Android only | React Native Android                                                         |
+| Tool                         | Version                                                                 | Where it is checked                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust toolchain               | 1.88+ (MSRV)                                                            | root `Cargo.toml` `rust-version` / [versioning policy](versioning-policy.md); repo development is pinned to 1.95.0 via `rust-toolchain.toml` |
+| Bun                          | 1.4+                                                                    | all JS-side commands (`rustra init`, codegen, doctor)                                                                                        |
+| Node.js                      | 22.x — **>= 22.6** for repo scripts (`node --experimental-strip-types`) | Node adapter runtime (measured on v22.21.1); repo pins 22.x via `.nvmrc`                                                                     |
+| Cargo + linker               | per host                                                                | a C/C++ compiler is required for native builds                                                                                               |
+| Xcode / CocoaPods            | iOS only                                                                | React Native iOS (see the [RN setup guide](extending/react-native-setup.md))                                                                 |
+| Android SDK/NDK 27+, Java 17 | Android only                                                            | React Native Android                                                                                                                         |
 
 `rustra doctor` checks every row that applies to your configuration — see the
 [development hurdles guide](development-hurdles.md).
@@ -338,8 +338,18 @@ export type ParityTree = {
  */
 export type ResourceHandle = number;
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_int32_and_int32`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_int32_and_int32 = [number, number];
 
+/**
+ * @deprecated Rust 내부 타입명(`int32`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type int32 = number;
 
 export type AddNumbersInput = {
@@ -474,8 +484,18 @@ export type GreetOutput = {
   message: string;
 };
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_String`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_String = [string];
 
+/**
+ * @deprecated Rust 내부 타입명(`String`)이 그대로 노출된 레거시 별칭입니다. 이 이름은 JS 내장 타입과 충돌하므로 특히 직접 import 하지 마세요.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type String = string;
 
 export type IsEvenInput = {
@@ -544,6 +564,11 @@ export type ProcessItemOutput = {
   item: Item;
 };
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_int32`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_int32 = [number];
 
 export type ResourceCloseInput = {
@@ -592,8 +617,18 @@ export type RegistryDemoOutput = {
   message: string;
 };
 
+/**
+ * @deprecated Rust 내부 타입명(`Tuple_of_double_and_double`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type Tuple_of_double_and_double = [number, number];
 
+/**
+ * @deprecated Rust 내부 타입명(`double`)이 그대로 노출된 레거시 별칭입니다.
+ * 새 코드는 인라인 타입을 사용하세요 — 생성 명령 시그니처는 이미 정화됐고,
+ * 이 별칭은 기존 코드 호환을 위해 유지됩니다.
+ */
 export type double = number;
 
 export type ScoreTotalInput = {

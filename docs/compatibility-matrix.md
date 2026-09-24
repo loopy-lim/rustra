@@ -129,6 +129,16 @@ claims. Apps can branch before any side effect, e.g.
 | `channels`          | `false`     | `false` / `false`         | `false`     | `true`      | `true`            |
 | `timeoutPreemption` | `true`      | `true` / `true`           | `true`      | `false`     | `true`            |
 
+> **Engine-level only.** These fields describe what the engine _factory_ itself
+> does — never the host platform's transport-level APIs. `channels: false`
+> (Node) does not mean Node lacks channels: `createNodeChannel(transport, cb)`
+> delivers them over the loop-stdio transport (`Channels` row above). Likewise
+> `events: 'none'` (RN JSON engine) does not mean the RN JSON adapter cannot
+> receive events — its `subscribeEvent` JSI sink still pushes (`Events` row
+> above). When gating a feature on `supports`, treat it as an engine-level
+> probe only and consult the matrix rows above for the transport-level API you
+> actually call.
+
 Nuances that do not fit one enum value stay in the matrix prose, not the enum:
 RN Frame `cancellation: 'cooperative'` means the matrix's "conditional
 propagation" cell (reaches the Rust checkpoint only when

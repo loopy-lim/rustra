@@ -922,12 +922,35 @@ export type AddNumbersOutput = {
 
 <!-- prettier-ignore -->
 ```typescript
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, String, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, Tuple_of_String, Tuple_of_double_and_double, Tuple_of_int32, Tuple_of_int32_and_int32, WideAggInput, WideAggOutput, double, int32 } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
-import type { InvokeOptions } from '@rustra/types';
+import type { InvokeOptions as CoreInvokeOptions } from '@rustra/types';
 
-export function add(arg0: Tuple_of_int32_and_int32[0], arg1: Tuple_of_int32_and_int32[1], options?: InvokeOptions): Promise<int32> {
-  return invokeGenerated<int32>(39, 'add', [arg0, arg1], options);
+/**
+ * 이 패키지 생성 명령의 호출 옵션 — 모든 생성 함수의 마지막 파라미터.
+ *
+ * ⚠️ **얕은 취소**: `signal` 이 실행 중에 abort 되면 **JS 프라미스만 거부되고**
+ * (shallow cancellation) Rust 명령은 끝까지 실행되거나 이미 완료됐을 수 있습니다.
+ * 취소/타임아웃은 "명령이 실행되지 않았음"을 보장하지 않습니다.
+ *
+ * ⚠️ **`retryable: true` ≠ 재실행 안전**: `transport.timeout`·`cancelled` 등
+ * retryable 오류는 재시도 시 실패 유형이 사라질 수 있음을 뜻할 뿐, 명령을 다시
+ * 실행해도 안전하다는 뜻이 아닙니다. 비멱등 명령의 재시도는 상태를 재조회해 이전
+ * 시도가 반영되지 않았음을 확인한 뒤에만 하세요.
+ *
+ * 전체 의미론은 docs/compatibility-matrix.md "Signal semantics in detail" 및
+ * 원본 타입(`InvokeOptions`(@rustra/types)) 문서를 참고하세요.
+ */
+export type InvokeOptions = CoreInvokeOptions;
+
+// ── 호출 규약 알림 ──────────────────────────────────────────────────
+// 이 패키지는 두 호출 규약이 혼재합니다 — 시그니처로 구분하세요:
+//   - positional 함수(PackageBuilder::function): 인자를 그대로 나열 — add(1, 2)
+//   - struct 기반 명령(#[command]): 필드 객체 하나 — addNumbers({ a: 1, b: 2 })
+// ───────────────────────────────────────────────────────────────────
+
+export function add(arg0: number, arg1: number, options?: InvokeOptions): Promise<number> {
+  return invokeGenerated<number>(39, 'add', [arg0, arg1], options);
 }
 add.commandId = 'add';
 
@@ -985,8 +1008,8 @@ export function greet(input: GreetInput, options?: InvokeOptions): Promise<Greet
 }
 greet.commandId = 'greet';
 
-export function greetPerson(arg0: Tuple_of_String[0], options?: InvokeOptions): Promise<String> {
-  return invokeGenerated<String>(40, 'greetPerson', [arg0], options);
+export function greetPerson(arg0: string, options?: InvokeOptions): Promise<string> {
+  return invokeGenerated<string>(40, 'greetPerson', [arg0], options);
 }
 greetPerson.commandId = 'greetPerson';
 
@@ -1037,12 +1060,12 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
 }
 processItem.commandId = 'processItem';
 
-export function readRemembered(options?: InvokeOptions): Promise<int32> {
-  return invokeGenerated<int32>(43, 'readRemembered', null, options);
+export function readRemembered(options?: InvokeOptions): Promise<number> {
+  return invokeGenerated<number>(43, 'readRemembered', null, options);
 }
 readRemembered.commandId = 'readRemembered';
 
-export function remember(arg0: Tuple_of_int32[0], options?: InvokeOptions): Promise<void> {
+export function remember(arg0: number, options?: InvokeOptions): Promise<void> {
   return invokeGenerated<void>(42, 'remember', [arg0], options).then(() => undefined);
 }
 remember.commandId = 'remember';
@@ -1078,8 +1101,8 @@ export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOpt
 }
 rustraRegistryDemo.commandId = 'rustraRegistryDemo';
 
-export function safeDivide(arg0: Tuple_of_double_and_double[0], arg1: Tuple_of_double_and_double[1], options?: InvokeOptions): Promise<double> {
-  return invokeGenerated<double>(41, 'safeDivide', [arg0, arg1], options);
+export function safeDivide(arg0: number, arg1: number, options?: InvokeOptions): Promise<number> {
+  return invokeGenerated<number>(41, 'safeDivide', [arg0, arg1], options);
 }
 safeDivide.commandId = 'safeDivide';
 
