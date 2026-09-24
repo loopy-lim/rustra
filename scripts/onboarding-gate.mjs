@@ -21,6 +21,11 @@
  * 임계 게이팅은 의도적으로 하지 않는다).
  * `runner`를 주입받아 스폰 없이 테스트 가능하고, mutate(fs 조작)도 주입 가능하다
  * (onboarding-gate.test.ts).
+ *
+ * 웜 캐시 옵트인: RUSTRA_ONBOARDING_CARGO_TARGET_DIR 를 설정하면 게이트가 스폰하는
+ * 커맨드가 해당 디렉터리를 CARGO_TARGET_DIR 로 상속한다(build/rebuild 의 cargo 빌드와
+ * codegen/regen 의 내부 cargo run 이 같은 타깃을 공유). 미설정이면 기존대로 콜드
+ * 캐시(fresh scaffold) 검증이다 — 게이트의 fail-closed 의미론은 그대로다.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -100,6 +105,17 @@ export const ONBOARDING_STEPS = [
 
 /** mutate 가 스캐폴드에 새로 심는 필드 — regen 후 types.ts 에 나타나야 한다. */
 const MUTATED_FIELD_PATTERN = /\brepeat\s*:\s*number\b/;
+
+/** 웜 캐시 옵트인 — RUSTRA_ONBOARDING_CARGO_TARGET_DIR 가 설정되면 게이트의 cargo
+ *  스텝(build/rebuild, codegen/regen 이 내부에서 돌리는 cargo run)이 해당 디렉터리를
+ *  CARGO_TARGET_DIR 로 상속한다. 미설정(빈 값 포함)이면 null — 콜드 캐시(fresh
+ *  scaffold) 검증이라는 기본 동작이 그대로 유지된다. 상대 경로는 스텝 cwd 가
+ *  제각각이므로 게이트 프로세스 cwd 기준 절대 경로로 정규화해 돌려준다. */
+export function sharedCargoTargetDir(env = process.env) {
+  const raw = env.RUSTRA_ONBOARDING_CARGO_TARGET_DIR;
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return value ? resolve(value) : null;
+}
 
 const OUTPUT_TAIL_CHARS = 2000;
 
@@ -252,8 +268,16 @@ export async function runOnboardingSteps({
   repoRoot,
   runner,
   mutate = mutateScaffoldProject,
+  env = process.env,
 }) {
   const projectDir = join(root, PROJECT_NAME);
+  // 공유 타깃 옵트인 — codegen 이 cargo metadata 의 target_directory 로 생성 엔트리의
+  // 바이너리 조회 경로를 굽고 demo 가 그 경로로 런타임을 찾기 때문에, build/rebuild 에만
+  // 부분 주입하면 조회가 어긋나 데모가 깨진다. 설정 시 스폰되는 커맨드 전체에 동일한
+  // 오버라이드를 운반시켜 흐름을 일관되게 유지한다(미설정 시 env 미부착 = 콜드 기본).
+  const sharedTargetDir = sharedCargoTargetDir(env);
+  const withSharedTarget = (command) =>
+    sharedTargetDir ? { ...command, env: { CARGO_TARGET_DIR: sharedTargetDir } } : command;
   const steps = [];
   for (const step of ONBOARDING_STEPS) {
     const startedAt = Date.now();
@@ -279,12 +303,16 @@ export async function runOnboardingSteps({
       if (drift) failure = drift;
       else {
         // 재호출 — 변경된 계약으로 demo 가 다시 돌아가는 것까지가 사이클의 끝이다.
-        failure = await runStep(runner, step.name, commandFor('demo', root, repoRoot));
+        failure = await runStep(
+          runner,
+          step.name,
+          withSharedTarget(commandFor('demo', root, repoRoot)),
+        );
       }
     } else {
-      const command = step.argv
-        ? { cwd: projectDir, argv: step.argv }
-        : commandFor(step.name, root, repoRoot);
+      const command = withSharedTarget(
+        step.argv ? { cwd: projectDir, argv: step.argv } : commandFor(step.name, root, repoRoot),
+      );
       failure = await runStep(runner, step.name, command);
     }
     // Successful preparation remains an internal implementation detail. A failed hidden step must
@@ -306,6 +334,8 @@ function defaultRunner(step, command) {
   console.log(label);
   const spawned = spawnSync(command.argv[0], command.argv.slice(1), {
     cwd: command.cwd,
+    // env 오버라이드(공유 타깃 옵트인)가 있으면 프로세스 env 위에 얹는다.
+    env: command.env ? { ...process.env, ...command.env } : process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   });

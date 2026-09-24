@@ -163,6 +163,12 @@ part of `test:compat` so the PR gate passes on Linux without Tauri system
 libraries — CI's `ts-runtime` job runs it on every PR, and locally it needs
 the [system prerequisites](#system-prerequisites-for-local-gates) above.
 
+The onboarding gate inside `test:local` opts into a shared cargo target cache
+(`RUSTRA_ONBOARDING_CARGO_TARGET_DIR=target/onboarding-shared` on its
+`test:onboarding:check` leg) so repeated runs skip the cold scaffold build;
+running `node scripts/onboarding-gate.mjs` without the variable keeps the cold
+fresh-scaffold verification.
+
 ### Which Gate When
 
 | Command                            | When to run                                          | Checks                                                                   |

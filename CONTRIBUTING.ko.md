@@ -161,6 +161,12 @@ PR 게이트가 통과해야 하기 때문이다. CI `ts-runtime` 잡이 모든 
 실행하며, 로컬 실행은 위 [시스템 사전조건](#로컬-게이트의-시스템-사전조건)이
 필요하다.
 
+`test:local` 안의 온보딩 게이트는 공유 cargo 타깃 캐시에 옵트인한다
+(`test:onboarding:check` 구간에
+`RUSTRA_ONBOARDING_CARGO_TARGET_DIR=target/onboarding-shared` 주입) — 반복
+실행 시 콜드 스캐폴드 빌드를 건너뛴다. 변수 없이 `node scripts/onboarding-gate.mjs`
+를 직접 실행하면 기존대로 콜드(신선한 스캐폴드) 검증이 유지된다.
+
 ### 어떤 게이트를 언제
 
 | 명령                               | 실행 시점                                        | 검사 내용                                                               |
