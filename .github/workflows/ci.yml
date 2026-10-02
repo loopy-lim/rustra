@@ -155,9 +155,15 @@ jobs:
   rust-msrv:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: 1.88.0
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Record MSRV toolchain
+        run: |
+          rustc -Vv
+          cargo --version
       - uses: Swatinem/rust-cache@v2
       - name: Install system dependencies
         run: |

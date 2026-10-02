@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      # 저장소의 stable 핀보다 우선해 nightly 전용 sanitizer를 실행한다.
+      RUSTUP_TOOLCHAIN: nightly
       SAFETY_LOG_DIR: ${{ github.workspace }}/target/safety/asan
     # continue-on-error 없음 — 주간 가시성 게이트. 누수/오염 발견은 즉시
     # triage 대상이지 조용한 green 이 아니다.

@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      # 저장소의 stable 핀보다 우선해 설치한 nightly를 실제 검사에 사용한다.
+      RUSTUP_TOOLCHAIN: nightly
       SAFETY_LOG_DIR: ${{ github.workspace }}/target/safety/miri
       MIRIFLAGS: -Zmiri-disable-isolation
     # continue-on-error 없음 — 주간 가시성 게이트. UB 발견은 즉시 triage
