@@ -8,7 +8,8 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 Columns are keyed by the low-level engine factories. If you use the generated
 host entry points (the default path), map them to columns like this:
-`generated/node.ts` → the **Node** column (one-shot stdio JSON engine),
+`generated/node.ts` → the **Node** column (one-shot stdio JSON by default;
+events or `node.persistent: true` select a shared persistent runtime),
 `generated/bun.ts` → the **Bun** column (its default is the FFI Frame engine —
 see the Frame row and the `supports` table below), `generated/tauri.ts` → the
 **Tauri** column, and `generated/react-native.ts` → the RN **`createFrameEngine`**
@@ -62,18 +63,16 @@ Every host exposes the same `{ handle, close() }` contract; only the issuer (tra
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
 | Rust workspace crates  | 0.12.0           |
-| `@rustra/bun`          | 0.10.2           |
-| `@rustra/cli`          | 0.11.3           |
+| `@rustra/bun`          | 0.11.0           |
+| `@rustra/cli`          | 0.12.0           |
 | `@rustra/devtools`     | 0.7.2            |
-| `@rustra/node`         | 0.10.2           |
+| `@rustra/node`         | 0.11.0           |
 | `@rustra/react`        | 0.8.3            |
-| `@rustra/react-native` | 0.9.2            |
-| `@rustra/tauri`        | 0.9.3            |
+| `@rustra/react-native` | 0.10.0           |
+| `@rustra/tauri`        | 0.10.0           |
 | `@rustra/testing`      | 0.7.2            |
-| `@rustra/types`        | 0.12.0           |
+| `@rustra/types`        | 0.12.1           |
 
-<!-- release:versions:end -->
-<!-- release:versions:end -->
 <!-- release:versions:end -->
 
 JS-created Tauri channels use a native `Channel<InvokeResponseBody>` tied to the

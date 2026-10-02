@@ -59,15 +59,31 @@ target 이름은 Cargo metadata에서 추론하므로 보통 `rustLibrary`는 �
 
 ## 3. 생성과 설치
 
-모든 JavaScript 작업은 Bun 1.4 이상으로 실행합니다.
+Bun 1.4 이상으로 의존성을 추가한 뒤 setup을 실행합니다.
 
 ```bash
-bun add @rustra/react-native @rustra/types
-bun add -d @rustra/cli
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
-bun install
+bun add @rustra/react-native@0.10.0 @rustra/types@0.12.1
+bun add -d @rustra/cli@0.12.0
+bunx --bun rustra setup --config rustra.json
 ```
+
+setup은 클라이언트와 로컬 네이티브 모듈을 생성하고 의존성을 설치하며 Rust 코어를
+빌드합니다. 기존 앱 스크립트를 보존하면서 `rustra:ios`·`rustra:android` 준비 스크립트를
+추가합니다. 실패하면 오류를 해결한 뒤 출력된 setup 명령으로 재시도합니다.
+설치 시 프로젝트의 `packageManager` 또는 lockfile을 따릅니다.
+
+사용하는 플랫폼만 준비한 뒤 기존 React Native 또는 Expo 명령으로 앱을 실행합니다.
+
+```bash
+bun run rustra:ios      # iOS Pods 준비
+# bun run rustra:android  # Android debug APK 빌드
+```
+
+이 스크립트는 앱을 설치하거나 실행하지 않습니다. 기존 커스텀 스크립트와 충돌하면
+setup이 출력한 준비 명령을 사용합니다. RN만 설정한 앱은 `setup --run` 대신 setup만
+실행합니다. `--run`은 Node/Bun 프로젝트의 `demo` 스크립트용입니다.
+JS 패키지와 네이티브 Rustra 0.12.0을 함께 갱신하고 앱을 다시 빌드해야 합니다.
+setup 성공, registry 발행, Simulator·실기기 명령 검증은 각각 별도의 확인입니다.
 
 생성 결과는 기본적으로 다음과 같습니다.
 

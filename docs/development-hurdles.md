@@ -4,15 +4,15 @@ English | [한국어](./development-hurdles.ko.md)
 
 Rustra connects Rust commands to native code, so it cannot remove every environment dependency. Instead, it can check the required tools before installation, bundle Rust schema generation and TypeScript/C++ generation into one command, and automatically verify generated output sync in CI.
 
-This document is based on the behavior of the current checkout without version changes. Because the CLI, JS packages, and Rust crate have independent version ranges, actual compatibility must be confirmed against the project's lockfile together with the generated manifest.
+This guide describes the Rust 0.12.0 and CLI 0.12.0 workflow. JS packages have independent version ranges; check the [compatibility table](compatibility-matrix.md), project lockfile and generated manifest together. Setup success, registry publication, and physical-device acceptance are separate checks.
 
 ## Running the CLI — three standard forms
 
-| Form                                                 | When                                                  |
-| ---------------------------------------------------- | ----------------------------------------------------- |
-| `bunx --bun @rustra/cli <cmd>`                       | recommended one-off form (no install, pinned by bunx) |
-| `bun add -d @rustra/cli` + `bunx --bun rustra <cmd>` | projects running CLI commands as package scripts      |
-| `bun i -g @rustra/cli` + `rustra <cmd>`              | rarely — only for machines that need a global binary  |
+| Form                                                        | When                                                 |
+| ----------------------------------------------------------- | ---------------------------------------------------- |
+| `bunx --bun @rustra/cli@0.12.0 <cmd>`                       | one-off execution with an explicit CLI version       |
+| `bun add -d @rustra/cli@0.12.0` + `bunx --bun rustra <cmd>` | projects running CLI commands as package scripts     |
+| `bun i -g @rustra/cli@0.12.0` + `rustra <cmd>`              | rarely — only for machines that need a global binary |
 
 `rustra init` scaffolds package scripts (`bun run doctor`, `bun run codegen`, …)
 that use the dependency form; CI and docs examples use the `bunx` form. All
@@ -77,20 +77,26 @@ nothing else in app code changes.
 
 ## First-run path
 
-A new project starts in the following order.
+Start a Node project and make its first Rust call in one command:
 
 ```bash
-bunx --bun @rustra/cli init my-project
-cd my-project
-bun install
-bun run doctor
-bun run codegen
+bunx --bun @rustra/cli@0.12.0 init my-project --setup
+# Bun FFI: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
 ```
+
+After editing, use `cd my-project` and `bun run start` to repeat generation,
+installation, build and demo. `bun run setup` prepares without running the demo.
+If setup fails, fix the reported error and rerun the printed setup command;
+recreating the project with `init --force` is unnecessary.
+Existing Node/Bun projects need a `demo` script in `package.json` for `rustra setup --run`.
+For RN/Tauri apps, use setup without `--run` and finish the printed native app steps.
 
 `rustra init` creates `rustra.json` along with the following scripts.
 
 ```json
 {
+  "setup": "rustra setup --config rustra.json",
+  "start": "rustra setup --config rustra.json --run",
   "doctor": "rustra doctor --config rustra.json",
   "codegen": "rustra codegen --config rustra.json",
   "codegen:check": "rustra codegen --config rustra.json --check",
@@ -103,12 +109,19 @@ bun run codegen
 `doctor` diagnoses the current host without installing anything or changing files.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli doctor --config rustra.json --format json
-bunx --bun @rustra/cli doctor --config rustra.json --strict
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json --format json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json --strict
 ```
 
-It commonly checks Rust MSRV 1.88+, Cargo, Node/Bun, a C/C++ compiler, CMake, the Cargo manifest, and the configured Rust target. Only when React Native is configured does it additionally check Xcode/CocoaPods on macOS, and on Android Java 17, `ANDROID_NDK_HOME` or the NDK `27.1.12297006` in the SDK, and the default Rust Android targets. Tauri configuration also includes per-host native build tools.
+It checks Rust MSRV 1.88+, Cargo, the configured Cargo manifest and Rust target.
+The Node adapter accepts Node.js 18+ or Bun 1.4+; the Bun host requires Bun 1.4+.
+Node/Bun-only configurations skip the separate C++ compiler and CMake checks.
+`cppOutput` requires a C++ compiler, while RN requires both the compiler and CMake.
+Only RN configurations add Xcode/CocoaPods on macOS and, on Android, Java 17,
+`ANDROID_NDK_HOME` or SDK NDK `27.1.12297006`, and the default Rust Android targets.
+Tauri configuration adds per-host native build tools. Rust builds still need the
+platform's native linker.
 
 Two checks look past the local toolchain. `registry.reachability` fetches `https://index.crates.io/config.json` with a 3-second timeout and reports `warn` — never `fail`, so an offline CI stays green — when crates.io is unreachable, with proxy (`HTTPS_PROXY`/`HTTP_PROXY`) and offline (`CARGO_NET_OFFLINE=true`) hints; it is skipped when Cargo itself is missing. `codegen.device_catalog` reads the generated `schema.json`: `skip` when no command declares devices, `warn` when commands declare devices but the schema has no `deviceCapabilities` catalog (regenerate with a current rustra), `pass` when every declared token is in the catalog, and `fail` for tokens outside it — debug builds accept such tokens with a warning while release builds panic at registration (see [dev-tier.md](dev-tier.md)).
 
@@ -181,7 +194,7 @@ React Native has no `process.env` — set `globalThis.__RUSTRA_DEBUG__ = true` i
 
 The Rustra CLI itself installs as an npm/Bun package. The application's native output, however — the user's `#[command]`, schema, and staticlib — depends on the app and target, so no single universal prebuilt binary can replace it.
 
-- Node/Bun alone still needs Rust, a C/C++ linker, and Node/Bun.
+- Node/Bun alone needs Rust, the platform's native linker, and a compatible JS runtime. A separate C++ compiler is checked for C++ or RN output; CMake is checked for RN.
 - Tauri needs the Rust and C/C++ tools of the given host.
 - React Native needs Xcode/CocoaPods on iOS and SDK/NDK 27+ plus Java 17 on Android, and uses a development build rather than Expo Go.
 
@@ -259,7 +272,7 @@ consumer's Rust FFI lifecycle.
 The 0.x API can still change, so run `doctor`, `codegen:check`, and `rustra diff` together in CI and lock the CLI/Rust/adapter versions separately. When reproducing an issue, leaving the following information behind makes diagnosis possible without descending into the source code.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json --format json > rustra-doctor.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json --format json > rustra-doctor.json
 bun run codegen:check
 bunx --bun @rustra/cli diff --old generated/schema.v1.json --new generated/schema.json
 ```
