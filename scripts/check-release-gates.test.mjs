@@ -35,7 +35,7 @@ case " $* " in
   *) echo 'version: 0.12.0 (from ./crates/local-workspace)'; exit 0 ;;
 esac
 `,
-        jq: '#!/bin/sh\necho 0.12.0\n',
+        jq: '#!/bin/sh\ncat >/dev/null\necho 0.12.0\n',
         sleep: '#!/bin/sh\nexit 0\n',
       })) {
         writeFileSync(join(root, name), source);

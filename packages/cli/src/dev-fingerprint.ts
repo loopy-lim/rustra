@@ -180,9 +180,11 @@ export function resolveRustInputPaths(
           const base = bases.find((candidate) =>
             rawDependencies.some((path) => canonicalInputPath(resolve(candidate, path)) === source),
           );
-          const dependencies = rawDependencies
-            .filter((path) => isAbsolute(path) || base !== undefined)
-            .map((path) => (isAbsolute(path) ? path : resolve(base!, path)));
+          const dependencies: string[] = [];
+          for (const path of rawDependencies) {
+            if (isAbsolute(path)) dependencies.push(path);
+            else if (base !== undefined) dependencies.push(resolve(base, path));
+          }
           if (
             target.src_path &&
             !dependencies.some(

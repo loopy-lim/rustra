@@ -92,15 +92,16 @@ export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle>
     paths = next;
     for (const watch of watches) watch.dispose();
     const excluded = paths.excluded ?? [];
+    const watchedFiles: { path: string; onChange: () => void }[] = [];
+    for (const path of paths.files) {
+      if (!excluded.some((root) => isWithin(root, path)))
+        watchedFiles.push({ path, onChange: () => loop.schedule('Cargo change') });
+    }
     watches = [
       ...paths.trees.map((tree) =>
         createSourceWatch(tree, () => loop.schedule('Rust change'), excluded),
       ),
-      createFileWatch(
-        paths.files
-          .filter((path) => !excluded.some((root) => isWithin(root, path)))
-          .map((path) => ({ path, onChange: () => loop.schedule('Cargo change') })),
-      ),
+      createFileWatch(watchedFiles),
       createFileWatch(
         [schema, join(generated, 'frame-codecs.ts'), join(generated, 'frame-registry.ts')].map(
           (path) => ({ path, onChange: () => loop.schedule('schema change') }),

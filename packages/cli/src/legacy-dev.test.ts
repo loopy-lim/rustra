@@ -148,7 +148,7 @@ test('legacy dev watches handwritten Rust adjacent to generated files', async ()
     await new Promise((resolve) => setTimeout(resolve, 450));
     assert.equal(count(f.runs), 2);
   } finally {
-    handle?.dispose();
+    await handle?.dispose();
     process.env.PATH = oldPath;
     if (oldCli === undefined) delete process.env.RUSTRA_CLI;
     else process.env.RUSTRA_CLI = oldCli;
@@ -176,7 +176,7 @@ for (const [name, edit] of edits) {
       await new Promise((resolve) => setTimeout(resolve, 450));
       assert.equal(count(f.runs), 2, 'successful output must not trigger another rebuild');
     } finally {
-      handle?.dispose();
+      await handle?.dispose();
       process.env.PATH = oldPath;
       if (oldCli === undefined) delete process.env.RUSTRA_CLI;
       else process.env.RUSTRA_CLI = oldCli;
@@ -203,7 +203,7 @@ test('legacy dev skips unchanged touches and excludes owned/custom target output
     await new Promise((resolve) => setTimeout(resolve, 750));
     assert.equal(count(f.runs), 1, 'touches and output changes must not recompile Rust');
   } finally {
-    handle?.dispose();
+    await handle?.dispose();
     process.env.PATH = oldPath;
     if (oldCli === undefined) delete process.env.RUSTRA_CLI;
     else process.env.RUSTRA_CLI = oldCli;
