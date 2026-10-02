@@ -17,14 +17,15 @@ This guide aims to get a developer new to rustra building their first package an
 
 ## Prerequisites
 
-| Tool                         | Version                                                                 | Where it is checked                                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust toolchain               | 1.88+ (MSRV)                                                            | root `Cargo.toml` `rust-version` / [versioning policy](versioning-policy.md); repo development is pinned to 1.95.0 via `rust-toolchain.toml` |
-| Bun                          | 1.4+                                                                    | all JS-side commands (`rustra init`, codegen, doctor)                                                                                        |
-| Node.js                      | 22.x — **>= 22.6** for repo scripts (`node --experimental-strip-types`) | Node adapter runtime (measured on v22.21.1); repo pins 22.x via `.nvmrc`                                                                     |
-| Cargo + linker               | per host                                                                | a C/C++ compiler is required for native builds                                                                                               |
-| Xcode / CocoaPods            | iOS only                                                                | React Native iOS (see the [RN setup guide](extending/react-native-setup.md))                                                                 |
-| Android SDK/NDK 27+, Java 17 | Android only                                                            | React Native Android                                                                                                                         |
+| Tool                         | Version      | When needed                                                                                                       |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Rust toolchain               | 1.88+ (MSRV) | App-specific Rust builds; repository development uses Rust 1.95.0                                                 |
+| Bun                          | 1.4+         | The commands and scaffold demo below; the Bun adapter requires Bun                                                |
+| Node.js                      | 18+          | An alternative runtime for the Node adapter; Bun can also run it. Repository scripts require Node 22.6+           |
+| Cargo + native linker        | Per host     | Rust builds need the platform linker; Node/Bun-only doctor checks do not require a separate C++ compiler or CMake |
+| C++ compiler / CMake         | Per output   | C++ output needs a compiler; RN needs both                                                                        |
+| Xcode / CocoaPods            | iOS only     | React Native iOS (see the [RN setup guide](extending/react-native-setup.md))                                      |
+| Android SDK/NDK 27+, Java 17 | Android only | React Native Android                                                                                              |
 
 `rustra doctor` checks every row that applies to your configuration — see the
 [development hurdles guide](development-hurdles.md).
@@ -33,55 +34,61 @@ This guide aims to get a developer new to rustra building their first package an
 
 ## 1. Installation
 
+### The Fastest Start — `rustra init --setup`
+
+With Rust and Bun 1.4+ installed, run:
+
+```bash
+bunx --bun @rustra/cli@0.12.0 init my-project --setup
+# Bun FFI instead: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+```
+
+This creates the project, generates its client, installs dependencies, builds
+Rust, and runs the `echo` demo. It respects the project's `packageManager` or
+lockfile when installing. The scaffold selects Bun and creates `setup`, `start`,
+`doctor`, `codegen`, `codegen:check`, `dev`, and `demo` scripts.
+
+Edit `my-project/src/lib.rs`, then repeat the first-call workflow:
+
+```bash
+cd my-project
+bun run start
+```
+
+`start` runs `rustra setup --config rustra.json --run`; `bun run setup` performs
+the same preparation without running `demo`. If setup fails, fix the reported
+error and rerun the printed setup command. Retry setup directly; `init --force`
+is only for deliberately replacing scaffold files.
+
+Without `--setup`, start with `cd my-project`, `bun install`, and `bun run start`.
+For an existing Node/Bun project with `rustra.json` and a `demo` script, use
+`rustra setup --config rustra.json --run`.
+
+The scaffold includes the Cargo crate, an `echo` command, a `generate` schema
+probe, `src/index.ts`, `rustra.json`, `package.json`, `.gitignore`, and
+`tsconfig.json`. Node is the default host; `--host bun` adds the native library
+entry and selects Bun FFI. The generated entry verifies that the Rust and
+TypeScript contracts match before the first invocation.
+
+RN setup connects the generated module and adds `rustra:ios` / `rustra:android`
+preparation scripts. Tauri setup generates a registration helper and prints the
+remaining app connection. Use setup without `--run` for native-only apps; then
+build and launch with the existing platform commands. Preparation does not prove
+simulator/device or WebView runtime acceptance.
+
 ### Try this checkout in one command
 
-With Rust, Bun and the repository's Node.js runtime installed, create an isolated example and make the first Rust call:
+With Rust, Bun and the repository's Node.js runtime installed, run:
 
 ```bash
 bun run try:node
 # For Bun FFI: bun run try:bun
 ```
 
-The command prints the example directory. Edit its `src/lib.rs`, then run `bun run start`
-there to generate types, install dependencies, rebuild Rust and call it again. The example
-uses this checkout's packages and preserves existing projects.
-
-The development CLI adds `rustra init my-project --setup` and `--host bun --setup`.
-For an existing project, use `rustra setup --run`. On failure, rerun the printed `setup`
-command; recreating the project with `init --force` is unnecessary. This automation has
-not been released; the pinned `0.11.3` path below retains its manual startup steps.
-
-RN setup connects the generated module and adds `rustra:ios` / `rustra:android` preparation
-scripts. Tauri setup generates a registration helper and prints the remaining application
-connection. Native app builds and launch still require platform tools. `setup --run`
-executes a Node/Bun project's `demo` script.
-
-### The Fastest Start — `rustra init`
-
-```bash
-bunx --bun @rustra/cli@0.11.3 init my-project
-cd my-project
-bun install
-bun run doctor
-bun run codegen      # generate schema.json + the full TS/C++ client
-cargo build          # build the Rust binary the Node entry point runs
-bun run demo         # call echo from TypeScript via the generated Node entry point
-cargo run            # call echo directly from Rust
-```
-
-The scaffold creates a Cargo crate (an echo example command and a stdio contract probe) +
-a `generate` bin + a first-call example in `src/index.ts` + a `rustra.json` with the
-Node host configuration and a package.json (doctor/codegen/codegen:check/dev/demo
-scripts), `.gitignore` (target/, node_modules/, dist/), and `tsconfig.json`. Before the
-first call, the Node entry point compares the contract hash of the Rust binary and the
-generated TS via `__rustra_contract`.
-
-Re-running init in a directory with existing files blocks overwriting. Add `--force`
-to replace them:
-
-```bash
-bunx --bun @rustra/cli@0.11.3 init my-project --force
-```
+The command prints an isolated example directory. Edit its `src/lib.rs`, then
+run `bun run start` there to generate, install, rebuild and call again. It uses
+this checkout's packages, preserves existing projects, and does not verify
+registry publication.
 
 ### Using in an External Project
 
@@ -97,10 +104,10 @@ Installation versions follow the current Rust and npm manifests. Adapters have i
 For the TypeScript adapters, install only the environment you use:
 
 ```bash
-bun add @rustra/node@0.10.2      # Node.js
-bun add @rustra/bun@0.10.2       # Bun
-bun add @rustra/tauri@0.9.3     # Tauri
-bun add @rustra/react-native@0.9.2  # React Native
+bun add @rustra/node@0.11.0      # Node.js
+bun add @rustra/bun@0.11.0       # Bun
+bun add @rustra/tauri@0.10.0     # Tauri
+bun add @rustra/react-native@0.10.0  # React Native
 ```
 
 ### Using in a Monorepo / Workspace
@@ -992,8 +999,8 @@ commands whose input has 0–3 fields are published as field-positional helpers
 outside that shape keep the object-input `commands.ts` path.
 
 ```bash
-bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 ```
 
 **TypeScript-side usage:**

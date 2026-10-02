@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaHash": "e70c24c62944ff78fb6ca58b5658d85bb5cff49af4acc96b3a78bedcbdfb0a58",
-  "generatorVersion": "0.11.3",
+  "generatorVersion": "0.12.0",
   "files": [
     {
       "path": "../modules/rustra-jsi/android/build-rust-android.sh",
@@ -49,7 +49,7 @@
     },
     {
       "path": "../modules/rustra-jsi/package.json",
-      "sha256": "3e260a84425630333078bed0d40e69b4c0cb8327564de9447d7d949df5494e13"
+      "sha256": "bf5ac0d89beb353d9ecf0e89af0747966f8cdfc0f203ece00209f10066dfe8c4"
     },
     {
       "path": "../modules/rustra-jsi/react-native.config.js",

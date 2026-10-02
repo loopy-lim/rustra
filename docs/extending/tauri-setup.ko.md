@@ -7,10 +7,11 @@
 
 ## 기존 앱을 한 명령으로 준비하기
 
-프런트엔드 루트의 `rustra.json`에 `"tauri": {}`를 켜고, 일치하는 개발 소스의 CLI로 실행한다.
+프런트엔드 루트의 `rustra.json`에 `"tauri": {}`를 켜고 CLI 0.12.0으로 실행한다.
+Rust 코어와 Tauri 호스트는 Rustra 0.12.0 이상을 함께 사용해야 한다.
 
 ```bash
-rustra setup --config rustra.json
+bunx --bun @rustra/cli@0.12.0 setup --config rustra.json
 ```
 
 setup은 클라이언트 생성, 의존성 설치, 선택된 Rust 코어 빌드,
@@ -29,17 +30,18 @@ let builder = rustra_setup::register(builder);
 바꾼다. 마지막 핸들러 설치로 유지한다. 생성된 `tauri.js`에서 명령을 import하고 Tauri 앱을 다시 빌드한다.
 
 재실행은 같은 파일을 바꾸지 않으며 수정된 어댑터는 덮어쓰지 않는다. 패키지 팩토리가
-여러 개면 추측하지 않고 명시적 선택을 요구한다. 여기 설명한 setup 명령과 합성 헬퍼는
-개발 소스 변경사항이다. 발행 전에는 일치하는 로컬 Rustra·CLI 소스를 사용한다.
+여러 개면 추측하지 않고 명시적 선택을 요구한다. 실패하면 오류를 해결한 뒤 출력된
+setup 명령으로 재시도한다. 준비 완료와 네이티브 앱 빌드·WebView 런타임 검증은
+별도이며 registry 발행 여부도 별도로 확인한다.
 
-| #   | 파일                               | 변경                                                     |
-| --- | ---------------------------------- | -------------------------------------------------------- |
-| 1   | Rust 코어 크레이트 — `src/lib.rs`  | `#[command]` 함수 + package 함수 정의                    |
-| 2   | Rust 코어 크레이트 — `rustra.json` | `"tauri": {}` 블록과 codegen generator 키 추가           |
-| 3   | `src-tauri/Cargo.toml`             | 코어 크레이트 의존 + `tauri` feature를 켠 `rustra` 의존  |
-| 4   | `src-tauri/src/main.rs`            | `tauri_support::register_with_events`로 패키지 등록      |
-| 5   | `src-tauri/tauri.conf.json`        | `app.withGlobalTauri: true` 설정                         |
-| 6   | 프런트엔드 (예: `src/app.ts`)      | `../generated/tauri.js`에서 import — 엔진 설정 코드 없음 |
+| #   | 파일                              | 변경                                                     |
+| --- | --------------------------------- | -------------------------------------------------------- |
+| 1   | Rust 코어 크레이트 — `src/lib.rs` | `#[command]` 함수 + package 함수 정의                    |
+| 2   | 프런트엔드 루트 — `rustra.json`   | `"tauri": {}` 블록과 codegen generator 키 추가           |
+| 3   | `src-tauri/Cargo.toml`            | 코어 크레이트 의존 + `tauri` feature를 켠 `rustra` 의존  |
+| 4   | `src-tauri/src/main.rs`           | `tauri_support::register_with_events`로 패키지 등록      |
+| 5   | `src-tauri/tauri.conf.json`       | `app.withGlobalTauri: true` 설정                         |
+| 6   | 프런트엔드 (예: `src/app.ts`)     | `../generated/tauri.js`에서 import — 엔진 설정 코드 없음 |
 
 ## 1. Rust 코어 크레이트: 명령과 패키지
 
@@ -68,15 +70,17 @@ pub fn package() -> Package {
 
 ## 2. `rustra.json` — Tauri 호스트 켜기
 
-Rust 크레이트에 `rustra.json`을 만든다(또는 확장한다). `tauri` 블록은 빈
-객체다 — Cargo metadata와 표준 Tauri API를 추론한다:
+프런트엔드 루트에서 `package.json`·`src-tauri/` 옆에 `rustra.json`을 만들거나
+확장한다. `codegen.rustManifest`는 Rust 코어 크레이트를 가리킨다. 이 예시의 코어는
+`rustra-app/`이며 생성 클라이언트는 프런트엔드 `generated/`에 둔다. 빈 `tauri`
+블록은 표준 Tauri API를 추론한다:
 
 ```json
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
   "codegen": {
-    "rustManifest": "./Cargo.toml",
+    "rustManifest": "./rustra-app/Cargo.toml",
     "rustBinary": "generate"
   },
   "tauri": {}
@@ -86,7 +90,7 @@ Rust 크레이트에 `rustra.json`을 만든다(또는 확장한다). `tauri` �
 그리고 클라이언트 표면을 생성한다:
 
 ```bash
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 ```
 
 `generated/tauri.ts`가 렌더링된다(`types.ts`, `commands.ts`, `contract.ts` 포함).
@@ -96,7 +100,7 @@ bunx --bun @rustra/cli codegen --config rustra.json
 
 생성 엔트리는 예상 계약 해시를 전달하고 네이티브 시작 검증을 strict로 수행한다.
 현재 Rust 등록은 `rustra_contract_hash`를 제공하므로 Rust와 생성 TypeScript를 함께
-갱신한다. 이 변경이 발행되기 전에는 서로 맞는 개발 소스를 사용한다. 검증을 제공할
+갱신한다. 설치한 Rustra와 CLI는 위 릴리스 버전에 맞춘다. 검증을 제공할
 수 없는 구형·사용자 정의 호스트는 `contractVerification: 'warn'` 또는 `'off'`를
 명시해야 한다.
 
@@ -104,7 +108,7 @@ bunx --bun @rustra/cli codegen --config rustra.json
 
 ```toml
 [dependencies]
-rustra = { version = "0.8", features = ["tauri"] }
+rustra = { version = "0.12.0", features = ["tauri"] }
 rustra-app = { path = "../rustra-app" }   # 여러분의 코어 크레이트
 ```
 
@@ -177,12 +181,12 @@ Tauri의 `.invoke_handler()`는 이전 핸들러를 교체하므로 `with_app_co
 어댑터를 한 번 설치하고 생성 엔트리를 import한다:
 
 ```bash
-bun add @rustra/tauri @rustra/types
+bun add @rustra/tauri@0.10.0 @rustra/types@0.12.1
 ```
 
 ```ts
 // src/app.ts
-import { addNumbers, subscribeEvent } from '../rustra-app/generated/tauri.js';
+import { addNumbers, subscribeEvent } from '../generated/tauri.js';
 
 // Rust 측 Package::emit이 타입 있는 푸시 이벤트로 도착한다 (폴링 없음)
 const unsubscribe = await subscribeEvent<{ value: number }>('calc.tick', (payload) => {
