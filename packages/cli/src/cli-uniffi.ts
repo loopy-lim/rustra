@@ -81,6 +81,7 @@ export type UniffiSpawnContext = {
 
 /** 스폰 출력 라우팅 — 스키마 프로브가 --format json 을 판별하는 것과 같은 계약. */
 export type UniffiRunOptions = {
+  signal?: AbortSignal;
   /** Rebuild and compare bindings without replacing the committed output. */
   check?: boolean;
   /** JSON stdout 을 기계 판독 가능하게 지키려면 'stderr'. 기본 'stdout'. */
@@ -101,6 +102,7 @@ export async function runUniffiBindings(
   options: UniffiRunOptions,
   progress: (message: string) => void,
 ): Promise<void> {
+  options.signal?.throwIfAborted();
   await withBindingOutput(bindingOutDir, options.check ?? false, async (emptyDirectory) => {
     await generateUniffiBindings(ctx, uniffi, emptyDirectory, options, progress);
   });
@@ -142,6 +144,7 @@ async function generateUniffiBindings(
       ],
       ctx.cwd,
       `uniffi cdylib build (${ctx.packageName}, ${profile})`,
+      options.signal,
     );
   } catch (error) {
     throw new Error(
@@ -150,6 +153,7 @@ async function generateUniffiBindings(
       { cause: error },
     );
   }
+  options.signal?.throwIfAborted();
   // cargo 가 계산한 target 디렉터리를 근원으로 — 프로필 디렉터리 재발명 금지.
   const dylibPath = pickCdylibArtifact(buildOutput, {
     name: libraries[0]!.name,
@@ -200,6 +204,7 @@ async function generateUniffiBindings(
       ],
       ctx.cwd,
       {
+        signal: options.signal,
         progressLabel: `uniffi-bindgen generate (${ctx.packageName} → ${bindingOutDir})`,
         progressStream: options.progressStream ?? 'stdout',
         childOutput: options.childOutput ?? 'inherit',
@@ -212,6 +217,7 @@ async function generateUniffiBindings(
       { cause: error },
     );
   }
+  options.signal?.throwIfAborted();
   assertBindingOutputs(bindingOutDir);
 }
 

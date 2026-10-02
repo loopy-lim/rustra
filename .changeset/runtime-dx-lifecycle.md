@@ -18,3 +18,10 @@ overlapping Cargo target directories, and stop pending publication after disposa
 Keep one-field generated commands and their generation-aware factory helper
 together. The React Native shell and Rust core retain the optional owned-response
 handoff with the legacy overflow fallback.
+
+Development disposal cancels owned Cargo stages immediately and can be awaited
+to drain active work before deleting project inputs. Wait for child output closure
+and keep progress/errors on the originating session. Reload callbacks can dispose
+their own watcher without joining themselves. Native Bun test fixtures build their
+own library instead of relying on a previously warmed checkout.
+Ignored child output cannot block verbose commands on an unread pipe.

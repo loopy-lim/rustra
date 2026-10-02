@@ -70,7 +70,12 @@ function printExplain(
   else console.log(formatExplainText(rows));
 }
 
-export async function runCodegen(args: string[]): Promise<void> {
+export async function runCodegen(
+  args: string[],
+  execution?: { signal?: AbortSignal },
+): Promise<void> {
+  const signal = execution?.signal;
+  signal?.throwIfAborted();
   const options = parseCodegenArgs(args);
   if (options.help) return;
   const startedAt = Date.now();
@@ -140,6 +145,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         ],
         target.cwd,
         {
+          signal,
           env: {
             RUSTRA_SCHEMA_OUT: schemaOutDir,
             // uniffi 섹션이 있을 때만 프로브에 mirror 소스 출력 위치를 고정한다.
@@ -163,6 +169,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         error,
       );
     }
+    signal?.throwIfAborted();
     if (uniffi && (!options.check || options.checkBindings) && uniffiBindingOut) {
       // --check keeps the cheap Rust mirror comparison; --check-bindings also
       // builds and regenerates the actual Swift/Kotlin tree in empty staging.
@@ -175,6 +182,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         uniffi,
         uniffiBindingOut,
         {
+          signal,
           check: options.checkBindings,
           // 스키마 프로브와 같은 판별 — JSON stdout 은 기계 계약이라 오염 금지.
           progressStream: options.format === 'json' ? 'stderr' : 'stdout',
@@ -183,6 +191,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         (command) => status(options.format, `[rustra] uniffi-bindings: ${command}`),
       );
     }
+    signal?.throwIfAborted();
     if (checkRoot) {
       const temporarySchema = resolve(checkRoot, 'schema.json');
       if (!existsSync(temporarySchema))
@@ -237,6 +246,7 @@ export async function runCodegen(args: string[]): Promise<void> {
     }
     return;
   }
+  signal?.throwIfAborted();
   status(options.format, `[rustra] TypeScript/C++: generate --config ${configPath}`);
   try {
     const files = await runGenerate(
@@ -244,6 +254,7 @@ export async function runCodegen(args: string[]): Promise<void> {
       undefined,
       { quiet: true },
     );
+    signal?.throwIfAborted();
     if (options.format === 'json')
       console.log(
         formatCodegenJson({

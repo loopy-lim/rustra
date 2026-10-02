@@ -16,6 +16,7 @@ import {
   liveArtifactPath,
   pickCdylibArtifact,
   publishGatedArtifact,
+  spawnCapturingStdout,
 } from './dev-dylib.js';
 import { readDevConfig } from './dev-config.js';
 import type { ResolvedDevDylib } from './dev-config.js';
@@ -108,6 +109,33 @@ function dylibInput(project: string, rustPackage?: string): ResolvedDevDylib {
     ...(rustPackage === undefined ? {} : { rustPackage }),
   };
 }
+
+test('Cargo progress stays with the output owner captured at command creation', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-dylib-output-owner-'));
+  const originalPath = process.env.PATH;
+  const originalError = console.error;
+  const owner: string[] = [];
+  const replacement: string[] = [];
+  try {
+    const project = seedCargoProject(root);
+    seedFakeCargo(root);
+    process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+    console.error = (...parts: unknown[]) => void owner.push(parts.join(' '));
+    const child = spawnCapturingStdout(
+      ['build', '--manifest-path', join(project, 'Cargo.toml')],
+      project,
+      'owned Cargo',
+    );
+    console.error = (...parts: unknown[]) => void replacement.push(parts.join(' '));
+    assert.match(await child, /compiler-artifact/);
+    assert.ok(owner.some((line) => line.includes('✓ owned Cargo done')));
+    assert.deepEqual(replacement, [], 'a later session must not capture this command');
+  } finally {
+    console.error = originalError;
+    process.env.PATH = originalPath;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('buildDylibCore returns the cdylib artifact cargo reported and pins the JSON build flags', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-'));

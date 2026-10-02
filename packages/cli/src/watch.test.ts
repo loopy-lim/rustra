@@ -40,7 +40,7 @@ test('source watch follows directories created after startup and recreated roots
     writeFileSync(file, 'two');
     await until(() => events.includes(file));
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -65,7 +65,7 @@ test('source watch follows a symlinked root and reports original-namespace paths
     writeFileSync(nestedViaLink, 'two');
     await until(() => events.includes(nestedViaLink));
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -96,7 +96,7 @@ test('source watch follows a retargeted root and stops observing the retired tre
     await new Promise((r) => setTimeout(r, 250));
     assert.deepEqual(events, []);
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -126,7 +126,7 @@ test('file watch follows a retargeted directory in the original namespace', asyn
     writeFileSync(join(after, 'new.json'), 'changed');
     await until(() => events.some(([path]) => path === join(link, 'new.json')));
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -150,7 +150,7 @@ test('source watch excludes newly created custom outputs but observes adjacent s
     await until(() => events.includes(source));
     assert.deepEqual(events, [source]);
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -203,7 +203,7 @@ test('source watch refreshes exclusions when the subscribed symlink changes', as
     await new Promise((r) => setTimeout(r, 250));
     assert.deepEqual(events, []);
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -248,14 +248,66 @@ test('file watch follows initially missing and atomically replaced files', async
     writeFileSync(join(root, 'new.json'), 'two');
     renameSync(join(root, 'new.json'), file);
     await until(() => changes > previous);
-    handle.dispose();
+    await handle.dispose();
     const disposed = changes;
     writeFileSync(file, 'three');
     await new Promise((r) => setTimeout(r, 150));
     assert.equal(changes, disposed);
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a reload callback can await disposal without joining itself', async () => {
+  const loop = createWatchLoop(
+    async () => {},
+    () => true,
+  );
+  let closedInCallback = false;
+  loop.onReload(async () => {
+    await loop.dispose();
+    closedInCallback = true;
+  });
+  const run = loop.run('reload');
+  const completed = await Promise.race([
+    run.then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
+  ]);
+  assert.equal(completed, true, 'disposal from the active callback must not deadlock');
+  assert.equal(closedInCallback, true);
+});
+
+test('external disposal still drains a pending reload callback', async () => {
+  const loop = createWatchLoop(
+    async () => {},
+    () => true,
+  );
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  loop.onReload(async () => {
+    entered();
+    await pending;
+  });
+  const run = loop.run('reload');
+  await started;
+  let drained = false;
+  const closing = loop.dispose().then(() => {
+    drained = true;
+  });
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(drained, false);
+  } finally {
+    release();
+    await closing;
+    await run;
   }
 });
 
@@ -280,7 +332,7 @@ test('scheduled pipeline failures are reported and the next run recovers', async
     loop.schedule('retry');
     await until(() => attempts === 2);
   } finally {
-    loop.dispose();
+    await loop.dispose();
     console.error = original;
   }
 });
@@ -337,7 +389,7 @@ test('schema watch reloads config and follows a newly selected schema file', asy
     writeFileSync(join(root, 'second.json'), JSON.stringify(schema));
     await until(() => readFileSync(types, 'utf8').includes('PingOutput'));
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -361,7 +413,7 @@ test('schema watch follows a new path even while it is missing or malformed', as
       await until(() => existsSync(join(root, `${name}-output`, 'types.ts')));
     }
   } finally {
-    handle.dispose();
+    await handle.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });

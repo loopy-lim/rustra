@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 
 export type SpawnInheritOptions = {
   env?: NodeJS.ProcessEnv;
+  /** Cancel an owned command; completion still waits for child output to close. */
+  signal?: AbortSignal;
   /** Human-readable operation name for long-running native commands. */
   progressLabel?: string;
   /** Keep progress on stderr so JSON stdout remains machine-readable. */
@@ -11,6 +13,17 @@ export type SpawnInheritOptions = {
 };
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+
+/** Only an operation cancelled by this owner is an expected disposal outcome. */
+export function isAbortedOperation(error: unknown, signal: AbortSignal): boolean {
+  if (!signal.aborted) return false;
+  let cause = error;
+  while (cause instanceof Error) {
+    if (cause === signal.reason) return true;
+    cause = cause.cause;
+  }
+  return false;
+}
 
 /**
  * Runs a child with inherited stdio and preserves exit-vs-signal diagnostics.
@@ -26,18 +39,18 @@ export function spawnInherit(
   options?: SpawnInheritOptions,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    options?.signal?.throwIfAborted();
+    const writeStderr = process.stderr.write.bind(process.stderr);
     const childOutput = options?.childOutput ?? 'inherit';
     const child = spawn(command, args, {
       cwd,
-      stdio:
-        childOutput === 'inherit'
-          ? 'inherit'
-          : ['ignore', 'pipe', childOutput === 'stderr' ? 'pipe' : 'ignore'],
+      stdio: childOutput === 'stderr' ? ['ignore', 'pipe', 'pipe'] : childOutput,
       env: options?.env ? { ...process.env, ...options.env } : process.env,
+      signal: options?.signal,
     });
     if (childOutput === 'stderr') {
-      child.stdout?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
-      child.stderr?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
+      child.stdout?.on('data', (chunk: Buffer) => writeStderr(chunk));
+      child.stderr?.on('data', (chunk: Buffer) => writeStderr(chunk));
     }
     const stream = options?.progressStream === 'stderr' ? console.error : console.log;
     const started = Date.now();
@@ -63,23 +76,26 @@ export function spawnInherit(
     const finish = (): void => {
       if (timer) clearInterval(timer);
     };
+    let spawnError: Error | undefined;
     child.on('error', (error) => {
       finish();
-      reject(error);
+      spawnError = error;
     });
-    child.on('exit', (code, signal) => {
+    child.on('close', (code, signal) => {
       finish();
       // 성공 체크마크는 exit 코드 판정 후에만 — 실패 직후 "✓ done"이 찍히면
       // CI 로그 독자가 "빌드는 됐는데 다른 게 죽었다"로 오독한다(Q3).
       if (options?.progressLabel) {
         const total = ((Date.now() - started) / 1000).toFixed(1);
-        if (code === 0) {
+        if (code === 0 && !spawnError) {
           stream(`[rustra] ✓ ${options.progressLabel} done in ${total}s`);
         } else {
           stream(`[rustra] ✗ ${options.progressLabel} failed in ${total}s`);
         }
       }
-      if (code === 0) {
+      if (spawnError) {
+        reject(spawnError);
+      } else if (code === 0) {
         resolve();
       } else {
         reject(new Error(`${command} ${signal ? `terminated by ${signal}` : `exit ${code}`}`));
