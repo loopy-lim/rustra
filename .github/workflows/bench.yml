@@ -12,6 +12,11 @@ on:
         required: false
         default: false
         type: boolean
+      comparison_ref:
+        description: 'Re-measure an ancestor commit on this runner before comparing (full 40-character SHA; no bootstrap)'
+        required: false
+        default: ''
+        type: string
   push:
     branches: [main]
     paths:
@@ -24,27 +29,39 @@ on:
       - 'scripts/check-criterion-regression*'
       - 'scripts/benchmark-workflow.test.mjs'
       - 'scripts/benchmark-environment*'
+      - 'scripts/benchmark-comparison*'
 
 jobs:
   rust-bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.comparison_ref != '' && 60 || 30 }}
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
     # main 커밋에 벤치 리포트 댓글을 게시하기 위해 write 필요
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
+      - name: Validate benchmark comparison request
+        env:
+          COMPARISON_REF: ${{ inputs.comparison_ref || '' }}
+          BOOTSTRAP_BASELINE: ${{ inputs.bootstrap_baseline || false }}
+        run: node scripts/benchmark-comparison.mjs --validate-only
       - name: Reset cached Criterion artifacts
         run: rm -rf target/criterion
       # 직전 성공 벤치의 criterion baseline 복원 — 없으면 change: 이 첫 측정
       # 기준(no baseline)이 되어 회귀 감지가 무의미해진다. retention(14일)
       # 내 아티팩트만 유효하다.
       - name: Restore previous baseline
+        if: github.event_name != 'workflow_dispatch' || inputs.comparison_ref == ''
         continue-on-error: true
         uses: dawidd6/action-download-artifact@v24
         with:
@@ -52,6 +69,13 @@ jobs:
           branch: main
           name: criterion-results
           path: target/criterion
+
+      - name: Build both revisions and measure comparison baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.comparison_ref != ''
+        env:
+          COMPARISON_REF: ${{ inputs.comparison_ref }}
+          BOOTSTRAP_BASELINE: ${{ inputs.bootstrap_baseline || false }}
+        run: node scripts/benchmark-comparison.mjs
 
       - name: Record benchmark environment
         run: bun scripts/benchmark-environment.mjs target/criterion
