@@ -4,6 +4,8 @@ set -euo pipefail
 bundle_id="com.alt-shifted.react-native-calculator"
 app="${RUNNER_TEMP:?RUNNER_TEMP must be set}/rustra-ios-dd/Build/Products/Release-iphonesimulator/reactnativecalculator.app"
 log_path="$RUNNER_TEMP/rustra-ios-console.log"
+native_stdout_path="$RUNNER_TEMP/rustra-ios-native.stdout.log"
+native_stderr_path="$RUNNER_TEMP/rustra-ios-native.stderr.log"
 kill_error_path="$RUNNER_TEMP/rustra-ios-kill.stderr.log"
 process_path="$RUNNER_TEMP/rustra-ios-process.log"
 crash_summary_path="$RUNNER_TEMP/rustra-ios-crash-summary.json"
@@ -33,7 +35,8 @@ echo "smoke: installing $bundle_id"
 xcrun simctl install "$sim_id" "$app"
 started_at="@$(date +%s)"
 echo "smoke: launching $bundle_id"
-launch_output="$(xcrun simctl launch --terminate-running-process "$sim_id" "$bundle_id")"
+launch_output="$(xcrun simctl launch --terminate-running-process \
+  --stdout="$native_stdout_path" --stderr="$native_stderr_path" "$sim_id" "$bundle_id")"
 echo "$launch_output"
 app_pid="${launch_output##*: }"
 if [[ ! "$app_pid" =~ ^[1-9][0-9]*$ ]]; then
@@ -43,6 +46,12 @@ fi
 trap 'xcrun simctl terminate "$sim_id" "$bundle_id" 2>/dev/null || true' EXIT
 
 failure_diagnostics() {
+  if [[ -s "$native_stderr_path" ]]; then
+    echo "smoke: native stderr for pid=$app_pid (last 80 lines, at most 16384 bytes)" >&2
+    tail -c 16384 "$native_stderr_path" | tail -n 80 >&2 || true
+  else
+    echo "smoke: native stderr is empty or unavailable for pid=$app_pid" >&2
+  fi
   if [[ -s "$kill_error_path" ]]; then
     echo "smoke: kill -0 stderr for pid=$app_pid" >&2
     cat "$kill_error_path" >&2 || true

@@ -8,7 +8,10 @@ import test from 'node:test';
 
 const root = resolve(import.meta.dirname, '..');
 
-function runSmoke(scenario, { crashHelper = true } = {}) {
+function runSmoke(
+  scenario,
+  { crashHelper = true, nativeStderr = true, nativeStderrBody = 'controlled native stderr\n' } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), 'rustra-ios-smoke-'));
   const calls = join(dir, 'calls.jsonl');
   const yaml = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
@@ -54,6 +57,10 @@ if (a[1] === 'list') {
 if (a[1] === 'install' && scenario === 'install-failure') process.exit(7);
 if (a[1] === 'launch') {
   if (scenario === 'launch-failure') process.exit(8);
+  const stdout = a.find(value => value.startsWith('--stdout='));
+  const stderr = a.find(value => value.startsWith('--stderr='));
+  if (stdout) fs.writeFileSync(stdout.slice('--stdout='.length), 'controlled native stdout\\n');
+  if (stderr && process.env.SMOKE_NATIVE_STDERR === '1') fs.writeFileSync(stderr.slice('--stderr='.length), process.env.SMOKE_NATIVE_STDERR_BODY);
   if (!a.includes('--console-pty')) console.log('com.alt-shifted.react-native-calculator: ' + (scenario === 'invalid-pid' ? 'invalid' : process.env.SMOKE_APP_PID));
 }
 if (a[1] === 'spawn' && a.includes('log') && a.includes('show')) {
@@ -106,6 +113,8 @@ console.log('4242 501 S reactnativecalculator');
         SMOKE_CALLS: calls,
         SMOKE_SCENARIO: scenario,
         SMOKE_APP_PID: '4242',
+        SMOKE_NATIVE_STDERR: nativeStderr ? '1' : '0',
+        SMOKE_NATIVE_STDERR_BODY: nativeStderrBody,
       },
     });
     assert.ifError(result.error);
@@ -117,6 +126,9 @@ console.log('4242 501 S reactnativecalculator');
       killError: diagnostic('rustra-ios-kill.stderr.log'),
       processDiagnostic: diagnostic('rustra-ios-process.log'),
       crashSummary: diagnostic('rustra-ios-crash-summary.json'),
+      nativeStdout: diagnostic('rustra-ios-native.stdout.log'),
+      nativeStderr: diagnostic('rustra-ios-native.stderr.log'),
+      runnerTemp: dir,
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -215,5 +227,49 @@ test('iOS failure diagnostics cannot mask a missing crash helper', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /controlled kill: No such process/);
   assert.ok(!result.calls.some((a) => a[0] === 'crash-summary'));
+  assert.ok(result.calls.some((a) => a[1] === 'terminate'));
+});
+
+test('iOS captures native streams from the same launch without printing them on success', () => {
+  const result = runSmoke('success');
+  assert.equal(result.status, 0);
+  const launches = result.calls.filter((a) => a[1] === 'launch');
+  assert.equal(launches.length, 1);
+  assert.ok(launches[0].includes(`--stdout=${result.runnerTemp}/rustra-ios-native.stdout.log`));
+  assert.ok(launches[0].includes(`--stderr=${result.runnerTemp}/rustra-ios-native.stderr.log`));
+  assert.ok(!launches[0].some((a) => ['--console', '--console-pty'].includes(a)));
+  assert.equal(result.nativeStdout, 'controlled native stdout\n');
+  assert.equal(result.nativeStderr, 'controlled native stderr\n');
+  assert.doesNotMatch(result.stdout + result.stderr, /controlled native/);
+});
+
+test('iOS native stderr failure diagnostics retain the full file but print at most 80 lines', () => {
+  const lines = Array.from({ length: 120 }, (_, i) => `native line ${i + 1}`);
+  const nativeStderrBody = `${lines.join('\n')}\n`;
+  const result = runSmoke('failure', { nativeStderrBody });
+  assert.equal(result.status, 1);
+  assert.equal(result.nativeStderr, nativeStderrBody);
+  const printed = result.stderr.split('\n').filter((line) => /^native line \d+$/.test(line));
+  assert.equal(printed.length, 80);
+  assert.equal(printed[0], 'native line 41');
+  assert.equal(printed.at(-1), 'native line 120');
+  assert.doesNotMatch(result.stderr, /controlled native stdout/);
+});
+
+test('iOS native stderr failure diagnostics bound a single large native log line', () => {
+  const result = runSmoke('failure', { nativeStderrBody: `${'X'.repeat(20_000)}\n` });
+  assert.equal(result.status, 1);
+  const printed = result.stderr.split('\n').find((line) => /^X+$/.test(line));
+  assert.ok(printed);
+  assert.ok(Buffer.byteLength(printed) <= 16_384);
+  assert.equal(result.nativeStderr.length, 20_001);
+});
+
+test('iOS native stderr failure diagnostics tolerate a missing capture file', () => {
+  const result = runSmoke('dead', { nativeStderr: false });
+  assert.equal(result.status, 1);
+  assert.equal(result.nativeStderr, undefined);
+  assert.match(result.stderr, /native stderr.*empty or unavailable/);
+  assert.match(result.stderr, /controlled kill: No such process/);
   assert.ok(result.calls.some((a) => a[1] === 'terminate'));
 });

@@ -42,6 +42,31 @@ import { formatError } from './src/format-error';
 
 // ── Helpers ──────────────────────────────────────────────
 
+type CiStartupStage =
+  | 'BENCH_ENTER'
+  | 'INSTALL_BEGIN'
+  | 'INSTALL_END'
+  | 'INSTALL_FAILED'
+  | 'JSON_FACTORY_BEGIN'
+  | 'JSON_FACTORY_END'
+  | 'FRAME_FACTORY_BEGIN'
+  | 'FRAME_FACTORY_END'
+  | 'NITRO_CREATE_BEGIN'
+  | 'NITRO_CREATE_END'
+  | 'JSON_FIRST_CALL_BEGIN'
+  | 'JSON_FIRST_CALL_END'
+  | 'JSON_FIRST_CALL_FAILED'
+  | 'FRAME_FIRST_CALL_BEGIN'
+  | 'FRAME_FIRST_CALL_END'
+  | 'FRAME_FIRST_CALL_FAILED';
+
+// CI startup checkpoints stay outside timed batches and contain no runtime data.
+function traceCiStartup(stage: CiStartupStage): void {
+  if (process.env.EXPO_PUBLIC_RUSTRA_CI_TRACE === '1') {
+    console.warn(`__RUSTRA_SMOKE_STAGE_${stage}`);
+  }
+}
+
 function formatNs(ns: number): string {
   if (ns >= 1_000_000) return `${(ns / 1_000_000).toFixed(2)} ms`;
   if (ns >= 1_000) return `${(ns / 1_000).toFixed(1)} µs`;
@@ -129,10 +154,14 @@ async function runBenchmarks(): Promise<string[]> {
     return lines;
   }
 
+  traceCiStartup('BENCH_ENTER');
   log('Installing JSI...');
   try {
+    traceCiStartup('INSTALL_BEGIN');
     await installRustraJSI();
+    traceCiStartup('INSTALL_END');
   } catch (e: any) {
+    traceCiStartup('INSTALL_FAILED');
     log(`JSI install failed: ${e.message}`);
     return lines;
   }
@@ -153,10 +182,16 @@ async function runBenchmarks(): Promise<string[]> {
   //   const result = await addNumbers({ a: 42, b: 58 });
   // ══════════════════════════════════════════════════════
 
+  traceCiStartup('JSON_FACTORY_BEGIN');
   const jsonEngine = createJsonEngine(native);
+  traceCiStartup('JSON_FACTORY_END');
+  traceCiStartup('FRAME_FACTORY_BEGIN');
   const frameEngine = createFrameEngine(native);
+  traceCiStartup('FRAME_FACTORY_END');
 
+  traceCiStartup('NITRO_CREATE_BEGIN');
   const nitroBench = NitroModules.createHybridObject<NitroBench>('NitroBench');
+  traceCiStartup('NITRO_CREATE_END');
 
   const INPUT = { a: 42, b: 58 };
 
@@ -176,10 +211,13 @@ async function runBenchmarks(): Promise<string[]> {
   for (const { name, engine } of adapters) {
     configure(engine);
     try {
+      traceCiStartup(name === 'JSON' ? 'JSON_FIRST_CALL_BEGIN' : 'FRAME_FIRST_CALL_BEGIN');
       const r = await addNumbers(INPUT);
+      traceCiStartup(name === 'JSON' ? 'JSON_FIRST_CALL_END' : 'FRAME_FIRST_CALL_END');
       const v = r.value === 100 ? '✓' : `✗ got ${r.value}`;
       log(`│  ${name.padEnd(10)} addNumbers(42,58)=100 ${v}`);
     } catch (e: any) {
+      traceCiStartup(name === 'JSON' ? 'JSON_FIRST_CALL_FAILED' : 'FRAME_FIRST_CALL_FAILED');
       log(`│  ${name.padEnd(10)} FAIL ${String(e).slice(0, 40)}`);
     }
   }
