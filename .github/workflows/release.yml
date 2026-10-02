@@ -178,7 +178,7 @@ jobs:
           VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustra-naming") | .version')"
           echo "waiting for rustra-naming@${VERSION} on crates.io index"
           for attempt in {1..12}; do
-            cargo info "rustra-naming@${VERSION}" >/dev/null 2>&1 && exit 0
+            cargo info "rustra-naming@${VERSION}" --registry crates-io >/dev/null 2>&1 && exit 0
             sleep 10
           done
           exit 1
@@ -193,7 +193,7 @@ jobs:
           VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustra-macros") | .version')"
           echo "waiting for rustra-macros@${VERSION} on crates.io index"
           for attempt in {1..12}; do
-            cargo info "rustra-macros@${VERSION}" >/dev/null 2>&1 && exit 0
+            cargo info "rustra-macros@${VERSION}" --registry crates-io >/dev/null 2>&1 && exit 0
             sleep 10
           done
           exit 1
