@@ -1,5 +1,106 @@
 # @rustra/cli
 
+## 0.12.0
+
+### Minor Changes
+
+- 89cf9c4: Add `init --setup` and repeatable `setup --run` to generate, install, build and
+  call in order, with stage progress and safe retry instructions. Support Bun
+  scaffolds, standalone nested Cargo projects and runtime paths through symlinks.
+  Respect the app's package manager. Prepare React Native platform scripts and
+  generate a non-destructive Tauri registration helper for existing apps. Preserve
+  literal URL delimiter characters in Cargo runtime paths and report failed Cargo
+  builds without displaying a successful completion marker.
+- 58e1835: M9(호스트 엔트리 계약 검증 옵션 기본값 정합화)과 S1(코드젠 타입명 정화)을 적용한다.
+  두 항목 모두 코드젠 **생성기** 변경이며, 버전이 올라가는 npm 패키지는
+  `@rustra/cli`뿐이다. Rust 크레이트 `rustra`(매크로 측 시그니처 정화)도 함께
+  바뀌었지만 changesets 관리 대상이 아니므로 워크스페이스 Cargo 버전으로 올린다.
+
+  **무엇이 바뀌었나** — `rustra codegen`/`generate`가 생성하는 4개 호스트
+  엔트리(node/bun/tauri/react-native)가 동일한 계약 검증 기본값과 옵션명을
+  명시하고, 명령 시그니처가 Rust 내부 타입명 누출(`String`, `int32`,
+  `Tuple_of_*` 등) 대신 인라인 타입으로 렌더링된다. 생성 `commands.ts`에는
+  호출 규약 혼재(positional vs struct) 안내 헤더, `InvokeOptions` 로컬 alias,
+  얕은 취소(shallow cancellation)·retryable 재실행 비안전 경고 JSDoc이 추가된다.
+
+  **기본값 정합** — 어댑터 런타임 기본값이 달라진 플랫폼은 없다(미설정은 원래
+  `'strict'`와 동일). 달라진 것은 생성 엔트리의 명시 여부다: 재생성하면
+  react-native 엔트리에 `contractVerification: 'strict'`가 명시적으로 추가되고
+  (이전에는 생략), node·bun은 기존 명시를 유지한다. tauri는 JSON 엔진 경로라
+  `contractVerification`/`schemaVersion` 옵션을 받지 않으며 계약 드리프트는
+  네이티브 `rustra_dispatch` 실행 오류로 표면화된다. 옵션명 변경·제거는 없다.
+
+  **마이그레이션** — 기존에 커밋된 generated 파일은 그대로 동작하고, 재생성해도
+  정화된 시그니처 타입은 기존 alias와 동일한 타입(`type int32 = number` 등)이라
+  소스 호환이다. 다음 경우에만 손이 간다: (1) generated 아티팩트를 체크인하는
+  저장소는 CLI 업그레이드 후 `rustra codegen` 재실행으로 생성물을 갱신하고
+  `rustra codegen --check`로 드리프트를 해소해야 한다. (2) deprecated
+  alias(`int32`, `String`, `Tuple_of_int32_and_int32` 등)를 타입 import로 직접
+  쓰던 코드는 계속 컴파일되지만 `@deprecated` 경고가 뜬다 — 특히 `String`은 JS
+  내장 타입과 충돌하므로 직접 import를 피하고, 명령 시그니처의 인라인 타입
+  (`number`, `string`, `[number, number]`)이나 자체 도메인 타입으로 교체한다.
+  (3) `contractVerification`을 `'warn'`/`'off'`로 바꿔 쓰는 OTA 롤백 등 의도적
+  드리프트 운영은 재생성된 엔트리의 해당 한 줄에서 그대로 설정한다.
+
+  **deprecated alias 유지 범위** — schemars 원시/합성 이름 집합(`String`,
+  `Boolean`, `int8`–`int128`/`uint8`–`uint128`, `float`, `double`, `Uuid`,
+  `Tuple_of_*`, `Array_of_*`, `Array_size_*`, `Set_of_*`, `Map_of_*`,
+  `Nullable_*`, `Result_of_*`, `Bound_of_*`, `Range_of_*`, `Either_*` 계열)에
+  해당하는 기존 export는 types.ts에 `@deprecated` JSDoc과 함께 유지된다. 제거는
+  별도 major 릴리스에서만 검토한다.
+
+- 89cf9c4: Keep generated commands and events on the same selected runtime. Add persistent
+  Node configuration for stateful applications, strict Tauri contract verification,
+  and producer-bound React Native channel cleanup. Normalize malformed batch errors,
+  preserve decoded Tauri string payloads, and close transport and subscription
+  lifecycle gaps. Development watching now tracks Cargo workspace/path dependencies,
+  build scripts, compiler dep-info, Cargo configs and toolchain selection. Config and
+  legacy dev exclude owned generated files without hiding adjacent source, including
+  overlapping Cargo target directories, and stop pending publication after disposal.
+  Keep one-field generated commands and their generation-aware factory helper
+  together. The React Native shell and Rust core retain the optional owned-response
+  handoff with the legacy overflow fallback.
+
+  Development disposal cancels owned Cargo stages immediately and can be awaited
+  to drain active work before deleting project inputs. Wait for child output closure
+  and keep progress/errors on the originating session. Reload callbacks can dispose
+  their own watcher without joining themselves. Native Bun test fixtures build their
+  own library instead of relying on a previously warmed checkout.
+  Ignored child output cannot block verbose commands on an unread pipe.
+
+  Fix iOS JSI installation with React Native's synchronous module interop. Install
+  on the owning JS thread with an object-returning native method, avoiding a crash
+  when a Promise's void return is read synchronously. Keep the public async
+  installer and JS-thread teardown, and reject explicit native installation failure
+  before accepting a previously installed global.
+
+### Patch Changes
+
+- 89cf9c4: Make setup failures actionable: resolve Node runtime candidates from the selected
+  child cwd, explain Bun FFI's runtime requirement, validate the selected React Native
+  native transport before readiness, and preserve structured bootstrap errors.
+  Tauri missing-registration errors now explain handler replacement and command
+  composition. Doctor checks compatible runtime versions and host-specific native
+  tools while allowing the Node process adapter to run under Bun.
+- 8fd97fe: Fix React Native initialization to declare the adapter dependency and register the
+  native FFI entrypoint. Preserve equals signs in inline CLI option values.
+  Keep generated React Native modules in their existing monorepo workspace instead
+  of creating a nested workspace. Respect workspace glob exclusions.
+
+  Make schema diffs detect positional wire changes and terminate on recursive
+  references. Optional field additions are now correctly reported as breaking for
+  binary consumers; keep strict contract verification and upgrade generated/native
+  artifacts together.
+  Remove obsolete generated files only when the previous manifest proves their
+  unchanged ownership. Preserve edited, unrecorded, symlinked, and out-of-root files
+  with an actionable error, including legacy rkyv files left by older upgrades.
+
+  Prevent repeated event delivery when callbacks resubscribe during dispatch, and
+  prevent channel callbacks from being invoked twice when user code throws.
+
+- Updated dependencies [89cf9c4]
+  - @rustra/types@0.12.1
+
 ## 0.11.3
 
 ### Patch Changes
