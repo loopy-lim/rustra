@@ -101,6 +101,31 @@ export function invokeGeneratedFields3<T>(
 }
 
 /** @internal — codegen import contract; see note atop global-fields.ts. */
+export function createGeneratedFields1<TInput extends object, TOutput>(
+  commandId: number,
+  command: string,
+  field0Key: keyof TInput,
+  functionName = command,
+): GeneratedCommand<TInput, TOutput> {
+  let routeGeneration = -1;
+  let route: GeneratedFieldsRoute | null = null;
+  const generated = ((input: TInput, options?: InvokeOptions): Promise<TOutput> => {
+    const field0 = input[field0Key];
+    if (!runtime.engine || options !== undefined)
+      return invokeGeneratedFields1<TOutput>(commandId, command, input, field0, options);
+    if (routeGeneration !== runtime.engineGeneration) {
+      route = runtime.engine[resolveGeneratedFieldsSync]?.(commandId, command, 1) ?? null;
+      routeGeneration = runtime.engineGeneration;
+    }
+    if (route) return invokeRoute<TOutput>(route, input, [field0]);
+    return invokeGeneratedFields1<TOutput>(commandId, command, input, field0);
+  }) as GeneratedCommand<TInput, TOutput>;
+  Object.defineProperty(generated, 'name', { configurable: true, value: functionName });
+  generated.commandId = command;
+  return generated;
+}
+
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function createGeneratedFields2<TInput extends object, TOutput>(
   commandId: number,
   command: string,

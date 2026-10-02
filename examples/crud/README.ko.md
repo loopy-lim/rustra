@@ -48,10 +48,11 @@ node --test dist-ts/examples/crud/ts/crud-operations.test.js
 calculator 예제와 동일한 형태다:
 
 ```ts
-import { createItem, rustra } from './generated/node.js';
+import { createItem, getItem, rustra } from './generated/node.js';
 
 const { item } = await createItem({ name: 'Widget', value: 42 });
 console.log(item.id, item.name, item.value);
+console.log((await getItem({ id: item.id })).item);
 
 rustra.dispose(); // 엔진 서브프로세스 정리
 ```
@@ -59,10 +60,10 @@ rustra.dispose(); // 엔진 서브프로세스 정리
 전제: `cargo build -p rustra-crud-example` — 엔트리는 `target/release/` 를 먼저,
 그다음 `target/debug/` 를 찾는다.
 
-**transport 주의(원샷)**: 생성 Node 엔트리는 invoke 마다 stdio 바이너리를 새로
-띄운다 — 호출마다 별도 프로세스에서 실행되므로, 이 예제의 메모리 Rust 스토어는
-이 transport 에서 호출 간 유지되지 않는다. 상태를 가진 전체 흐름(create → get →
-update → delete)은 Rust 데모(`cargo run -p rustra-crud-example --bin rustra-crud-example`)가 한 프로세스에서
-실행하고, [`ts/crud-operations.test.ts`](ts/crud-operations.test.ts) 가 상태를 가진
-mock 엔진으로 검증한다. 상시 프로세스는 calculator 의 loop transport
-([`node-performance.ts`](../calculator/apps/node-performance.ts)) 를 참고한다.
+이 예제의 `node.persistent: true` 설정은 명령마다 같은 Rust 프로세스를 사용한다.
+따라서 `create → get → update → delete` 동안 메모리 스토어가 유지된다.
+바이너리는 NDJSON `serve` 프로토콜을 구현한다. 서버 플래그가 다르면
+`node.args`로 지정한다. 앱을 종료할 때 `rustra.dispose()`로 프로세스를 정리한다.
+이 옵션이 없고 이벤트도 없는 스키마는 기존 원샷 `invoke` 프로토콜을 사용한다.
+
+저장소 루트에서 `bun run test:runtime:crud`로 실제 생성 Node 소비자를 실행한다.

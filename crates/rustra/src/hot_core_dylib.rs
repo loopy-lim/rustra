@@ -269,6 +269,12 @@ impl HotCoreHandle {
 }
 
 impl JsonDispatch for HotCoreHandle {
+    fn contract_hash(&self) -> Result<String, Value> {
+        HotCoreHandle::contract_hash(self).map_err(
+            |error| json!({"code": "contract.unenforceable", "message": error.to_string()}),
+        )
+    }
+
     fn invoke_json(&self, command: &str, args: Value) -> Result<Value, Value> {
         let guard = self
             .core

@@ -26,6 +26,16 @@ import {
 
 const baseConfig = { schema: './generated/schema.json', output: './src/generated' };
 
+test('node.persistent is an additive boolean opt-in and preserves explicit runtime arguments', () => {
+  const result = loadConfig({ ...baseConfig, node: { persistent: true, args: ['custom-loop'] } });
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.config?.node, { persistent: true, args: ['custom-loop'] });
+  assert.match(
+    loadConfigError({ ...baseConfig, node: { persistent: 'true' } }),
+    /node\.persistent must be a boolean/,
+  );
+});
+
 type LoadResult = { config?: RustraConfig; error?: string };
 
 function loadConfig(body: unknown): LoadResult {

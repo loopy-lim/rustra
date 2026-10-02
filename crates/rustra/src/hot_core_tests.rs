@@ -308,6 +308,11 @@ fn dylib_core_opens_invokes_and_swaps_calculator_cdylib() {
         handle.contract_hash().expect("handle hash after swap"),
         hash
     );
+    assert_eq!(
+        JsonDispatch::contract_hash(&handle).expect("selected producer trait hash"),
+        hash,
+        "Tauri's dispatcher handshake must read the selected dylib contract"
+    );
     let via_handle = handle
         .invoke_json("addNumbers", serde_json::json!({"a": 6, "b": 7}))
         .expect("handle invoke after swap");

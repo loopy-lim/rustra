@@ -88,6 +88,17 @@ test('unsubscribe is idempotent and safe after dispose', async () => {
   expect(true).toBe(true);
 });
 
+test('disposing a polling bridge suppresses events from an in-flight drain', async () => {
+  const bridge = await createBunEventBridge({
+    poll: { drainEvents: async () => [{ name: 'tick', payload: 1 }] },
+  });
+  const seen: unknown[] = [];
+  bridge.subscribeEvent('tick', (payload) => seen.push(payload));
+  bridge.dispose();
+  await Bun.sleep(1);
+  assert.deepEqual(seen, []);
+});
+
 test('polling survives a synchronous drainEvents throw', async () => {
   let calls = 0;
   const source: BunEventDrainSource = {

@@ -21,6 +21,8 @@ import {
   invokeWithTimeout,
   parseRustraErrorString,
   raceAbort,
+  RustraCommandError,
+  RustraErrorCode,
 } from '@rustra/types';
 
 export type ReactNativeEngine = EngineClientType & {
@@ -36,6 +38,8 @@ export type RustraJSINative = FrameSchemaNative & {
   /** 바이너리 채널 — 콜백이 Frame 프레임 등 임의 바이트를 받는다. */
   createChannelBytes?(callback: (payload: ArrayBuffer | Uint8Array) => void): number;
   dropChannel?(handle: number): boolean;
+  /** Producer-bound close; preserves channel ownership across hot-core replacement. */
+  bindChannelClose?(handle: number): () => boolean;
   /**
    * C++ typed fast path(동기) — HostFunction `invokeTyped` 과 동일 계약.
    * 동기 invoke 표면(`invokeTypedSync`) 이 이 함수를 직접 쓴다. 에러는
@@ -89,6 +93,7 @@ export const REACT_NATIVE_FRAME_ENGINE_SUPPORTS: EngineSupports = {
 export function createReactNativeEngine(native: {
   invoke(payload: ArrayBuffer): ArrayBuffer;
 }): ReactNativeEngine {
+  assertNativeTransport(native, 'createReactNativeEngine', 'invoke');
   const transport: EngineClientType = {
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       if (options?.signal?.aborted) {
@@ -149,20 +154,37 @@ export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBo
       'Rustra (React Native)',
       'A JS reload cannot repair native drift — remount the React Native screen/app to create a fresh bootstrap.',
     );
-  configureLazy(async () => {
-    try {
-      await options.install();
-      return createFastEngine(options.getNative(), options);
-    } catch (error) {
-      throw new Error(
-        `[rustra:bootstrap] Native setup failed: ${error instanceof Error ? error.message : String(error)}. Rebuild the native app after checking autolinking, generated codecs, and Rust FFI symbols.`,
-        { cause: error },
+  const requireActive = () => {
+    if (state === 'disposed') throw disposed();
+    if (!registration.isCurrent()) {
+      throw new RustraCommandError(
+        RustraErrorCode.RegistryFrozen,
+        'React Native bootstrap registration was replaced by another engine',
       );
     }
-  });
+  };
+  const registration = configureLazy(
+    async () => {
+      requireActive();
+      try {
+        await options.install();
+        requireActive();
+        return guardBootstrapEngine(createFastEngine(options.getNative(), options), requireActive);
+      } catch (error) {
+        requireActive();
+        if (error instanceof RustraCommandError) throw error;
+        throw new Error(
+          `[rustra:bootstrap] Native setup failed: ${error instanceof Error ? error.message : String(error)}. Rebuild the native app after checking autolinking, generated codecs, and Rust FFI symbols.`,
+          { cause: error },
+        );
+      }
+    },
+    { ownerId: 'React Native bootstrap' },
+  );
   const dispose = () => {
     if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
     state = 'disposed';
+    registration();
   };
   return {
     get state() {
@@ -170,14 +192,53 @@ export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBo
     },
     ready: () => {
       if (state === 'disposed') return Promise.reject(disposed());
-      return (ensureConfigured() as Promise<FrameEngine>).then((engine) => {
-        if (state === 'disposed') throw disposed();
-        state = 'ready';
-        return engine;
-      });
+      try {
+        requireActive();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      return (ensureConfigured() as Promise<FrameEngine>)
+        .then((engine) => {
+          requireActive();
+          state = 'ready';
+          return engine;
+        })
+        .catch((error: unknown) => {
+          requireActive();
+          throw error;
+        });
     },
     dispose,
   };
+}
+
+/** Retained engines and cached synchronous routes share the bootstrap lease. */
+function guardBootstrapEngine(engine: FrameEngine, requireActive: () => void): FrameEngine {
+  const guarded = { ...engine };
+  for (const key of Reflect.ownKeys(engine)) {
+    const member: unknown = Reflect.get(engine, key);
+    if (typeof member !== 'function') continue;
+    const returnsPromise = key === 'invoke' || key === 'invokeById' || key === 'invokeBatch';
+    Reflect.set(guarded, key, (...args: unknown[]) => {
+      try {
+        requireActive();
+      } catch (error) {
+        if (returnsPromise) return Promise.reject(error);
+        throw error;
+      }
+      const result: unknown = Reflect.apply(member, engine, args);
+      // Internal Frame resolvers return cached native bindings; guarding only
+      // the resolver would leave previously captured routes usable after dispose.
+      if (typeof result === 'function') {
+        return (...routeArgs: unknown[]) => {
+          requireActive();
+          return Reflect.apply(result, undefined, routeArgs);
+        };
+      }
+      return result;
+    });
+  }
+  return guarded;
 }
 
 export function getRustraNative(): RustraJSINative & RustraNative {
@@ -193,6 +254,7 @@ export function getRustraNative(): RustraJSINative & RustraNative {
 }
 
 export function createFastEngine(native: RustraJSINative, options: FastEngineOptions): FrameEngine {
+  assertNativeTransport(native, 'createFastEngine', 'invokeFrame');
   const engineOptions = {
     contractHash: options.contractHash,
     contractVerification: options.contractVerification,
@@ -204,4 +266,25 @@ export function createFastEngine(native: RustraJSINative, options: FastEngineOpt
   const engine = createFrameEngine(native, options.frameCodecs, engineOptions);
   engine.supports = { ...REACT_NATIVE_FRAME_ENGINE_SUPPORTS };
   return engine;
+}
+
+/** Check the selected transport before exposing a ready but unusable engine. */
+function assertNativeTransport(
+  native: unknown,
+  engine: string,
+  method: 'invoke' | 'invokeFrame',
+): void {
+  if (
+    native !== null &&
+    (typeof native === 'object' || typeof native === 'function') &&
+    typeof Reflect.get(native, method) === 'function'
+  )
+    return;
+  throw new RustraCommandError(
+    'native.incompatible',
+    `[rustra/react-native] ${engine} requires native.${method}(); the installed native bridge ` +
+      'is incompatible with the selected engine. Regenerate the React Native bridge with ' +
+      '`rustra codegen --config <path>`, rebuild the Rust archive and the native app, then ' +
+      'await installRustraJSI() before creating the engine. A JavaScript reload cannot update native bindings.',
+  );
 }

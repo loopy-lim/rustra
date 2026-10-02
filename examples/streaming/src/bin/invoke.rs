@@ -66,6 +66,14 @@ fn handle(input: &str) -> rustra::Result<Vec<u8>> {
         serde_json::to_vec(&body).map_err(rustra::RustraError::internal)
     };
 
+    if command == "__rustra_contract" {
+        let hash = streaming_package().generate_typescript()?.contract_hash;
+        return respond(json!({ "ok": true, "result": hash }));
+    }
+    if command == "__rustra_capabilities" {
+        return respond(json!({ "ok": true, "result": { "events": "polling" } }));
+    }
+
     if command == "__drainEvents" {
         // drain 페이로드는 `events` 필드로 돌아간다 — loop-stdio 참조 런타임과
         // @rustra/node 폴링 폴백(`transport.drainEvents()`)이 읽는 계약 필드.
@@ -83,6 +91,11 @@ fn handle(input: &str) -> rustra::Result<Vec<u8>> {
         return respond(json!({ "ok": true, "events": events }));
     }
 
-    let result = streaming_package().invoke_json(&command, args)?;
-    respond(json!({ "ok": true, "result": result }))
+    match streaming_package().invoke_json(&command, args) {
+        Ok(result) => respond(json!({ "ok": true, "result": result })),
+        Err(error) => {
+            let detail = serde_json::to_string(&error).map_err(rustra::RustraError::internal)?;
+            respond(json!({ "ok": false, "error": detail }))
+        }
+    }
 }

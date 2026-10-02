@@ -1,4 +1,5 @@
-import { dirname, relative, resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ReactNativeScaffoldOptions } from './react-native.js';
 import { cargoPackagesForManifest, findCargoManifest, selectCodegenBinary } from './cargo.js';
 import { toPosixPath } from './paths.js';
@@ -13,7 +14,7 @@ import {
 export type CargoHostEntry = { targetDirectoryUrl: string; targetName: string };
 export type HostEntries = {
   appRoot: string;
-  node?: CargoHostEntry & { args?: string[] };
+  node?: CargoHostEntry & { args?: string[]; persistent?: boolean };
   bun?: CargoHostEntry;
   tauri?: true;
 };
@@ -26,7 +27,7 @@ export function resolveCodegenTarget(configPath: string, config: RustraConfig) {
     : findCargoManifest(cwd);
   if (!manifestPath)
     throw new Error('codegen.rust_manifest_missing: set codegen.rustManifest in rustra.json');
-  const metadata = readCargoMetadata(manifestPath);
+  const metadata = readCargoMetadata(manifestPath, cwd);
   const candidates = cargoPackagesForManifest(
     metadata.packages,
     manifestPath,
@@ -110,7 +111,7 @@ export function resolveHostEntries(
   if (config.node) {
     const manifest = resolveSectionManifest(config.node);
     if (!manifest) throw new Error('Node setup could not find Cargo.toml. Set node.rustManifest.');
-    const metadata = readCargoMetadata(manifest);
+    const metadata = readCargoMetadata(manifest, appRoot);
     const cargoPackage = selectHostPackage(metadata, manifest, config.node.rustPackage);
     const binaries = cargoPackage.targets.filter(
       (target) => target.kind?.includes('bin') || target.crate_types.includes('bin'),
@@ -120,15 +121,16 @@ export function resolveHostEntries(
       'generate',
     ]);
     entries.node = {
-      targetDirectoryUrl: `${portablePackagePath(outputPath, requireTargetDirectory(metadata))}/`,
+      targetDirectoryUrl: runtimeTargetDirectoryUrl(outputPath, requireTargetDirectory(metadata)),
       targetName: name,
       args: config.node.args,
+      persistent: config.node.persistent,
     };
   }
   if (config.bun) {
     const manifest = resolveSectionManifest(config.bun);
     if (!manifest) throw new Error('Bun setup could not find Cargo.toml. Set bun.rustManifest.');
-    const metadata = readCargoMetadata(manifest);
+    const metadata = readCargoMetadata(manifest, appRoot);
     const cargoPackage = selectHostPackage(metadata, manifest, config.bun.rustPackage);
     const libraries = cargoPackage.targets.filter((target) =>
       target.crate_types.includes('cdylib'),
@@ -145,7 +147,7 @@ export function resolveHostEntries(
           .join(', ')}). Add crate-type = ["rlib", "cdylib"], or set bun.rustLibrary.`,
       );
     entries.bun = {
-      targetDirectoryUrl: `${portablePackagePath(outputPath, requireTargetDirectory(metadata))}/`,
+      targetDirectoryUrl: runtimeTargetDirectoryUrl(outputPath, requireTargetDirectory(metadata)),
       targetName: selected.name,
     };
   }
@@ -161,7 +163,12 @@ export function resolveReactNativeScaffold(
   const rn = config.reactNative!;
   const appRoot = dirname(resolve(configPath));
   const moduleDir = resolve(appRoot, rn.moduleDir ?? 'modules/rustra-bridge');
-  if (moduleDir !== appRoot && !moduleDir.startsWith(`${appRoot}/`))
+  const moduleRelative = relative(appRoot, moduleDir);
+  if (
+    isAbsolute(moduleRelative) ||
+    moduleRelative === '..' ||
+    moduleRelative.startsWith(`..${sep}`)
+  )
     throw new Error('Config reactNative.moduleDir must stay inside the app directory');
   const rustManifestPath = rn.rustManifest
     ? resolve(appRoot, rn.rustManifest)
@@ -171,7 +178,7 @@ export function resolveReactNativeScaffold(
       'React Native setup could not find Cargo.toml. Set reactNative.rustManifest in rustra.json.',
     );
   const inferred = selectReactNativeCargoTarget(
-    readCargoMetadata(rustManifestPath),
+    readCargoMetadata(rustManifestPath, dirname(rustManifestPath)),
     rustManifestPath,
     rn.rustPackage,
   );
@@ -191,4 +198,25 @@ export function resolveReactNativeScaffold(
 export function portablePackagePath(from: string, to: string): string {
   const path = toPosixPath(relative(from, to));
   return path.startsWith('.') ? path : `./${path}`;
+}
+
+function runtimeTargetDirectoryUrl(outputPath: string, targetPath: string): string {
+  // import.meta.url follows symlinks; Cargo targets must use the same path basis.
+  const path = portablePackagePath(
+    canonicalRuntimePath(outputPath),
+    canonicalRuntimePath(targetPath),
+  );
+  return `${path.split('/').map(encodeURIComponent).join('/')}/`;
+}
+
+function canonicalRuntimePath(path: string): string {
+  const absolute = resolve(path);
+  try {
+    return realpathSync(absolute);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    const parent = dirname(absolute);
+    if (parent === absolute) throw error;
+    return join(canonicalRuntimePath(parent), basename(absolute));
+  }
 }

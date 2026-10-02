@@ -7,7 +7,7 @@
 // ────────────────────────────────────────────────────────────
 
 import type { CreateItemInput, CreateItemOutput, DeleteItemInput, DeleteItemOutput, GetItemInput, GetItemOutput, ListItemsInput, ListItemsOutput, UpdateItemInput, UpdateItemOutput } from './types.js';
-import { createGeneratedFields2, invokeGenerated, invokeGeneratedFields1 } from '@rustra/types';
+import { createGeneratedFields1, createGeneratedFields2, invokeGenerated } from '@rustra/types';
 import type { InvokeOptions as CoreInvokeOptions } from '@rustra/types';
 
 /**
@@ -29,15 +29,9 @@ export type InvokeOptions = CoreInvokeOptions;
 
 export const createItem = createGeneratedFields2<CreateItemInput, CreateItemOutput>(1, 'createItem', "name", "value", 'createItem');
 
-export function deleteItem(input: DeleteItemInput, options?: InvokeOptions): Promise<DeleteItemOutput> {
-  return invokeGeneratedFields1<DeleteItemOutput>(5, 'deleteItem', input, input["id"], options);
-}
-deleteItem.commandId = 'deleteItem';
+export const deleteItem = createGeneratedFields1<DeleteItemInput, DeleteItemOutput>(5, 'deleteItem', "id", 'deleteItem');
 
-export function getItem(input: GetItemInput, options?: InvokeOptions): Promise<GetItemOutput> {
-  return invokeGeneratedFields1<GetItemOutput>(2, 'getItem', input, input["id"], options);
-}
-getItem.commandId = 'getItem';
+export const getItem = createGeneratedFields1<GetItemInput, GetItemOutput>(2, 'getItem', "id", 'getItem');
 
 export function listItems(input: ListItemsInput, options?: InvokeOptions): Promise<ListItemsOutput> {
   return invokeGenerated<ListItemsOutput>(3, 'listItems', input, options);

@@ -1,5 +1,5 @@
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
-  "node": {}
+  "node": { "persistent": true }
 }

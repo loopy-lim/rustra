@@ -11,7 +11,7 @@ import {
   RustraCommandError,
 } from './index.js';
 import type { RustraJSINative } from './index.js';
-import { decodeUtf8, encodeUtf8, exactArrayBuffer } from '@rustra/types';
+import { createSchemaPostcardCodec, decodeUtf8, encodeUtf8, exactArrayBuffer } from '@rustra/types';
 
 const encoder = new TextEncoder();
 
@@ -42,6 +42,13 @@ function createMockNative(returnValue: { ok: boolean; result?: unknown; error?: 
   };
 }
 
+function createSetupNative(): RustraJSINative {
+  return {
+    invoke: () => new ArrayBuffer(0),
+    invokeFrame: () => new ArrayBuffer(0),
+  };
+}
+
 test('missing JSI module error points through native linking to the Rust ABI', () => {
   const globalRecord = globalThis as Record<string, unknown>;
   const previous = Object.getOwnPropertyDescriptor(globalRecord, '__rustraNative');
@@ -62,7 +69,7 @@ test('missing JSI module error points through native linking to the Rust ABI', (
 
 test('React Native bootstrap installs and configures once across concurrent readiness', async () => {
   let installs = 0;
-  const native = {} as RustraJSINative;
+  const native = createSetupNative();
   const bootstrap = createRustraBootstrap({
     install: async () => {
       installs++;
@@ -82,7 +89,7 @@ test('React Native bootstrap adds native-to-Rust remediation to install failures
     install: async () => {
       throw new Error('ERR_NO_BRIDGE');
     },
-    getNative: () => ({}) as RustraJSINative,
+    getNative: createSetupNative,
     frameCodecs: new Map(),
   });
 
@@ -94,6 +101,131 @@ test('React Native bootstrap adds native-to-Rust remediation to install failures
       /autolinking/.test(error.message) &&
       /Rust FFI symbols/.test(error.message),
   );
+});
+
+for (const native of [{ invoke: () => new ArrayBuffer(0) }, { invokeFrame: 'old bridge' }, null]) {
+  test(`Frame engine reports an incompatible selected native transport (${native === null ? 'null' : typeof native.invokeFrame})`, () => {
+    assert.throws(
+      () => createFastEngine(native as unknown as RustraJSINative, { frameCodecs: new Map() }),
+      (error: unknown) => {
+        assert.ok(error instanceof RustraCommandError);
+        assert.equal(error.code, 'native.incompatible');
+        assert.match(error.message, /createFastEngine/);
+        assert.match(error.message, /invokeFrame/);
+        assert.match(error.message, /rustra codegen/);
+        assert.match(error.message, /rebuild.*native app/i);
+        assert.match(error.message, /JavaScript reload/);
+        return true;
+      },
+    );
+  });
+}
+
+test('JSON engine reports a missing selected invoke transport before the first command', () => {
+  assert.throws(
+    () => createReactNativeEngine({} as { invoke(payload: ArrayBuffer): ArrayBuffer }),
+    (error: unknown) => {
+      assert.ok(error instanceof RustraCommandError);
+      assert.equal(error.code, 'native.incompatible');
+      assert.match(error.message, /createReactNativeEngine/);
+      assert.match(error.message, /invoke\(\)/);
+      return true;
+    },
+  );
+});
+
+test('Frame-only legacy transport reaches the first typed command without optional native methods', async () => {
+  const codec = createSchemaPostcardCodec(
+    1,
+    {
+      type: 'object',
+      properties: { a: { type: 'integer' }, b: { type: 'integer' } },
+      required: ['a', 'b'],
+    },
+    { type: 'object', properties: { value: { type: 'integer' } }, required: ['value'] },
+  );
+  assert.ok(codec);
+  const native = {
+    invokeFrame(payload: ArrayBuffer) {
+      assert.deepEqual([...new Uint8Array(payload)], [1, 0, 40, 44]);
+      // Success header + postcard zigzag(42); independent hand-checked response.
+      return new Uint8Array([1, 0, 0, 0, 0, 0, 0, 0, 84]).buffer;
+    },
+  } as RustraJSINative;
+  const engine = createFastEngine(native, { frameCodecs: new Map([['addNumbers', codec]]) });
+  assert.deepEqual(await engine.invoke('addNumbers', { a: 20, b: 22 }), { value: 42 });
+});
+
+test('RN bootstrap cannot report ready when installation lacks the selected Frame transport', async () => {
+  const native = createMockNative({ ok: true, result: null }) as RustraJSINative;
+  const bootstrap = createRustraBootstrap({
+    install: async () => {},
+    getNative: () => native,
+    frameCodecs: new Map(),
+  });
+  try {
+    await assert.rejects(
+      bootstrap.ready(),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'native.incompatible',
+    );
+    assert.equal(bootstrap.state, 'initializing', 'failed transport setup never becomes ready');
+  } finally {
+    bootstrap.dispose();
+  }
+});
+
+test('RN bootstrap preserves contract mismatch code and native/client diagnosis', async () => {
+  const bootstrap = createRustraBootstrap({
+    install: async () => {},
+    getNative: () => ({
+      invoke: () => new ArrayBuffer(0),
+      invokeFrame: () => new ArrayBuffer(0),
+      getContractHash: () => exactArrayBuffer(encodeUtf8('native-contract')),
+    }),
+    contractHash: 'client-contract',
+    frameCodecs: new Map(),
+  });
+  try {
+    await assert.rejects(bootstrap.ready(), (error: unknown) => {
+      assert.ok(error instanceof RustraCommandError);
+      assert.equal(error.code, 'contract.mismatch');
+      assert.match(error.message, /native-contract/);
+      assert.match(error.message, /client-contract/);
+      assert.match(error.message, /rebuild.*native app/);
+      return true;
+    });
+  } finally {
+    bootstrap.dispose();
+  }
+});
+
+test('RN bootstrap preserves structured native setup error cause and request data', async () => {
+  const cause = new Error('native registration rejected');
+  const failure = Object.assign(
+    new RustraCommandError('bridge.install_failed', 'install request 42 rejected', true, cause),
+    { requestId: 42, frameBytes: new Uint8Array([1, 2, 3]) },
+  );
+  const bootstrap = createRustraBootstrap({
+    install: async () => {
+      throw failure;
+    },
+    getNative: createSetupNative,
+    frameCodecs: new Map(),
+  });
+  try {
+    await assert.rejects(bootstrap.ready(), (error: unknown) => {
+      assert.ok(error instanceof RustraCommandError);
+      assert.equal(error, failure, 'callers receive the original structured native failure');
+      assert.equal(error.cause, cause);
+      assert.equal(Reflect.get(error, 'requestId'), 42);
+      assert.deepEqual(error.frameBytes, new Uint8Array([1, 2, 3]));
+      assert.equal(error.retryable, true);
+      return true;
+    });
+  } finally {
+    bootstrap.dispose();
+  }
 });
 
 test('routes invoke through JSI native module', async () => {
@@ -1095,7 +1227,7 @@ const A05_SLOT_ENGINE = {
 
 test('A05: createRustraBootstrap exposes the lifecycle state surface', async () => {
   const { configure } = await import('@rustra/types');
-  const native = {} as RustraJSINative;
+  const native = createSetupNative();
   configure(A05_SLOT_ENGINE);
   try {
     const bootstrap = createRustraBootstrap({
@@ -1121,7 +1253,7 @@ test('A05: ready after dispose rejects loudly (react-native)', async () => {
   try {
     const bootstrap = createRustraBootstrap({
       install: async () => {},
-      getNative: () => ({}) as RustraJSINative,
+      getNative: createSetupNative,
       frameCodecs: new Map(),
     });
     bootstrap.dispose();
@@ -1140,7 +1272,7 @@ test('A05: dispose is idempotent — second dispose is a no-op (react-native)', 
   try {
     const bootstrap = createRustraBootstrap({
       install: async () => {},
-      getNative: () => ({}) as RustraJSINative,
+      getNative: createSetupNative,
       frameCodecs: new Map(),
     });
     bootstrap.dispose();
@@ -1156,7 +1288,7 @@ test('A05: concurrent ready calls share one initialization promise (react-native
   configure(A05_SLOT_ENGINE);
   try {
     let installs = 0;
-    const native = {} as RustraJSINative;
+    const native = createSetupNative();
     const bootstrap = createRustraBootstrap({
       install: async () => {
         installs++;
@@ -1171,6 +1303,182 @@ test('A05: concurrent ready calls share one initialization promise (react-native
     bootstrap.dispose();
   } finally {
     configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('disposing an uninitialized RN bootstrap releases global lazy setup', async () => {
+  const { configure, ensureConfigured } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let installs = 0;
+  const bootstrap = createRustraBootstrap({
+    install: async () => {
+      installs++;
+    },
+    getNative: createSetupNative,
+    frameCodecs: new Map(),
+  });
+  try {
+    bootstrap.dispose();
+    await assert.rejects(ensureConfigured(), /not configured/);
+    assert.equal(installs, 0);
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('disposing RN bootstrap during install cannot publish its engine', async () => {
+  const { configure, ensureConfigured } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let release!: () => void;
+  const installing = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const bootstrap = createRustraBootstrap({
+    install: () => installing,
+    getNative: createSetupNative,
+    frameCodecs: new Map(),
+  });
+  try {
+    const ready = bootstrap.ready();
+    await Promise.resolve();
+    bootstrap.dispose();
+    release();
+    await assert.rejects(ready, /disposed/);
+    await assert.rejects(ensureConfigured(), /not configured/);
+  } finally {
+    release();
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('replaced RN bootstrap cannot claim another engine as ready', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let release!: () => void;
+  const installing = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const bootstrap = createRustraBootstrap({
+    install: () => installing,
+    getNative: createSetupNative,
+    frameCodecs: new Map(),
+  });
+  try {
+    const ready = bootstrap.ready();
+    await Promise.resolve();
+    configure(A05_SLOT_ENGINE);
+    release();
+    await assert.rejects(ready, /replaced/);
+    assert.equal(bootstrap.state, 'initializing');
+  } finally {
+    release();
+    bootstrap.dispose();
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('captured RN engine stops every public route after bootstrap disposal', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let nativeCalls = 0;
+  const bootstrap = createRustraBootstrap({
+    install: async () => {},
+    getNative: () =>
+      ({
+        ...createSetupNative(),
+        getSchema() {
+          nativeCalls++;
+          return exactArrayBuffer(encodeUtf8('{"commands":[]}'));
+        },
+      }) as RustraJSINative,
+    frameCodecs: new Map(),
+  });
+  try {
+    const engine = await bootstrap.ready();
+    const callsBeforeDispose = nativeCalls;
+    bootstrap.dispose();
+    await assert.rejects(engine.invoke('retired'), /disposed/);
+    await assert.rejects(engine.invokeById(1, 'retired'), /disposed/);
+    await assert.rejects(engine.invokeBatch([]), /disposed/);
+    assert.throws(() => engine.refreshLiveSchema(), /disposed/);
+    assert.equal(nativeCalls, callsBeforeDispose);
+  } finally {
+    bootstrap.dispose();
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('captured RN engine rejects replacement and old dispose preserves the new owner', async () => {
+  const { configure, invoke } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  const bootstrap = createRustraBootstrap({
+    install: async () => {},
+    getNative: createSetupNative,
+    frameCodecs: new Map(),
+  });
+  try {
+    const engine = await bootstrap.ready();
+    configure(A05_SLOT_ENGINE);
+    await assert.rejects(engine.invokeBatch([]), /replaced/);
+    await assert.rejects(bootstrap.ready(), /replaced/);
+    bootstrap.dispose();
+    assert.equal(await invoke('current'), 'slot');
+  } finally {
+    bootstrap.dispose();
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('captured RN synchronous binding follows bootstrap ownership', async () => {
+  const { configure } = await import('@rustra/types');
+  for (const retirement of ['dispose', 'replace'] as const) {
+    configure(A05_SLOT_ENGINE);
+    let nativeCalls = 0;
+    const bootstrap = createRustraBootstrap({
+      install: async () => {},
+      getNative: () =>
+        ({
+          invoke: () => {
+            throw new Error('unexpected JSON invocation');
+          },
+          invokeFrame: () => {
+            throw new Error('unexpected Frame invocation');
+          },
+          bindSyncCommand: () => () => {
+            nativeCalls++;
+            return 42;
+          },
+        }) as RustraJSINative,
+      contractHash: 'expected',
+      contractVerification: 'off',
+      frameCodecs: new Map([
+        [
+          'ownedSync',
+          {
+            commandId: 1,
+            execution: 'sync',
+            encode: () => new ArrayBuffer(0),
+            decode: () => ({ ok: true, result: 42 }),
+          },
+        ],
+      ]),
+    });
+    try {
+      const engine = await bootstrap.ready();
+      const resolve = Reflect.get(
+        engine,
+        Symbol.for('dev.rustra.types.v0.10.resolveSyncBinding'),
+      ) as (command: string) => (input: unknown) => unknown;
+      const bound = resolve('ownedSync');
+      assert.equal(bound({}), 42);
+      if (retirement === 'dispose') bootstrap.dispose();
+      else configure(A05_SLOT_ENGINE);
+      assert.throws(() => bound({}), retirement === 'dispose' ? /disposed/ : /replaced/);
+      assert.equal(nativeCalls, 1);
+    } finally {
+      bootstrap.dispose();
+      configure(A05_SLOT_ENGINE);
+    }
   }
 });
 
@@ -1512,4 +1820,274 @@ test('polling demand is shared between event subscriptions and channels on one n
     channel.close();
     root.__rustraNative = previous;
   }
+});
+
+function withPollingClock(run: (clock: { pending(): number; tick(): void }) => void): void {
+  const timeoutDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'setTimeout');
+  const clearDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'clearTimeout');
+  const timers = new Map<number, () => void>();
+  let nextTimer = 0;
+  Object.defineProperty(globalThis, 'setTimeout', {
+    configurable: true,
+    value: (callback: () => void) => {
+      const id = ++nextTimer;
+      timers.set(id, callback);
+      return id;
+    },
+  });
+  Object.defineProperty(globalThis, 'clearTimeout', {
+    configurable: true,
+    value: (id: number) => timers.delete(id),
+  });
+  try {
+    run({
+      pending: () => timers.size,
+      tick: () => {
+        const timer = timers.entries().next().value;
+        assert.ok(timer, 'a polling timer must be available');
+        const [id, callback] = timer;
+        timers.delete(id);
+        callback();
+      },
+    });
+  } finally {
+    if (timeoutDescriptor) Object.defineProperty(globalThis, 'setTimeout', timeoutDescriptor);
+    if (clearDescriptor) Object.defineProperty(globalThis, 'clearTimeout', clearDescriptor);
+  }
+}
+
+test('closing a channel with disabled polling preserves another channel delivery', () => {
+  withPollingClock((clock) => {
+    let nextHandle = 0;
+    let drains = 0;
+    const native = {
+      createChannel: () => ++nextHandle,
+      dropChannel: () => true,
+      drainEvents: () => ++drains,
+    };
+    const active = createChannel(() => {}, native, { pollMs: 5 });
+    const disabled = createChannel(() => {}, native, { pollMs: 0 });
+    try {
+      disabled.close();
+      assert.equal(clock.pending(), 1, 'disabled polling never owns active demand');
+      clock.tick();
+      assert.equal(drains, 1);
+    } finally {
+      disabled.close();
+      active.close();
+    }
+    assert.equal(clock.pending(), 0);
+  });
+});
+
+test('unsubscribing an event with disabled polling preserves a channel polling loop', () => {
+  withPollingClock((clock) => {
+    const h = createEventNative();
+    const native = {
+      ...h.native,
+      createChannel: () => 1,
+      dropChannel: () => true,
+      drainEvents: () => 0,
+    };
+    const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+    const previous = root.__rustraNative;
+    root.__rustraNative = native;
+    const channel = createChannel(() => {}, native, { pollMs: 5 });
+    const unsubscribe = subscribeEvent('disabled.tick', () => {}, { pollMs: -1 });
+    try {
+      unsubscribe();
+      assert.equal(clock.pending(), 1);
+      clock.tick();
+      assert.equal(clock.pending(), 1);
+    } finally {
+      unsubscribe();
+      channel.close();
+      root.__rustraNative = previous;
+    }
+  });
+});
+
+test('non-finite polling intervals leave push channels usable without scheduling timers', () => {
+  withPollingClock((clock) => {
+    for (const pollMs of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      let deliver: ((payload: ArrayBuffer | Uint8Array) => void) | undefined;
+      const received: number[][] = [];
+      const channel = createBytesChannel(
+        (payload) => received.push([...payload]),
+        {
+          createChannelBytes(callback) {
+            deliver = callback;
+            return 1;
+          },
+          dropChannel: () => true,
+          drainEvents: () => 0,
+        },
+        { pollMs },
+      );
+      try {
+        assert.equal(clock.pending(), 0, 'invalid intervals cannot create busy polling loops');
+        deliver!(new Uint8Array([7]));
+        assert.deepEqual(received, [[7]]);
+      } finally {
+        channel.close();
+      }
+    }
+  });
+});
+
+test('a channel replaced during drain keeps one timer and stops at its last close', () => {
+  withPollingClock((clock) => {
+    let nextHandle = 0;
+    let replacement: ReturnType<typeof createChannel> | undefined;
+    const native = {
+      createChannel: () => ++nextHandle,
+      dropChannel: () => true,
+      drainEvents() {
+        if (!replacement) {
+          oldChannel.close();
+          replacement = createChannel(() => {}, native, { pollMs: 5 });
+        }
+        return 0;
+      },
+    };
+    const oldChannel = createChannel(() => {}, native, { pollMs: 5 });
+    try {
+      clock.tick();
+      assert.equal(clock.pending(), 1, 'the retired drain cannot reschedule itself');
+      replacement!.close();
+      assert.equal(clock.pending(), 0, 'last close cancels every owned timer');
+    } finally {
+      oldChannel.close();
+      replacement?.close();
+    }
+  });
+});
+
+test('repeated old unsubscribe cannot remove a replacement subscription', () => {
+  const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
+  const received: unknown[] = [];
+  const listener = (payload: unknown) => received.push(payload);
+  const oldUnsubscribe = subscribeEvent('replacement.tick', listener);
+  oldUnsubscribe();
+  const unsubscribe = subscribeEvent('replacement.tick', listener);
+  try {
+    oldUnsubscribe();
+    h.emit('replacement.tick', '{"step":2}');
+    assert.deepEqual(received, [{ step: 2 }]);
+  } finally {
+    unsubscribe();
+    root.__rustraNative = previous;
+  }
+});
+
+test('a failed native event registration can be retried and deliver events', () => {
+  const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  const failure = new Error('native registration failed');
+  let failed = false;
+  root.__rustraNative = {
+    ...h.native,
+    onEvent(name: string, callback: (payloadJson: string) => void) {
+      if (!failed) {
+        failed = true;
+        throw failure;
+      }
+      h.native.onEvent(name, callback);
+    },
+  };
+  const received: unknown[] = [];
+  let unsubscribe = () => {};
+  try {
+    assert.throws(
+      () => subscribeEvent('retry.tick', () => {}),
+      (error) => error === failure,
+    );
+    unsubscribe = subscribeEvent('retry.tick', (payload) => received.push(payload));
+    h.emit('retry.tick', '{"ok":true}');
+    assert.deepEqual(received, [{ ok: true }]);
+  } finally {
+    unsubscribe();
+    root.__rustraNative = previous;
+  }
+});
+
+test('unsubscribe releases polling even when native listener removal throws', () => {
+  withPollingClock((clock) => {
+    const failure = new Error('native removal failed');
+    const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+    const previous = root.__rustraNative;
+    root.__rustraNative = {
+      onEvent() {},
+      offEvent() {
+        throw failure;
+      },
+      drainEvents: () => 0,
+    };
+    const unsubscribe = subscribeEvent('failed-removal.tick', () => {}, { pollMs: 5 });
+    try {
+      assert.throws(unsubscribe, (error) => error === failure);
+      assert.equal(clock.pending(), 0, 'native errors cannot retain polling demand');
+      assert.doesNotThrow(unsubscribe, 'unsubscribe stays idempotent after the error');
+    } finally {
+      unsubscribe();
+      root.__rustraNative = previous;
+    }
+  });
+});
+
+test('channel creation rejects the native zero-handle failure sentinel', () => {
+  assert.throws(
+    () => createChannel(() => {}, { createChannel: () => 0, dropChannel: () => false }),
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'channel.unavailable',
+  );
+});
+
+test('channel close retains a native producer-bound closer across core replacement', () => {
+  let currentCore = 0;
+  const drops: number[] = [];
+  const native = {
+    createChannel: () => 1,
+    bindChannelClose(handle: number) {
+      assert.equal(handle, 1);
+      const producer = currentCore;
+      return () => {
+        drops.push(producer);
+        return true;
+      };
+    },
+    dropChannel() {
+      drops.push(currentCore);
+      return true;
+    },
+  };
+  const oldChannel = createChannel(() => {}, native);
+  currentCore = 1;
+  const newChannel = createChannel(() => {}, native);
+  oldChannel.close();
+  newChannel.close();
+  assert.deepEqual(drops, [0, 1]);
+});
+
+test('failed native close binding releases the created channel before reporting failure', () => {
+  const failure = new Error('native close binding failed');
+  const dropped: number[] = [];
+  assert.throws(
+    () =>
+      createBytesChannel(() => {}, {
+        createChannelBytes: () => 1,
+        bindChannelClose() {
+          throw failure;
+        },
+        dropChannel(handle) {
+          dropped.push(handle);
+          return true;
+        },
+      }),
+    (error) => error === failure,
+  );
+  assert.deepEqual(dropped, [1]);
 });

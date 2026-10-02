@@ -37,6 +37,20 @@ function percentile(sorted: readonly number[], ratio: number): number {
   return sorted[Math.max(0, index)] ?? 0;
 }
 
+/** Checkpoints run outside timed batches and identify stalled startup/IPC. */
+async function reportProgress(
+  stage: string,
+  completedCalls = 0,
+  averageNs?: number,
+): Promise<void> {
+  const response = await fetch('http://127.0.0.1:19473/rustra-benchmark', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-rustra-benchmark': 'receipt-v1' },
+    body: JSON.stringify({ type: 'progress', stage, completedCalls, averageNs }),
+  });
+  if (!response.ok) throw new Error(`progress server returned ${response.status}`);
+}
+
 function summarize(
   durations: number[],
   extra: Pick<BenchmarkResult, 'name' | 'warmup' | 'iterations' | 'repeats' | 'batchSize'>,
@@ -63,6 +77,7 @@ async function measure(): Promise<{
 }> {
   const first = await addNumbers({ a: 20, b: 22 });
   if (first.value !== 42) throw new Error(`expected 42, got ${first.value}`);
+  await reportProgress('first-call', 1);
 
   const tauriInvoke = requireTauriInvoke();
   const warmup = 100;
@@ -75,6 +90,7 @@ async function measure(): Promise<{
   for (let index = 0; index < warmup; index += 1) {
     await addNumbers({ a: 20, b: 22 });
   }
+  await reportProgress('warmup-complete', warmup);
 
   const durations: number[] = [];
   for (let repeat = 0; repeat < repeats; repeat += 1) {
@@ -83,12 +99,20 @@ async function measure(): Promise<{
       for (let index = 0; index < batchSize; index += 1) {
         await addNumbers({ a: 20, b: 22 });
       }
-      durations.push(((performance.now() - started) * 1_000_000) / batchSize);
+      const averageNs = ((performance.now() - started) * 1_000_000) / batchSize;
+      durations.push(averageNs);
+      await reportProgress(
+        `production-repeat-${repeat + 1}-batch-${batch + 1}`,
+        repeat * iterations + (batch + 1) * batchSize,
+        averageNs,
+      );
     }
+    await reportProgress(`production-repeat-${repeat + 1}`, (repeat + 1) * iterations);
   }
 
   const last = await addNumbers({ a: 20, b: 22 });
   if (last.value !== 42) throw new Error(`expected 42, got ${last.value}`);
+  await reportProgress('profile-start', repeats * iterations);
 
   // 성분 분해: profiled 명령으로 RTT 와 네이티브 처리 시간을 함께 수집한다.
   // 크로싱 잔차 = RTT − 네이티브 (JS 직렬화 + WebKit 왕복 잔여).
@@ -106,6 +130,7 @@ async function measure(): Promise<{
     }
     nativeSamples.push(Number(response.native_ns));
   }
+  await reportProgress('profile-complete', profiledSamples.length);
   const profiledSummary = summarize(profiledSamples, {
     name: 'tauri-profiled-dispatch',
     warmup: 0,
@@ -132,6 +157,7 @@ async function measure(): Promise<{
 }
 
 try {
+  await reportProgress('webview-ready');
   const { production, profiled } = await measure();
   const response = await fetch('http://127.0.0.1:19473/rustra-benchmark', {
     method: 'POST',
@@ -141,6 +167,7 @@ try {
     },
     body: JSON.stringify({
       runtime: navigator.userAgent,
+      window: { visibilityState: document.visibilityState, hasFocus: document.hasFocus() },
       results: [production],
       decomposition: {
         rttAvgNs: profiled.averageNs,

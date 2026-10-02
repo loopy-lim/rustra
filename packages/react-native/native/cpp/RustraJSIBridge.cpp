@@ -4,6 +4,7 @@
 #include "rustra-sync-contract.hpp"
 #include "rustra-generated-codecs.hpp"
 #include <folly/dynamic.h>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -77,6 +78,9 @@ const CoreTable kStaticCoreTable = {
     rustra_ffi_has_raw,
     rustra_ffi_get_schema,
     rustra_ffi_contract_hash,
+    // (E1) 옵셔널 — 정적 코어는 셸과 함께 빌드되므로 항상 존재한다. 엔트리
+    // null(롤백·구형 핫코어) 시 소비 측이 기존 probe 경로로 폴백한다.
+    rustra_ffi_invoke_frame_owned,
 };
 
 // C++17 호환 홀더 — `std::atomic<std::shared_ptr<const CoreTable>>` 는
@@ -262,6 +266,44 @@ static std::string parseFrameErrorBody(const uint8_t* resp, size_t out_len) {
   }
 }
 
+// ── (E1) owned 응답 free 짝 가드 ─────────────────────────────
+// rustra_ffi_invoke_frame_owned 의 non-null 반환은 헤더 없는 owned 할당이다
+// — free 짝은 정확히 (ptr, len) 1회의 rustra_ffi_free_owned_bytes 다
+// (rustra_ffi_invoke_buffer 와 동일한 짝, 비동기 owned=1 프레임이
+// rustra_ffi_free 를 쓰는 것과 대조). decode/에러 파싱이 throw 해도
+// 소멸자가 짝을 지킨다 — largeBuf(vector) 소멸과 같은 예외 안전 계약.
+// 코어 테이블을 생성 시점에 고정해 스왑 뒤에도 생산 코어의 allocator 로
+// 해제된다(발행된 테이블은 불변·무폐기).
+class OwnedFrameGuard final {
+public:
+  OwnedFrameGuard() = default;
+  ~OwnedFrameGuard() { release(); }
+  OwnedFrameGuard(const OwnedFrameGuard&) = delete;
+  OwnedFrameGuard& operator=(const OwnedFrameGuard&) = delete;
+
+  /// 소유권 접수 — 이전 프레임이 있으면 먼저 해제하고 (ptr, len, core) 을
+  /// 기록한다. 반환 포인터는 resp 로 그대로 쓴다.
+  const uint8_t* adopt(uint8_t* ptr, size_t len, const CoreTable* core) {
+    release();
+    ptr_ = ptr;
+    len_ = len;
+    core_ = core;
+    return ptr_;
+  }
+
+private:
+  void release() {
+    if (ptr_ != nullptr) core_->free_owned_bytes(ptr_, len_);
+    ptr_ = nullptr;
+    len_ = 0;
+    core_ = nullptr;
+  }
+
+  uint8_t* ptr_ = nullptr;
+  size_t len_ = 0;
+  const CoreTable* core_ = nullptr;
+};
+
 // ── typed invoke 공통 tail ──────────────────────────────────
 // invokeTyped / invokeTypedById / invokeTypedBatch(ById) 의 FFI 이후 꼬리:
 // dispatch → 헤더 분기(null / empty / ok=0 에러 / malformed) → (성공 시)
@@ -272,12 +314,17 @@ static std::string parseFrameErrorBody(const uint8_t* resp, size_t out_len) {
 //   - batchItemName: 이름 기반 배치 루프의 항목 이름. FFI null 접미
 //     " (batch item <name>)" 조립에만 쓴다(에러 시 1회 조립 — hot path 비용 0).
 //     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
-// free 짝 계약: (Tier 1) typedInvokeTail 은 caller-buffer 변형을 쓴다 —
-// Rust 가 응답을 할당하지 않고 caller 소유 버퍼에 직접 기록하므로 free 짝이
-// 필요 없다. 먼저 512B 스택 버퍼로 바로 dispatch+write하고, 부족한 경우에만
-// 코어가 캐시한 같은 응답을 정확한 크기의 vector로 재시도한다. 작은 응답은
-// FFI 1회, 큰 응답도 핸들러는 정확히 1회만 실행된다. 테이블은 진입 시 1회
-// 로드해 probe/재시도를 같은 코어로 묶는다(스왑은 호출 경계에서만 반영).
+// free 짝 계약: (E1) 코어 테이블에 owned 진입(invoke_frame_owned)이 있으면
+// 그 진입으로 dispatch 를 1회 FFI 로 끝낸다 — 응답이 스택 버퍼에 들어가면
+// 제자리 기록(free 짝 불필요), 넘치면 응답 소유권을 넘겨받아 decode 후
+// OwnedFrameGuard 로 정확히 1회 free_owned_bytes 짝을 짓는다. probe 왕복
+// (요청 전체 복사·비교 + largeBuf zero-fill resize + 2차 FFI)이 없다.
+// (Tier 1 폴백) 진입 부재(구형 코어/핫코어 심볼 부재 → 테이블 null)면 기존
+// caller-buffer 변형(invoke_frame_into)을 쓴다 — 먼저 512B 스택 버퍼로 바로
+// dispatch+write하고, 부족한 경우에만 코어가 캐시한 같은 응답을 정확한
+// 크기의 vector로 재시도한다. 작은 응답은 FFI 1회, 큰 응답도 핸들러는
+// 정확히 1회만 실행된다. 테이블은 진입 시 1회 로드해 dispatch/free 짝을
+// 같은 코어로 묶는다(스왑은 호출 경계에서만 반영).
 template <typename Decode>
 static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize,
                              const char* tailSuffix, Decode decode,
@@ -290,23 +337,40 @@ static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize
   size_t out_len = 0;
   const uint8_t* resp = nullptr;
   std::vector<uint8_t> largeBuf;
+  // (E1) owned 핸드오프 프레임 — decode 경로가 throw 해도 정확히 1회 free 짝.
+  OwnedFrameGuard ownedGuard;
 
-  // 1단계: 스택 버퍼로 바로 dispatch+write. 대부분의 응답은 여기서 끝나
-  // size-probe를 위한 두 번째 FFI 횡단과 thread_local 캐시 왕복이 없다.
-  size_t n = core->invoke_frame_into(
-    reqData, reqSize, stackBuf, kStackCap, &out_len);
-  if (n != SIZE_MAX && n > 0) {
-    resp = stackBuf;
-  }
-
-  // 버퍼가 부족하면 코어가 out_len에 필요 크기를 쓰고 동일 응답을 캐시한다.
-  // 정확한 크기로 한 번만 재시도하므로 비멱등 핸들러는 재실행되지 않는다.
-  if (!resp && n == SIZE_MAX && out_len > kStackCap) {
-    largeBuf.resize(out_len);
-    n = core->invoke_frame_into(
-      reqData, reqSize, largeBuf.data(), largeBuf.size(), &out_len);
+  if (core->invoke_frame_owned != nullptr) {
+    // 1단계(E1): owned 진입 — dispatch 를 이 한 번의 FFI 로 끝낸다. 응답이
+    // 스택 버퍼에 들어가면 제자리 기록(null 반환, 해제 없음), 넘치면 응답
+    // 소유권을 넘겨받는다(non-null 반환 + *out_len = 응답 길이). overflow
+    // 폴백이 같은 dispatch 안에서 일어나므로 핸들러는 정확히 1회 실행된다.
+    uint8_t* owned = core->invoke_frame_owned(
+      reqData, reqSize, stackBuf, kStackCap, &out_len);
+    if (owned != nullptr) {
+      resp = ownedGuard.adopt(owned, out_len, core);
+    } else if (out_len > 0 && out_len <= kStackCap) {
+      resp = stackBuf;
+    }
+  } else {
+    // 1단계(Tier 1 폴백): 스택 버퍼로 바로 dispatch+write. 대부분의 응답은
+    // 여기서 끝나 size-probe를 위한 두 번째 FFI 횡단과 thread_local 캐시
+    // 왕복이 없다.
+    size_t n = core->invoke_frame_into(
+      reqData, reqSize, stackBuf, kStackCap, &out_len);
     if (n != SIZE_MAX && n > 0) {
-      resp = largeBuf.data();
+      resp = stackBuf;
+    }
+
+    // 버퍼가 부족하면 코어가 out_len에 필요 크기를 쓰고 동일 응답을 캐시한다.
+    // 정확한 크기로 한 번만 재시도하므로 비멱등 핸들러는 재실행되지 않는다.
+    if (!resp && n == SIZE_MAX && out_len > kStackCap) {
+      largeBuf.resize(out_len);
+      n = core->invoke_frame_into(
+        reqData, reqSize, largeBuf.data(), largeBuf.size(), &out_len);
+      if (n != SIZE_MAX && n > 0) {
+        resp = largeBuf.data();
+      }
     }
   }
   if (!resp) {
@@ -445,6 +509,7 @@ void EventDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
   bool hadListeners = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    invokerGeneration_.fetch_add(1, std::memory_order_acq_rel);
     callInvoker_ = std::move(invoker);
     hadListeners = !listeners_.empty();
     listeners_.clear();
@@ -500,6 +565,9 @@ void EventDispatcher::onRustEvent(void* user_data, const char* name,
   if (!self || !name || !payload) return;
 
   std::lock_guard<std::mutex> lock(self->mutex_);
+  // unregister waits for callbacks already in flight. They may reach this
+  // lock after teardown cleared the listeners; never retain their payload.
+  if (!self->hasListeners_.load(std::memory_order_acquire)) return;
   if (self->queue_.size() >= self->capacity_) {
     self->queue_.pop_front();
     ++self->dropped_;
@@ -519,8 +587,10 @@ void EventDispatcher::scheduleDrainLocked() {
   auto weak = std::weak_ptr<EventDispatcher>(self);
 #if defined(__APPLE__) || defined(__ANDROID__)
   auto* nativeInvoker = static_cast<facebook::react::CallInvoker*>(invoker.get());
-  nativeInvoker->invokeAsync([weak](facebook::jsi::Runtime& rt) {
+  const auto generation = invokerGeneration_.load(std::memory_order_acquire);
+  nativeInvoker->invokeAsync([weak, generation](facebook::jsi::Runtime& rt) {
     if (auto dispatcher = weak.lock()) {
+      if (dispatcher->invokerGeneration_.load(std::memory_order_acquire) != generation) return;
       dispatcher->drain(rt);
     }
   });
@@ -584,13 +654,14 @@ static std::shared_ptr<ChannelDispatcher> getChannelDispatcher() {
 void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
   // mutex_ 없이 콜백 맵 정리(레지스트리는 JS 스레드 전용) 후 락 내부에서
   // invoker 교체·채널 drop. drop 이 FFI 를 호출하므로 reset() 은 락 밖 실행.
-  std::vector<std::pair<uint32_t, const core::CoreTable*>> toDrop;
+  std::vector<std::pair<uint32_t, std::shared_ptr<ChannelContext>>> toDrop;
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    invokerGeneration_.fetch_add(1, std::memory_order_acq_rel);
     callInvoker_ = std::move(invoker);
-    for (auto& [handle, owner] : channelCores_) toDrop.emplace_back(handle, owner);
+    for (auto& [handle, context] : channelContexts_) toDrop.emplace_back(handle, context);
     callbacks_.clear();
-    channelCores_.clear();
+    channelContexts_.clear();
     queue_.clear();
     bytesQueue_.clear();
     bytesHandles_.clear();
@@ -599,8 +670,15 @@ void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
   // 리로드 대응: 귀속 채널 전부를 발급 코어에서 drop(락 밖 — FFI 재진입 방지).
   // 소유 코어로 라우팅한다 — 핸들은 코어 귀속이라 스왑 뒤 현재 코어에 같은
   // 번호가 새로 발급돼 있어도 그것을 오해제하는 일이 없다.
-  for (auto& [handle, owner] : toDrop) {
-    owner->channel_drop(handle);
+  for (auto& [handle, context] : toDrop) {
+    context->owner->channel_drop(handle);
+  }
+  // A callback already in flight may enqueue after the first clear. Drop has
+  // now synchronized every callback, so discard that final retired tail too.
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.clear();
+    bytesQueue_.clear();
   }
 }
 
@@ -611,11 +689,13 @@ uint32_t ChannelDispatcher::create(facebook::jsi::Runtime& rt,
   // 발급 코어를 기록한다 — drop/폐기 라우팅의 소유권 원천.
   (void)rt;
   const core::CoreTable* owner = core::currentCoreTable();
+  dropStaleChannelsAfterSwap(owner);
+  auto context = std::make_shared<ChannelContext>(ChannelContext{this, owner});
   uint32_t handle =
-    owner->channel_create(&ChannelDispatcher::onChannelPayload, this);
+    owner->channel_create(&ChannelDispatcher::onChannelPayload, context.get());
   if (handle == 0) return 0; // 발급 실패 sentinel — 사실상 도달하지 않는다.
   callbacks_.insert_or_assign(handle, std::move(callback));
-  channelCores_.insert_or_assign(handle, owner);
+  channelContexts_.insert_or_assign(handle, std::move(context));
   return handle;
 }
 
@@ -625,11 +705,13 @@ uint32_t ChannelDispatcher::createBytes(facebook::jsi::Runtime& rt,
   // drain 이 ArrayBuffer 로 전달한다.
   (void)rt;
   const core::CoreTable* owner = core::currentCoreTable();
+  dropStaleChannelsAfterSwap(owner);
+  auto context = std::make_shared<ChannelContext>(ChannelContext{this, owner});
   uint32_t handle =
-    owner->channel_create_bytes(&ChannelDispatcher::onChannelPayloadBytes, this);
+    owner->channel_create_bytes(&ChannelDispatcher::onChannelPayloadBytes, context.get());
   if (handle == 0) return 0;
   callbacks_.insert_or_assign(handle, std::move(callback));
-  channelCores_.insert_or_assign(handle, owner);
+  channelContexts_.insert_or_assign(handle, std::move(context));
   {
     std::lock_guard<std::mutex> lock(mutex_);
     bytesHandles_.insert(handle);
@@ -637,17 +719,20 @@ uint32_t ChannelDispatcher::createBytes(facebook::jsi::Runtime& rt,
   return handle;
 }
 
-bool ChannelDispatcher::drop(uint32_t handle) {
+bool ChannelDispatcher::drop(uint32_t handle, const core::CoreTable* expectedOwner) {
   // JS 스레드 호출. 발급 코어에서 Rust 채널 해제 후 콜백 제거. 해제 후 drain 에
   // 이미 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
   // 발급 코어로 라우팅한다 — 스왑 뒤 새 코어에 같은 번호가 재발급돼 있어도
   // 발급 주체를 해제한다(코어 귀속 계약).
-  auto ownerIt = channelCores_.find(handle);
-  const core::CoreTable* owner =
-    ownerIt != channelCores_.end() ? ownerIt->second : core::currentCoreTable();
+  auto found = channelContexts_.find(handle);
+  if (found == channelContexts_.end()) return false;
+  const core::CoreTable* owner = found->second->owner;
+  if (expectedOwner && owner != expectedOwner) return false;
+  // Keep callback user_data alive until the issuing core has joined callbacks.
+  auto context = found->second;
   int dropped = owner->channel_drop(handle);
   callbacks_.erase(handle);
-  channelCores_.erase(handle);
+  channelContexts_.erase(handle);
   {
     std::lock_guard<std::mutex> lock(mutex_);
     bytesHandles_.erase(handle);
@@ -655,11 +740,26 @@ bool ChannelDispatcher::drop(uint32_t handle) {
   return dropped == 1;
 }
 
+facebook::jsi::Function ChannelDispatcher::bindClose(facebook::jsi::Runtime& rt,
+                                                    uint32_t handle) {
+  auto found = channelContexts_.find(handle);
+  if (found == channelContexts_.end()) throw JSError(rt, "channel.unavailable: channel is closed");
+  auto context = found->second;
+  auto dispatcher = shared_from_this();
+  return Function::createFromHostFunction(rt, PropNameID::forAscii(rt, "closeChannel"), 0,
+    [dispatcher, context, handle](Runtime&, const Value&, const Value*, size_t) -> Value {
+      auto current = dispatcher->channelContexts_.find(handle);
+      if (current == dispatcher->channelContexts_.end() || current->second != context) return Value(false);
+      return Value(dispatcher->drop(handle, context->owner));
+    });
+}
+
 void ChannelDispatcher::onChannelPayload(void* user_data, uint32_t handle,
                                           const char* payload) {
   // send 스레드에서 호출 — JS 객체 미접근, 큐 적재 + drain 예약만.
-  auto* self = static_cast<ChannelDispatcher*>(user_data);
-  if (!self || !payload) return;
+  auto* context = static_cast<ChannelContext*>(user_data);
+  if (!context || !payload) return;
+  auto* self = context->dispatcher;
 
   std::lock_guard<std::mutex> lock(self->mutex_);
   if (self->queue_.size() >= self->capacity_) {
@@ -667,15 +767,16 @@ void ChannelDispatcher::onChannelPayload(void* user_data, uint32_t handle,
   }
   // payload 는 NUL 종결 C 문자열 — FfiChannelSink 가 CString 으로 만들어
   // 전달했으므로 여기서 복사해 소유한다(콜백 반환 후 무효).
-  self->queue_.emplace_back(handle, std::string(payload));
+  self->queue_.emplace_back(handle, context->owner, std::string(payload));
   self->scheduleDrainLocked();
 }
 
 void ChannelDispatcher::onChannelPayloadBytes(
   void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len) {
   // send 스레드 — JSON 경로와 동일하게 큐 적재 + drain 예약만(복사 소유).
-  auto* self = static_cast<ChannelDispatcher*>(user_data);
-  if (!self) return;
+  auto* context = static_cast<ChannelContext*>(user_data);
+  if (!context) return;
+  auto* self = context->dispatcher;
 
   std::lock_guard<std::mutex> lock(self->mutex_);
   if (self->bytesQueue_.size() >= self->capacity_) {
@@ -683,7 +784,7 @@ void ChannelDispatcher::onChannelPayloadBytes(
   }
   const uint8_t* src = payload ? payload : reinterpret_cast<const uint8_t*>("");
   self->bytesQueue_.emplace_back(
-    handle, std::vector<uint8_t>(src, src + payload_len));
+    handle, context->owner, std::vector<uint8_t>(src, src + payload_len));
   self->scheduleDrainLocked();
 }
 
@@ -693,15 +794,17 @@ void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
   if (resetQueued_.exchange(false, std::memory_order_acq_rel)) {
     dropStaleChannelsAfterSwap();
   }
-  std::deque<std::pair<uint32_t, std::string>> items;
-  std::deque<std::pair<uint32_t, std::vector<uint8_t>>> byteItems;
+  decltype(queue_) items;
+  decltype(bytesQueue_) byteItems;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     drainScheduled_ = false;
     items.swap(queue_);
     byteItems.swap(bytesQueue_);
   }
-  for (auto& [handle, payload] : byteItems) {
+  for (auto& [handle, owner, payload] : byteItems) {
+    auto context = channelContexts_.find(handle);
+    if (context == channelContexts_.end() || context->second->owner != owner) continue;
     auto it = callbacks_.find(handle);
     if (it == callbacks_.end()) continue; // 만료 채널 — 조용히 무시
     try {
@@ -711,7 +814,9 @@ void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
       // JSON 경로와 동일 정책 — 콜백 예외 무시, 나머지 프레임 계속 전달.
     }
   }
-  for (auto& [handle, payload] : items) {
+  for (auto& [handle, owner, payload] : items) {
+    auto context = channelContexts_.find(handle);
+    if (context == channelContexts_.end() || context->second->owner != owner) continue;
     auto it = callbacks_.find(handle);
     if (it == callbacks_.end()) continue; // 만료 채널 — 조용히 무시
     try {
@@ -737,8 +842,10 @@ void ChannelDispatcher::scheduleDrainLocked() {
   auto weak = std::weak_ptr<ChannelDispatcher>(self);
 #if defined(__APPLE__) || defined(__ANDROID__)
   auto* nativeInvoker = static_cast<facebook::react::CallInvoker*>(invoker.get());
-  nativeInvoker->invokeAsync([weak](facebook::jsi::Runtime& rt) {
+  const auto generation = invokerGeneration_.load(std::memory_order_acquire);
+  nativeInvoker->invokeAsync([weak, generation](facebook::jsi::Runtime& rt) {
     if (auto dispatcher = weak.lock()) {
+      if (dispatcher->invokerGeneration_.load(std::memory_order_acquire) != generation) return;
       dispatcher->drain(rt);
     }
   });
@@ -748,24 +855,29 @@ void ChannelDispatcher::scheduleDrainLocked() {
 void ChannelDispatcher::reset() {
   // 리로드 대응 전체 폐기 — JS 콜백 맵·큐 클리어 후 발급 코어에서 채널
   // drop(락 밖). 전체 폐기이므로 바이너리 큐/핸들 표시도 함께 비운다.
-  std::vector<std::pair<uint32_t, const core::CoreTable*>> toDrop;
+  std::vector<std::pair<uint32_t, std::shared_ptr<ChannelContext>>> toDrop;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (auto& [handle, owner] : channelCores_) toDrop.emplace_back(handle, owner);
+    for (auto& [handle, context] : channelContexts_) toDrop.emplace_back(handle, context);
     callbacks_.clear();
-    channelCores_.clear();
+    channelContexts_.clear();
     queue_.clear();
     bytesQueue_.clear();
     bytesHandles_.clear();
     drainScheduled_ = false;
   }
-  for (auto& [handle, owner] : toDrop) {
-    owner->channel_drop(handle);
+  for (auto& [handle, context] : toDrop) {
+    context->owner->channel_drop(handle);
+  }
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.clear();
+    bytesQueue_.clear();
   }
 }
 
 void ChannelDispatcher::requestResetAfterSwap() {
-  // 폴링 스레드 — 레지스트리(callbacks_/channelCores_)는 JS 스레드 전용이므로
+  // 폴링 스레드 — 레지스트리(callbacks_/channelContexts_)는 JS 스레드 전용이므로
   // 플래그 + drain 예약만 한다. 실제 폐기는 drain 안의
   // dropStaleChannelsAfterSwap(JS 스레드)이 수행한다.
   std::lock_guard<std::mutex> lock(mutex_);
@@ -773,31 +885,39 @@ void ChannelDispatcher::requestResetAfterSwap() {
   scheduleDrainLocked();
 }
 
-void ChannelDispatcher::dropStaleChannelsAfterSwap() {
+void ChannelDispatcher::dropStaleChannelsAfterSwap(const core::CoreTable* current) {
   // drain(JS 스레드) 안에서만 호출 — 레지스트리 수정은 이 스레드로 국한.
   // 발급 코어가 현재 코어가 아닌(스왑으로 은퇴한) 채널만 폐기한다: 스왑
   // 발행 뒤 새 코어로 새로 만든 채널은 유지한다(발행→drain 사이 창의
   // 신규 생성 보호). 채널은 "스왑 시 코어 내 상태 소실" 설계 정책에 따라
   // 구 코어 발급분은 만료다 — 새 코어의 같은 번호 채널 오해제 창을 닫는다.
-  const core::CoreTable* current = core::currentCoreTable();
-  std::vector<std::pair<uint32_t, const core::CoreTable*>> toDrop;
-  for (auto it = channelCores_.begin(); it != channelCores_.end();) {
-    if (it->second != current) {
+  std::vector<std::pair<uint32_t, std::shared_ptr<ChannelContext>>> toDrop;
+  for (auto it = channelContexts_.begin(); it != channelContexts_.end();) {
+    if (it->second->owner != current) {
       toDrop.emplace_back(it->first, it->second);
       callbacks_.erase(it->first);
-      it = channelCores_.erase(it);
+      it = channelContexts_.erase(it);
     } else {
       ++it;
     }
   }
   if (toDrop.empty()) return;
+  // FFI 는 락 밖 — owner 테이블은 불변·무폐기라 맵에서 지운 뒤에도 안전하다.
+  for (auto& [handle, context] : toDrop) {
+    context->owner->channel_drop(handle);
+  }
+  // Drop has synchronized every callback using these contexts. Remove their
+  // queued payloads before a new core can register the same wire handle.
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (auto& [handle, _owner] : toDrop) bytesHandles_.erase(handle);
-  }
-  // FFI 는 락 밖 — owner 테이블은 불변·무폐기라 맵에서 지운 뒤에도 안전하다.
-  for (auto& [handle, owner] : toDrop) {
-    owner->channel_drop(handle);
+    for (auto& [handle, context] : toDrop) {
+      bytesHandles_.erase(handle);
+      auto stale = [&](const auto& item) {
+        return std::get<0>(item) == handle && std::get<1>(item) == context->owner;
+      };
+      queue_.erase(std::remove_if(queue_.begin(), queue_.end(), stale), queue_.end());
+      bytesQueue_.erase(std::remove_if(bytesQueue_.begin(), bytesQueue_.end(), stale), bytesQueue_.end());
+    }
   }
 }
 
@@ -820,6 +940,7 @@ struct AsyncCallContext {
   bool valid = true;
   uint64_t generation = 0;
   uint64_t invocationId = 0;
+  uint64_t hostInvocationId = 0;
   /// (F3) caller-buffer async 응답 버퍼 — Rust 워커가 응답을 여기에 직접
   /// 기록한다(owned=0). context(shared_ptr)가 완료 콜백과 JS 스레드 전달
   /// 람다까지 수명을 보장하므로 복사 없이 제자리 읽는다. 버퍼에 안 들어가는
@@ -832,23 +953,46 @@ struct AsyncCallContext {
 };
 
 static std::atomic<uint64_t> g_runtimeGeneration{0};
+static std::atomic<uint64_t> g_nextAsyncHandle{1};
 static std::mutex g_asyncContextsMutex;
-static std::unordered_map<AsyncCallContext*, std::shared_ptr<AsyncCallContext>>
+static std::unordered_map<uint64_t, std::shared_ptr<AsyncCallContext>>
   g_asyncContexts;
 
 static void registerAsyncContext(const std::shared_ptr<AsyncCallContext>& ctx) {
+  // Core-local IDs restart when a dylib is replaced. Expose a host-owned safe
+  // integer instead, and retain the producing core's ID only for cancellation.
+  const uint64_t handle = g_nextAsyncHandle.fetch_add(1, std::memory_order_relaxed);
+  if (handle > 9007199254740991ULL) {
+    throw std::runtime_error("RustraJSI: async invocation handle space exhausted");
+  }
+  ctx->hostInvocationId = handle;
   std::lock_guard<std::mutex> lock(g_asyncContextsMutex);
-  g_asyncContexts.insert_or_assign(ctx.get(), ctx);
+  g_asyncContexts.insert_or_assign(handle, ctx);
 }
 
 static void unregisterAsyncContext(const std::shared_ptr<AsyncCallContext>& ctx) {
   std::lock_guard<std::mutex> lock(g_asyncContextsMutex);
-  g_asyncContexts.erase(ctx.get());
+  g_asyncContexts.erase(ctx->hostInvocationId);
+}
+
+static bool cancelAsyncInvocation(uint64_t handle) {
+  const CoreTable* owner = nullptr;
+  uint64_t coreId = 0;
+  {
+    std::lock_guard<std::mutex> registryLock(g_asyncContextsMutex);
+    auto found = g_asyncContexts.find(handle);
+    if (found == g_asyncContexts.end()) return false;
+    std::lock_guard<std::mutex> contextLock(found->second->mutex);
+    owner = found->second->dispatchCore;
+    coreId = found->second->invocationId;
+  }
+  // Never hold registry/context locks across a core call: completion may reenter.
+  return owner && coreId != 0 && owner->invoke_cancel(coreId);
 }
 
 void invalidateRustraJSI() {
   g_runtimeGeneration.fetch_add(1, std::memory_order_acq_rel);
-  std::vector<uint64_t> pendingIds;
+  std::vector<std::pair<const CoreTable*, uint64_t>> pendingIds;
   {
     // registry lock이 context 수명을 고정한다. Function reset은 플랫폼이
     // 보장한 JS thread의 invalidate/install 경로에서만 실행된다.
@@ -857,7 +1001,7 @@ void invalidateRustraJSI() {
     for (auto& [_, ctx] : g_asyncContexts) {
       std::lock_guard<std::mutex> contextLock(ctx->mutex);
       ctx->valid = false;
-      if (ctx->invocationId != 0) pendingIds.push_back(ctx->invocationId);
+      if (ctx->invocationId != 0) pendingIds.emplace_back(ctx->dispatchCore, ctx->invocationId);
       ctx->onSuccess.reset();
       ctx->onError.reset();
       ctx->callInvoker.reset();
@@ -865,10 +1009,13 @@ void invalidateRustraJSI() {
     // native callback의 heap-held shared_ptr가 완료까지 context를 살린다.
     g_asyncContexts.clear();
   }
-  for (uint64_t id : pendingIds) {
-    // 스왑을 지난 id 는 새 코어에 없어 false(무해 no-op)다 — 협력적 취소 계약.
-    core::currentCoreTable()->invoke_cancel(id);
+  for (auto& [owner, id] : pendingIds) {
+    owner->invoke_cancel(id);
   }
+  // Platform modules run teardown on the owning JS thread before destroying
+  // the runtime. Retire every JSI callback, queued drain and producer channel.
+  getEventDispatcher()->setCallInvoker(nullptr);
+  getChannelDispatcher()->setCallInvoker(nullptr);
 }
 
 // ── HostObject with cached functions ───────────────────────
@@ -1099,6 +1246,18 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return Value(dispatcher->drop(handle) ? true : false);
       });
     cache_["dropChannel"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+  {
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "bindChannelClose");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) throw JSError(rt, "RustraJSI: bindChannelClose requires (handle)");
+        return dispatcher->bindClose(rt, requireU32(rt, args[0], "channel handle"));
+      });
+    cache_["bindChannelClose"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -1409,6 +1568,8 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         ctx->onError.emplace(args[3].asObject(rt).getFunction(rt));
         ctx->callInvoker = std::move(invoker);
         ctx->generation = g_runtimeGeneration.load(std::memory_order_acquire);
+        const CoreTable* dispatchCore = core::currentCoreTable();
+        ctx->dispatchCore = dispatchCore;
         registerAsyncContext(ctx);
         // C ABI user_data는 shared_ptr holder를 소유한다. 동기 오류 콜백과
         // install/invalidate 경합에서도 context 수명이 보장된다. 응답 버퍼는
@@ -1418,8 +1579,6 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
 
         // 2) 비동기 FFI — id 를 동기 반환한다 (취소 핸들). 테이블은 이
         // dispatch 의 생산 코어로 고정된다(콜백 free 짝이 같은 코어).
-        const CoreTable* dispatchCore = core::currentCoreTable();
-        ctx->dispatchCore = dispatchCore;
         uint64_t invocationId = 0;
         dispatchCore->invoke_frame_async_into(
           req.data(), req.size(),
@@ -1536,7 +1695,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
 
         // JS 는 동기적으로 id 를 받는다 — abort 전파에 쓸 취소 핸들.
-        return Value(static_cast<double>(invocationId));
+        return Value(static_cast<double>(ctx->hostInvocationId));
       });
     cache_["invokeTypedAsync"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -1585,13 +1744,13 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         ctx->onError.emplace(args[3].asObject(rt).getFunction(rt));
         ctx->callInvoker = std::move(invoker);
         ctx->generation = g_runtimeGeneration.load(std::memory_order_acquire);
+        const CoreTable* dispatchCore = core::currentCoreTable();
+        ctx->dispatchCore = dispatchCore;
         registerAsyncContext(ctx);
         auto* holder = new std::shared_ptr<AsyncCallContext>(ctx);
 
         // 2) 비동기 FFI — invokeTypedAsync 와 동일한 엔트리, 동일한 응답 규약.
         // dispatch 시점 테이블로 생산 코어를 고정한다(owned 프레임 free 짝).
-        const CoreTable* dispatchCore = core::currentCoreTable();
-        ctx->dispatchCore = dispatchCore;
         uint64_t invocationId = 0;
         dispatchCore->invoke_frame_async_into(
           req.data(), req.size(),
@@ -1676,7 +1835,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           ctx->invocationId = invocationId;
         }
 
-        return Value(static_cast<double>(invocationId));
+        return Value(static_cast<double>(ctx->hostInvocationId));
       });
     cache_["invokeTypedAsyncById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -1692,7 +1851,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, "RustraJSI: invokeCancel requires (invocationId)");
         }
         uint64_t id = requireSafeU64(rt, args[0], "invocation id");
-        return Value(core::currentCoreTable()->invoke_cancel(id));
+        return Value(cancelAsyncInvocation(id));
       });
     cache_["invokeCancel"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -2140,7 +2299,9 @@ int pollHotCoreOnce() {
       return -1;
     }
 
-    // 2) dlopen(RTLD_LOCAL) + 23심볼 바인딩 — 하나라도 없으면 카피 삭제+포기.
+    // 2) dlopen(RTLD_LOCAL) + 심볼 바인딩 — 23 필수 심볼은 하나라도 없으면
+    //    카피 삭제+포기. (E1) owned 응답 진입은 옵셔널 — 구형 핫 코어에 없으면
+    //    null 로 남고 소비 측(typedInvokeTail)이 probe 폴백으로 동작한다.
     //    실패 바인딩의 핸들도 leak 한다(dlclose 금지 계약 — dlopen 이 실행한
     //    초기화를 되돌릴 수 없다). 파일 삭제는 디렉터 엔트리만 지운다 —
     //    로드된 매핑은 inode 로 살아 있어 안전하다.
@@ -2165,6 +2326,11 @@ int pollHotCoreOnce() {
       missing = symbolName;                                                   \
     }                                                                         \
   } while (0)
+#define RUSTRA_BIND_OPTIONAL(field, symbolName)                              \
+  do {                                                                        \
+    table->field = reinterpret_cast<decltype(table->field)>(                  \
+      dlsym(handle, symbolName));                                             \
+  } while (0)
     RUSTRA_BIND(invoke, "rustra_ffi_invoke");
     RUSTRA_BIND(invoke_json, "rustra_ffi_invoke_json");
     RUSTRA_BIND(invoke_postcard, "rustra_ffi_invoke_postcard");
@@ -2188,6 +2354,9 @@ int pollHotCoreOnce() {
     RUSTRA_BIND(has_raw, "rustra_ffi_has_raw");
     RUSTRA_BIND(get_schema, "rustra_ffi_get_schema");
     RUSTRA_BIND(contract_hash, "rustra_ffi_contract_hash");
+    // (E1) 옵셔널 — 심볼 부재는 스왑 실패가 아니라 null(폴백 신호) 이다.
+    RUSTRA_BIND_OPTIONAL(invoke_frame_owned, "rustra_ffi_invoke_frame_owned");
+#undef RUSTRA_BIND_OPTIONAL
 #undef RUSTRA_BIND
     if (!bound) {
       recordHotCoreError(std::string("symbol missing in hot dylib: ") +

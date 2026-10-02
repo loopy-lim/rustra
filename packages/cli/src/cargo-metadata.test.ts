@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, statSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -59,3 +59,81 @@ test('readCargoMetadata surfaces the rustup hint when cargo is missing from PATH
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('cargo metadata cache invalidates workspace inheritance and same-size manifest edits', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-metadata-cache-'));
+  const manifest = join(root, 'app', 'Cargo.toml');
+  const workspaceManifest = join(root, 'Cargo.toml');
+  mkdirSync(join(root, 'app', 'src'), { recursive: true });
+  writeFileSync(join(root, 'app', 'src', 'lib.rs'), 'pub fn value() {}\n');
+  writeFileSync(
+    workspaceManifest,
+    '[workspace]\nmembers=["app"]\nresolver="2"\n[workspace.package]\nversion="0.1.0"\n',
+  );
+  const app = '[package]\nname="app"\nversion.workspace=true\n[lib]\nname="one"\n';
+  writeFileSync(manifest, app);
+  try {
+    const first = readCargoMetadata(manifest);
+    writeFileSync(
+      workspaceManifest,
+      '[workspace]\nmembers=["app"]\nresolver="2"\n[workspace.package]\nversion="0.2.0"\n',
+    );
+    const inherited = readCargoMetadata(manifest);
+    assert.notDeepEqual(
+      inherited,
+      first,
+      'workspace manifest edits must invalidate member metadata',
+    );
+    const stat = statSync(manifest);
+    writeFileSync(manifest, app.replace('name="one"', 'name="two"'));
+    utimesSync(manifest, stat.atime, stat.mtime);
+    assert.equal(
+      readCargoMetadata(manifest).packages[0]?.targets[0]?.name,
+      'two',
+      'mtime and size equality must not hide a changed target',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const location of ['invocation cwd', 'Cargo home'] as const) {
+  test(`cargo metadata cache invalidates ${location} configuration edits`, () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-metadata-config-'));
+    const originalCwd = process.cwd();
+    const originalHome = process.env.CARGO_HOME;
+    const originalTarget = process.env.CARGO_TARGET_DIR;
+    const app = join(root, 'app');
+    mkdirSync(join(app, 'src'), { recursive: true });
+    writeFileSync(join(app, 'Cargo.toml'), '[package]\nname="app"\nversion="0.1.0"\n');
+    writeFileSync(join(app, 'src', 'lib.rs'), 'pub fn value() {}');
+    const cwd = join(root, 'invoker');
+    const cargoHome = join(root, 'cargo-home');
+    const configDirectory = location === 'invocation cwd' ? join(cwd, '.cargo') : cargoHome;
+    mkdirSync(configDirectory, { recursive: true });
+    mkdirSync(cwd, { recursive: true });
+    const configPath = join(configDirectory, 'config.toml');
+    try {
+      process.chdir(cwd);
+      if (location === 'Cargo home') process.env.CARGO_HOME = cargoHome;
+      delete process.env.CARGO_TARGET_DIR;
+      writeFileSync(configPath, '[build]\ntarget-dir="target-a"\n');
+      const first = readCargoMetadata(join(app, 'Cargo.toml')).target_directory;
+      writeFileSync(configPath, '[build]\ntarget-dir="target-b"\n');
+      const second = readCargoMetadata(join(app, 'Cargo.toml')).target_directory;
+      assert.notEqual(
+        second,
+        first,
+        'configuration changes must not return a cached target directory',
+      );
+      assert.ok(second?.endsWith('target-b'));
+    } finally {
+      process.chdir(originalCwd);
+      if (originalHome === undefined) delete process.env.CARGO_HOME;
+      else process.env.CARGO_HOME = originalHome;
+      if (originalTarget === undefined) delete process.env.CARGO_TARGET_DIR;
+      else process.env.CARGO_TARGET_DIR = originalTarget;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

@@ -17,6 +17,13 @@
 
 RCT_EXPORT_MODULE(RustraBridge)
 
+- (dispatch_queue_t)methodQueue {
+  // RCTCxxBridge waits for module invalidation on its JS thread before deleting
+  // Hermes. Its RCTJSThread queue runs this module's teardown inline there;
+  // enqueueing through a CallInvoker from a native queue would be too late.
+  return RCTJSThread;
+}
+
 - (void)invalidate {
   // RCTBridge가 Runtime을 폐기하기 전에 JSI Function과 pending async invoke를
   // 정리한다. 늦게 도착한 Rust callback은 generation guard가 폐기한다.

@@ -3,9 +3,40 @@ English | [한국어](./tauri-setup.ko.md)
 # Adding rustra to an Existing Tauri App
 
 A file-by-file walkthrough for putting rustra commands into a Tauri v2 app you
-already have. Five files change; nothing else in the app does. A complete
+already have. A complete
 working app built exactly this way lives in
 [`examples/tauri-calculator`](../../examples/tauri-calculator/).
+
+## Prepare the existing app in one command
+
+With `rustra.json` at your frontend root and `"tauri": {}` enabled, run the matching
+development CLI:
+
+```bash
+rustra setup --config rustra.json
+```
+
+Setup generates clients, installs dependencies, builds the selected Rust core,
+enables `app.withGlobalTauri`, and creates `src-tauri/src/rustra_setup.rs`. It
+detects the core library and its public zero-argument `Package` factory. Existing
+native Rust sources and Cargo dependencies are preserved. Add any dependency
+lines printed by setup, then register your existing builder:
+
+```rust
+mod rustra_setup;
+// Keep your existing plugins and managed state on builder.
+let builder = rustra_setup::register(builder);
+```
+
+If the app has native Tauri commands, replace its `.invoke_handler(...)` with
+`rustra_setup::with_app_commands(builder, tauri::generate_handler![greet, open_document])`
+instead of `register`. Keep that as the final handler installation. Import
+commands from the generated `tauri.js` entry and rebuild your Tauri app.
+
+Repeated setup preserves identical files and refuses to overwrite an edited
+adapter. Multiple package factories require an explicit selection rather than a
+guess. The setup command and composition helper described here are development
+source changes; use matching local Rustra and CLI sources until released.
 
 | #   | File                            | Change                                                          |
 | --- | ------------------------------- | --------------------------------------------------------------- |
@@ -69,6 +100,13 @@ If the schema probe binary does not exist yet, add a `generate` bin to the crate
 that calls `package().generate_typescript()?.write_schema_to_dir("generated")` —
 see [getting started §2-4](../getting-started.md).
 
+The generated entry supplies the expected contract hash and defaults to strict
+native startup verification. The current Rust registration exposes
+`rustra_contract_hash`; update Rust and generated TypeScript together. Before
+these changes are released, use the matching development source. Old/custom
+native hosts need an explicit `contractVerification: 'warn'` or `'off'` if
+verification cannot be enforced.
+
 ## 3. `src-tauri/Cargo.toml` — feature and dependency
 
 ```toml
@@ -98,6 +136,27 @@ fn main() {
 - `register(package, builder)` is the variant without event wiring.
 - All commands are multiplexed through the single `rustra_dispatch` Tauri
   command — you never list commands on the Tauri side.
+
+For an existing app that also has native Tauri commands, compose its handler with
+the Rustra registration:
+
+```rust
+let builder = tauri_support::with_app_commands(
+    tauri_support::register_with_events(rustra_app::package(), tauri::Builder::default()),
+    tauri::generate_handler![greet, open_document],
+);
+```
+
+`greet` and `open_document` are the app's existing `#[tauri::command]` functions.
+Tauri's `.invoke_handler()` replaces the previous handler, so use
+`with_app_commands` as the final handler installation. It preserves Rustra's
+managed producer, events, and channels; the six production Rustra endpoints take
+precedence over app commands. The profiling endpoint stays unavailable. The
+helper also works after `register` and `register_dispatch`.
+
+A missing `rustra_contract_hash` startup error now points to native registration
+and handler replacement. Register with the matching Rustra version and rebuild
+the host; use the composition helper when the app also installs native commands.
 
 ## 5. `src-tauri/tauri.conf.json` — enable the global API
 

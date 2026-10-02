@@ -27,6 +27,7 @@ export const CLI_COMMANDS = [
   'generate',
   'codegen',
   'init',
+  'setup',
   'diff',
   'doctor',
   'inspect',

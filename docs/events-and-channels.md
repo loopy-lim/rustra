@@ -92,6 +92,11 @@ and `Package::build()` panics with `event channel collision` when two _declared_
 event names would map to the same channel (`a.b` vs `a_b`), so that misrouting
 cannot reach runtime.
 
+Tauri delivers decoded values, including strings. A string such as `'{"a":1}'`
+is preserved as a string. Custom legacy transports delivering serialized JSON
+text must select `subscribeEvent(name, callback, listen, { payloadEncoding: 'serialized-json' })`;
+that mode decodes exactly once, including numbers, booleans, and null.
+
 **Reserved channel** — `rustra://hot-core/swapped`: the hot-core swap report. A Rust host
 registered with `tauri_support::register_dispatch_with_swap_events` (hot-core dylib mode)
 pushes every swap outcome here — `{ oldContractHash, newContractHash }` on success,

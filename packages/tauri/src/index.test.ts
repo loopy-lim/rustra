@@ -70,6 +70,233 @@ test('createTauriEngine normalizes undefined args to empty object', async () => 
   assert.deepEqual(calls, [{ command: 'rustra_dispatch', args: { command: 'noArgs', args: {} } }]);
 });
 
+test('Tauri verifies an expected contract before commands and shares the startup handshake', async () => {
+  const calls: string[] = [];
+  const engine = createTauriEngine({
+    contractHash: 'expected',
+    async invoke(command) {
+      calls.push(command);
+      if (command === 'rustra_contract_hash') return 'expected';
+      if (command === 'rustra_dispatch_batch') return [{ ok: true, result: 42 }];
+      return 42;
+    },
+  });
+  assert.deepEqual(
+    await Promise.all([engine.invoke('one'), engine.invokeBatch([{ command: 'two' }])]),
+    [42, [42]],
+  );
+  assert.deepEqual(calls, ['rustra_contract_hash', 'rustra_dispatch', 'rustra_dispatch_batch']);
+});
+
+test('Tauri strict contract mismatch rejects before executing a command', async () => {
+  const calls: string[] = [];
+  const engine = createTauriEngine({
+    contractHash: 'expected',
+    invoke(command) {
+      calls.push(command);
+      return 'different';
+    },
+  });
+  await assert.rejects(
+    engine.invoke('one'),
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'contract.mismatch',
+  );
+  assert.deepEqual(calls, ['rustra_contract_hash']);
+});
+
+test('Tauri preserves a native IPC contract mismatch error and sends the expected hash', async () => {
+  const engine = createTauriEngine({
+    contractHash: 'expected',
+    async invoke(command, args) {
+      assert.equal(command, 'rustra_contract_hash');
+      assert.deepEqual(args, { expectedHash: 'expected' });
+      throw { code: 'contract.mismatch', message: 'native rejected stale client' };
+    },
+  });
+  await assert.rejects(
+    engine.invoke('one'),
+    (error: unknown) =>
+      error instanceof RustraCommandError &&
+      error.code === 'contract.mismatch' &&
+      error.message === 'native rejected stale client',
+  );
+});
+
+test('Tauri strict contract verification rejects old or malformed native handshakes', async () => {
+  for (const response of [undefined, 123, {}]) {
+    const engine = createTauriEngine({ contractHash: 'expected', invoke: () => response });
+    await assert.rejects(
+      engine.invoke('one'),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'contract.unenforceable',
+    );
+  }
+  const old = createTauriEngine({
+    contractHash: 'expected',
+    invoke: async () => {
+      throw 'Command rustra_contract_hash not found';
+    },
+  });
+  await assert.rejects(
+    old.invoke('one'),
+    (error: unknown) =>
+      error instanceof RustraCommandError && error.code === 'contract.unenforceable',
+  );
+});
+
+test('Tauri missing native registration explains the handler replacement and repair', async () => {
+  const cause = 'Command rustra_contract_hash not found';
+  const bootstrap = createTauriBootstrap({
+    contractHash: 'expected',
+    invoke: () => Promise.reject(cause),
+  });
+  try {
+    await assert.rejects(bootstrap.ready(), (error: unknown) => {
+      assert.ok(error instanceof RustraCommandError);
+      assert.equal(error.code, 'contract.unenforceable');
+      assert.match(error.message, /rustra_contract_hash/);
+      assert.match(error.message, /register_with_events/);
+      assert.match(error.message, /invoke_handler/);
+      assert.match(error.message, /with_app_commands/);
+      assert.equal(error.cause, cause);
+      return true;
+    });
+  } finally {
+    bootstrap.dispose();
+  }
+});
+
+test('Tauri custom transport failures are not mislabeled as missing native registration', async () => {
+  for (const cause of [new Error('transport disconnected'), 'Command custom_rpc not found']) {
+    const engine = createTauriEngine({
+      contractHash: 'expected',
+      invoke: () => Promise.reject(cause),
+    });
+    await assert.rejects(engine.invoke('first'), (error: unknown) => {
+      assert.ok(error instanceof RustraCommandError);
+      assert.equal(error.code, 'contract.unenforceable');
+      assert.doesNotMatch(error.message, /with_app_commands/);
+      assert.equal(error.cause, cause);
+      return true;
+    });
+  }
+});
+
+test('Tauri warn permits old transports with one warning and off skips the handshake', async () => {
+  const warnings: unknown[] = [];
+  const warn = console.warn;
+  console.warn = (...args) => {
+    warnings.push(args);
+  };
+  try {
+    const calls: string[] = [];
+    const engine = createTauriEngine({
+      contractHash: 'expected',
+      contractVerification: 'warn',
+      invoke(command) {
+        calls.push(command);
+        if (command === 'rustra_contract_hash') throw 'Command rustra_contract_hash not found';
+        return 42;
+      },
+    });
+    assert.equal(await engine.invoke('one'), 42);
+    assert.equal(await engine.invoke('two'), 42);
+    assert.equal(warnings.length, 1);
+    assert.deepEqual(calls, ['rustra_contract_hash', 'rustra_dispatch', 'rustra_dispatch']);
+    const unchecked = createTauriEngine({
+      contractHash: 'expected',
+      contractVerification: 'off',
+      invoke(command) {
+        assert.equal(command, 'rustra_dispatch');
+        return 42;
+      },
+    });
+    assert.equal(await unchecked.invoke('one'), 42);
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('Tauri bootstrap ready waits for strict native contract verification', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    let calls = 0;
+    const bootstrap = createTauriBootstrap({
+      contractHash: 'expected',
+      invoke: () => {
+        calls++;
+        return 'different';
+      },
+    });
+    await assert.rejects(
+      bootstrap.ready(),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'contract.mismatch',
+    );
+    assert.equal(bootstrap.state, 'initializing');
+    assert.equal(calls, 1);
+    bootstrap.dispose();
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('disposing Tauri during its native handshake cannot publish or return the stale engine', async () => {
+  const { configure, invoke } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let started!: () => void;
+  const handshaking = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let finish!: (hash: string) => void;
+  const nativeHash = new Promise<string>((resolve) => {
+    finish = resolve;
+  });
+  try {
+    const bootstrap = createTauriBootstrap({
+      contractHash: 'expected',
+      invoke: () => {
+        started();
+        return nativeHash;
+      },
+    });
+    const ready = bootstrap.ready();
+    await handshaking;
+    bootstrap.dispose();
+    finish('expected');
+    await assert.rejects(ready, /disposed/);
+    await assert.rejects(
+      invoke('echo'),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'transport.unavailable',
+    );
+  } finally {
+    finish('expected');
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('Tauri batch rejects malformed response envelopes instead of resolving lost values', async () => {
+  for (const response of [null, {}, [{ ok: 'true', result: 1 }], [{ ok: true }], [{ ok: false }]]) {
+    const engine = createTauriEngine({ invoke: async () => response });
+    await assert.rejects(engine.invokeBatch([{ command: 'one' }]), (error: unknown) => {
+      assert.ok(error instanceof RustraCommandError);
+      assert.equal(error.code, 'invoke.malformed');
+      assert.match(error.message, /batch response/i);
+      return true;
+    });
+  }
+});
+
+test('Tauri batch rejects a response with fewer entries than requested', async () => {
+  const engine = createTauriEngine({ invoke: async () => [{ ok: true, result: 1 }] });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'one' }, { command: 'two' }]),
+    (error: unknown) =>
+      error instanceof RustraCommandError && /batch response/i.test(error.message),
+  );
+});
+
 test('createTauriEngine discovers the Tauri global without manual transport wiring', async () => {
   const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
   const previous = root.__TAURI__;
@@ -241,7 +468,9 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   };
 
   const seen: unknown[] = [];
-  await subscribeEvent<typeof seen>('tick', (p) => seen.push(p), fakeListen);
+  await subscribeEvent<typeof seen>('tick', (p) => seen.push(p), fakeListen, {
+    payloadEncoding: 'serialized-json',
+  });
 
   assert.equal(captured!.channel, 'rustra://tick');
   fire!('{"value":42}');
@@ -249,6 +478,46 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   // 비 JSON 페이로드는 원본 문자열로 전달(조용한 드롭 방지).
   fire!('not-json');
   assert.equal(seen[1], 'not-json');
+});
+
+test('Tauri event strings preserve JSON-looking text delivered by the real WebView', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  const values = ['{"a":1}', '[1,2]', '"quoted"', '123', 'true', 'null'];
+  for (const expected of values) {
+    let actual: unknown;
+    await subscribeEvent(
+      'text',
+      (value) => {
+        actual = value;
+      },
+      async (_name, listener) => {
+        // Rust emit_str receives serde_json::to_string(&expected). Tauri evaluates
+        // that JSON in payload: <json>, so the listener sees the decoded string.
+        listener({ payload: JSON.parse(JSON.stringify(expected)) });
+        return () => {};
+      },
+    );
+    assert.equal(actual, expected);
+  }
+});
+
+test('Tauri serialized-json compatibility is explicit and decodes every JSON value exactly once', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  for (const expected of [{ a: 1 }, [1, 2], '{"a":1}', '"quoted"', 123, true, null]) {
+    let actual: unknown;
+    await subscribeEvent(
+      'text',
+      (value) => {
+        actual = value;
+      },
+      async (_name, listener) => {
+        listener({ payload: JSON.stringify(expected) });
+        return () => {};
+      },
+      { payloadEncoding: 'serialized-json' },
+    );
+    assert.deepEqual(actual, expected);
+  }
 });
 
 // ── 콜백 예외 경계 (R01) — 변환 경계와 사용자 콜백 경계는 분리된다 ──
@@ -297,7 +566,7 @@ test('subscribeEvent keeps a throwing callback inside the listener boundary (cal
     );
 
     // 프로미스 자체가 resolve 해야 한다 — 콜백 예외가 구독/전달 경로를 깨지 않는다.
-    fire('{"value":42}');
+    fire({ value: 42 });
     assert.equal(calls, 1, 'callback must be invoked exactly once — no re-invocation');
     const listenerErrors = events.filter((event) => event.kind === 'tauri.listener_error');
     assert.equal(listenerErrors.length, 1, 'exactly one listener_error diagnostic');
@@ -328,7 +597,7 @@ test('subscribeEvent absorbs diagnostics failures — a throwing sink never esca
       listen,
     );
 
-    fire('{"value":42}');
+    fire({ value: 42 });
     assert.equal(calls, 1, 'callback still invoked exactly once');
     // sink 예외가 여기까지 전파되면 이 테스트는 실패한다 — 경계 흡수 계약.
   } finally {
@@ -336,12 +605,12 @@ test('subscribeEvent absorbs diagnostics failures — a throwing sink never esca
   }
 });
 
-test('subscribeEvent delivers parsed payloads once for a normal callback', async () => {
+test('subscribeEvent delivers decoded payloads once for a normal callback', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const seen: unknown[] = [];
   await subscribeEvent<{ value: number }>('tick', (payload) => seen.push(payload), listen);
-  fire('{"value":42}');
+  fire({ value: 42 });
   assert.deepEqual(seen, [{ value: 42 }]);
 });
 
@@ -371,7 +640,7 @@ test('subscribeEvent protects sibling listeners from a throwing listener', async
     const seen: unknown[] = [];
     await subscribeEvent<{ value: number }>('tick', (payload) => seen.push(payload), listen);
 
-    fire('{"value":42}');
+    fire({ value: 42 });
     assert.deepEqual(seen, [{ value: 42 }], 'sibling listener unaffected by the throwing one');
     assert.equal(
       events.filter((event) => event.kind === 'tauri.listener_error').length,
@@ -421,9 +690,9 @@ test('subscribeTauriEvent discovers the global listen API', async () => {
   let channel = '';
   root.__TAURI__ = {
     event: {
-      async listen(name: string, handler: (event: { payload: string }) => void) {
+      async listen(name: string, handler: (event: { payload: unknown }) => void) {
         channel = name;
-        handler({ payload: '{"value":42}' });
+        handler({ payload: { value: 42 } });
         return () => {};
       },
     },
@@ -440,14 +709,14 @@ test('subscribeTauriEvent discovers the global listen API', async () => {
   }
 });
 
-// ── R03 — payload 단일 파싱 계약 (decoded 우선·문자열만 1회 parse) ──
+// ── WebView payload 계약 — 이미 해석된 값은 문자열까지 그대로 전달 ──
 // 실제 WebView 경계(tauri `emit_str` → `payload: {}` 인라인 평가)에서 JS listener 는
 // 이미 해석된 값을 받는다 — 무조건 JSON.parse 하면 이미 해석된 객체를 재직렬화·재파싱해
 // 훼손하고, "JSON 처럼 생긴" 문자열 payload 도 몰래 디코딩한다. 계약 표 하나가
 // 파서의 전부다 — 각 행은 typeof/null 이중 assert 로 고정한다(동치 혼동 방지:
 // 123 ≠ '123', true ≠ 'true', null 은 typeof 'object').
 
-test('subscribeEvent payload contract table — decoded pass-through, string-only single parse (R03)', async () => {
+test('subscribeEvent payload contract table — decoded values pass through unchanged', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const seen: Array<{ typeofIn: string; value: unknown }> = [];
@@ -469,17 +738,14 @@ test('subscribeEvent payload contract table — decoded pass-through, string-onl
       { inner: '{"a":1}' },
       'nested JSON-string inside a decoded object is NOT double-parsed',
     ],
-    // 문자열 payload — JSON 처럼 생겨도 문자열이면 한 번만 parse.
-    ['{"a":1}', 'object', { a: 1 }, 'JSON object string parses to an object'],
+    // 실제 WebView의 문자열은 JSON처럼 생겨도 그대로 전달한다.
+    ['{"a":1}', 'string', '{"a":1}', 'JSON object text stays a string'],
     // 핵심 회귀(통합 문서 표): 문자열 '123' — number 123 으로 디코딩되지 않는다.
     ['123', 'string', '123', 'string that looks numeric stays a string'],
     ['true', 'string', 'true', 'string that looks boolean stays a string'],
-    // JSDoc 이 주장하는 원시 결과 규칙(원본 유지)의 마지막 게이트 — 파서의
-    // `parsed !== null` 판정(line 위 계약 2번)은 이 행이 지킨다. `JSON.parse('null')`
-    // 은 null 이라 parse "성공"이지만 원시 결과므로 원본 문자열이 유지된다.
-    ['null', 'string', 'null', "string 'null' parses to null — primitive result, original kept"],
-    // 문자열이지만 escape 로 인코딩된 JSON — 딱 한 번만 parse 된다.
-    ['"{\\"a\\":1}"', 'string', '{"a":1}', 'escaped-JSON string parses exactly once to the string'],
+    ['null', 'string', 'null', "string 'null' stays a string"],
+    // 따옴표와 escape도 문자열 도메인 값의 일부다.
+    ['"quoted"', 'string', '"quoted"', 'quoted JSON text stays unchanged'],
     // parse 실패 — 원본 문자열이 그대로 전달된다.
     ['', 'string', '', 'empty string fails to parse — original delivered'],
     ['hello', 'string', 'hello', 'plain text fails to parse — original delivered'],
@@ -504,30 +770,29 @@ test('subscribeEvent payload contract table — decoded pass-through, string-onl
   assert.equal(seen[0]!.value, identity, 'decoded object keeps its identity — no clone via parse');
 });
 
-test('subscribeEvent converges both WebView delivery modes on the same value (MockRuntime coherence, R03)', async () => {
-  // tauri 실제 경계: Rust `app.emit("…", payload_json)` → tauri 가 `payload: {}`
-  // 로 JSON 을 JS 소스에 인라인 splice → JS listener 는 이미 파싱된 객체를 받는다.
-  // 레거시 fake transport: payload 를 (직렬화된) 문자열로 전달한다.
-  // 두 모드가 이 규칙 아래 같은 값으로 수렴하는지 fixture 로 고정한다.
+test('decoded and explicit serialized-json transports deliver the same event values', async () => {
   const { subscribeEvent } = await import('./index.js');
-  const { listen, fire } = mockListen();
-  const seen: unknown[] = [];
-  await subscribeEvent<{ n: number }>('tick', (payload) => seen.push(payload), listen);
-
-  // Rust 측이 만든 직렬화 형태(실제 emit 스트링) — event_push.rs 패턴의 TS 재현.
-  const emittedJson = JSON.stringify({ n: 42 });
-  assert.equal(emittedJson, '{"n":42}');
-
-  // 모드 A — 실제 WebView: tauri 가 이미 파싱한 값.
-  fire({ n: 42 });
-  // 모드 B — 레거시/헤드리스: 직렬화된 문자열이 그대로 도착.
-  fire(emittedJson);
-
-  assert.equal(seen.length, 2);
-  assert.deepEqual(seen[0], { n: 42 });
-  assert.deepEqual(seen[1], { n: 42 });
-  assert.equal(typeof seen[0], 'object');
-  assert.equal(typeof seen[1], 'object');
+  for (const expected of [{ n: 42 }, '{"n":42}', 42, null]) {
+    const seen: unknown[] = [];
+    await subscribeEvent(
+      'tick',
+      (value) => seen.push(value),
+      async (_name, listener) => {
+        listener({ payload: expected });
+        return () => {};
+      },
+    );
+    await subscribeEvent(
+      'tick',
+      (value) => seen.push(value),
+      async (_name, listener) => {
+        listener({ payload: JSON.stringify(expected) });
+        return () => {};
+      },
+      { payloadEncoding: 'serialized-json' },
+    );
+    assert.deepEqual(seen, [expected, expected]);
+  }
 });
 
 // ── 와이어 배치 — rustra_dispatch_batch 단일 횡단 (트랙 E2) ──
@@ -701,6 +966,90 @@ test('A05: concurrent ready calls share one initialization promise (tauri)', asy
     const [a, b] = await Promise.all([bootstrap.ready(), bootstrap.ready()]);
     assert.equal(a, b);
     bootstrap.dispose();
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('disposing an uninitialized Tauri bootstrap releases its generated command registration', async () => {
+  const { configure, invoke } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let calls = 0;
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => ++calls });
+    bootstrap.dispose();
+    await assert.rejects(
+      invoke('echo'),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'transport.unavailable',
+    );
+    assert.equal(calls, 0);
+    const replacement = createTauriBootstrap({ invoke: () => 'replacement' });
+    assert.equal(await (await replacement.ready()).invoke('echo'), 'replacement');
+    replacement.dispose();
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('disposing a ready Tauri bootstrap releases its generated command registration', async () => {
+  const { configure, invoke } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => 'alive' });
+    await bootstrap.ready();
+    bootstrap.dispose();
+    await assert.rejects(
+      invoke('echo'),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'transport.unavailable',
+    );
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('a captured Tauri bootstrap engine rejects new calls after disposal', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  let calls = 0;
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => ++calls });
+    const engine = await bootstrap.ready();
+    bootstrap.dispose();
+    await assert.rejects(engine.invoke('echo'), /disposed/);
+    await assert.rejects(engine.invokeBatch([{ command: 'echo' }]), /disposed/);
+    assert.equal(calls, 0);
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('Tauri bootstrap ready rejects when another registration takes ownership', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => 'old' });
+    configure(A05_SLOT_ENGINE);
+    await assert.rejects(
+      bootstrap.ready(),
+      (error: unknown) => error instanceof RustraCommandError && /replaced/.test(error.message),
+    );
+    bootstrap.dispose();
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('disposing an older Tauri bootstrap preserves a newer engine registration', async () => {
+  const { configure, invoke } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => 'old' });
+    await bootstrap.ready();
+    configure(A05_SLOT_ENGINE);
+    bootstrap.dispose();
+    assert.equal(await invoke('echo'), 'slot');
   } finally {
     configure(A05_SLOT_ENGINE);
   }
@@ -1069,7 +1418,7 @@ test('subscribeHotSwap listens on the reserved swap channel and delivers both pa
   // 실제 WebView 경계 — emit_str JSON 이 이미 파싱된 객체로 도달한다(무손실 통과).
   fire!({ oldContractHash: '0123456789abcdef', newContractHash: 'fedcba9876543210' });
   // 문자열 모드 transport — R03 단일 parse 로 같은 값으로 수렴한다.
-  fire!('{"oldContractHash":"aaaaaaaaaaaaaaaa","newContractHash":"bbbbbbbbbbbbbbbb"}');
+  fire!({ oldContractHash: 'aaaaaaaaaaaaaaaa', newContractHash: 'bbbbbbbbbbbbbbbb' });
   // 실패 보고 — {error} 모양도 그대로 전달된다.
   fire!({ error: 'dylib open failed' });
 

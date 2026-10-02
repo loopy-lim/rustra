@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, lstatSync, realpathSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 export type WatchLoop = {
   run(reason: string, force?: boolean): Promise<void>;
@@ -168,7 +168,13 @@ function pollPaths(
   };
 }
 
-function snapshotPath(path: string, files: Map<string, string>, recursive: boolean): void {
+function snapshotPath(
+  path: string,
+  files: Map<string, string>,
+  recursive: boolean,
+  excludedPaths: readonly string[] = [],
+): void {
+  if (excludedPaths.some((excluded) => isWithin(excluded, path))) return;
   try {
     const stat = lstatSync(path);
     // Do not follow symlinks out of the source tree or enter directory cycles.
@@ -183,7 +189,7 @@ function snapshotPath(path: string, files: Map<string, string>, recursive: boole
       if (entry.name === 'target' || entry.name === 'node_modules' || entry.name === '.git')
         continue;
       const child = join(path, entry.name);
-      if (recursive || !entry.isDirectory()) snapshotPath(child, files, recursive);
+      if (recursive || !entry.isDirectory()) snapshotPath(child, files, recursive, excludedPaths);
       else {
         const stat = lstatSync(child);
         files.set(child, `${stat.ino}:${stat.mtimeMs}:${stat.ctimeMs}`);
@@ -196,23 +202,23 @@ function snapshotPath(path: string, files: Map<string, string>, recursive: boole
   }
 }
 
-/** Watches immediate children of directories, or individual pathnames. */
-/**
- * 감시 루트가 디렉터리 심링크여도 감시가 무효가 되지 않게 실제 경로로 해석한다
- * (리스크 감사 2026-09-13 #6 — lstat 루트는 링크 자체를 파일로 기록해 서브트리를
- * 걷지 못한다). 루트만 realpath 로 풀어 걷고, 중첩 항목의 lstat·제외 규칙은
- * 기존대로 유지해 트리 밖 추종·사이클 진입 방어를 그대로 둔다. onChange 는
- * resolved→원본 역매핑으로 사용자가 건 네임스페이스의 경로를 유지한다 — isWithin
- * 등 소비자의 비교 대상이 바뀌지 않는다. 해석 실패(없는 루트)는 원문자열 유지 —
- * "다음 틱에서 발견" 동작을 보존한다.
- */
+// Resolve readable ancestors too: excluded outputs may be missing or unreadable.
+function canonicalWatchPath(path: string): string {
+  const absolute = resolve(path);
+  try {
+    return realpathSync(absolute);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EACCES' && code !== 'EPERM')
+      throw error;
+    const parent = dirname(absolute);
+    return parent === absolute ? absolute : join(canonicalWatchPath(parent), basename(absolute));
+  }
+}
+
 function resolveWatchRoot(root: string): { real: string; original: string } {
   const original = resolve(root);
-  try {
-    return { real: realpathSync(original), original };
-  } catch {
-    return { real: original, original };
-  }
+  return { real: canonicalWatchPath(original), original };
 }
 
 function remapWatchPath(root: { real: string; original: string }, path: string): string {
@@ -224,17 +230,35 @@ function remapWatchPath(root: { real: string; original: string }, path: string):
   return path;
 }
 
+function snapshotWatchRoot(
+  root: string,
+  recursive: boolean,
+  excludedPaths: readonly string[] = [],
+): Map<string, string> {
+  // Refresh bindings on every reconciliation, including symlink replacements.
+  // Compare paths in the caller's namespace so a replacement also reports
+  // removed children from the retired tree using the subscribed pathname.
+  const watchRoot = resolveWatchRoot(root);
+  const excluded = excludedPaths.flatMap((path) => {
+    const original = resolve(path);
+    const canonical = canonicalWatchPath(original);
+    const relativePath = relative(watchRoot.original, original);
+    return isWithin(watchRoot.original, original)
+      ? [canonical, join(watchRoot.real, relativePath)]
+      : [canonical];
+  });
+  const files = new Map<string, string>();
+  snapshotPath(watchRoot.real, files, recursive, excluded);
+  return new Map([...files].map(([path, stamp]) => [remapWatchPath(watchRoot, path), stamp]));
+}
+
+/** Watches immediate children of directories, or individual pathnames. */
 export function createFileWatch(specs: readonly FileWatchSpec[]): WatchHandle {
   const handles = specs.map((spec) => {
-    const watchRoot = resolveWatchRoot(spec.path);
+    const original = resolve(spec.path);
     return pollPaths(
-      () => {
-        const snapshot = new Map<string, string>();
-        snapshotPath(watchRoot.real, snapshot, false);
-        return snapshot;
-      },
-      (path) =>
-        spec.onChange(remapWatchPath(watchRoot, path), relative(watchRoot.real, path) || undefined),
+      () => snapshotWatchRoot(original, false),
+      (path) => spec.onChange(path, relative(original, path) || undefined),
     );
   });
   return {
@@ -263,14 +287,9 @@ export function isWithin(root: string, candidate: string): boolean {
 export function createSourceWatch(
   root: string,
   onChange: (changedPath: string) => void,
+  excludedPaths: readonly string[] = [],
 ): WatchHandle {
-  const watchRoot = resolveWatchRoot(root);
-  return pollPaths(
-    () => {
-      const snapshot = new Map<string, string>();
-      snapshotPath(watchRoot.real, snapshot, true);
-      return snapshot;
-    },
-    (path) => onChange(remapWatchPath(watchRoot, path)),
-  );
+  const original = resolve(root);
+  const excluded = excludedPaths.map((path) => resolve(path));
+  return pollPaths(() => snapshotWatchRoot(original, true, excluded), onChange);
 }

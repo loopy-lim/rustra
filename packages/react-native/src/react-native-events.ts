@@ -12,6 +12,8 @@ export type RustraChannelNative = {
   /** 바이너리 채널 — 콜백이 임의 바이트를 받는다(C++ createChannelBytes HostFunction). */
   createChannelBytes?(callback: (payload: ArrayBuffer | Uint8Array) => void): number;
   dropChannel?(handle: number): boolean;
+  /** Captures the producing native core; older native modules use dropChannel. */
+  bindChannelClose?(handle: number): () => boolean;
   /** JS 폴링 drain(CallInvoker 없는 호스트) — 이벤트와 채널 프레임을 함께
    * 소비하고 처리한 프레임 수를 반환한다(C++ drainEvents HostFunction). */
   drainEvents?(): number;
@@ -31,19 +33,29 @@ function bindChannelLifecycle(
 ): { readonly handle: number; close(): boolean } {
   let closed = false;
   const handle = register(() => closed);
-  if (!Number.isSafeInteger(handle) || handle < 0)
+  if (!Number.isSafeInteger(handle) || handle <= 0)
     throw new RustraCommandError('channel.unavailable', invalidHandleMessage);
+  let drop: () => boolean;
+  try {
+    drop =
+      typeof native.bindChannelClose === 'function'
+        ? native.bindChannelClose(handle)
+        : () => native.dropChannel!(handle);
+  } catch (error) {
+    closed = true;
+    native.dropChannel!(handle);
+    throw error;
+  }
   // 폴링 drain — CallInvoker 없는 호스트의 채널 큐 소비(SubscribeOptions.pollMs
   // 와 동일 계약). 수명은 채널에 귀속 — close 가 수요를 해제한다.
-  const pollMs = options?.pollMs;
-  if (pollMs !== undefined) acquirePollingDemand(native, pollMs);
+  const releasePolling = acquirePollingDemand(native, options?.pollMs);
   return {
     handle,
     close: () => {
       if (closed) return false;
       closed = true;
-      if (pollMs !== undefined) releasePollingDemand(native);
-      return native.dropChannel!(handle);
+      releasePolling();
+      return drop();
     },
   };
 }
@@ -60,7 +72,7 @@ export function createChannel(
   return bindChannelLifecycle(
     native,
     options,
-    'native createChannel() returned an invalid handle; expected a non-negative safe integer',
+    'native createChannel() returned an invalid handle; expected a positive safe integer',
     (isClosed) =>
       native.createChannel!((payloadJson) => {
         if (isClosed()) return;
@@ -93,7 +105,7 @@ export function createBytesChannel(
   return bindChannelLifecycle(
     native,
     options,
-    'native createChannelBytes() returned an invalid handle; expected a non-negative safe integer',
+    'native createChannelBytes() returned an invalid handle; expected a positive safe integer',
     (isClosed) =>
       native.createChannelBytes!((payload) => {
         if (isClosed()) return;
@@ -131,42 +143,54 @@ type SubscribeOptions = {
 /** 폴링 drain 루프 — 네이티브 인스턴스당 1개(WeakMap). drainEvents 가 존재하고
  * pollMs > 0 인 소비자(이벤트 구독/채널)가 1개라도 있으면 가동한다. 간격은 첫
  * 수요자의 pollMs 를 따른다. */
-const pollTimers = new WeakMap<PollingDrainNative, ReturnType<typeof setTimeout> | null>();
+type PollingLoop = {
+  demand: number;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+const pollingLoops = new WeakMap<PollingDrainNative, PollingLoop>();
 
-/** 네이티브 인스턴스당 폴링 수요 수 — 이벤트 구독 해제/채널 close 로 0 이 되면
- * 루프를 정지한다. */
-const pollingDemand = new WeakMap<PollingDrainNative, number>();
-
-function acquirePollingDemand(native: PollingDrainNative, pollMs: number): void {
-  if (typeof native.drainEvents !== 'function' || pollMs <= 0) return;
-  const demand = pollingDemand.get(native) ?? 0;
-  pollingDemand.set(native, demand + 1);
-  if (demand > 0) return; // 이미 가동 중 — 수요만 증가.
-  const tick = (): void => {
-    if ((pollingDemand.get(native) ?? 0) === 0) return; // 수요 소멸 — 정지.
-    try {
-      native.drainEvents!();
-    } catch (error) {
-      console.error('Rustra: drainEvents failed:', error);
+function acquirePollingDemand(native: PollingDrainNative, pollMs: number | undefined): () => void {
+  if (
+    typeof native.drainEvents !== 'function' ||
+    pollMs === undefined ||
+    !Number.isFinite(pollMs) ||
+    pollMs <= 0
+  ) {
+    return () => {};
+  }
+  let loop = pollingLoops.get(native);
+  if (!loop) {
+    const created: PollingLoop = { demand: 0, timer: null };
+    pollingLoops.set(native, created);
+    const tick = (): void => {
+      if (pollingLoops.get(native) !== created) return;
+      created.timer = null;
+      try {
+        native.drainEvents!();
+      } catch (error) {
+        console.error('Rustra: drainEvents failed:', error);
+      }
+      // A callback may close the last owner and acquire a replacement loop.
+      // The retired tick must not schedule another timer for that replacement.
+      if (pollingLoops.get(native) === created) {
+        created.timer = setTimeout(tick, pollMs);
+      }
+    };
+    created.timer = setTimeout(tick, pollMs);
+    loop = created;
+  }
+  const heldLoop = loop;
+  heldLoop.demand += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    heldLoop.demand -= 1;
+    if (heldLoop.demand === 0) {
+      pollingLoops.delete(native);
+      if (heldLoop.timer !== null) clearTimeout(heldLoop.timer);
     }
-    pollTimers.set(native, setTimeout(tick, pollMs));
   };
-  pollTimers.set(native, setTimeout(tick, pollMs));
-}
-
-function releasePollingDemand(native: PollingDrainNative): void {
-  const demand = pollingDemand.get(native) ?? 0;
-  if (demand === 0) return; // 수요 없음 — drainEvents 미노출 no-op acquire 짝.
-  if (demand > 1) {
-    pollingDemand.set(native, demand - 1);
-    return;
-  }
-  pollingDemand.set(native, 0);
-  const timer = pollTimers.get(native);
-  if (timer != null) {
-    clearTimeout(timer);
-    pollTimers.set(native, null);
-  }
 }
 
 export function subscribeEvent(
@@ -187,49 +211,51 @@ export function subscribeEvent(
   let listeners = events.get(name);
   if (!listeners) {
     events.set(name, (listeners = new Set()));
-    native.onEvent(name, (json) => {
-      let payload: unknown = null;
-      try {
-        if (json) payload = JSON.parse(json);
-      } catch {
-        /* malformed payload stays null */
-      }
-      // Snapshot before callbacks: Set.forEach revisits deleted/re-added listeners
-      // and can loop forever when a callback resubscribes itself.
-      const listeners = events?.get(name);
-      if (!listeners) return;
-      Array.from(listeners).forEach((listener) => {
-        if (!listeners.has(listener)) return;
+    try {
+      native.onEvent(name, (json) => {
+        let payload: unknown = null;
         try {
-          listener(payload);
-        } catch (error) {
-          console.error(`Rustra: event listener for "${name}" threw:`, error);
+          if (json) payload = JSON.parse(json);
+        } catch {
+          /* malformed payload stays null */
         }
+        // Snapshot before callbacks: Set.forEach revisits deleted/re-added listeners
+        // and can loop forever when a callback resubscribes itself.
+        const listeners = events?.get(name);
+        if (!listeners) return;
+        Array.from(listeners).forEach((listener) => {
+          if (!listeners.has(listener)) return;
+          try {
+            listener(payload);
+          } catch (error) {
+            console.error(`Rustra: event listener for "${name}" threw:`, error);
+          }
+        });
       });
-    });
+    } catch (error) {
+      events.delete(name);
+      throw error;
+    }
   }
   listeners.add(cb);
   // 폴링 drain 옵션 — CallInvoker 없는 호스트(C++ 큐가 JS 폴링 대기)를 위한
   // JS 측 소비 루프. onEvent 푸시와 병행 무해(drain 이 비어 있으면 0).
-  const pollMs = options?.pollMs;
-  let pollingHeld = false;
-  if (pollMs !== undefined) {
-    pollingHeld = true;
-    acquirePollingDemand(native, pollMs);
-  }
+  const releasePolling = acquirePollingDemand(native, options?.pollMs);
+  let active = true;
   return () => {
-    const current = events?.get(name);
-    if (current) {
-      current.delete(cb);
-      if (current.size === 0) {
-        events?.delete(name);
-        native.offEvent?.(name);
+    if (!active) return;
+    active = false;
+    try {
+      const current = events?.get(name);
+      if (current) {
+        current.delete(cb);
+        if (current.size === 0) {
+          events?.delete(name);
+          native.offEvent?.(name);
+        }
       }
-    }
-    // pollMs 구독의 수요 해제 — 1회만(해제 후 수요 0 이면 루프 정지).
-    if (pollingHeld) {
-      pollingHeld = false;
-      releasePollingDemand(native);
+    } finally {
+      releasePolling();
     }
   };
 }

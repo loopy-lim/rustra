@@ -28,6 +28,9 @@
  * 시그니처는 코드젠 `SubscribeFn` / RN·Tauri `subscribeEvent` 와 동일한
  * `(name, callback) => unsubscribe` 다.
  */
+import { createBunFfiEventBridge } from './bun-ffi-event-hub.js';
+import { SubscriberMap, type EventCallback } from './bun-event-subscribers.js';
+export { createBunFfiEventBridge } from './bun-ffi-event-hub.js';
 
 /** 이벤트 버스를 읽는 주입형 소스 — loop-stdio 계열 transport 와 호환. */
 export type BunEventDrainSource = {
@@ -59,118 +62,7 @@ export type BunEventBridge = {
   dispose(): void;
 };
 
-type EventCallback = (payload: never) => void;
-
 const DEFAULT_POLL_MS = 100;
-
-/** 이름별 구독자 집합 — 푸시/폴링 양 경로가 공유하는 분배 테이블. */
-class SubscriberMap {
-  private subscribers = new Map<string, Set<EventCallback>>();
-
-  add(name: string, callback: EventCallback): void {
-    let listeners = this.subscribers.get(name);
-    if (!listeners) this.subscribers.set(name, (listeners = new Set()));
-    listeners.add(callback);
-  }
-
-  /** 구독자를 제거하고(이름별 set이 비면 set 자체를 삭제) map이 비었는지 반환. */
-  remove(name: string, callback: EventCallback): boolean {
-    const listeners = this.subscribers.get(name);
-    if (!listeners) return this.subscribers.size === 0;
-    listeners.delete(callback);
-    if (listeners.size === 0) this.subscribers.delete(name);
-    return this.subscribers.size === 0;
-  }
-
-  isEmpty(): boolean {
-    return this.subscribers.size === 0;
-  }
-
-  dispatch(name: string, payload: unknown): void {
-    const listeners = this.subscribers.get(name);
-    if (!listeners) return;
-    for (const listener of [...listeners]) {
-      try {
-        // EventCallback 은 계약상 (payload: never) => void — 모든 페이로드 콜백의
-        // 최소 상위집합이라 런타임 값 전달은 안전하다(never 는 타입 레벨 계약일 뿐).
-        (listener as (payload: unknown) => void)(payload);
-      } catch (error) {
-        // 리스너 예외가 브릿지를 죽이지 않는다(node/RN 어댑터와 동일 정책).
-        console.error(`Rustra: event listener for "${name}" threw:`, error);
-      }
-    }
-  }
-}
-
-function parseJsonPayload(raw: string, name: string): unknown {
-  try {
-    return raw === '' ? null : JSON.parse(raw);
-  } catch {
-    // 비 JSON 페이로드는 원본 문자열로 전달(Tauri 어댑터와 동일한 조용한 드롭 방지).
-    console.warn(`Rustra: event "${name}" payload was not valid JSON; delivering raw string`);
-    return raw;
-  }
-}
-
-/**
- * FFI 푸시 싱크 브릿지. `libraryPath` 의 cdylib 을 자체 dlopen 으로 열어
- * `rustra_ffi_event_sink_register`/`rustra_ffi_event_sink_unregister` 를
- * 노출하고 — 첫 구독에서 등록, 마지막 unsubscribe 에서 해제해 리소스를
- * 정확히 되돌린다. 같은 dylib 에 대한 2회 dlopen 은 로드 비용 없이 심볼
- * 노출만 확장한다(Bun 1.4 실증).
- */
-async function createFfiEventBridge(libraryPath: string): Promise<BunEventBridge> {
-  const { dlopen, FFIType, JSCallback } = (await import('bun:ffi')) as typeof import('bun:ffi');
-  const lib = dlopen(libraryPath, {
-    rustra_ffi_event_sink_register: { args: ['ptr', 'ptr'], returns: FFIType.void },
-    rustra_ffi_event_sink_unregister: { args: [], returns: FFIType.void },
-  });
-  const register = lib.symbols.rustra_ffi_event_sink_register;
-  const unregister = lib.symbols.rustra_ffi_event_sink_unregister;
-
-  const subscribers = new SubscriberMap();
-  let callback: InstanceType<typeof JSCallback> | null = null;
-  let disposed = false;
-
-  const ensureRegistered = (): void => {
-    if (callback || disposed) return;
-    callback = new JSCallback(
-      (_userData: unknown, name: string, payloadJson: string) => {
-        subscribers.dispatch(name, parseJsonPayload(payloadJson, name));
-      },
-      // threadsafe:false — JS 스레드(FFI invoke 체인)에서만 호출 전제(모듈 JSDoc).
-      { args: ['ptr', 'cstring', 'cstring'], returns: 'void' },
-    );
-    register(callback.ptr, null);
-  };
-
-  const maybeUnregister = (): void => {
-    if (!callback || !subscribers.isEmpty()) return;
-    unregister();
-    callback.close();
-    callback = null;
-  };
-
-  return {
-    subscribeEvent(name, callback: EventCallback) {
-      ensureRegistered();
-      subscribers.add(name, callback);
-      return () => {
-        subscribers.remove(name, callback);
-        maybeUnregister();
-      };
-    },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      if (callback) {
-        unregister();
-        callback.close();
-        callback = null;
-      }
-    },
-  };
-}
 
 /**
  * 폴링 폴백 브릿지 — Node 어댑터와 동일 계약(구독자 0이면 정지, 루프 공유).
@@ -223,13 +115,17 @@ function createPollingEventBridge(options: BunEventBridgeOptions): BunEventBridg
       if (disposed) return () => {};
       subscribers.add(name, callback);
       if (timer === null) tick();
+      let active = true;
       return () => {
+        if (!active) return;
+        active = false;
         if (subscribers.remove(name, callback)) stop();
       };
     },
     dispose() {
       disposed = true;
       stop();
+      subscribers.clear();
     },
   };
 }
@@ -246,7 +142,7 @@ export async function createBunEventBridge(
 ): Promise<BunEventBridge> {
   if (options.library) {
     try {
-      return await createFfiEventBridge(options.library);
+      return createBunFfiEventBridge(options.library);
     } catch (error) {
       if (!options.poll || options.fallbackToPolling === false) throw error;
       console.warn('Rustra: FFI event sink registration failed; falling back to polling:', error);

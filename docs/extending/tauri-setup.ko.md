@@ -2,9 +2,35 @@
 
 # 기존 Tauri 앱에 rustra 얹기
 
-이미 가지고 있는 Tauri v2 앱에 rustra 명령을 넣는 파일별 워크스루다. 변경은 5개
-파일이고 앱의 다른 부분은 건드리지 않는다. 정확히 이 구성으로 만든 완전한 동작
+이미 가지고 있는 Tauri v2 앱에 rustra 명령을 넣는 파일별 워크스루다. 정확히 이 구성으로 만든 완전한 동작
 앱은 [`examples/tauri-calculator`](../../examples/tauri-calculator/)에 있다.
+
+## 기존 앱을 한 명령으로 준비하기
+
+프런트엔드 루트의 `rustra.json`에 `"tauri": {}`를 켜고, 일치하는 개발 소스의 CLI로 실행한다.
+
+```bash
+rustra setup --config rustra.json
+```
+
+setup은 클라이언트 생성, 의존성 설치, 선택된 Rust 코어 빌드,
+`app.withGlobalTauri` 설정과 `src-tauri/src/rustra_setup.rs` 생성을 수행한다.
+코어 라이브러리와 인자 없는 공개 `Package` 팩토리를 자동으로 찾는다. 기존 네이티브
+Rust 소스와 Cargo 의존성은 보존한다. setup이 출력한 누락 의존성만 추가한 뒤 기존 builder를 등록한다.
+
+```rust
+mod rustra_setup;
+// 기존 플러그인과 managed state를 연결한 builder를 그대로 전달한다.
+let builder = rustra_setup::register(builder);
+```
+
+기존 Tauri 명령이 있으면 `register` 대신 `.invoke_handler(...)` 자리를
+`rustra_setup::with_app_commands(builder, tauri::generate_handler![greet, open_document])`로
+바꾼다. 마지막 핸들러 설치로 유지한다. 생성된 `tauri.js`에서 명령을 import하고 Tauri 앱을 다시 빌드한다.
+
+재실행은 같은 파일을 바꾸지 않으며 수정된 어댑터는 덮어쓰지 않는다. 패키지 팩토리가
+여러 개면 추측하지 않고 명시적 선택을 요구한다. 여기 설명한 setup 명령과 합성 헬퍼는
+개발 소스 변경사항이다. 발행 전에는 일치하는 로컬 Rustra·CLI 소스를 사용한다.
 
 | #   | 파일                               | 변경                                                     |
 | --- | ---------------------------------- | -------------------------------------------------------- |
@@ -68,6 +94,12 @@ bunx --bun @rustra/cli codegen --config rustra.json
 `package().generate_typescript()?.write_schema_to_dir("generated")`를 호출하는
 `generate` bin을 추가한다 — [시작하기 §2-4](../getting-started.ko.md) 참고.
 
+생성 엔트리는 예상 계약 해시를 전달하고 네이티브 시작 검증을 strict로 수행한다.
+현재 Rust 등록은 `rustra_contract_hash`를 제공하므로 Rust와 생성 TypeScript를 함께
+갱신한다. 이 변경이 발행되기 전에는 서로 맞는 개발 소스를 사용한다. 검증을 제공할
+수 없는 구형·사용자 정의 호스트는 `contractVerification: 'warn'` 또는 `'off'`를
+명시해야 한다.
+
 ## 3. `src-tauri/Cargo.toml` — feature와 의존성
 
 ```toml
@@ -97,6 +129,26 @@ fn main() {
 - `register(package, builder)`는 이벤트 배선 없는 변형이다.
 - 모든 명령은 단일 `rustra_dispatch` Tauri 커맨드로 멀티플렉싱된다 — Tauri
   쪽에 명령을 나열하지 않는다.
+
+기존 앱에 자체 Tauri 네이티브 명령도 있다면 Rustra 등록과 핸들러를 결합한다:
+
+```rust
+let builder = tauri_support::with_app_commands(
+    tauri_support::register_with_events(rustra_app::package(), tauri::Builder::default()),
+    tauri::generate_handler![greet, open_document],
+);
+```
+
+`greet`와 `open_document`는 앱에 이미 있는 `#[tauri::command]` 함수다.
+Tauri의 `.invoke_handler()`는 이전 핸들러를 교체하므로 `with_app_commands`를
+마지막 핸들러 설치로 사용한다. 등록된 Rustra 생산자, 이벤트, 채널은 유지되고
+프로덕션 Rustra 엔드포인트 여섯 개가 앱 명령보다 우선한다. 프로파일링
+엔드포인트는 노출하지 않는다. `register`와 `register_dispatch` 뒤에도 사용할
+수 있다.
+
+시작 중 `rustra_contract_hash`가 없다는 오류는 이제 네이티브 등록과 핸들러
+교체 원인을 안내한다. 대응하는 Rustra 버전으로 등록한 뒤 호스트를 다시 빌드하고,
+앱 자체 네이티브 명령이 있으면 결합 헬퍼를 사용한다.
 
 ## 5. `src-tauri/tauri.conf.json` — global API 활성화
 

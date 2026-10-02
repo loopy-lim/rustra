@@ -21,7 +21,7 @@
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
-      "sha256": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921"
+      "sha256": "35ffd61a882a8e2de8c94dd91ee4a8b1080c5a95b94111d6d19b179f11938fce"
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt",
@@ -60,12 +60,16 @@
       "sha256": "4f55ec5ef3af8d6b4aad8c9237749fcf0517732cbac8b6efe9723ce035cd50ae"
     },
     {
+      "path": "../modules/rustra-jsi/scripts/prepare-native.cjs",
+      "sha256": "28705d1d555796b41fe31f7172e1468477332ba03008fa56fe45a88574bcd700"
+    },
+    {
       "path": "../modules/rustra-jsi/src/index.ts",
       "sha256": "6c9d182eb5a4132aea132226c4755ffd3866bf3da5617b3543561407b327e5eb"
     },
     {
       "path": "commands.ts",
-      "sha256": "3659b19a39e8a834f2e163419ab7d8608418a141ee89f57727b9ee308f151546"
+      "sha256": "f480202c9daf7a79f5615af71fcac89b8a4b698648bc958e63ddf63f6b0cebe1"
     },
     {
       "path": "contract.ts",

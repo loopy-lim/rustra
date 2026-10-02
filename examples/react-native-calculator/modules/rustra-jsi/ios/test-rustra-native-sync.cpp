@@ -68,7 +68,7 @@ static jsi::Value evaluate(jsi::Runtime& rt, const std::string& source) {
 }
 static void run(jsi::Runtime& rt, const char* name, const std::string& source) {
   try {
-    publish(0); for (auto& p : peers) { p.mode = 0; p.duringFrame = {}; }
+    publish(0); resetOwned(); for (auto& p : peers) { p.mode = 0; p.duringFrame = {}; }
     evaluate(rt, "(()=>{" + source + "})()");
     check(allocationErrors == 0, "wrong owner/length/double free");
     std::cout << "PASS " << name << '\n';
@@ -89,9 +89,10 @@ static void installTestAPI(jsi::Runtime& rt) {
     check(a[0].getBool(), n > 1 ? a[1].asString(r).utf8(r) : "JS assertion"); return jsi::Value();
   });
   host(rt, "mode", 2, [](auto&, const auto&, const auto* a, size_t) { peers[static_cast<int>(a[0].asNumber())].mode = static_cast<int>(a[1].asNumber()); return jsi::Value(); });
+  host(rt, "useOwned", 2, [](auto&, const auto&, const auto* a, size_t) { useOwned(static_cast<int>(a[0].asNumber()), a[1].asNumber() != 0); return jsi::Value(); });
   host(rt, "stat", 2, [](auto& r, const auto&, const auto* a, size_t) {
     auto& p = peers[static_cast<int>(a[0].asNumber())]; auto key = a[1].asString(r).utf8(r);
-    const int value = key == "hashes" ? p.hashes : key == "schemas" ? p.schemas : key == "frames" ? p.frames : key == "raws" ? p.raws : key == "buffers" ? p.buffers : key == "ownedFrees" ? p.ownedFrees : p.frees;
+    const int value = key == "hashes" ? p.hashes : key == "schemas" ? p.schemas : key == "frames" ? p.frames : key == "raws" ? p.raws : key == "buffers" ? p.buffers : key == "ownedFrees" ? p.ownedFrees : key == "ownedFrames" ? p.ownedFrames : key == "ownedHandoffs" ? p.ownedHandoffs : p.frees;
     return jsi::Value(value);
   });
   host(rt, "collect", 0, [](auto& r, const auto&, const auto*, size_t) { r.instrumentation().collectGarbage("native-sync-test"); return jsi::Value(); });
@@ -271,21 +272,41 @@ static void binderTests(jsi::Runtime& rt) {
     const f=bind(23,"benchAdd");
     for(const m of [1,2,3]) { mode(0,m); const before=stat(0,"frames"); rejects(()=>f({a:1,b:2})); assert(stat(0,"frames")===before+1); }
   )JS");
+  run(rt, "owned response handoff skips probe and frees the exact pair", R"JS(
+    useOwned(0,1);
+    const f=bind(24,"benchEchoString"); const text="x".repeat(1024);
+    const frames=stat(0,"frames"), owned=stat(0,"ownedFrames");
+    assert(f({value:text}).value===text);
+    assert(stat(0,"frames")===frames,"owned path must not touch the probe entry");
+    assert(stat(0,"ownedFrames")===owned+1 && stat(0,"ownedHandoffs")===1,"overflow handed off response ownership");
+    // 작은 응답/에러 프레임은 제자리 기록 — 핸드오프 없이 동일 와이어.
+    assert(f({value:"hi"}).value==="hi");
+    assert(stat(0,"ownedFrames")===owned+2 && stat(0,"ownedHandoffs")===1,"small response must be written in place");
+    mode(0,1); rejects(()=>f({value:"boom"}));
+    assert(stat(0,"ownedFrames")===owned+3 && stat(0,"ownedHandoffs")===1,"error frame stays in place");
+  )JS");
 }
 
 #include "native-sync-codec-tests.inc"
 #include "native-sync-runtime-tests.inc"
+#include "native-sync-lifecycle-tests.inc"
+#include "native-sync-perf.inc"
 }
 
 int main() {
   using namespace native_test;
   initializePeers();
+#if defined(RUSTRA_NATIVE_SYNC_PERF)
+  nativeSyncPerf();
+  return 0;
+#endif
   for (int generation = 0; generation < 2; ++generation) {
     auto runtime = facebook::hermes::makeHermesRuntime();
     std::cout << "Runtime " << generation << " at " << runtime.get() << '\n';
     publish(0); installTestAPI(*runtime);
     if (generation == 0) binderTests(*runtime);
     codecTests(*runtime);
+    if (generation == 0) lifecycle::tests(*runtime);
     for (auto& p : peers) p.duringFrame = {};
     runtime->instrumentation().collectGarbage("native-sync-test-final");
     runtime.reset();

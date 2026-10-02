@@ -6,7 +6,9 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +17,11 @@ import { fileURLToPath } from 'node:url';
 import { runInit } from './cli-init.js';
 import { UsageError } from './cli-usage-error.js';
 import { readConfigSync } from './config.js';
-import { INIT_CONFIG_SCHEMA_PATH } from './init-template.js';
+import {
+  INIT_CONFIG_SCHEMA_PATH,
+  renderInitProjectFiles,
+  templateVersions,
+} from './init-template.js';
 import { runGenerate } from './cli-generate.js';
 import { cliManifest } from './cli-runtime.js';
 
@@ -137,6 +143,63 @@ test('node-only detection emits only the node host section and passes full confi
   });
 });
 
+test('Bun scaffold template selects the FFI host, dependency and native crate entry', () => {
+  const hosts = { bun: true, bunRange: cliManifest.rustraTemplate.bunRange, reactNative: false };
+  const files = renderInitProjectFiles(templateVersions('0.11.3', '^0.12.0', '^0.11.0'), hosts);
+  const config = JSON.parse(files.rustraJson);
+  const manifest = JSON.parse(files.packageJson);
+  assert.deepEqual(config.bun, {});
+  assert.equal(config.node, undefined);
+  assert.equal(manifest.dependencies['@rustra/bun'], cliManifest.rustraTemplate.bunRange);
+  assert.equal(manifest.dependencies['@rustra/node'], undefined);
+  assert.match(files.cargoToml, /crate-type\s*=\s*\["rlib", "cdylib"\]/);
+  assert.match(files.libRs, /rustra::native_entry!\(package\)/);
+  assert.match(files.libRs, /OnceLock/);
+  assert.match(files.appTs, /import \{ echo, rustra \} from '\.\/generated\/bun\.js'/);
+  assert.match(files.appTs, /finally\s*\{\s*rustra\.dispose\(\)/);
+});
+
+test('Node and Bun scaffold templates offer setup/start and clean up the selected runtime', () => {
+  for (const hosts of [{ reactNative: false }, { bun: true, reactNative: false }]) {
+    const files = renderInitProjectFiles(templateVersions('0.11.3', '^0.12.0', '^0.11.0'), hosts);
+    const manifest = JSON.parse(files.packageJson);
+    assert.equal(manifest.scripts.setup, 'rustra setup --config rustra.json');
+    assert.equal(manifest.scripts.start, 'rustra setup --config rustra.json --run');
+    assert.match(files.appTs, /finally\s*\{\s*rustra\.dispose\(\)/);
+  }
+});
+
+test('--host bun creates a validated Bun-only config and matching app entry', async () => {
+  await withTempDir(async (root) => {
+    const project = join(root, 'app');
+    await runInit([project, '--host', 'bun']);
+    const config = readConfigSync(join(project, 'rustra.json'));
+    assert.deepEqual(config.bun, {});
+    assert.equal(config.node, undefined);
+    assert.equal(config.reactNative, undefined);
+    assert.match(readFileSync(join(project, 'src/index.ts'), 'utf8'), /generated\/bun\.js/);
+  });
+});
+
+test('init scaffolds remain standalone when nested inside another Cargo workspace', async () => {
+  const { spawnSync } = await import('node:child_process');
+  await withTempDir(async (root) => {
+    writeFileSync(join(root, 'Cargo.toml'), '[workspace]\nmembers = []\nresolver = "2"\n');
+    for (const host of ['node', 'bun', 'react-native']) {
+      const project = join(root, 'apps', host);
+      await runInit([project, '--host', host]);
+      const result = spawnSync(
+        'cargo',
+        ['metadata', '--no-deps', '--offline', '--format-version', '1'],
+        { cwd: project, encoding: 'utf8', timeout: 10_000 },
+      );
+      assert.equal(result.status, 0, `${result.error ?? ''}\n${result.stderr}`);
+      const metadata = JSON.parse(result.stdout);
+      assert.equal(realpathSync(metadata.workspace_root), realpathSync(project));
+    }
+  });
+});
+
 test('--host react-native includes the reactNative section and passes full config validation', async () => {
   await withTempDir(async (root) => {
     const project = join(root, 'app');
@@ -153,8 +216,8 @@ test('--host react-native includes the reactNative section and passes full confi
 test('init rejects unknown --host values with the supported list', async () => {
   await withTempDir(async (root) => {
     await assert.rejects(
-      () => runInit([join(root, 'x'), '--host', 'bun']),
-      /Unknown init --host value "bun"[\s\S]*node, react-native/,
+      () => runInit([join(root, 'x'), '--host', 'unsupported']),
+      /Unknown init --host value "unsupported"[\s\S]*node, bun, react-native/,
     );
     // 오타는 closestMatch 관례대로 did-you-mean 을 고린다.
     await assert.rejects(
@@ -168,7 +231,7 @@ test('unknown --host is a UsageError (exit-2 contract, closed-enum violation)', 
   // 닫힌 열거 외 값은 arg-parser 의 unknownValueError 와 동일한 exit-2 클래스다
   // (cli-usage-error.ts 헤더 경계 계약). exit 1 로의 되돌림을 잡는 핀.
   await withTempDir(async (root) => {
-    await assert.rejects(() => runInit([join(root, 'x'), '--host', 'bun']), UsageError);
+    await assert.rejects(() => runInit([join(root, 'x'), '--host', 'unsupported']), UsageError);
   });
 });
 
@@ -199,9 +262,7 @@ test('--host node suppresses a detected react-native host and says so', async ()
   }
 });
 
-test('Next steps puts cargo build before install/codegen/demo (cold-start order)', async () => {
-  // 감사 #4 — Next steps 가 cargo build 를 빠뜨리면 콜드 개발자는 demo 실패(스테일 바이너리
-  // contract.mismatch)를 만난다. 첫 빌드가 2-4 분의 병목이므로 순서도 build 가 앞서야 한다.
+test('Next steps reduce the first call to entering the project, installing and starting', async () => {
   const lines: string[] = [];
   const originalLog = console.log;
   console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
@@ -218,25 +279,10 @@ test('Next steps puts cargo build before install/codegen/demo (cold-start order)
     .slice(start + 1)
     .map((line) => line.trim())
     .filter(Boolean);
-  const stepIndex = (command: string) => {
-    const at = steps.findIndex((step) => step.startsWith(command));
-    assert.ok(at >= 0, `"${command}" must appear in Next steps`);
-    return at;
-  };
-  const build = stepIndex('cargo build');
-  const install = stepIndex('bun install');
-  const codegen = stepIndex('bun run codegen');
-  const demo = stepIndex('bun run demo');
-  const run = stepIndex('cargo run');
-  assert.ok(build < install, 'cargo build must precede bun install');
-  assert.ok(
-    build < codegen,
-    'codegen shells out to the built generate bin — build must come first',
-  );
-  assert.ok(build < demo, 'demo needs the built native binary — build must come first');
-  assert.ok(run > demo, 'cargo run stays as the final step (demos the Rust side)');
-  // 첫 빌드가 오래 걸린다는 사실 자체가 계약 — 없으면 개발자가 멈춘 줄 알고 이탈한다(감사 #4).
-  assert.match(steps[build] ?? '', /few minutes/);
+  assert.equal(steps.length, 3, 'setup owns the build/codegen sequence');
+  assert.match(steps[0]!, /^cd /);
+  assert.equal(steps[1], 'bun install');
+  assert.equal(steps[2], 'bun run start');
 });
 
 test('react-native in the pre-existing package.json dependencies switches detection to RN', async () => {
@@ -462,6 +508,97 @@ fn native_entry_registers_echo() {
       });
       assert.equal(result.status, 0, `${result.error ?? ''}\n${result.stdout}\n${result.stderr}`);
       assert.match(result.stdout, /1 passed/);
+    });
+  },
+);
+
+test(
+  'Bun scaffold builds its native entry and executes the generated first echo',
+  { timeout: 180_000 },
+  async () => {
+    const { spawnSync } = await import('node:child_process');
+    await withTempDir(async (root) => {
+      const project = join(root, 'app');
+      const repo = fileURLToPath(new URL('../../../', import.meta.url));
+      const versions = templateVersions(
+        cliManifest.version,
+        cliManifest.dependencies['@rustra/types'],
+        cliManifest.rustraTemplate.cargoRange,
+      );
+      const files = renderInitProjectFiles(versions, {
+        bun: true,
+        bunRange: cliManifest.rustraTemplate.bunRange,
+        reactNative: false,
+      });
+      const contents = {
+        'Cargo.toml': files.cargoToml,
+        'src/lib.rs': files.libRs,
+        'src/main.rs': files.mainRs,
+        'src/bin/generate.rs': files.generateRs,
+        'src/index.ts': files.appTs,
+        'package.json': files.packageJson,
+        'rustra.json': files.rustraJson,
+      };
+      for (const [name, content] of Object.entries(contents)) {
+        const path = join(project, name);
+        mkdirSync(join(path, '..'), { recursive: true });
+        writeFileSync(path, content);
+      }
+      // Validate the current source adapters/Rust ABI, independently of registry
+      // publication. The generated package still declares its release ranges.
+      const manifest = join(project, 'Cargo.toml');
+      writeFileSync(
+        manifest,
+        readFileSync(manifest, 'utf8') +
+          '\n[patch.crates-io]\n' +
+          ['rustra', 'rustra-macros', 'rustra-naming']
+            .map(
+              (name) =>
+                `${name} = { path = ${JSON.stringify(join(repo, 'crates', name).replaceAll('\\', '/'))} }`,
+            )
+            .join('\n') +
+          '\n',
+      );
+      const adapters = join(project, 'node_modules/@rustra');
+      mkdirSync(adapters, { recursive: true });
+      for (const name of ['types', 'bun'])
+        symlinkSync(join(repo, 'packages', name), join(adapters, name), 'dir');
+      const previousTarget = process.env.CARGO_TARGET_DIR;
+      process.env.CARGO_TARGET_DIR = join(repo, 'target/init-smoke');
+      try {
+        for (const args of [
+          ['build', '--quiet'],
+          ['run', '--quiet', '--bin', 'generate'],
+        ]) {
+          const result = spawnSync('cargo', [...args, '--manifest-path', manifest], {
+            cwd: project,
+            encoding: 'utf8',
+            timeout: 150_000,
+            env: process.env,
+          });
+          assert.equal(
+            result.status,
+            0,
+            `${result.error ?? ''}\n${result.stdout}\n${result.stderr}`,
+          );
+        }
+        const written = await runGenerate(['--config', join(project, 'rustra.json')], undefined, {
+          quiet: true,
+        });
+        assert.ok(written.some((file) => file.endsWith('bun.ts')));
+        assert.ok(!written.some((file) => file.endsWith('node.ts')));
+        const firstCall = spawnSync('bun', ['src/index.ts'], {
+          cwd: project,
+          encoding: 'utf8',
+          timeout: 5_000,
+          env: process.env,
+        });
+        assert.equal(firstCall.status, 0, `${firstCall.error ?? ''}\n${firstCall.stderr}`);
+        assert.equal(firstCall.stdout.trim(), 'hello from TypeScript');
+      } finally {
+        if (previousTarget === undefined) delete process.env.CARGO_TARGET_DIR;
+        else process.env.CARGO_TARGET_DIR = previousTarget;
+      }
     });
   },
 );

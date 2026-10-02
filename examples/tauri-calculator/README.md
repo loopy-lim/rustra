@@ -21,9 +21,17 @@ bun run build:frontend
 # Runtime smoke test
 bun run smoke
 
-# Measure 3,000 generated API calls in a real hidden WebView
+# Measure 30,000 generated API calls in a real visible WebView
 bun run bench
 ```
+
+The benchmark opens its window and requests focus after application startup to avoid
+hidden-view scheduling effects. The receipt records actual visibility and focus.
+The runner logs `RUSTRA_TAURI_BENCH_PROGRESS` checkpoints outside timed batches.
+Timeouts identify the last stage; an app launch failure or early exit fails immediately.
+Set `RUSTRA_TAURI_BENCH_TIMEOUT_MS` to an integer from 1000 to 600000 to adjust the
+60-second deadline. `bun run test:benchmark-runner` verifies collection and cleanup
+with controlled child processes, without opening a WebView.
 
 ### Hot-core dev mode (experimental)
 

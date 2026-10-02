@@ -51,6 +51,7 @@ import {
   type EngineClientWithBatch,
   type EngineSupports,
 } from '@rustra/types';
+import { createTauriContractVerifier } from './tauri-contract.js';
 
 /**
  * Tauri의 IPC invoke 함수 타입입니다.
@@ -69,9 +70,8 @@ export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> 
  *
  * handler 의 `payload` 는 `unknown` 이다(R03): 실제 WebView 경계(tauri 가
  * `emit_str` JSON 을 `payload: {}` 로 인라인 평가)에선 이미 해석된 값이 오고,
- * 레거시 주입 transport 는 직렬화된 문자열을 줄 수 있다. `subscribeEvent` 가
- * 양쪽을 단일 규칙(문자열만 1회 parse)으로 정규화하므로 이 타입을 문자열로
- * 좁히지 않는다.
+ * 문자열도 이미 해석된 도메인 값이다. 직렬화된 JSON 문자열을 주는 레거시
+ * 주입 transport는 `payloadEncoding: 'serialized-json'`을 명시한다.
  */
 export type TauriListen = (
   event: string,
@@ -103,13 +103,17 @@ function requireTauriInvoke(): TauriInvoke {
 export type TauriEngineOptions = {
   /** Omit when Tauri `app.withGlobalTauri` is enabled. */
   invoke?: TauriInvoke;
+  /** Generated expected contract hash. Omission preserves unverified manual transports. */
+  contractHash?: string;
+  /** Defaults to strict when contractHash is supplied; warn/off are explicit compatibility modes. */
+  contractVerification?: 'strict' | 'warn' | 'off';
 };
 
 /**
  * Tauri JSON 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 Tauri 열 셀을
  * 그대로 옮긴 것: in-flight 취소는 얕은 취소, 배치는 per-entry 폴백(와이어
  * 배치는 E2 트랙의 단일 IPC 횡단 최적화 — 셀 표기 계열은 per-entry), 이벤트는
- * Rust `app.emit` 푸시, 채널 어댑터 없음, timeoutMs 레이스 있음.
+ * Rust `app.emit` 푸시, 엔진 인스턴스에는 채널 생성 메서드가 없음, timeoutMs 레이스 있음.
  */
 export const TAURI_ENGINE_SUPPORTS: EngineSupports = {
   cancellation: 'shallow',
@@ -136,22 +140,50 @@ export const TAURI_ENGINE_SUPPORTS: EngineSupports = {
  * ```
  */
 export function createTauriEngine(options: TauriEngineOptions = {}) {
+  return createTauriEngineDetails(options).engine;
+}
+
+function createTauriEngineDetails(options: TauriEngineOptions) {
   const tauriInvoke = options.invoke ?? requireTauriInvoke();
-  return createJsonEngine(
+  const ready = createTauriContractVerifier(tauriInvoke, options);
+  const verifyBeforeInvoke =
+    options.contractHash !== undefined && options.contractVerification !== 'off';
+  const engine = createJsonEngine(
     {
-      invoke: (command, args) => tauriInvoke('rustra_dispatch', { command, args }),
+      invoke: (command, args) =>
+        verifyBeforeInvoke
+          ? ready().then(() => tauriInvoke('rustra_dispatch', { command, args }))
+          : tauriInvoke('rustra_dispatch', { command, args }),
       // 트랙 E2 — N 개 명령을 `rustra_dispatch_batch` 한 번의 IPC 횡단으로
       // 실행한다. Rust 측은 항목별 ok/error 로 응답하므로(fail-fast 아님)
       // 실패 항목만 RustraCommandError 로 재구성해 reject 한다.
       invokeBatch: async (entries) => {
-        const responses = (await tauriInvoke('rustra_dispatch_batch', {
+        if (verifyBeforeInvoke) await ready();
+        const responses = await tauriInvoke('rustra_dispatch_batch', {
           requests: entries.map((entry) => ({
             command: entry.command,
             args: entry.args === undefined ? {} : entry.args,
           })),
-        })) as Array<{ ok: boolean; result?: unknown; error?: unknown }>;
+        });
+        if (!Array.isArray(responses)) {
+          throw new RustraCommandError(
+            RustraErrorCode.InvokeMalformed,
+            'Invalid Tauri batch response: expected an array of response envelopes',
+          );
+        }
         return Promise.all(
           responses.map(async (response, index) => {
+            if (
+              typeof response !== 'object' ||
+              response === null ||
+              typeof response.ok !== 'boolean' ||
+              !Object.prototype.hasOwnProperty.call(response, response.ok ? 'result' : 'error')
+            ) {
+              throw new RustraCommandError(
+                RustraErrorCode.InvokeMalformed,
+                `Invalid Tauri batch response envelope at entry ${index}`,
+              );
+            }
             if (response.ok) return response.result;
             throw normalizeRustraError(
               response.error ?? {
@@ -166,6 +198,7 @@ export function createTauriEngine(options: TauriEngineOptions = {}) {
     (args) => (args === undefined ? {} : args),
     { ...TAURI_ENGINE_SUPPORTS },
   );
+  return { engine, ready };
 }
 
 export type TauriBootstrap = {
@@ -191,11 +224,32 @@ export type TauriBootstrap = {
  */
 export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBootstrap {
   let state: 'initializing' | 'ready' | 'disposed' = 'initializing';
-  const bootstrap = () => createTauriEngine(options);
-  configureLazy(bootstrap);
+  const bootstrap = async () => {
+    const invoke = options.invoke ?? requireTauriInvoke();
+    const configured = createTauriEngineDetails({
+      ...options,
+      invoke: (command, args) => {
+        if (state === 'disposed') throw disposedBootstrapError('Tauri');
+        requireOwnership();
+        return invoke(command, args);
+      },
+    });
+    await configured.ready();
+    return configured.engine;
+  };
+  const registration = configureLazy(bootstrap, { ownerId: 'Tauri bootstrap' });
+  const requireOwnership = () => {
+    if (!registration.isCurrent()) {
+      throw new RustraCommandError(
+        RustraErrorCode.RegistryFrozen,
+        'Tauri bootstrap registration was replaced by another engine',
+      );
+    }
+  };
   const dispose = () => {
     if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
     state = 'disposed';
+    registration();
   };
   return {
     get state() {
@@ -203,11 +257,23 @@ export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBoo
     },
     ready: () => {
       if (state === 'disposed') return Promise.reject(disposedBootstrapError('Tauri'));
-      return (ensureConfigured() as Promise<EngineClientWithBatch>).then((engine) => {
-        if (state === 'disposed') throw disposedBootstrapError('Tauri');
-        state = 'ready';
-        return engine;
-      });
+      try {
+        requireOwnership();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      return (ensureConfigured() as Promise<EngineClientWithBatch>)
+        .then((engine) => {
+          if (state === 'disposed') throw disposedBootstrapError('Tauri');
+          requireOwnership();
+          state = 'ready';
+          return engine;
+        })
+        .catch((error: unknown) => {
+          if (state === 'disposed') throw disposedBootstrapError('Tauri');
+          requireOwnership();
+          throw error;
+        });
     },
     dispose,
   };
@@ -219,6 +285,7 @@ export {
   subscribeHotSwap,
   subscribeTauriEvent,
   type HotSwapEvent,
+  type TauriEventOptions,
 } from './tauri-events.js';
 export { disposedBootstrapError, type BootstrapState } from '@rustra/types';
 export {

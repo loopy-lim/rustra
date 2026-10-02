@@ -2,6 +2,42 @@ import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { createBunEventSubscription } from './bun-event-subscription.js';
 import type { BunEventDrainSource } from './bun-events.js';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { suffix } from 'bun:ffi';
+import { createBunFfiEngine } from './bun-ffi.js';
+import type { FrameCodec } from '@rustra/types';
+
+test('a subscription receives the first emission immediately after a ready FFI runtime', async () => {
+  const library = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../target/debug',
+    `librustra_calculator_example.${suffix}`,
+  );
+  const codec: FrameCodec<unknown, unknown> = {
+    commandId: 11,
+    encode() {
+      return Uint8Array.of(11, 0, 0, 0).buffer;
+    },
+    decode() {
+      return { ok: true, result: { emitted: 1 } };
+    },
+  };
+  const runtime = await createBunFfiEngine({
+    library,
+    frameCodecs: new Map([['emitDemo', codec]]),
+  });
+  const subscription = createBunEventSubscription({ library: runtime.library });
+  const events: unknown[] = [];
+  try {
+    subscription.subscribeEvent('demo.done', (payload) => events.push(payload));
+    await runtime.engine.invoke('emitDemo');
+    assert.deepEqual(events, [{ emitted: 1 }]);
+  } finally {
+    subscription.dispose();
+    runtime.close();
+  }
+});
 
 /**
  * 실 dylib 없이 검증 가능한 주입형 테스트 — 후보가 비어 poll 소스로 폴백하는 경로와

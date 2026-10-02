@@ -27,6 +27,14 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tauri::State;
 
+#[path = "tauri_support_ipc.rs"]
+mod ipc_dispatch;
+
+#[path = "tauri_support_app_commands.rs"]
+mod app_commands;
+
+pub use app_commands::with_app_commands;
+
 /// 채널·이벤트 배선 — [`crate::tauri_channels`] 모듈로 분리된 항목을 기존
 /// 공개 경로(`rustra::tauri_support::*`)로 그대로 노출하기 위한 재수출이다.
 pub use crate::tauri_channels::{
@@ -85,8 +93,12 @@ pub fn rustra_dispatch_profiled(
     command: String,
     args: Value,
 ) -> ProfiledResponse {
+    run_profiled(state.dispatch.as_ref(), &command, args)
+}
+
+fn run_profiled(dispatch: &dyn JsonDispatch, command: &str, args: Value) -> ProfiledResponse {
     let started = std::time::Instant::now();
-    let (result, ok) = match state.dispatch.invoke_json(&command, args) {
+    let (result, ok) = match dispatch.invoke_json(command, args) {
         Ok(value) => (value, true),
         Err(error) => (
             serde_json::to_value(&error)
@@ -162,9 +174,12 @@ fn run_batch(dispatch: &dyn JsonDispatch, requests: Vec<BatchRequest>) -> Vec<Ba
 /// 이벤트는 폴링으로만 전달됩니다(기존 동작). 푸시 배선이 필요하면
 /// [`register_with_events`]를 사용하세요.
 ///
-/// 노출 커맨드는 프로덕션 경로인 [`rustra_dispatch`]·[`rustra_dispatch_batch`]
-/// 뿐이다 — 측정 전용 [`rustra_dispatch_profiled`] 은 기본 노출에서 제외된다
+/// `rustra_contract_hash`는 선택된 생산자의 계약을 시작 시점에 검증한다.
+/// 명령 실행은 [`rustra_dispatch`]·[`rustra_dispatch_batch`]로 전달한다.
+/// 측정 전용 [`rustra_dispatch_profiled`] 은 기본 노출에서 제외된다
 /// (A07). 벤치 호스트는 [`register_profiled`] 을 사용한다.
+/// 등록된 IPC 핸들러는 동기 dispatch를 blocking pool에서 실행해 WebView IPC
+/// 스레드를 점유하지 않는다. 공개 Rust dispatch 함수의 직접 호출은 동기식이다.
 pub fn register<R: tauri::Runtime>(
     package: Package,
     builder: tauri::Builder<R>,
@@ -172,13 +187,7 @@ pub fn register<R: tauri::Runtime>(
     finish_registration(package, builder, |state, builder| {
         builder
             .manage(state)
-            .invoke_handler(tauri::generate_handler![
-                rustra_dispatch,
-                rustra_dispatch_batch,
-                crate::tauri_channels::rustra_channel_create,
-                crate::tauri_channels::rustra_channel_create_bytes,
-                crate::tauri_channels::rustra_channel_drop
-            ])
+            .invoke_handler(ipc_dispatch::production_handler())
     })
 }
 
@@ -199,9 +208,10 @@ pub fn register_profiled<R: tauri::Runtime>(
         builder
             .manage(state)
             .invoke_handler(tauri::generate_handler![
-                rustra_dispatch,
-                rustra_dispatch_profiled,
-                rustra_dispatch_batch,
+                ipc_dispatch::rustra_contract_hash_ipc,
+                ipc_dispatch::rustra_dispatch_ipc,
+                ipc_dispatch::rustra_dispatch_profiled_ipc,
+                ipc_dispatch::rustra_dispatch_batch_ipc,
                 crate::tauri_channels::rustra_channel_create,
                 crate::tauri_channels::rustra_channel_create_bytes,
                 crate::tauri_channels::rustra_channel_drop
@@ -247,13 +257,7 @@ pub fn register_dispatch<R: tauri::Runtime>(
     builder
         .plugin(crate::tauri_channels::channel_ownership_plugin())
         .manage(RustraState { dispatch })
-        .invoke_handler(tauri::generate_handler![
-            rustra_dispatch,
-            rustra_dispatch_batch,
-            crate::tauri_channels::rustra_channel_create,
-            crate::tauri_channels::rustra_channel_create_bytes,
-            crate::tauri_channels::rustra_channel_drop
-        ])
+        .invoke_handler(ipc_dispatch::production_handler())
 }
 
 /// 스왑 보고 책임은 별도 파일로 분리한다(architecture-boundaries

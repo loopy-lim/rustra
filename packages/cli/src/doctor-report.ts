@@ -8,7 +8,8 @@ import {
   type DoctorRunner,
 } from './doctor-types.js';
 import { check, memoizeRunner, readConfig } from './doctor-support.js';
-import { collectBaseChecks, collectConfigChecks } from './doctor-checks.js';
+import { collectConfigChecks } from './doctor-checks.js';
+import { collectBaseChecks } from './doctor-base-checks.js';
 import { buildMatrix, collectSectionChecks } from './doctor-matrix.js';
 
 export function collectDoctorReport(
@@ -20,7 +21,8 @@ export function collectDoctorReport(
   const configPath = resolve(options.configPath);
   const cached = memoizeRunner(runner);
   // 동기 경로는 fetch 프리브를 못 돌린다 — skip 행으로 명시한다(누락이 아님).
-  const checks = collectBaseChecks(options, cached, registry);
+  const parsed = existsSync(configPath) ? readConfig(configPath) : {};
+  const checks = collectBaseChecks(options, cached, registry, parsed.config);
   if (!existsSync(configPath)) {
     checks.unshift(
       check('config.file', 'fail', true, `Config file does not exist: ${configPath}`, undefined, [
@@ -29,7 +31,6 @@ export function collectDoctorReport(
     );
     return { schemaVersion: 1, checks };
   }
-  const parsed = readConfig(configPath);
   if (!parsed.config) {
     checks.unshift(check('config.file', 'fail', true, 'Config file is invalid JSON', parsed.error));
     return { schemaVersion: 1, checks };

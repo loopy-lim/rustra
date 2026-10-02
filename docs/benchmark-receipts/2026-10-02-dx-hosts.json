@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-02T14:22:11.407Z",
+  "sourceSha": "58e1835e5f2b74f9a8c1e21addabcf85836534cd",
+  "sourceDirty": true,
+  "sourceTreeHash": "0d267d6a9c9980ae8d7ebe061915033fb04f8a3e214d6ba18bc21e1c757d0389",
+  "sourceFileCount": 1048,
+  "nativeArtifact": "target/release/librustra_calculator_example.dylib",
+  "nativeArtifacts": [
+    {
+      "path": "target/release/librustra_calculator_example.dylib",
+      "sha256": "3bc64368aa1b22cbcbd314a006f2f6ff850d910987b62d4bec7889167e4f45ed"
+    },
+    {
+      "path": "target/release/rustra-calculator-example",
+      "sha256": "2d860f63405d86c8971ea772a48bd7c01888c2ac75ca19a7251c37e8b1d21605"
+    },
+    {
+      "path": "target/release/loop-stdio",
+      "sha256": "8d163d17638cc423a79dfc2c7e130dc12622ed79ac1f82ed06ef0a4ecf89e2ea"
+    },
+    {
+      "path": "examples/calculator-napi/calculator-napi.darwin-arm64.node",
+      "sha256": "a13c1970c606b3b717d5e0e458d6aaf9bdd1283f06d056a325691a789482acc5"
+    }
+  ],
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "bun": "1.4.1",
+    "node": "v22.21.1"
+  },
+  "runtimeEvidence": ["Node v22.21.1", "Bun 1.4.1"],
+  "correctness": true,
+  "results": [
+    {
+      "name": "node-generated-client",
+      "correctness": true,
+      "warmup": 10,
+      "iterations": 200,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 3152324.1425925912,
+      "p50Ns": 3111874.999999941,
+      "p95Ns": 3745542.000000114,
+      "p99Ns": 4387292.0000001155,
+      "throughputOpsPerSecond": 317.22626061467207
+    },
+    {
+      "name": "node-one-shot-stdio-json",
+      "correctness": true,
+      "warmup": 10,
+      "iterations": 200,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 3948184.0759259243,
+      "p50Ns": 3439832.999999908,
+      "p95Ns": 7779540.999999881,
+      "p99Ns": 11430624.999999963,
+      "throughputOpsPerSecond": 253.28099723047512
+    },
+    {
+      "name": "node-persistent-stdio-json",
+      "correctness": true,
+      "warmup": 100,
+      "iterations": 2000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 29642.119999994757,
+      "p50Ns": 17417.00000002311,
+      "p95Ns": 103750.00000021828,
+      "p99Ns": 479624.9999999418,
+      "throughputOpsPerSecond": 33735.77868250236
+    },
+    {
+      "name": "node-persistent-loop",
+      "correctness": true,
+      "warmup": 100,
+      "iterations": 2000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 26954.613333347243,
+      "p50Ns": 17792.000000554253,
+      "p95Ns": 89375.00000047294,
+      "p99Ns": 470167.00000040146,
+      "throughputOpsPerSecond": 37099.400671529474
+    },
+    {
+      "name": "node-napi-frame",
+      "correctness": true,
+      "warmup": 500,
+      "iterations": 10000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 2811.979444458855,
+      "p50Ns": 2667.0000006561168,
+      "p95Ns": 5957.999999736785,
+      "p99Ns": 9624.999999687134,
+      "throughputOpsPerSecond": 355621.37624104955
+    },
+    {
+      "name": "bun-generated-ffi-frame",
+      "correctness": true,
+      "warmup": 500,
+      "iterations": 10000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 6213.299259259311,
+      "p50Ns": 5333.00000000736,
+      "p95Ns": 16041.99999999878,
+      "p99Ns": 28584.00000002348,
+      "throughputOpsPerSecond": 160945.08863543943
+    }
+  ]
+}

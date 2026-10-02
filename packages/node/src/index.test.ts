@@ -680,7 +680,7 @@ processTest(
       assert.ok(elapsed >= 150, `drain waited until the guard fired (took ${elapsed}ms)`);
       assert.ok(elapsed < 5_000, 'drain must not wait past the guard');
       transport.dispose();
-      await assert.rejects(() => never as Promise<unknown>, /exited before responding/);
+      await assert.rejects(() => never as Promise<unknown>, /disposed/);
     } finally {
       transport.dispose();
     }

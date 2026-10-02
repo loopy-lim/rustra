@@ -11,6 +11,8 @@ import {
   rmSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { runDev, type DevWatchHandle } from './dev.js';
 import { cliManifest } from './cli-runtime.js';
@@ -616,7 +618,7 @@ function seedDylibProject(root: string): string {
     '  dir=$(dirname "$manifest")',
     '  printf \'{"target_directory":"%s/target","packages":[{"name":"x","manifest_path":"%s",',
     '  "targets":[{"name":"generate","crate_types":["bin"],"kind":["bin"]},',
-    '  {"name":"rustra_bridge","crate_types":["staticlib","cdylib"],"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"',
+    '  {"name":"rustra_bridge","crate_types":["staticlib","cdylib"],"kind":["lib"]}]}],"workspace_root":"%s"}\\n\' "$dir" "$manifest" "${FAKE_WORKSPACE_ROOT:-$dir}"',
     '  exit 0',
     'fi',
     'if [ "$1" = "run" ]; then',
@@ -655,6 +657,95 @@ function seedDylibProject(root: string): string {
   chmodSync(fakePath, 0o755);
   return project;
 }
+
+test(
+  'disposing while parity verification is pending prevents publication and watcher revival',
+  { timeout: 30_000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dispose-gate-'));
+    const originalPath = process.env.PATH;
+    const originalReadFile = fsPromises.readFile;
+    const logs: string[] = [];
+    const restoreConsole = captureConsole(logs);
+    const capturedLog = console.log;
+    let handle: DevWatchHandle | undefined;
+    let pauseCapture = false;
+    let releaseCapture!: () => void;
+    const capturePaused = new Promise<void>((resolve) => {
+      releaseCapture = resolve;
+    });
+    let markCaptureEntered!: () => void;
+    let entered = false;
+    const captureEntered = new Promise<void>((resolve) => {
+      markCaptureEntered = resolve;
+    });
+    try {
+      const project = seedDylibProject(root);
+      const schemaPath = join(project, 'generated', 'schema.json');
+      writeSchema(schemaPath, 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      const buildLog = join(root, 'build.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_DYLIB_LOG = buildLog;
+      process.env.FAKE_DYLIB_CONTENT = 'initial published core';
+      Object.defineProperty(fsPromises, 'readFile', {
+        configurable: true,
+        writable: true,
+        value: (...args: Parameters<typeof originalReadFile>) => {
+          if (pauseCapture && String(args[0]) === schemaPath) {
+            entered = true;
+            markCaptureEntered();
+            return capturePaused.then(() => originalReadFile(...args));
+          }
+          return originalReadFile(...args);
+        },
+      });
+      syncBuiltinESMExports();
+      console.log = (line: unknown) => {
+        capturedLog(line);
+        if (handle && String(line).includes('[dev:dylib] core artifact:')) pauseCapture = true;
+      };
+      handle = await runDev(['--config', join(project, 'rustra.json')]);
+      const livePath = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+      assert.equal(readFileSync(livePath, 'utf8'), 'initial published core');
+      const reloads: string[] = [];
+      handle.onReload((reason) => void reloads.push(reason));
+      process.env.FAKE_DYLIB_CONTENT = 'candidate after close';
+      await triggerUntil(
+        () => logs,
+        () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed_after_start() {}\n'),
+        () => entered,
+        'pending parity verification',
+      );
+      await captureEntered;
+      handle.dispose();
+      releaseCapture();
+      await sleep(200);
+      assert.equal(readFileSync(livePath, 'utf8'), 'initial published core');
+      assert.deepEqual(reloads, []);
+      const buildsAfterClose = readFileSync(buildLog, 'utf8');
+      writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed_after_close() {}\n');
+      await sleep(250);
+      assert.equal(readFileSync(buildLog, 'utf8'), buildsAfterClose);
+    } finally {
+      handle?.dispose();
+      releaseCapture();
+      Object.defineProperty(fsPromises, 'readFile', {
+        configurable: true,
+        writable: true,
+        value: originalReadFile,
+      });
+      syncBuiltinESMExports();
+      restoreConsole();
+      process.env.PATH = originalPath;
+      delete process.env.FAKE_SCHEMA_FILE;
+      delete process.env.FAKE_DYLIB_LOG;
+      delete process.env.FAKE_DYLIB_CONTENT;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   'runConfigDev dylib target builds the cdylib core, announces RUSTRA_HOT_CORE, and reloads',
@@ -1158,6 +1249,110 @@ function logLineCount(path: string): number {
         .filter((line) => line.trim() !== '').length
     : 0;
 }
+
+for (const input of ['build script', 'workspace lock'] as const) {
+  test(`runConfigDev rebuilds after a ${input} edit`, { timeout: 30_000 }, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-extra-input-'));
+    const originalPath = process.env.PATH;
+    const logs: string[] = [];
+    const restore = captureConsole(logs);
+    let handle: DevWatchHandle | undefined;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      writeFileSync(join(root, 'Cargo.toml'), '[workspace]\nmembers = ["proj"]\n');
+      writeFileSync(join(root, 'Cargo.lock'), 'version = 3\n');
+      const changedPath =
+        input === 'build script' ? join(project, 'build.rs') : join(root, 'Cargo.lock');
+      if (input === 'build script') writeFileSync(changedPath, 'fn main() {}\n');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_WORKSPACE_ROOT = root;
+      process.env.FAKE_CARGO_LOG = join(root, 'cargo-run.log');
+      handle = await runDev(['--config', join(project, 'rustra.json')]);
+      const reloads: string[] = [];
+      handle.onReload((reason) => void reloads.push(reason));
+      await triggerUntil(
+        () => logs,
+        () =>
+          writeFileSync(
+            changedPath,
+            input === 'build script'
+              ? 'fn main() { println!("cargo:rustc-cfg=changed"); }\n'
+              : 'version = 4\n',
+          ),
+        () => reloads.length > 0,
+        `${input} reload`,
+      );
+      assert.equal(
+        logLineCount(process.env.FAKE_CARGO_LOG),
+        2,
+        'Cargo inputs outside src must defeat the cached fingerprint',
+      );
+    } finally {
+      handle?.dispose();
+      restore();
+      process.env.PATH = originalPath;
+      delete process.env.FAKE_SCHEMA_FILE;
+      delete process.env.FAKE_WORKSPACE_ROOT;
+      delete process.env.FAKE_CARGO_LOG;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test(
+  'runConfigDev restores an externally changed schema before reloading',
+  { timeout: 30_000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-schema-edit-'));
+    const originalPath = process.env.PATH;
+    let handle: DevWatchHandle | undefined;
+    const logs: string[] = [];
+    const restore = captureConsole(logs);
+    try {
+      const project = seedDylibProject(root);
+      const schemaPath = join(project, 'generated', 'schema.json');
+      const sourceSchema = join(root, 'schema-string.json');
+      writeSchema(schemaPath, 'string');
+      writeSchema(sourceSchema, 'string');
+      const cargoLog = join(root, 'cargo-run.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = sourceSchema;
+      process.env.FAKE_CARGO_LOG = cargoLog;
+      handle = await runDev(['--config', join(project, 'rustra.json')]);
+      const originalSchema = readFileSync(schemaPath, 'utf8');
+      const reloads: string[] = [];
+      handle.onReload((reason) => void reloads.push(reason));
+      const edited = JSON.parse(originalSchema);
+      edited.commands[0].description = 'external stale schema';
+      await triggerUntil(
+        () => logs,
+        () => writeFileSync(schemaPath, JSON.stringify(edited)),
+        () => reloads.length > 0,
+        'schema regeneration and reload',
+      );
+      assert.equal(
+        readFileSync(schemaPath, 'utf8'),
+        originalSchema,
+        'only the Rust-produced schema may be used to reload the native core',
+      );
+      assert.equal(
+        logLineCount(cargoLog),
+        2,
+        'a schema edit must invalidate the skip even when Rust source bytes are unchanged',
+      );
+    } finally {
+      handle?.dispose();
+      restore();
+      process.env.PATH = originalPath;
+      delete process.env.FAKE_SCHEMA_FILE;
+      delete process.env.FAKE_CARGO_LOG;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   'runConfigDev skips the cargo stage when a trigger fires with byte-identical rust inputs',

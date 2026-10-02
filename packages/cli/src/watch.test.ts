@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  chmodSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFileWatch, createSourceWatch, createWatchLoop } from './watch.js';
@@ -58,6 +66,172 @@ test('source watch follows a symlinked root and reports original-namespace paths
     await until(() => events.includes(nestedViaLink));
   } finally {
     handle.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('source watch follows a retargeted root and stops observing the retired tree', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-watch-retarget-'));
+  const before = join(root, 'before');
+  const after = join(root, 'after');
+  mkdirSync(before);
+  mkdirSync(after);
+  writeFileSync(join(before, 'lib.rs'), 'before');
+  writeFileSync(join(after, 'lib.rs'), 'after');
+  const link = join(root, 'src');
+  symlinkSync(before, link, 'dir');
+  const events: string[] = [];
+  const handle = createSourceWatch(link, (path) => events.push(path));
+  try {
+    symlinkSync(after, join(root, 'next'), 'dir');
+    renameSync(join(root, 'next'), link);
+    await new Promise((r) => setTimeout(r, 250));
+    assert.ok(events.includes(join(link, 'lib.rs')), 'replacement source tree was not observed');
+    events.length = 0;
+    writeFileSync(join(after, 'lib.rs'), 'edited replacement');
+    await until(() => events.includes(join(link, 'lib.rs')));
+    assert.ok(events.every((path) => path.startsWith(link)));
+    events.length = 0;
+    writeFileSync(join(before, 'lib.rs'), 'edited retired tree');
+    await new Promise((r) => setTimeout(r, 250));
+    assert.deepEqual(events, []);
+  } finally {
+    handle.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('file watch follows a retargeted directory in the original namespace', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-file-watch-retarget-'));
+  const before = join(root, 'before');
+  const after = join(root, 'after');
+  mkdirSync(before);
+  mkdirSync(after);
+  writeFileSync(join(before, 'old.json'), 'old');
+  writeFileSync(join(after, 'new.json'), 'new');
+  const link = join(root, 'schemas');
+  symlinkSync(before, link, 'dir');
+  const events: Array<[string, string | undefined]> = [];
+  const handle = createFileWatch([
+    { path: link, onChange: (path, filename) => events.push([path, filename]) },
+  ]);
+  try {
+    symlinkSync(after, join(root, 'next'), 'dir');
+    renameSync(join(root, 'next'), link);
+    await new Promise((r) => setTimeout(r, 250));
+    assert.ok(
+      events.some(([path, name]) => path === join(link, 'new.json') && name === 'new.json'),
+    );
+    events.length = 0;
+    writeFileSync(join(after, 'new.json'), 'changed');
+    await until(() => events.some(([path]) => path === join(link, 'new.json')));
+  } finally {
+    handle.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('source watch excludes newly created custom outputs but observes adjacent source files', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-watch-excluded-'));
+  const output = join(root, 'compiled-output');
+  const generated = join(root, 'generated');
+  const events: string[] = [];
+  const handle = createSourceWatch(root, (path) => events.push(path), [output, generated]);
+  try {
+    mkdirSync(join(output, 'debug'), { recursive: true });
+    writeFileSync(join(output, 'debug', 'output.o'), 'build output');
+    mkdirSync(generated);
+    writeFileSync(join(generated, 'bindings.rs'), 'generated');
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(events.length, 0, 'excluded output creation triggered source changes');
+    writeFileSync(join(output, 'debug', 'output.o'), 'new build output');
+    const source = join(root, 'compiled-output-helper.rs');
+    writeFileSync(source, 'relevant source');
+    await until(() => events.includes(source));
+    assert.deepEqual(events, [source]);
+  } finally {
+    handle.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('source watch excludes traversal through a canonical alias before reading the subtree', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-watch-excluded-alias-'));
+  const src = join(root, 'src');
+  const output = join(src, 'compiled-output');
+  mkdirSync(output, { recursive: true });
+  const alias = join(root, 'alias');
+  symlinkSync(src, alias, 'dir');
+  chmodSync(output, 0);
+  const events: string[] = [];
+  let handle: ReturnType<typeof createSourceWatch> | undefined;
+  try {
+    handle = createSourceWatch(src, (path) => events.push(path), [join(alias, 'compiled-output')]);
+    const source = join(src, 'lib.rs');
+    writeFileSync(source, 'source');
+    await until(() => events.includes(source));
+  } finally {
+    handle?.dispose();
+    chmodSync(output, 0o700);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('source watch refreshes exclusions when the subscribed symlink changes', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-watch-excluded-retarget-'));
+  const before = join(root, 'before');
+  const after = join(root, 'after');
+  mkdirSync(before);
+  mkdirSync(after);
+  const link = join(root, 'src');
+  symlinkSync(before, link, 'dir');
+  const events: string[] = [];
+  const handle = createSourceWatch(link, (path) => events.push(path), [
+    join(link, 'compiled-output'),
+  ]);
+  try {
+    symlinkSync(after, join(root, 'next'), 'dir');
+    renameSync(join(root, 'next'), link);
+    const source = join(link, 'lib.rs');
+    writeFileSync(source, 'replacement');
+    mkdirSync(join(after, 'compiled-output'));
+    writeFileSync(join(after, 'compiled-output', 'output.o'), 'output');
+    await until(() => events.includes(source));
+    assert.ok(events.every((path) => !path.includes('compiled-output')));
+    events.length = 0;
+    writeFileSync(join(after, 'compiled-output', 'output.o'), 'changed output');
+    await new Promise((r) => setTimeout(r, 250));
+    assert.deepEqual(events, []);
+  } finally {
+    handle.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('relative source watch paths stay bound to their original working directory', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-watch-relative-'));
+  const originalCwd = process.cwd();
+  mkdirSync(join(root, 'src'));
+  mkdirSync(join(root, 'other'));
+  const events: string[] = [];
+  let handle: ReturnType<typeof createSourceWatch> | undefined;
+  try {
+    process.chdir(root);
+    const subscribedRoot = join(process.cwd(), 'src');
+    handle = createSourceWatch('src', (path) => events.push(path), ['src/compiled-output']);
+    process.chdir(join(root, 'other'));
+    const source = join(subscribedRoot, 'lib.rs');
+    writeFileSync(source, 'source');
+    await new Promise((r) => setTimeout(r, 250));
+    assert.ok(events.includes(source), 'relative root moved with process.cwd()');
+    events.length = 0;
+    mkdirSync(join(root, 'src', 'compiled-output'));
+    writeFileSync(join(root, 'src', 'compiled-output', 'output.o'), 'output');
+    await new Promise((r) => setTimeout(r, 250));
+    assert.deepEqual(events, []);
+  } finally {
+    handle?.dispose();
+    process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   }
 });

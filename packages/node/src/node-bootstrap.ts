@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   configureLazy,
   disposedBootstrapError,
@@ -16,6 +17,12 @@ import {
   type NodeBootstrapOptions,
   type NodeProcessTransport,
 } from './node-core.js';
+import { subscribeEvent, type NodeEventTransport } from './node-events.js';
+import {
+  awaitNodeReadiness,
+  createNodePersistentTransport,
+  verifyNodeEventRuntime,
+} from './node-persistent.js';
 
 /** 계약 검증 기각 코드(감사 A1) — 다른 코드의 실패는 후보 폴백 없이 즉시 전파. */
 const CONTRACT_REJECTION_CODES = ['contract.mismatch', 'contract.unenforceable'];
@@ -24,11 +31,20 @@ function isContractRejection(error: unknown): error is RustraCommandError {
   return error instanceof RustraCommandError && CONTRACT_REJECTION_CODES.includes(error.code);
 }
 
-function noNodeRuntimeError(): RustraCommandError {
+function noNodeRuntimeError(options: NodeBootstrapOptions = {}): RustraCommandError {
+  const checked = runtimeSearchPaths(options);
   return new RustraCommandError(
     RustraErrorCode.TransportUnavailable,
-    'No Rustra Node runtime was found. Build the inferred Cargo binary, or set RUSTRA_NODE_BINARY to its absolute path.',
+    'No Rustra Node runtime was found. Build the inferred Cargo binary, or set ' +
+      `RUSTRA_NODE_BINARY to its absolute path. Working directory: ${runtimeDirectory(options)}. ` +
+      `Checked: ${checked.length ? checked.join('; ') : 'no commandCandidates or binaryName configured'}.`,
   );
+}
+
+function runtimeDirectory(options: NodeBootstrapOptions): string {
+  const cwd = options.spawnOptions?.cwd;
+  if (cwd === undefined) return resolve(process.cwd());
+  return typeof cwd === 'string' ? resolve(cwd) : fileURLToPath(cwd);
 }
 
 function runtimeMtime(candidate: string): string {
@@ -57,19 +73,13 @@ function mtimeMs(candidate: string): number {
   }
 }
 
-/**
- * 런타임 실행 파일 후보 전체 — `command` → `RUSTRA_NODE_BINARY` → 후보/이름 추론,
- * 존재하는 것만 최신 빌드 순. 명시 지정은 존재 검사·정렬 없이 단일 후보다.
- * 이벤트 구독 팩토리(node-event-subscription.ts)도 같은 해상을 재사용한다 —
- * 부트스트랩과 이벤트 transport 가 서로 다른 런타임을 가리키지 않게.
- */
-export function nodeRuntimeCandidates(options: NodeBootstrapOptions): string[] {
-  const explicit = process.env.RUSTRA_NODE_BINARY ?? options.command;
-  if (explicit) return [explicit];
-  const candidates = [...(options.commandCandidates ?? [])];
+/** Filesystem candidates use the same working directory as the spawned runtime. */
+function runtimeSearchPaths(options: NodeBootstrapOptions): string[] {
+  const directory = runtimeDirectory(options);
+  const candidates = (options.commandCandidates ?? []).map((path) => resolve(directory, path));
   if (options.binaryName) {
     const executable = options.binaryName + (process.platform === 'win32' ? '.exe' : '');
-    let current = resolve(process.cwd());
+    let current = directory;
     while (true) {
       candidates.push(resolve(current, 'target', 'release', executable));
       candidates.push(resolve(current, 'target', 'debug', executable));
@@ -78,13 +88,20 @@ export function nodeRuntimeCandidates(options: NodeBootstrapOptions): string[] {
       current = parent;
     }
   }
-  return orderCandidatesNewestFirst([...new Set(candidates)].filter((c) => existsSync(c)));
+  return [...new Set(candidates)];
+}
+
+/** Existing candidates, newest first; explicit commands preserve PATH lookup. */
+export function nodeRuntimeCandidates(options: NodeBootstrapOptions): string[] {
+  const explicit = process.env.RUSTRA_NODE_BINARY ?? options.command;
+  if (explicit) return [explicit];
+  return orderCandidatesNewestFirst(runtimeSearchPaths(options).filter((c) => existsSync(c)));
 }
 
 export function resolveNodeRuntime(options: NodeBootstrapOptions): string {
   const first = nodeRuntimeCandidates(options)[0];
   if (first !== undefined) return first;
-  throw noNodeRuntimeError();
+  throw noNodeRuntimeError(options);
 }
 
 /** (A6) Node 계약 불일치 — Bun 구현(frame-engine-contract)과 동일한 fix 안내. */
@@ -149,7 +166,13 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
   const verifyContract = async (spawned: NodeProcessTransport): Promise<void> => {
     if (options.contractHash === undefined) return;
     if (options.contractVerification === 'off') return;
-    const nativeHash = await spawned.getContractHash();
+    const nativeHash = await awaitNodeReadiness(
+      () => spawned.getContractHash(),
+      spawned,
+      options,
+      '__rustra_contract',
+      'contract.unenforceable',
+    );
     if (nativeHash !== options.contractHash) {
       if (options.contractVerification === 'warn') {
         console.warn(
@@ -174,6 +197,28 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
           error,
         );
   let closeResource: (() => void) | undefined;
+  const subscriptions = new Set<{
+    name: string;
+    callback: (payload: never) => void;
+    unsubscribe?: () => void;
+  }>();
+  let eventFailure: unknown;
+  const closeEvents = () => {
+    for (const entry of subscriptions) {
+      entry.unsubscribe?.();
+      entry.unsubscribe = undefined;
+    }
+  };
+  const attachEvents = (spawned: NodeProcessTransport) => {
+    for (const entry of subscriptions) {
+      if (!entry.unsubscribe)
+        entry.unsubscribe = subscribeEvent(
+          spawned as NodeEventTransport,
+          entry.name,
+          entry.callback,
+        );
+    }
+  };
   let reloadPromise: Promise<void> | undefined;
   const assertActive = () => {
     if (readState() === 'disposed') throw disposedBootstrapError('Node');
@@ -188,14 +233,25 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
     const close = () => {
       if (closed) return;
       closed = true;
+      closeEvents();
       spawned.dispose();
     };
     try {
       assertActive();
       transport = spawned;
       closeResource = close;
-      await verifyContract(spawned);
+      try {
+        await verifyContract(spawned);
+      } catch (error) {
+        throw wrapUnenforceable(error);
+      }
       assertActive();
+      if (options.persistent) {
+        await verifyNodeEventRuntime(spawned, options);
+        assertActive();
+      }
+      attachEvents(spawned);
+      eventFailure = undefined;
       const engine = createNodeEngine({
         invoke(command, args) {
           if (closed) throw disposedBootstrapError('Node');
@@ -205,6 +261,7 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       const invokeBatch = engine.invokeBatch.bind(engine);
       engine.invokeBatch = (entries) =>
         closed ? Promise.reject(disposedBootstrapError('Node')) : invokeBatch(entries);
+      state = 'ready';
       return engine;
     } catch (error) {
       close();
@@ -213,7 +270,7 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
         transport = undefined;
       }
       assertActive();
-      throw wrapUnenforceable(error);
+      throw error;
     }
   };
   const bootstrap = async (): Promise<EngineClientWithBatch> => {
@@ -224,17 +281,20 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       return adopt(spawned);
     }
     const candidates = nodeRuntimeCandidates(options);
-    if (candidates.length === 0) throw noNodeRuntimeError();
+    if (candidates.length === 0) throw noNodeRuntimeError(options);
     const { value } = await selectVerifiedRuntime(candidates, (candidate) =>
-      adopt(
-        createNodeProcessTransport({
-          command: candidate,
-          args: options.args,
-          spawnOptions: options.spawnOptions,
-        }),
-      ),
+      adopt(createTransport(candidate)),
     );
     return value;
+  };
+  const createTransport = (candidate: string): NodeProcessTransport => {
+    if (!options.persistent)
+      return createNodeProcessTransport({
+        command: candidate,
+        args: options.args,
+        spawnOptions: options.spawnOptions,
+      });
+    return createNodePersistentTransport(candidate, options);
   };
   let registration = configureLazy(bootstrap, { ownerId: 'node' });
   const ready = async (): Promise<EngineClientWithBatch> => {
@@ -264,6 +324,26 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       return state;
     },
     ready,
+    subscribeEvent(name, callback) {
+      assertActive();
+      if (!options.persistent && !options.createTransport)
+        throw new RustraCommandError(
+          'event.unavailable',
+          'Node bootstrap events require persistent: true; one-shot invocations cannot share an event bus.',
+        );
+      if (eventFailure) throw eventFailure;
+      const entry = { name, callback, unsubscribe: undefined as (() => void) | undefined };
+      subscriptions.add(entry);
+      if (transport && state === 'ready') attachEvents(transport);
+      else
+        void ready().catch((error: unknown) => {
+          eventFailure = error;
+        });
+      return () => {
+        if (!subscriptions.delete(entry)) return;
+        entry.unsubscribe?.();
+      };
+    },
     dispose() {
       if (state === 'disposed') return;
       state = 'disposed';
@@ -271,6 +351,7 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       closeResource?.();
       closeResource = undefined;
       transport = undefined;
+      subscriptions.clear();
     },
     reload() {
       if (readState() === 'disposed') return Promise.reject(disposedBootstrapError('Node'));

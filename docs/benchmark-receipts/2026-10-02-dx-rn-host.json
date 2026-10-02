@@ -1,0 +1,638 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-02T14:28:20.687267+00:00",
+  "candidateRevision": "58e1835e5f2b74f9a8c1e21addabcf85836534cd",
+  "scope": {
+    "evidence": "host-process correctness, platform API compile and current controlled-peer caller timing",
+    "runtime": "Hermes",
+    "platform": "mac-catalyst",
+    "target": "arm64-apple-ios15.1-macabi",
+    "optimization": "-O1",
+    "debugSymbols": true,
+    "asan": false,
+    "nativeProfiler": false,
+    "producer": "controlled C ABI peer, not the Rust core"
+  },
+  "host": {
+    "os": "26.6.2",
+    "architecture": "arm64",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.3.2)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+    "sdk": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+    "reactNativeVersion": "0.81.5"
+  },
+  "correctness": {
+    "native": {
+      "verdict": "passed",
+      "exitCode": 0,
+      "assertions": 1412,
+      "failures": 0,
+      "command": {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge",
+        "env": {
+          "RUSTRA_NATIVE_TEST_PLATFORM": "mac-catalyst",
+          "RUSTRA_NATIVE_DEPS_ROOT": "/private/tmp/rustra-rn-audit-native-20261002/dependencies/packages/react-native/third-party/ReactNativeDependencies.xcframework",
+          "RUSTRA_NATIVE_TEST_DIR": "/private/tmp/rustra-rn-audit-native-20261002/build"
+        },
+        "argv": [
+          "bash",
+          "examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh"
+        ]
+      },
+      "log": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/hermes-final-green.log",
+        "sha256": "895e65a7ad270392b118f764052cca115b5fb1bf39313ec1c1f37362070f091d"
+      },
+      "identities": [
+        {
+          "path": "/private/tmp/rustra-rn-audit-native-20261002/build/native-sync-test",
+          "sha256": "ad87add6a4b260eb7c669e7382311a41ded58d5d1db92588e3eea0a9966a1ca4",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.cpp",
+          "sha256": "8206a89d25dd2df3b2d89de41435302b1576880f3dcf5f0316fac935db53d12a",
+          "repoPath": "packages/react-native/native/cpp/RustraJSIBridge.cpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.hpp",
+          "sha256": "c3ebd6de40b1512cf42f747bdbe68c9ff26bb638b1c3b7baa4d37a612d3e9b7e",
+          "repoPath": "packages/react-native/native/cpp/RustraJSIBridge.hpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraSyncBinding.inc",
+          "sha256": "8f860c7571012cee50703cff1d0128bd1850a6edb5a203a3fc9ac13863a93012",
+          "repoPath": "packages/react-native/native/cpp/RustraSyncBinding.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
+          "sha256": "b25b98046764e60bb30aebe776487a14b007a48ca37cb2433603839a83079f87",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
+          "sha256": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-native-sync.cpp",
+          "sha256": "048b5a89e4c6ec46698262e60eced861ce29a21c232800297c581e943342298f",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-native-sync.cpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-codec-tests.inc",
+          "sha256": "bed9769392c37d79e1edc2d070f614cde98eb0d5d6bca78ee7d19d6bd3e584fb",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-codec-tests.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-ffi-stubs.inc",
+          "sha256": "ad6900f15b7ecdffc057a802d04a804cce415b45cb0564d000b2bd14e0c417fe",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-ffi-stubs.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-lifecycle-tests.inc",
+          "sha256": "3ce3761edacb8693f763a25326fbdd678f5689836b0c9318aca3e6ba50fe4d45",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-lifecycle-tests.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-peers.inc",
+          "sha256": "7d2fa2de5070f9be68a7fc420d6f4133d8ddecd8139eeef2c460180ff49fa742",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-peers.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-perf.inc",
+          "sha256": "2fc764cbedcaaddbc946fce079926c693504ea0f6cab7aed4da01d54d0029e19",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-perf.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-runtime-tests.inc",
+          "sha256": "934b9ed9d39e912192beed4f1ff5b0ac57184b47a2a0a52eb1a2a131faa90d00",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-runtime-tests.inc",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh",
+          "sha256": "1c7602e26c4a0b490a4b9370a8e355f0905a690f7bda42027ce08acdb0ebd945",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/jsi/jsi/jsi.cpp",
+          "sha256": "03234845ab9657805097c6617613ec85f89816d0343fc190e0c76be97289aa35",
+          "repoPath": "examples/react-native-calculator/node_modules/react-native/ReactCommon/jsi/jsi/jsi.cpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/rustra-sync-core.hpp",
+          "sha256": "91470e07fbf481ebf34f7da1ca1cb43a7644b6f6418ef549c07108b95a4e3248",
+          "repoPath": "packages/react-native/native/cpp/rustra-sync-core.hpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/rustra-sync-contract.hpp",
+          "sha256": "7d3f799d1f9cc323daf0423b102164e972d0b2c2420abf868e8e72ee9d207da1",
+          "repoPath": "packages/react-native/native/cpp/rustra-sync-contract.hpp",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-maccatalyst/hermes.framework/hermes",
+          "sha256": "8ec4dbd155ab22f2694c87658b2886baeed5295058ee1f994a6a25e54bfdfa01",
+          "repoPath": "examples/react-native-calculator/ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-maccatalyst/hermes.framework/hermes",
+          "matchesExecutedInput": true
+        },
+        {
+          "path": "/private/tmp/rustra-rn-audit-native-20261002/dependencies/packages/react-native/third-party/ReactNativeDependencies.xcframework/ios-arm64_x86_64-maccatalyst/ReactNativeDependencies.framework/ReactNativeDependencies",
+          "sha256": "8564901e165868f21f2e8a6a45bb7079c464fb5b1613ca70d25b6486f7a9841c",
+          "matchesExecutedInput": true
+        }
+      ],
+      "regressionRedLogs": [
+        {
+          "path": "/private/tmp/rustra-rn-audit-native-20261002/hermes-invalidate-red.log",
+          "sha256": "a67d91cc83ba2252eb338da7f7b4781f3e5877b8f7106f682dffa20048603e58"
+        },
+        {
+          "path": "/private/tmp/rustra-rn-audit-native-20261002/hermes-inflight-red.log",
+          "sha256": "020037f3d73d7ba850127612d07cb01419a9b61630043001367f4aa7c401f621"
+        }
+      ],
+      "coverage": [
+        "E1 owned frames and legacy probe fallback",
+        "core-bound async cancellation and invalidation",
+        "core-local ID collisions",
+        "producer-bound exact registration close",
+        "event/channel runtime invalidation",
+        "retired invoker drain rejection",
+        "in-flight callback tail during producer release",
+        "existing codec ownership, GC, getter reentry and runtime isolation"
+      ]
+    },
+    "androidHostQueue": {
+      "verdict": "passed",
+      "exitCode": 0,
+      "tests": 5,
+      "failures": 0,
+      "command": {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge",
+        "env": {
+          "RUSTRA_ANDROID_MODULE_SOURCE": "/private/tmp/rustra-rn-audit-native-20261002/android-rendered.kt"
+        },
+        "argv": [
+          "python3",
+          "examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/run-host-tests.py"
+        ]
+      },
+      "redLog": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/android-lifecycle-red.log",
+        "sha256": "3f9f80cd91621d1e1dbd8ada32f708af4cf6c699d36373dbbc5ccd91aeec2eea"
+      },
+      "log": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/android-rendered-lifecycle-green.log",
+        "sha256": "dd2c6e6c727ca4ff3f3e7df34a62909698e944d23bf01367afe2fcd71a70d07c"
+      },
+      "boundary": "Generated Kotlin queue/control flow compiled unchanged; only JNI entrypoints/library loading and RN queue APIs replaced by host boundaries. This does not execute Android JNI or a device.",
+      "identities": [
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
+          "sha256": "35ffd61a882a8e2de8c94dd91ee4a8b1080c5a95b94111d6d19b179f11938fce",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli/src/react-native-template-android.ts",
+          "sha256": "472152cb56d8d496088b8f99e586781abbeae0fe5445aec501340ea4e7ec8128",
+          "repoPath": "packages/cli/src/react-native-template-android.ts"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/ApplicationInfo.kt",
+          "sha256": "3ea33354f26d58604057ac90ca1d6063e54df99fc92ecbf30adfd1c90c580b29",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/ApplicationInfo.kt"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/BridgeStubs.kt",
+          "sha256": "5f0cdd7319c6471729407cdd7249417dd2d780d7881ea506f37f4be0cd85e104",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/BridgeStubs.kt"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/CallInvokerHolder.kt",
+          "sha256": "93ddd0fb05de52f57affdc7459257b63e0e0e65b61e866c0610af46a86f16a35",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/CallInvokerHolder.kt"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/LifecycleTest.kt",
+          "sha256": "3d5fd554edf0e60e5599865936dbf514084820de47738b65d8aba767fa81cf4d",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/LifecycleTest.kt"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/run-host-tests.py",
+          "sha256": "8e916bad52ca8e3271a9cf4ab86ac8f99bef2cece6b96d868d9ee7a778e7b6ec",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/test-lifecycle/run-host-tests.py"
+        }
+      ]
+    },
+    "androidApiCompile": {
+      "verdict": "passed",
+      "exitCode": 0,
+      "command": {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge",
+        "argv": [
+          "java",
+          "-cp",
+          "/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.0.21/79346ed53db48b18312a472602eb5c057070c54d/kotlin-compiler-embeddable-2.0.21.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.0.21/618b539767b4899b4660a83006e052b63f1db551/kotlin-stdlib-2.0.21.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/2.0.21/669e1d35e4ca1797f9ddb2830dd6c36c0ca531e4/kotlin-reflect-2.0.21.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.0.21/c9b044380ad41f89aa89aa896c2d32a8c0b2129d/kotlin-script-runtime-2.0.21.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.intellij.deps/trove4j/1.0.20200330/3afb14d5f9ceb459d724e907a21145e8ff394f02/trove4j-1.0.20200330.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.1/bb0e192bd7c2b6b8217440d36e9758e377e450/kotlinx-coroutines-core-jvm-1.8.1.jar",
+          "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+          "-no-stdlib",
+          "-no-reflect",
+          "-classpath",
+          "/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.0.21/618b539767b4899b4660a83006e052b63f1db551/kotlin-stdlib-2.0.21.jar:/Users/loopy/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/private/tmp/rustra-rn-audit-native-20261002/android-api/react-android.jar:/Users/loopy/Library/Android/sdk/platforms/android-35/android.jar",
+          "-d",
+          "/private/tmp/rustra-rn-audit-native-20261002/android-api/classes",
+          "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt"
+        ]
+      },
+      "log": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/android-api/compile.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "reactAndroidVersion": "0.81.5",
+      "apiLevel": 35,
+      "identities": [
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
+          "sha256": "35ffd61a882a8e2de8c94dd91ee4a8b1080c5a95b94111d6d19b179f11938fce",
+          "repoPath": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt"
+        },
+        {
+          "path": "/Users/loopy/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-android/0.81.5/98805d876957296e393f2c1ef180f7a650afce7c/react-android-0.81.5-debug.aar",
+          "sha256": "5780b154ece55333bf4c606fc9e0fda3f7e925aaa7297e89faf95ca92db9619b"
+        },
+        {
+          "path": "/private/tmp/rustra-rn-audit-native-20261002/android-api/react-android.jar",
+          "sha256": "d366df3f9e5ce41dfb823403b21c72e904e83fd38eff6134299e89bf8fd30f15"
+        },
+        {
+          "path": "/Users/loopy/Library/Android/sdk/platforms/android-35/android.jar",
+          "sha256": "4566663c3876e022b4fa4ced8c8697c4ab1688267f090114fd92d027b32e619b"
+        }
+      ],
+      "boundary": "Original generated Kotlin compiled against real React Android 0.81.5 API classes and Android SDK35; no APK or device execution."
+    },
+    "iosAdapterSyntax": {
+      "verdict": "passed",
+      "exitCode": 0,
+      "command": {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge",
+        "argv": [
+          "xcrun",
+          "clang++",
+          "-fsyntax-only",
+          "-x",
+          "objective-c++",
+          "-fobjc-arc",
+          "-std=c++20",
+          "-target",
+          "arm64-apple-ios15.1-macabi",
+          "-isysroot",
+          "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+          "-isystem",
+          "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/iOSSupport/usr/include",
+          "-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/iOSSupport/System/Library/Frameworks",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-microtasksnativemodule",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTAppDelegate",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-callinvoker",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-debug",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-ImageManager",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTBlob",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/RCTTypeSafety",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-defaultsnativemodule",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTText",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsinspectorcdp",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/Yoga",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-Core",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-logger",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-idlecallbacksnativemodule",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-rendererconsistency",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-FabricComponents",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/RCTDeprecation",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/FBLazyVector",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-runtimescheduler",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/ReactCommon",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsi",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTRuntime",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-cxxreact",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RuntimeHermes",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-domnativemodule",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/RCTRequired",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-FabricImage",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-runtimeexecutor",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsitooling",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-timing",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-Mapbuffer",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-utils",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RuntimeCore",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-performancetimeline",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-perflogger",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-featureflagsnativemodule",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-NativeModulesApple",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jserrorhandler",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTFBReactNativeSpec",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsinspectortracing",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-Fabric",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTAnimation",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-hermes",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-featureflags",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-rendererdebug",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsinspector",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsiexecutor",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-graphics",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RuntimeApple",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-renderercss",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-oscompat",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-jsinspectornetwork",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/ios-headers/React-RCTFabric",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/React/Base",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/React/CxxBridge",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/jsi",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/callinvoker",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/cxxreact",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/react/nativemodule/core",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon",
+          "-I/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp",
+          "-I/private/tmp/rustra-rn-audit-native-20261002/dependencies/packages/react-native/third-party/ReactNativeDependencies.xcframework/Headers",
+          "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/ios/RustraJSIModule.mm"
+        ]
+      },
+      "log": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/ios-adapter-syntax.log",
+        "sha256": "7b67ae00befc15abfbb761bd2ed00180f9fe148658187012cac1fa74a347fa81"
+      },
+      "identities": [
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/ios/RustraJSIModule.mm",
+          "sha256": "66b652ab941907fbd74aa2ca7cd209b3036264ed871255d63a4ac1980d02e0bb",
+          "repoPath": "packages/react-native/native/ios/RustraJSIModule.mm"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.hpp",
+          "sha256": "c3ebd6de40b1512cf42f747bdbe68c9ff26bb638b1c3b7baa4d37a612d3e9b7e",
+          "repoPath": "packages/react-native/native/cpp/RustraJSIBridge.hpp"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/React/CxxBridge/RCTCxxBridge.mm",
+          "sha256": "bd5ffc6fbca8ab6972618d648c6d2941de9e48aec1094f05d736e3b8a0348dbb",
+          "repoPath": "examples/react-native-calculator/node_modules/react-native/React/CxxBridge/RCTCxxBridge.mm"
+        },
+        {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModuleManager.mm",
+          "sha256": "4e4f155e29e88ef6e694c74e52f793b7b3d88de565cc5b917d2dfd6ba7ccaea4",
+          "repoPath": "examples/react-native-calculator/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModuleManager.mm"
+        }
+      ],
+      "preparedHeaders": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/ios-headers",
+        "method": "Mirrored cached Pod public header symlink layout into temporary directory, rebased React Native targets to installed live 0.81.5 source headers; no Pod/project writes."
+      },
+      "boundary": "Objective-C++ Catalyst syntax compile, with SDK availability warnings. No linked iOS app, Simulator or device execution."
+    }
+  },
+  "performance": {
+    "verdict": "measured-current-controlled-peer-only",
+    "command": {
+      "cwd": "/Users/loopy/dev/ll3/rustra-bridge",
+      "env": {
+        "RUSTRA_NATIVE_TEST_PLATFORM": "mac-catalyst",
+        "RUSTRA_NATIVE_DEPS_ROOT": "/private/tmp/rustra-rn-audit-native-20261002/dependencies/packages/react-native/third-party/ReactNativeDependencies.xcframework",
+        "RUSTRA_NATIVE_TEST_DIR": "/private/tmp/rustra-rn-audit-native-20261002/perf-build",
+        "RUSTRA_NATIVE_SYNC_PERF": "1"
+      },
+      "argv": [
+        "bash",
+        "examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh"
+      ]
+    },
+    "log": {
+      "path": "/private/tmp/rustra-rn-audit-native-20261002/hermes-caller-perf-final.log",
+      "sha256": "e655a38700951132a02841ae085c3b1bc162e3d8bb89fd4ea949a2a399bb7f4a"
+    },
+    "identities": [
+      {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/perf-build/native-sync-test",
+        "sha256": "6533322f34dcf3abd606690cc84aaacfdade70db34fcfaec209677770f5d8890",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.cpp",
+        "sha256": "8206a89d25dd2df3b2d89de41435302b1576880f3dcf5f0316fac935db53d12a",
+        "repoPath": "packages/react-native/native/cpp/RustraJSIBridge.cpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.hpp",
+        "sha256": "c3ebd6de40b1512cf42f747bdbe68c9ff26bb638b1c3b7baa4d37a612d3e9b7e",
+        "repoPath": "packages/react-native/native/cpp/RustraJSIBridge.hpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraSyncBinding.inc",
+        "sha256": "8f860c7571012cee50703cff1d0128bd1850a6edb5a203a3fc9ac13863a93012",
+        "repoPath": "packages/react-native/native/cpp/RustraSyncBinding.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
+        "sha256": "b25b98046764e60bb30aebe776487a14b007a48ca37cb2433603839a83079f87",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
+        "sha256": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-native-sync.cpp",
+        "sha256": "048b5a89e4c6ec46698262e60eced861ce29a21c232800297c581e943342298f",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-native-sync.cpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-codec-tests.inc",
+        "sha256": "bed9769392c37d79e1edc2d070f614cde98eb0d5d6bca78ee7d19d6bd3e584fb",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-codec-tests.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-ffi-stubs.inc",
+        "sha256": "ad6900f15b7ecdffc057a802d04a804cce415b45cb0564d000b2bd14e0c417fe",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-ffi-stubs.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-lifecycle-tests.inc",
+        "sha256": "3ce3761edacb8693f763a25326fbdd678f5689836b0c9318aca3e6ba50fe4d45",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-lifecycle-tests.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-peers.inc",
+        "sha256": "7d2fa2de5070f9be68a7fc420d6f4133d8ddecd8139eeef2c460180ff49fa742",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-peers.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-perf.inc",
+        "sha256": "2fc764cbedcaaddbc946fce079926c693504ea0f6cab7aed4da01d54d0029e19",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-perf.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-runtime-tests.inc",
+        "sha256": "934b9ed9d39e912192beed4f1ff5b0ac57184b47a2a0a52eb1a2a131faa90d00",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-runtime-tests.inc",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh",
+        "sha256": "1c7602e26c4a0b490a4b9370a8e355f0905a690f7bda42027ce08acdb0ebd945",
+        "repoPath": "examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/jsi/jsi/jsi.cpp",
+        "sha256": "03234845ab9657805097c6617613ec85f89816d0343fc190e0c76be97289aa35",
+        "repoPath": "examples/react-native-calculator/node_modules/react-native/ReactCommon/jsi/jsi/jsi.cpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/rustra-sync-core.hpp",
+        "sha256": "91470e07fbf481ebf34f7da1ca1cb43a7644b6f6418ef549c07108b95a4e3248",
+        "repoPath": "packages/react-native/native/cpp/rustra-sync-core.hpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/rustra-sync-contract.hpp",
+        "sha256": "7d3f799d1f9cc323daf0423b102164e972d0b2c2420abf868e8e72ee9d207da1",
+        "repoPath": "packages/react-native/native/cpp/rustra-sync-contract.hpp",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-maccatalyst/hermes.framework/hermes",
+        "sha256": "8ec4dbd155ab22f2694c87658b2886baeed5295058ee1f994a6a25e54bfdfa01",
+        "repoPath": "examples/react-native-calculator/ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-maccatalyst/hermes.framework/hermes",
+        "matchesExecutedInput": true
+      },
+      {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/dependencies/packages/react-native/third-party/ReactNativeDependencies.xcframework/ios-arm64_x86_64-maccatalyst/ReactNativeDependencies.framework/ReactNativeDependencies",
+        "sha256": "8564901e165868f21f2e8a6a45bb7079c464fb5b1613ca70d25b6486f7a9841c",
+        "matchesExecutedInput": true
+      }
+    ],
+    "results": [
+      {
+        "producer": "controlled-cabi-peer",
+        "runtime": "Hermes mac-catalyst",
+        "command": "benchEchoString",
+        "route": "bound typed object",
+        "ownedResponseEntry": true,
+        "peerCountersAndLedger": false,
+        "reusedInput": true,
+        "payloadBytes": 2,
+        "warmupCalls": 20000,
+        "samples": 101,
+        "callsPerSample": 2000,
+        "p50BatchMeanUs": 0.23325,
+        "p95BatchMeanUs": 0.258041,
+        "batchMeanUs": [
+          0.234833, 0.232333, 0.232833, 0.232708, 0.232729, 0.233333, 0.234771, 0.232042, 0.233979,
+          0.23275, 0.234792, 0.235875, 0.235563, 0.236292, 0.235792, 0.894771, 0.237271, 0.254812,
+          0.238583, 0.279084, 0.243188, 0.237021, 0.24925, 0.232583, 0.232729, 0.23325, 0.232458,
+          0.332354, 0.234396, 0.257354, 0.274896, 0.232604, 0.232896, 0.232854, 0.231896, 0.234416,
+          0.232146, 0.23298, 0.23248, 0.232771, 0.232875, 0.232563, 0.231958, 0.232167, 0.23677,
+          0.237375, 0.258041, 0.233313, 0.233042, 0.23298, 0.233125, 0.232563, 0.232292, 0.233,
+          0.2325, 0.231667, 0.233396, 0.233, 0.233146, 0.232875, 0.232208, 0.232604, 0.232375,
+          0.232313, 0.232083, 0.231687, 0.232187, 0.23275, 0.232375, 0.232417, 0.234313, 0.239375,
+          0.236396, 0.245105, 0.234958, 0.232646, 0.233292, 0.246938, 0.23723, 0.240021, 0.232292,
+          0.233396, 0.253167, 0.244938, 0.237292, 0.232896, 0.253167, 0.234083, 0.232125, 0.234667,
+          0.233771, 0.231979, 0.353687, 0.2395, 0.251333, 0.231896, 0.232667, 0.233208, 0.236313,
+          0.233854, 0.241271
+        ]
+      },
+      {
+        "producer": "controlled-cabi-peer",
+        "runtime": "Hermes mac-catalyst",
+        "command": "benchEchoString",
+        "route": "bound typed object",
+        "ownedResponseEntry": true,
+        "peerCountersAndLedger": false,
+        "reusedInput": true,
+        "payloadBytes": 1024,
+        "warmupCalls": 20000,
+        "samples": 101,
+        "callsPerSample": 2000,
+        "p50BatchMeanUs": 3.65598,
+        "p95BatchMeanUs": 6.69029,
+        "batchMeanUs": [
+          3.79492, 6.3279, 3.61446, 3.63194, 3.6261, 3.60929, 6.40596, 10.2453, 3.60333, 3.6139,
+          3.60312, 3.60679, 3.60942, 3.60785, 3.60244, 3.60546, 4.32217, 3.95498, 4.17944, 3.63092,
+          3.6725, 3.73021, 3.74812, 3.7276, 4.04306, 3.73783, 5.21917, 4.92583, 3.83442, 3.66706,
+          3.67794, 4.08958, 3.7444, 3.62819, 3.68346, 3.62363, 3.63356, 4.02817, 5.19915, 3.61602,
+          3.63742, 3.62838, 5.1136, 3.63765, 3.62021, 3.6159, 3.62308, 3.64625, 3.62852, 3.94158,
+          3.68613, 3.63187, 3.6459, 3.62125, 3.62429, 5.68308, 6.69029, 3.94963, 8.06923, 11.0716,
+          6.43717, 5.50573, 3.66567, 3.69129, 3.66588, 3.84348, 3.71069, 3.62827, 3.70794, 3.63171,
+          3.72335, 3.63881, 3.72919, 3.65823, 3.64106, 3.62733, 3.69896, 3.65477, 3.635, 3.66129,
+          3.64294, 3.6179, 3.63271, 3.62279, 3.65598, 3.70977, 3.60967, 3.66071, 3.6176, 3.65158,
+          3.62533, 3.6335, 3.62848, 3.66369, 3.65404, 3.61715, 4.56704, 8.88223, 3.61219, 3.61906,
+          6.73854
+        ]
+      }
+    ],
+    "method": "C++ steady_clock measures one JS caller batch; divide elapsed by2000calls.20kwarmupcalls,101batches,checksum checked after clock. Forced GC only before samples; timed batches include ordinary allocation/GC. Input object reused; native output objects freshly decoded. Peer counters/allocation ledger compiled out; production bridge/codec has no timing instrumentation.",
+    "percentileLimitation": "p50BatchMeanUs/p95BatchMeanUs are percentiles of per-call batch means, not individual-call latency/tail percentiles.",
+    "claims": {
+      "realRustCore": false,
+      "abSpeedup": false,
+      "devicePerformance": false,
+      "simulatorPerformance": false,
+      "publishedPackagePerformance": false,
+      "productionReleaseBuildPerformance": false
+    }
+  },
+  "remainingEvidence": {
+    "asan": {
+      "verdict": "blocked-before-main",
+      "exactRunnerExit": 143,
+      "sample": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/hermes-asan-sample.txt",
+        "sha256": "c2a1c8efce0a861ddb686d6a2ed893e39e34b83e61f43a236ab1d0d77de21885"
+      },
+      "log": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/hermes-asan.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "independentEmptyMainProbe": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/asan-startup-probe.cpp",
+        "sha256": "bc1b869310e785bead337ff8f97f76ecd3e559c708cd017fc074e0172fedd7b7"
+      },
+      "probeLog": {
+        "path": "/private/tmp/rustra-rn-audit-native-20261002/asan-startup-probe.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "reason": "Exact test PID stack sampled in ASan InitializeShadowMemory recursive malloc/StaticSpinMutex startup deadlock; independent empty-main Catalyst ASan probe timed out beforemain after3s. No native memory safety acceptance claimed."
+    },
+    "realRustCoreBaselineAndFinalAB": "not measured",
+    "mobileRuntime": "not executed",
+    "packagedConsumer": "separate root-owned receipt"
+  }
+}

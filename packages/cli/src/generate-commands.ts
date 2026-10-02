@@ -116,8 +116,15 @@ export function generateCommandsTs(schema: PackageSchema): string {
     }
     const fields = generatedFieldRoute(command, definitions);
     if (fields) {
+      // 1·2-필드 명령은 팩토리(createGeneratedFieldsN)로 — 라우트 해결 결과를 세대
+      // 캐시해 warm 디스패치 비용을 줄인다(2026-09-24 마이크로벤치 warm 20.8%,
+      // docs/research/2026-09-24-emit-switch-decision.md). 3-필드는 기존 함수형 emit 유지.
       generatedHelpers.add(
-        fields.length === 2 ? 'createGeneratedFields2' : `invokeGeneratedFields${fields.length}`,
+        fields.length === 1
+          ? 'createGeneratedFields1'
+          : fields.length === 2
+            ? 'createGeneratedFields2'
+            : `invokeGeneratedFields${fields.length}`,
       );
     }
   }
@@ -188,6 +195,13 @@ export function generateCommandsTs(schema: PackageSchema): string {
       }
       const fields = generatedFieldRoute(command, definitions);
       if (fields) {
+        if (fields.length === 1) {
+          const fieldKey = JSON.stringify(fields[0].name);
+          output +=
+            `export const ${fnName} = createGeneratedFields1<${inType}, ${outType}>` +
+            `(${command.commandId}, '${command.name}', ${fieldKey}, '${fnName}');\n\n`;
+          continue;
+        }
         if (fields.length === 2) {
           const fieldKeys = fields.map((field) => JSON.stringify(field.name)).join(', ');
           output +=

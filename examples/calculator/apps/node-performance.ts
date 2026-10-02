@@ -2,7 +2,12 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createNodeEngine, createNodeLoopTransport, type NodeLoopBinaryCodecs } from '@rustra/node';
+import {
+  createNodeBootstrap,
+  createNodeEngine,
+  createNodeLoopTransport,
+  createNodeProcessTransport,
+} from '@rustra/node';
 import { createFrameEngine } from '@rustra/types';
 import { addNumbers, rustra } from '../generated/node.js';
 import { frameRegistry } from '../generated/frame-registry.js';
@@ -12,14 +17,42 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 // addNumbers 의 i64 결과는 fast-path 코덱이 safe 범위 밖에서 bigint 로 복원한다.
 const validate = (result: { value: number | bigint }) => result.value === 42;
 
-const oneShot = await benchmarkCommand({
-  name: 'node-generated-one-shot',
+const generated = await benchmarkCommand({
+  name: 'node-generated-client',
   invoke: () => addNumbers({ a: 20, b: 22 }),
   validate,
   warmup: 10,
   iterations: 200,
 });
 rustra.dispose();
+
+const oneShotTransport = createNodeProcessTransport({
+  command: resolve(root, 'target/release/rustra-calculator-example'),
+  args: ['invoke'],
+});
+const oneShotEngine = createNodeEngine(oneShotTransport);
+const oneShot = await benchmarkCommand({
+  name: 'node-one-shot-stdio-json',
+  invoke: () => oneShotEngine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 }),
+  validate,
+  warmup: 10,
+  iterations: 200,
+});
+oneShotTransport.dispose();
+
+const persistentBootstrap = createNodeBootstrap({
+  command: resolve(root, 'target/release/rustra-calculator-example'),
+  persistent: true,
+});
+const persistentEngine = await persistentBootstrap.ready();
+const persistent = await benchmarkCommand({
+  name: 'node-persistent-stdio-json',
+  invoke: () => persistentEngine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 }),
+  validate,
+  warmup: 100,
+  iterations: 2_000,
+});
+persistentBootstrap.dispose();
 
 const loopTransport = createNodeLoopTransport({
   command: resolve(root, 'target/release/loop-stdio'),
@@ -70,5 +103,5 @@ const napi = await benchmarkCommand({
 });
 
 console.log(
-  `RUSTRA_HOST_BENCH_JSON=${JSON.stringify({ runtime: `Node ${process.version}`, results: [oneShot, loop, napi] })}`,
+  `RUSTRA_HOST_BENCH_JSON=${JSON.stringify({ runtime: `Node ${process.version}`, results: [generated, oneShot, persistent, loop, napi] })}`,
 );

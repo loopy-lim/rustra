@@ -7,7 +7,7 @@
 // ────────────────────────────────────────────────────────────
 
 import type { AdminStatsInput, AdminStatsOutput, GrantInput, GrantOutput, SignInInput, SignInOutput, SignOutInput, SignOutOutput } from './types.js';
-import { createGeneratedFields2, invokeGenerated, invokeGeneratedFields1 } from '@rustra/types';
+import { createGeneratedFields1, createGeneratedFields2, invokeGenerated } from '@rustra/types';
 import type { InvokeOptions as CoreInvokeOptions } from '@rustra/types';
 
 /**
@@ -27,16 +27,10 @@ import type { InvokeOptions as CoreInvokeOptions } from '@rustra/types';
  */
 export type InvokeOptions = CoreInvokeOptions;
 
-export function adminStats(input: AdminStatsInput, options?: InvokeOptions): Promise<AdminStatsOutput> {
-  return invokeGeneratedFields1<AdminStatsOutput>(4, 'adminStats', input, input["token"], options);
-}
-adminStats.commandId = 'adminStats';
+export const adminStats = createGeneratedFields1<AdminStatsInput, AdminStatsOutput>(4, 'adminStats', "token", 'adminStats');
 
 export const grant = createGeneratedFields2<GrantInput, GrantOutput>(3, 'grant', "token", "capability", 'grant');
 
 export const signIn = createGeneratedFields2<SignInInput, SignInOutput>(1, 'signIn', "username", "password", 'signIn');
 
-export function signOut(input: SignOutInput, options?: InvokeOptions): Promise<SignOutOutput> {
-  return invokeGeneratedFields1<SignOutOutput>(2, 'signOut', input, input["token"], options);
-}
-signOut.commandId = 'signOut';
+export const signOut = createGeneratedFields1<SignOutInput, SignOutOutput>(2, 'signOut', "token", 'signOut');

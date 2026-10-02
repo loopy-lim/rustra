@@ -1,23 +1,26 @@
 import { isBindingOutputPath } from './uniffi-output-boundary.js';
 /** `rustra dev` — Rust 소스와 생성물의 dual-phase watch loop. */
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { spawnInherit } from './process.js';
+import { dirname, resolve } from 'node:path';
 import { parseCliArgs } from './cli-arg-parser.js';
 import {
   createFileWatch,
   createSourceWatch,
   createWatchLoop,
-  isWithin,
   createReloadHooks,
   type WatchHandle,
 } from './watch.js';
-import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
+import { assertDirectory, readDevConfig, readSchemaSnapshot } from './dev-config.js';
 import { buildDylibCore, liveArtifactPath, publishGatedArtifact } from './dev-dylib.js';
 import { buildWasmEngine } from './dev-wasm.js';
 import { captureSchemaParity } from './dev-schema-capture.js';
-import { rustInputFingerprint } from './dev-fingerprint.js';
-import { detectDirty, planPipeline, runOnce } from './dev-support.js';
+import {
+  devInputFingerprint,
+  resolveRustInputPaths,
+  type RustInputPaths,
+} from './dev-fingerprint.js';
+import { runLegacyDev } from './legacy-dev.js';
+import { withDevGeneratedInputExclusions } from './dev-generated-inputs.js';
 import { createParityGate } from './parity-gate.js';
 import { readFile } from 'node:fs/promises';
 
@@ -77,13 +80,6 @@ function inspectHint(): void {
   console.log('[dev:inspect] to expose report() via console or remote: @rustra/devtools');
 }
 
-function watchPlan(backendDir: string, generatedDir: string): () => boolean {
-  return () => {
-    const plan = planPipeline(detectDirty(backendDir, generatedDir));
-    return plan.rustBin || plan.tsCli;
-  };
-}
-
 export async function runDev(args: string[]): Promise<DevWatchHandle> {
   const options = parseDevArgs(args);
   // help 관례 — 조용히 더미 핸들로 돌아온다(출력은 cli-main). 디렉터리 검증·
@@ -101,58 +97,7 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
     process.env.CARGO_INCREMENTAL = '1';
   }
   if (options.configPath) return runConfigDev(options.configPath, options.inspect);
-  const backendDir = resolve(options.backendDir);
-  const appDir = resolve(options.appDir);
-  const generatedDir = join(appDir, 'generated');
-  assertDirectory(backendDir, 'backend', 'rustra dev --backend <dir>');
-  assertDirectory(join(backendDir, 'src'), 'backend/src', 'rustra dev --backend <dir>');
-  assertDirectory(appDir, 'app', 'rustra dev --app <dir>');
-  if (!process.env.RUSTRA_CLI && !findRepoCli(appDir)) {
-    throw new Error(
-      `Could not find the Rustra CLI from ${appDir}. Install @rustra/cli or set RUSTRA_CLI.`,
-    );
-  }
-  const rustBin = () => spawnInherit('cargo', ['run', '--quiet', '--bin', 'generate'], backendDir);
-  const reload = createReloadHooks();
-  const tsCli = async () => {
-    const cli = process.env.RUSTRA_CLI ?? findRepoCli(appDir);
-    if (!cli) throw new Error('Rustra CLI is unavailable; set RUSTRA_CLI.');
-    await spawnInherit(
-      'node',
-      [cli, 'generate', '--schema', join(generatedDir, 'schema.json'), '--output', generatedDir],
-      appDir,
-    );
-  };
-  const perform = async (reason: string) => {
-    console.log(`[dev] ${reason} → codegen`);
-    const plan = planPipeline(detectDirty(backendDir, generatedDir));
-    if (!plan.rustBin && !plan.tsCli) return console.log('[dev] clean — nothing to do');
-    try {
-      await runOnce(plan, { rustBin, tsCli });
-      console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
-      if (options.inspect) inspectHint();
-      // Rust 소스가 바뀌었다(rustBin 단계가 돌았다) → reload 신호. 네이티브
-      // 바이너리 반영 여부는 호스트 재빌드/스폰 시점에 달렸다 — 신호의 책임은
-      // "Rust 측 변경" 통보까지다.
-      if (plan.rustBin) await reload.emitReload(reason);
-    } catch (error) {
-      console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
-    }
-  };
-  const loop = createWatchLoop(perform, watchPlan(backendDir, generatedDir));
-  await loop.run('initial', true);
-  console.log(`\n[dev] watching ${backendDir} for changes...`);
-  const sourceWatch = createSourceWatch(join(backendDir, 'src'), () =>
-    loop.schedule('rust change'),
-  );
-  const handle: DevWatchHandle = {
-    dispose() {
-      loop.dispose();
-      sourceWatch.dispose();
-    },
-    onReload: reload.onReload,
-  };
-  return handle;
+  return runLegacyDev(options);
 }
 
 async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWatchHandle> {
@@ -168,6 +113,8 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   // 값을 건드리지 못한다 — 실패 상태의 지문이 다음 틱의 스킵 근거가 되는
   // fail-open 을 막는다.
   let lastSuccessfulFingerprint: string | undefined;
+  let inputPaths: RustInputPaths;
+  let inputPathKey = '';
   let subscriptions: WatchHandle[] = [];
   let disposed = false;
   let gate: ReturnType<typeof createParityGate> | undefined;
@@ -177,19 +124,41 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
 
   function subscribe(): void {
     for (const watch of subscriptions) watch.dispose();
-    const generatedRoots = [
-      config.outputPath,
-      config.schemaPath,
-      ...(config.uniffiMirrorPath ? [config.uniffiMirrorPath] : []),
-    ];
+    inputPaths = resolveRustInputPaths(
+      config.manifestPath,
+      config.rustPackage,
+      config.root,
+      [config.devDylib, config.devWasm].flatMap((engine) =>
+        engine
+          ? [
+              {
+                manifestPath: engine.manifestPath,
+                rustPackage: engine.rustPackage,
+                cwd: dirname(engine.manifestPath),
+              },
+            ]
+          : [],
+      ),
+    );
+    const cargoExcluded = inputPaths.excluded;
+    inputPaths = withDevGeneratedInputExclusions(inputPaths, config);
+    // Ownership changes only filter generated bytes. Cargo discoveries still
+    // need a fresh pre-build baseline, even when their files currently match.
+    inputPathKey = JSON.stringify({ ...inputPaths, excluded: cargoExcluded });
     subscriptions = [
-      createSourceWatch(join(manifestDir, 'src'), (changed) => {
-        if (config.uniffiBindingPath && isBindingOutputPath(config.uniffiBindingPath, changed))
-          return;
-        if (!generatedRoots.some((root) => isWithin(root, changed))) loop.schedule('Rust change');
-      }),
+      ...inputPaths.trees.map((tree) =>
+        createSourceWatch(
+          tree,
+          (changed) => {
+            if (config.uniffiBindingPath && isBindingOutputPath(config.uniffiBindingPath, changed))
+              return;
+            loop.schedule('Rust change');
+          },
+          inputPaths.excluded,
+        ),
+      ),
       createFileWatch(
-        [config.manifestPath, join(manifestDir, 'Cargo.lock')].map((path) => ({
+        inputPaths.files.map((path) => ({
           path,
           onChange: () => loop.schedule('Cargo change'),
         })),
@@ -216,16 +185,12 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
     regenerating = true;
     try {
       const nextText = await readFile(configPath, 'utf8');
+      if (disposed) return;
       if (nextText !== configText) {
         const next = readDevConfig(configPath);
         assertDirectory(
           dirname(next.manifestPath),
           'Cargo project root',
-          'set codegen.rustManifest',
-        );
-        assertDirectory(
-          join(dirname(next.manifestPath), 'src'),
-          'Rust src',
           'set codegen.rustManifest',
         );
         config = next;
@@ -237,6 +202,10 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
         // 파이프라인으로 재기준을 잡는다.
         lastSuccessfulFingerprint = undefined;
         if (!disposed) subscribe();
+      } else if (!disposed) {
+        // Re-resolve local dependency/target roots after Cargo input edits.
+        // Cache hits read only manifest bytes; no extra Cargo process on a no-op tick.
+        subscribe();
       }
       // 이 틱에서 codegen 이전에 arm 했는지 — 수행 지역 변수라서 pipeline 이
       // 중간에 실패하면 다음 틱으로 이어지지 않는다(끼인 기준의 무음 채택 금지).
@@ -257,21 +226,14 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
           armedPreCodegen = true;
         }
       }
-      // warm-loop Stage 1(§(b)) — 지문 스킵 판정. 감시 대상 Rust 입력(src 트리 +
-      // Cargo.toml + Cargo.lock — 감시 등록과 정확히 같은 루트)이 마지막 성공
-      // 파이프라인과 바이트 동일하고 생성된 schema.json 이 살아 있으면, 이 틱의
-      // cargo 프로브(≈2.1s)와 엔진 재빌드는 생략한다 — 바뀐 것이 없으므로
-      // 갈아끼울 것도 없다. 지문은 감시 이벤트를 믿지 않고 **판정 시점에 디스크에서
-      // 재계산**한다. 계산 실패·첫 틱(지문 미채택)·schema 부재는 전부 전체
-      // 파이프라인이다(fail-safe — 불확실할 때 스킵하지 않는다).
-      const fingerprintRoots = [
-        join(manifestDir, 'src'),
-        config.manifestPath,
-        join(manifestDir, 'Cargo.lock'),
-      ];
+      if (disposed) return;
+      // Watch roots and compiler-discovered inputs must match the last successful
+      // build by content. The published schema must also match our own snapshot;
+      // an external edit or uncertain read always runs the full pipeline.
       let decisionFingerprint: string | undefined;
+      const decisionPaths = inputPathKey;
       try {
-        decisionFingerprint = rustInputFingerprint(fingerprintRoots);
+        decisionFingerprint = devInputFingerprint(inputPaths);
       } catch {
         // throw = 불확실 — 스킵 근거로 쓰지 않는다(dev-fingerprint.ts 계약).
         decisionFingerprint = undefined;
@@ -279,13 +241,15 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       const skippedCargoStage =
         decisionFingerprint !== undefined &&
         decisionFingerprint === lastSuccessfulFingerprint &&
-        existsSync(config.schemaPath);
+        lastGeneratedSchema !== undefined &&
+        readSchemaSnapshot(config.schemaPath) === lastGeneratedSchema;
       let dylibPublish: { artifact: string; livePath: string } | undefined;
       if (skippedCargoStage) {
         console.log('[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)');
       } else {
         const { runCodegen } = await import('./cli-codegen.js');
         await runCodegen(['--config', configPath]);
+        if (disposed) return;
         lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
         if (config.devWasm) {
           const artifact = await buildWasmEngine(config.devWasm);
@@ -322,6 +286,7 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
           }
         }
       }
+      if (disposed) return;
       if (dylibPublish) {
         const livePath = publishGatedArtifact(dylibPublish.artifact, dylibPublish.livePath);
         console.log(`[dev:dylib] launch the host with RUSTRA_HOT_CORE=${livePath}`);
@@ -331,7 +296,24 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       // 채택한다: 코드젠 도중의 편집은 다음 틱 지문을 바꿔놓았을 것이므로, 채택값이
       // 코드젠 뒤 디스크 재계산값이라면 그 편집이 스킵에 삼켜지는 구멍이 생긴다.
       // 계산 실패(undefined) 틱은 채택을 보류 — 다음 틱도 전체 파이프라인을 돈다.
-      lastSuccessfulFingerprint = decisionFingerprint;
+      // A first build can discover include!/build-script inputs through Cargo
+      // dep-info. Start watching them now, then run once with a pre-build
+      // fingerprint of the expanded set rather than adopting a post-build read.
+      subscribe();
+      const discoveredInputs = inputPathKey !== decisionPaths;
+      let editedDuringBuild = false;
+      if (!discoveredInputs && decisionFingerprint !== undefined) {
+        try {
+          editedDuringBuild = devInputFingerprint(inputPaths) !== decisionFingerprint;
+        } catch {
+          editedDuringBuild = true;
+        }
+      }
+      lastSuccessfulFingerprint = discoveredInputs ? undefined : decisionFingerprint;
+      if (discoveredInputs) loop.schedule('Cargo inputs discovered');
+      // Replacing subscriptions must not swallow edits between the last poll
+      // and publication. A new watcher starts at the current disk snapshot.
+      if (editedDuringBuild) loop.schedule('Rust inputs changed during build');
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
       await reload.emitReload(reason);

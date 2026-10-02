@@ -5,7 +5,7 @@
   "files": [
     {
       "path": "commands.ts",
-      "sha256": "7c14a11bc06f45f34f23e1756562a5e1cdaef1c1093a08eb4f926a081d1cee96"
+      "sha256": "5056dee46f74dee91bef103db8677405d4837a7ceee2ab5c6778bc135a573f85"
     },
     {
       "path": "contract.ts",

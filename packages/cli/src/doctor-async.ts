@@ -11,6 +11,7 @@ import {
 import { probeRegistryReachability, readConfig, resolveManifest } from './doctor-support.js';
 import { doctorHostSections, resolveSectionManifest } from './doctor-matrix.js';
 import { collectDoctorReport } from './doctor-report.js';
+import { nativeToolRequirements } from './doctor-base-checks.js';
 
 const key = (command: string, args: string[]) => JSON.stringify([command, args]);
 
@@ -25,12 +26,14 @@ export async function collectDoctorReportAsync(
   add('node', ['--version']);
   add('bun', ['--version']);
   const platform = options.platform ?? process.platform;
-  add(platform === 'win32' ? 'cl' : 'c++', platform === 'win32' ? ['/Bv'] : ['--version']);
-  add('cmake', ['--version']);
   const configPath = resolve(options.configPath);
   if (existsSync(configPath)) {
     const parsed = readConfig(configPath);
     if (parsed.config) {
+      const required = nativeToolRequirements(parsed.config);
+      if (required.cpp)
+        add(platform === 'win32' ? 'cl' : 'c++', platform === 'win32' ? ['/Bv'] : ['--version']);
+      if (required.cmake) add('cmake', ['--version']);
       const configRoot = dirname(configPath);
       const manifests = new Set<string>();
       const codegenManifest = resolveManifest(configRoot, parsed.config);

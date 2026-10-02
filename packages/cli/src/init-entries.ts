@@ -43,9 +43,8 @@ const RN_POLICY = contractPolicyNote('react-native', [
 ]);
 
 const TAURI_POLICY = contractPolicyNote('tauri', [
-  `JSON 엔진 경로 — 클라이언트측 contractHash 핸드셰이크가 없어`,
-  `contractVerification/schemaVersion 옵션을 받지 않는다(와이어가 JSON).`,
-  `계약 드리프트는 네이티브 rustra_dispatch 실행 오류로 표면화된다.`,
+  `contractHash + contractVerification: 'strict' 전달.`,
+  `rustra_contract_hash IPC 핸드셰이크로 선택된 네이티브 코어를 검증한다.`,
 ]);
 
 export function generateReactNativeEntryTs(): string {
@@ -80,13 +79,39 @@ export type HostEntryRenderOptions = {
   events?: boolean;
 };
 
+const BOOTSTRAP_EVENT_EXPORTS = `
+const eventUnsubscribes = new Set<() => void>();
+const subscribe: typeof rustra.subscribeEvent = (name, callback) => {
+  const unsubscribe = rustra.subscribeEvent(name, callback);
+  const remove = () => {
+    eventUnsubscribes.delete(remove);
+    unsubscribe();
+  };
+  eventUnsubscribes.add(remove);
+  return remove;
+};
+export const events = {
+  subscribeEvent: subscribe,
+  dispose() {
+    for (const unsubscribe of [...eventUnsubscribes]) unsubscribe();
+    eventUnsubscribes.clear();
+  },
+};
+export const subscribeEvent = events.subscribeEvent;
+const disposeBootstrap = rustra.dispose.bind(rustra);
+rustra.dispose = () => {
+  events.dispose();
+  disposeBootstrap();
+};
+`;
+
 export function generateNodeEntryTs(
-  entry: CargoHostEntry & { args?: string[] },
+  entry: CargoHostEntry & { args?: string[]; persistent?: boolean },
   options?: HostEntryRenderOptions,
 ): string {
   if (options?.events === true) {
     return `${generatedFileHeader('node.ts', 'schema → host entry')}${NODE_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
-import { createNodeBootstrap, createNodeEventSubscription } from '@rustra/node';
+import { createNodeBootstrap } from '@rustra/node';
 import { GENERATED_CONTRACT_HASH } from './contract.js';
 
 export * from './commands.js';
@@ -100,20 +125,13 @@ export const rustra = createNodeBootstrap({
     fileURLToPath(new URL(\`release/\${executable}\`, targetDirectory)),
     fileURLToPath(new URL(\`debug/\${executable}\`, targetDirectory)),
   ],
-  args: ${JSON.stringify(entry.args ?? ['invoke'])},
+  args: ${JSON.stringify(entry.args ?? ['serve'])},
+  persistent: true,
   contractHash: GENERATED_CONTRACT_HASH,
   contractVerification: 'strict',
 });
 
-export const events = createNodeEventSubscription({
-  binaryName: ${JSON.stringify(entry.targetName)},
-  commandCandidates: [
-    fileURLToPath(new URL(\`release/\${executable}\`, targetDirectory)),
-    fileURLToPath(new URL(\`debug/\${executable}\`, targetDirectory)),
-  ],
-});
-export const subscribeEvent = events.subscribeEvent;
-`;
+${BOOTSTRAP_EVENT_EXPORTS}`;
   }
   return `${generatedFileHeader('node.ts', 'schema → host entry')}${NODE_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { createNodeBootstrap } from '@rustra/node';
@@ -130,8 +148,8 @@ export const rustra = createNodeBootstrap({
     fileURLToPath(new URL(\`release/\${executable}\`, targetDirectory)),
     fileURLToPath(new URL(\`debug/\${executable}\`, targetDirectory)),
   ],
-  args: ${JSON.stringify(entry.args ?? ['invoke'])},
-  contractHash: GENERATED_CONTRACT_HASH,
+  args: ${JSON.stringify(entry.args ?? (entry.persistent ? ['serve'] : ['invoke']))},
+${entry.persistent ? '  persistent: true,\n' : ''}  contractHash: GENERATED_CONTRACT_HASH,
   contractVerification: 'strict',
 });
 `;
@@ -144,7 +162,7 @@ export function generateBunEntryTs(
   if (options?.events === true) {
     return `${generatedFileHeader('bun.ts', 'schema → host entry')}${BUN_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { suffix } from 'bun:ffi';
-import { createBunBootstrap, createBunEventSubscription } from '@rustra/bun';
+import { createBunBootstrap } from '@rustra/bun';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
 import { frameRegistry } from './frame-registry.js';
 
@@ -165,17 +183,7 @@ export const rustra = createBunBootstrap({
   schemaVersion: SCHEMA_VERSION,
 });
 
-// 이벤트 브릿지는 부트스트랩과 같은 후보 계산으로 cdylib 을 해상한다
-// (libraryName 추론 폴백과 RUSTRA_BUN_LIBRARY 도 동일하게 존중 — 옵션 대칭).
-export const events = createBunEventSubscription({
-  libraryName: ${JSON.stringify(entry.targetName)},
-  libraryCandidates: [
-    fileURLToPath(new URL(\`release/\${library}\`, targetDirectory)),
-    fileURLToPath(new URL(\`debug/\${library}\`, targetDirectory)),
-  ],
-});
-export const subscribeEvent = events.subscribeEvent;
-`;
+${BOOTSTRAP_EVENT_EXPORTS}`;
   }
   return `${generatedFileHeader('bun.ts', 'schema → host entry')}${BUN_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { fileURLToPath } from 'node:url';
 import { suffix } from 'bun:ffi';
@@ -204,10 +212,14 @@ export const rustra = createBunBootstrap({
 
 export function generateTauriEntryTs(): string {
   return `${generatedFileHeader('tauri.ts', 'schema → host entry')}${TAURI_POLICY}${OPTION_UNIFICATION_CHANGELOG}import { createTauriBootstrap } from '@rustra/tauri';
+import { GENERATED_CONTRACT_HASH } from './contract.js';
 
 export * from './commands.js';
 export { subscribeTauriEvent as subscribeEvent } from '@rustra/tauri';
 
-export const rustra = createTauriBootstrap();
+export const rustra = createTauriBootstrap({
+  contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
+});
 `;
 }

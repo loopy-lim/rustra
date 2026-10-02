@@ -98,9 +98,14 @@
           "pattern": "^[A-Za-z0-9_-]+$"
         },
         "args": {
-          "description": "Extra arguments passed to the codegen binary.",
+          "description": "Arguments passed to the runtime binary. Defaults to invoke, or serve for persistent/event clients. Preserve a custom loop flag here if your binary uses another protocol entry point.",
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "persistent": {
+          "description": "Keep one NDJSON runtime alive across calls, preserving Rust state. The runtime must support serve mode and __rustra_capabilities. Event clients always use a persistent runtime.",
+          "type": "boolean",
+          "default": false
         }
       }
     },

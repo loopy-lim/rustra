@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -92,6 +93,21 @@ extern "C" {
     const uint8_t* payload, size_t payload_len,
     uint8_t* buf, size_t capacity, size_t* out_len);
 
+  // ── (E1) Frame owned 응답 — probe-cache 2-FFI 왕복 제거 ──
+  // invoke_frame_into 와 동일하게 핸들러를 1회 실행하지만, 응답이 buf 에
+  // 들어가지 않으면 probe 재시도 없이 응답 소유권을 넘긴다(비동기 owned=1
+  // 프레임 계약의 동기판):
+  //   null 반환 — 응답이 buf 에 기록됐다(*out_len = 기록 바이트 수, 해제 없음)
+  //   non-null 반환 — overflow. *out_len 은 응답 길이이며 rustra_ffi_free_owned_bytes
+  //   를 정확히 (ptr, *out_len) 쌍으로 1회 해제해야 한다.
+  // 옵셔널 심볼 — 코어 함수 테이블의 옵셔널 엔트리로 노출된다(핫코어
+  // 바인딩은 부재를 실패가 아닌 null 로 처리). 정적 코어는 셸과 함께
+  // 빌드되므로 버전 스케류가 없고, 엔트리가 null 인 테이블(롤백·구형
+  // 핫코어)을 만나면 소비 측이 기존 probe 경로로 폴백한다.
+  uint8_t* rustra_ffi_invoke_frame_owned(
+    const uint8_t* payload, size_t payload_len,
+    uint8_t* buf, size_t capacity, size_t* out_len);
+
   // ── (Tier 0) 스칼라 직결 raw invoke — postcard 인코딩/디코딩 전부 제거 ──
   // 인자를 u64 슬롯(f64는 IEEE-754 비트, bool은 0/1)으로 직접 전달한다.
   // 반환: 0=성공(*out_slot 에 결과 슬롯), 1=핸들러 에러(에러 와이어를 err_buf
@@ -120,7 +136,8 @@ extern "C" {
 // 코어로 향한다(JSI HostFunction 은 C++ 셸 소유 유지).
 namespace core {
 
-/// 스왑 단위 C ABI 함수 포인터 테이블 — 어댑터가 참조하는 23 심볼.
+/// 스왑 단위 C ABI 함수 포인터 테이블 — 어댑터가 참조하는 23 필수 심볼 +
+/// (E1) 옵셔널 1 심볼(invoke_frame_owned — 구형 코어는 null, 소비 측 폴백).
 /// 발행 후 절대 수정하지 않는 불변 객체이며, 구 코어를 절대 dlclose 하지
 /// 않는 계약과 맞물려 테이블 객체 자체도 폐기하지 않는다(의도적 leak —
 /// 스왑별 소량 누수는 dev 감수 정책, 설계 문서 "스왑 시퀀스" 5번과 동일).
@@ -160,6 +177,11 @@ struct CoreTable {
   uint8_t (*has_raw)(uint16_t command_id);
   uint8_t* (*get_schema)(size_t* out_len);
   uint8_t* (*contract_hash)(size_t* out_len);
+  // ── (E1) 옵셔널 엔트리 — 끝에 추가(구형 셸/dylib 와의 레이아웃 호환) ──
+  // 신규 코어만 non-null. null 이면 소비 측이 기존 probe-cache 경로로
+  // 폴백한다(핫코어 바인딩은 심볼 부재를 실패가 아닌 null 로 처리).
+  uint8_t* (*invoke_frame_owned)(const uint8_t* payload, size_t payload_len,
+                                 uint8_t* buf, size_t capacity, size_t* out_len);
 };
 
 /// 현재 테이블 — 절대 nullptr 이 아니다(정적 모드는 링크 심볼 테이블).
@@ -262,6 +284,7 @@ private:
   size_t capacity_ = 1024;
   size_t dropped_ = 0;
   bool drainScheduled_ = false;
+  std::atomic<uint64_t> invokerGeneration_{0};
   std::shared_ptr<void> callInvoker_;
   /// per-name JS 콜백 레지스트리 — drain 에서만 접근(JS 스레드).
   std::unordered_map<std::string, facebook::jsi::Function> listeners_;
@@ -278,7 +301,7 @@ private:
 ///
 /// 핫코어 스왑 대응: 채널 핸들은 발급 코어에 귀속된다(새 dylib 의 핸들
 /// 발급기는 새로 시작해 번호가 겹친다). drop 은 발급 코어의 channel_drop
-/// 로 라우팅하고(`channelCores_` 소유권 기록), 스왑 직후에는 구 코어 발급
+/// 로 라우팅하고(`channelContexts_` 소유권 기록), 스왑 직후에는 구 코어 발급
 /// 채널의 레지스트리를 폐기한다 — 교차 코어 drop 오발(같은 번호의 신규
 /// 채널을 해제하는 사고)을 원천 차단한다. 폐기는 "스왑 시 코어 내 상태
 /// 소실" 설계 정책과 동일 선에서, 이벤트 싱크 재등록(rebindEventSink)의
@@ -301,10 +324,14 @@ public:
   uint32_t createBytes(facebook::jsi::Runtime& rt,
                        facebook::jsi::Function callback);
   /// 채널 해제(호출 완료/취소). 성공 true. JS 스레드 호출.
-  bool drop(uint32_t handle);
+  bool drop(uint32_t handle, const core::CoreTable* expectedOwner = nullptr);
+  /// Captures this registration so a stale JS close cannot release a later
+  /// channel with the same wire handle, including producer-local handle reuse.
+  facebook::jsi::Function bindClose(facebook::jsi::Runtime& rt, uint32_t handle);
 
   /// FFI C 콜백 — send 스레드에서 호출. 큐 적재 + drain 예약만.
-  /// handle 은 발급 시 캡처된 채널 번호(핸들→JS 콜백 룩업 키).
+  /// user_data retains dispatcher/producing-core identity until core drop joins
+  /// every callback; handle remains the issuing core's wire number.
   static void onChannelPayload(void* user_data, uint32_t handle, const char* payload);
   /// 바이너리 경로 C 콜백 — 페이로드는 (ptr, len), 콜백 반환 전까지만 유효.
   static void onChannelPayloadBytes(
@@ -320,7 +347,7 @@ public:
   void reset();
 
   /// 핫코어 스왑 직후(폴링 스레드) 호출 — 구 코어 발급 채널의 폐기를
-  /// 요청한다. 레지스트리(callbacks_/channelCores_)는 JS 스레드 전용이므로
+  /// 요청한다. 레지스트리(callbacks_/channelContexts_)는 JS 스레드 전용이므로
   /// 여기서는 플래그만 세우고 drain 을 예약한다(실제 폐기는 drain 안에서).
   void requestResetAfterSwap();
 
@@ -330,26 +357,30 @@ private:
   /// 스왑 리셋의 실제 폐기 — drain(JS 스레드) 안에서 소비된다. 발급 코어가
   /// 현재 코어가 아닌(스왑으로 은퇴한) 채널만 drop 하고, 스왑 뒤 새 코어로
   /// 새로 만든 채널은 유지한다. FFI channel_drop 은 락 밖에서 호출된다.
-  void dropStaleChannelsAfterSwap();
+  void dropStaleChannelsAfterSwap(const core::CoreTable* current = core::currentCoreTable());
 
   /// 스왑 리셋 지연 플래그 — 폴링 스레드가 세우고 drain(JS 스레드)이 소비.
   std::atomic<bool> resetQueued_{false};
   std::mutex mutex_;
-  /// (handle, payload) 큐 — onChannelPayload 가 적재, drain 이 소비.
-  std::deque<std::pair<uint32_t, std::string>> queue_;
+  struct ChannelContext {
+    ChannelDispatcher* dispatcher;
+    const core::CoreTable* owner;
+  };
+  /// Queued payloads retain producer identity even across drain callback reentry.
+  std::deque<std::tuple<uint32_t, const core::CoreTable*, std::string>> queue_;
   /// 바이너리 큐 — onChannelPayloadBytes 가 적재. drop-oldest 정책 동일.
-  std::deque<std::pair<uint32_t, std::vector<uint8_t>>> bytesQueue_;
+  std::deque<std::tuple<uint32_t, const core::CoreTable*, std::vector<uint8_t>>> bytesQueue_;
   /// 바이너리 경로로 발급된 핸들 — drain 이 전달 형태를 고른다.
   std::unordered_set<uint32_t> bytesHandles_;
   size_t capacity_ = 1024;
   bool drainScheduled_ = false;
+  std::atomic<uint64_t> invokerGeneration_{0};
   std::shared_ptr<void> callInvoker_;
   /// 핸들별 JS 콜백 — drain 에서만 접근(JS 스레드).
   std::unordered_map<uint32_t, facebook::jsi::Function> callbacks_;
-  /// 핸들 → 발급 코어 테이블 — drop/폐기를 올바른 코어의 channel_drop 로
-  /// 라우팅하기 위한 소유권 기록. CoreTable 은 불변·무폐기라 스왑 뒤에도
-  /// 포인터가 유효하다. callbacks_ 와 동일 수명주기로 함께 수정된다(JS 스레드).
-  std::unordered_map<uint32_t, const core::CoreTable*> channelCores_;
+  /// Callback user_data remains owned through the producing core's synchronized
+  /// drop. CoreTable is immutable and retained for the entire host lifetime.
+  std::unordered_map<uint32_t, std::shared_ptr<ChannelContext>> channelContexts_;
 };
 
 /// Optimized HostObject that caches all JSI functions on first access.

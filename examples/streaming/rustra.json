@@ -1,6 +1,11 @@
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
+  "node": {
+    "rustBinary": "rustra-streaming-invoke",
+    "args": ["--serve"],
+    "persistent": true
+  },
   "codegen": {
     "rustManifest": "./Cargo.toml",
     "rustPackage": "rustra-streaming-example",

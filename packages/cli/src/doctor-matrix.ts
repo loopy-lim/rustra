@@ -202,7 +202,7 @@ function runtimeCell(target: DoctorSection, checks: DoctorCheck[]): DoctorCheck[
   if (target === 'reactNative') return checks.filter((candidate) => candidate.id.startsWith('rn.'));
   if (target === 'tauri')
     return checks.filter((candidate) => candidate.id === 'tauri.platform_tools');
-  return checks.filter((candidate) => candidate.id === 'js.runtime');
+  return checks.filter((candidate) => candidate.id === `${target}.runtime`);
 }
 
 /**
