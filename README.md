@@ -2,11 +2,12 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
-The current release line targets Rust crates 0.11.0 and the coordinated package
+The current release line targets Rust crates 0.12.0 and the coordinated package
 versions below (`@rustra/types` 0.12.0 / `@rustra/cli` 0.11.3, adapters at their own
 versions). Upgrade native libraries, JS adapters, and generated output together;
 see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
-checks and rollback.
+checks and rollback. The 0.12 DX upgrade is documented in the
+[0.11 to 0.12 migration guide](docs/migrations/0.11-to-0.12.md).
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
@@ -169,7 +170,7 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.11.0"
+rustra = "0.12.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -629,7 +630,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.11.0", features = ["tauri"] }
+rustra = { version = "0.12.0", features = ["tauri"] }
 ```
 
 Rust side:

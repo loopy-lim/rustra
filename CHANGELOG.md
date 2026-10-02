@@ -5,7 +5,22 @@
 
 ## Unreleased
 
+## 0.12.0 (2026-10-03)
+
+### Added
+
+- Tauri의 Rustra IPC와 앱 명령을 함께 등록하는 `tauri_support::with_app_commands`를
+  추가한다. 계약 해시 조회와 bounded 채널 전송을 제공하고, 기존 핸들러 교체로 인한
+  누락을 진단한다.
+- RN owned-response FFI 경로를 추가하고 응답 메모리 소유권을 코어와 네이티브 셸이
+  함께 관리한다. 새 정적 셸은 Rust 0.12.0 이상으로 다시 빌드해야 한다.
+
 ### Changed
+
+- 생성 타입명과 호스트 엔트리 계약을 정합화하고 상태·이벤트·채널의 종료 처리를
+  보완한다. CLI와 호스트 어댑터는 독립 npm 버전으로 발행한다.
+- 업그레이드·재생성·네이티브 재빌드·롤백 절차는
+  [0.11 → 0.12 마이그레이션](docs/migrations/0.11-to-0.12.ko.md)을 따른다.
 
 - hot-core 감시 스레드(dylib watch)의 폴링을 300ms 전체 sha256 조사에서 **100ms
   stat 지문 사전 검사**로 전환한다 — stat(ino:size:mtime:ctime 계열)이 변한 틱에서만
