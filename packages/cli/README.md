@@ -35,6 +35,29 @@ rustra init my-app
 rustra doctor --config rustra.json
 ```
 
+The development CLI also provides a single startup pipeline (pending release):
+
+```bash
+rustra init my-app --setup
+rustra init my-bun-app --host bun --setup
+# From an existing project's directory:
+rustra setup --run
+# After changing Rust:
+bun run start
+```
+
+`setup` checks core tools, generates the contract, installs dependencies and builds every
+configured Rust producer. `--run` then executes the project's `demo` script. Run the same
+command after a failed stage. `--skip-install` uses dependencies already supplied by your environment.
+A fresh RN adapter is installed before generation; its generated workspace is installed afterward.
+RN preparation scripts and Tauri registration instructions are printed separately from the Rust host build.
+For a working example from this repository now, use `bun run try:node` or `bun run try:bun` at its root.
+
+Doctor accepts Node 18+ or Bun 1.4+ for the Node process adapter. Generated Bun FFI
+clients require Bun 1.4+; an available Node runtime cannot satisfy that requirement.
+Node/Bun-only projects skip C++ and CMake prerequisites;
+C++ is checked for React Native or explicit `cppOutput`, and CMake for React Native.
+
 See `rustra --help` for the full list of options. Exit code `2` means a usage error
 (unknown command/flag or a missing required argument), `1` a runtime failure or a
 breaking `diff`; `doctor`, `codegen`, `codegen --explain`, and `diff` share the

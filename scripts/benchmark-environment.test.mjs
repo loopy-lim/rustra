@@ -4,6 +4,47 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { recordBenchmarkEnvironment } from './benchmark-environment.mjs';
+import { execFileSync } from 'node:child_process';
+import { benchmarkArtifact, collectBenchmarkSource } from './host-benchmark-provenance.mjs';
+
+test('host receipts identify dirty sources and exact artifacts, including missing libraries', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rustra-host-provenance-'));
+  try {
+    await mkdir(join(root, 'packages', 'fixture', 'src'), { recursive: true });
+    const source = join(root, 'packages', 'fixture', 'src', 'index.ts');
+    await writeFile(source, 'export const value = 1;');
+    execFileSync('git', ['init', '--quiet'], { cwd: root });
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.invalid',
+        'commit',
+        '--quiet',
+        '-m',
+        'fixture',
+      ],
+      { cwd: root },
+    );
+    const before = collectBenchmarkSource(root);
+    assert.equal(before.sourceDirty, false);
+    await writeFile(source, 'export const value = 2;');
+    const after = collectBenchmarkSource(root);
+    assert.equal(after.sourceSha, before.sourceSha);
+    assert.equal(after.sourceDirty, true);
+    assert.notEqual(after.sourceTreeHash, before.sourceTreeHash);
+    assert.equal(benchmarkArtifact(root, 'missing.dylib'), null);
+    await writeFile(join(root, 'native.dylib'), 'candidate-one');
+    const first = benchmarkArtifact(root, 'native.dylib');
+    await writeFile(join(root, 'native.dylib'), 'candidate-two');
+    assert.notEqual(benchmarkArtifact(root, 'native.dylib').sha256, first.sha256);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('runner provenance preserves the restored context and never changes Criterion data', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rustra-bench-context-'));

@@ -154,6 +154,9 @@ export function readConfigSync(configPath: string): RustraConfig {
   ) {
     throw new Error('Config node.rustBinary must be a Cargo binary name');
   }
+  if (config.node?.persistent !== undefined && typeof config.node.persistent !== 'boolean') {
+    throw new Error('Config node.persistent must be a boolean');
+  }
   if (
     config.node?.args !== undefined &&
     (!Array.isArray(config.node.args) ||

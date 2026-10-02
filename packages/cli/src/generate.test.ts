@@ -354,6 +354,43 @@ test('generateCommandsTs produces command function', () => {
   assert.ok(commands.includes('≠ 재실행 안전'));
 });
 
+test('generateCommandsTs emits 1-field commands via createGeneratedFields1 factory', () => {
+  const schema: PackageSchema = {
+    packageId: 'test',
+    commands: [
+      {
+        name: 'greet',
+        commandId: 5,
+        inputType: 'GreetInput',
+        outputType: 'GreetOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+          title: 'GreetInput',
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { message: { type: 'string' } },
+          required: ['message'],
+          title: 'GreetOutput',
+        },
+      },
+    ],
+  };
+  const commands = generateCommandsTs(schema);
+  // 2-필드 선례(createGeneratedFields2)와 동일한 팩토리 형태 — 라우트 세대 캐시로
+  // warm 디스패치 비용을 줄인다(docs/research/2026-09-24-emit-switch-decision.md).
+  assert.ok(
+    commands.includes(
+      "export const greet = createGeneratedFields1<GreetInput, GreetOutput>(5, 'greet', \"name\", 'greet');",
+    ),
+  );
+  assert.ok(commands.includes("createGeneratedFields1, invokeGenerated } from '@rustra/types'"));
+  // 함수형 emit(invokeGeneratedFields1 직접 호출)은 더 이상 생성되지 않는다.
+  assert.ok(!commands.includes('invokeGeneratedFields1<'));
+});
+
 test('generateCommandsTs keeps complex inputs on the generic route', () => {
   const commands = generateCommandsTs(cppSchema);
   const sumList = commands.split('export function sumList')[1] ?? '';
@@ -2128,15 +2165,16 @@ test('desktop host entries own lazy setup and preserve explicit escape hatches',
   assert.match(bun, /contractVerification: 'strict'/);
 
   const tauri = generateTauriEntryTs();
-  assert.match(tauri, /createTauriBootstrap\(\)/);
+  assert.match(tauri, /createTauriBootstrap\(\{/);
+  assert.match(tauri, /contractHash: GENERATED_CONTRACT_HASH/);
+  assert.match(tauri, /contractVerification: 'strict'/);
   assert.match(tauri, /subscribeTauriEvent as subscribeEvent/);
-  // (M9) 4개 엔트리가 같은 계약 검증 기본값('strict')을 선언하고, tauri 는
-  // JSON 엔진 경로(클라이언트측 핸드셰이크 없음)임을 명시한다.
+  // Generated hosts all enforce their expected contract during bootstrap.
   for (const entry of [node, bun, tauri]) {
     assert.match(entry, /공통 기본값: contractVerification = 'strict'/);
     assert.match(entry, /Changelog\(M9 옵션 정합\)/);
   }
-  assert.match(tauri, /JSON 엔진 경로 — 클라이언트측 contractHash 핸드셰이크가 없어/);
+  assert.match(tauri, /rustra_contract_hash/);
 });
 
 test('host entries wire subscribeEvent when the schema declares events', () => {
@@ -2144,9 +2182,9 @@ test('host entries wire subscribeEvent when the schema declares events', () => {
     { targetDirectoryUrl: '../../target/', targetName: 'my-app' },
     { events: true },
   );
-  assert.match(node, /createNodeEventSubscription/);
+  assert.match(node, /persistent: true/);
   assert.match(node, /export const subscribeEvent = events\.subscribeEvent/);
-  // 브릿지가 부트스트랩과 같은 런타임 해상(후보) 정보를 재사용한다 — 이중 해상 불일치 방지.
+  // Events bind to the selected bootstrap transport and share command state.
   assert.match(node, /binaryName: "my-app"/);
   assert.match(node, /release\/\$\{executable\}/);
 
@@ -2154,16 +2192,10 @@ test('host entries wire subscribeEvent when the schema declares events', () => {
     { targetDirectoryUrl: '../../target/', targetName: 'my_app' },
     { events: true },
   );
-  assert.match(bun, /createBunEventSubscription/);
   // (A2) events 변형 부트스트랩도 동일하게 계약 검증 정책을 명시한다.
   assert.match(bun, /contractVerification: 'strict'/);
   assert.match(bun, /export const subscribeEvent = events\.subscribeEvent/);
-  // 팩토리가 부트스트랩과 같은 옵션 집합(libraryName + libraryCandidates)을 받는다 —
-  // 후보 경로 부재 시에도 cwd 체인 추론 폴백이 부트스트랩과 동일하게 작동한다.
-  assert.match(
-    bun,
-    /createBunEventSubscription\(\{\s*libraryName: "my_app",\s*libraryCandidates: \[/,
-  );
+  assert.match(bun, /rustra\.subscribeEvent\(name, callback\)/);
 });
 
 test('host entries stay byte-identical when the schema declares no events', () => {

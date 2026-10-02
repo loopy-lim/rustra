@@ -1,7 +1,7 @@
 /**
  * Streaming 예제 Node 앱 — 실제 Rust 프로세스와 이벤트를 주고받는 end-to-end 데모.
  *
- * `@rustra/node` 의 `createNodeLoopTransport` + `subscribeEvent` 로 이벤트를
+ * 생성 node 엔트리의 `subscribeEvent` 로 이벤트를
  * 받는다 — 앱은 수동 `__drainEvents` 폴링을 쓰지 않는다. 이 데몬은 라인 JSON
  * 프로토콜(구 런타임)이라 푸시 핸드셰이크(`events:"push"`)가 없고, 따라서
  * subscribeEvent 의 **폴링 폴백** 경로로 흐른다(2-모드 dispatch — 푸시 가능한
@@ -15,34 +15,11 @@
  * 실행: cargo build -p rustra-streaming-example && \
  *       bun examples/streaming/apps/node-app.ts
  */
-import { createNodeLoopTransport, subscribeEvent } from '@rustra/node';
-import { configure } from '@rustra/types';
-import { createNodeEngine } from '@rustra/node';
-import { startJob } from '../generated/commands.js';
+import { rustra, startJob, subscribeEvent } from '../generated/node.js';
+import { onRustraEvent } from '../generated/events.js';
 
-const RUST_BIN = 'target/debug/rustra-streaming-invoke';
-
-interface ProgressPayload {
-  jobId: string;
-  step: number;
-  total: number;
-}
-interface DonePayload {
-  jobId: string;
-  steps: number;
-}
-
-const transport = createNodeLoopTransport({ command: RUST_BIN, args: ['--serve'] });
-await transport.ready();
-console.log(
-  `[streaming] transport ready — mode=${transport.mode} pushCapable=${transport.pushCapable} (폴링 폴백 경로)`,
-);
-
-configure(
-  createNodeEngine({
-    invoke: (command, args) => transport.invoke(command, args),
-  }),
-);
+await rustra.ready();
+console.log('[streaming] generated runtime ready (polling event delivery)');
 
 // ── 시나리오 ───────────────────────────────────────────────────
 const TOTAL = 5;
@@ -54,20 +31,20 @@ const done = new Promise<void>((resolve) => {
 });
 const timeout = setTimeout(() => {
   console.error('[streaming] timeout waiting for job.done');
-  transport.dispose();
+  rustra.dispose();
   process.exit(1);
 }, 10_000);
 
 let ticks = 0;
-const unsubscribeTick = subscribeEvent(transport, 'progress.tick', (payload) => {
-  const { step, total } = payload as ProgressPayload;
+const unsubscribeTick = await onRustraEvent(subscribeEvent, 'progress.tick', (payload) => {
+  const step = Number(payload.step);
+  const total = Number(payload.total);
   ticks += 1;
   console.log(
     `[streaming] tick ${String(step).padStart(2)}/${total} ${'▓'.repeat(step)}${'░'.repeat(total - step)}`,
   );
 });
-const unsubscribeDone = subscribeEvent(transport, 'job.done', (payload) => {
-  const { steps } = payload as DonePayload;
+const unsubscribeDone = await onRustraEvent(subscribeEvent, 'job.done', ({ steps }) => {
   console.log(`[streaming] done: ${steps} steps`);
   settleDone();
 });
@@ -81,11 +58,11 @@ clearTimeout(timeout);
 if (ticks !== TOTAL) {
   unsubscribeTick();
   unsubscribeDone();
-  transport.dispose();
+  rustra.dispose();
   throw new Error(`expected ${TOTAL} ticks, got ${ticks}`);
 }
 console.log(`[streaming] PASS — ${ticks}/${TOTAL} ticks received via subscribeEvent`);
 unsubscribeTick();
 unsubscribeDone();
-transport.dispose();
+rustra.dispose();
 process.exit(0);

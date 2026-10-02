@@ -2,6 +2,18 @@ English | [한국어](./README.ko.md)
 
 # @rustra/bun
 
+## Events on the selected runtime
+
+Event-enabled generated entries export `subscribeEvent`, backed by the same
+contract-verified library as their generated commands. Manual bootstraps expose
+`rustra.subscribeEvent(name, callback)` too. On an initialized runtime, subscription
+installs the native sink synchronously, so an immediate command can emit its first event.
+`rustra.dispose()` closes subscriptions; `reload()` reattaches them to the selected library.
+
+Native callback delivery requires emission on the JS thread, such as a synchronous FFI
+command. For Rust background threads, use `createBunEventSubscription` with an injected
+`poll` source rather than the default native callback.
+
 Adapter that automatically connects the Rustra cdylib over a stable C ABI in Bun 1.4
 environments.
 
@@ -29,6 +41,10 @@ const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 If the deployment layout differs, use `RUSTRA_BUN_LIBRARY=/absolute/path/to/libapp.dylib`.
+
+The FFI engine and bootstrap require the Bun runtime. Running them in Node reports
+`transport.unavailable` with guidance to launch with `bun` or use `@rustra/node`.
+Package imports and `createBunEngine(transport)` remain available to Node hosts.
 
 ## Public API
 

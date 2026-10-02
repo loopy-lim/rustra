@@ -23,6 +23,7 @@ export interface ResolvedDevConfig {
   uniffiBindingPath?: string;
   manifestPath: string;
   dev?: ReturnType<typeof resolveDevSection>;
+  rustPackage?: string;
   /** target=wasm 일 때만 존재 — wasm32 엔진 빌드의 매니페스트·패키지 해석값. */
   devWasm?: ResolvedDevWasm;
   /** target=dylib 일 때만 존재 — 네이티브 cdylib 핫 코어 빌드의 매니페스트·패키지 해석값. */
@@ -118,6 +119,7 @@ export function readDevConfig(configPath: string): ResolvedDevConfig {
         }
       : {}),
     manifestPath,
+    rustPackage: config.codegen?.rustPackage,
     dev,
     devWasm: resolveDevWasm(config, root, manifestPath),
     devDylib: resolveDevDylib(config, root, manifestPath),

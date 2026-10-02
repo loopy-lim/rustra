@@ -3,6 +3,7 @@ import { cliVersion, CLI_COMMANDS } from './cli-runtime.js';
 import { runCodegen } from './cli-codegen.js';
 import { runGenerate, runWatch } from './cli-generate.js';
 import { runInit } from './cli-init.js';
+import { runSetup } from './cli-setup.js';
 import { runDiff } from './cli-diff.js';
 import { runDoctor } from './cli-doctor.js';
 import { runInspect } from './cli-inspect.js';
@@ -42,6 +43,10 @@ export async function main(): Promise<void> {
   }
   if (command === 'init') {
     await runInit(rest);
+    return;
+  }
+  if (command === 'setup') {
+    await runSetup(rest);
     return;
   }
   if (command === 'diff') {

@@ -13,7 +13,9 @@
     "codegen:check": "bun ../../packages/cli/src/index.ts codegen --config rustra.json --check",
     "postinstall": "node scripts/link-live-packages.mjs",
     "test:autolink": "bun scripts/check-autolink.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "rustra:ios": "node -e \"require('@rustra/generated-react-native/scripts/prepare-native.cjs').prepare('ios')\"",
+    "rustra:android": "node -e \"require('@rustra/generated-react-native/scripts/prepare-native.cjs').prepare('android')\""
   },
   "dependencies": {
     "@rustra/generated-react-native": "workspace:*",

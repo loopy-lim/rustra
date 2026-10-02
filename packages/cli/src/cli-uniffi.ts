@@ -118,7 +118,7 @@ async function generateUniffiBindings(
     `cargo build --manifest-path ${ctx.manifestPath} --package ${ctx.packageName} ` +
       `--features uniffi${profile === 'release' ? ' --release' : ''}`,
   );
-  const metadata = readCargoMetadata(ctx.manifestPath);
+  const metadata = readCargoMetadata(ctx.manifestPath, ctx.cwd);
   const pkg = selectHostPackage(metadata, ctx.manifestPath, ctx.packageName);
   const libraries = pkg.targets.filter((target) => target.crate_types.includes('cdylib'));
   if (libraries.length !== 1)

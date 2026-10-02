@@ -246,6 +246,9 @@ test('buildDylibCore fails loudly when no cdylib artifact message appears', asyn
 test('buildDylibCore wraps cargo build failures with the package and manifest', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-fail-'));
   const originalPath = process.env.PATH;
+  const originalError = console.error;
+  const progress: string[] = [];
+  console.error = (...parts: unknown[]) => progress.push(parts.join(' '));
   try {
     const project = seedCargoProject(root);
     seedFakeCargo(root);
@@ -261,10 +264,14 @@ test('buildDylibCore wraps cargo build failures with the package and manifest', 
           return true;
         },
       );
+      const output = progress.join('\n');
+      assert.match(output, /✗ dylib core build \(x\) failed in \d+\.\ds/);
+      assert.doesNotMatch(output, /✓|done in/, 'a failed Cargo build must never report success');
     } finally {
       delete process.env.FAKE_BUILD_FAIL;
     }
   } finally {
+    console.error = originalError;
     process.env.PATH = originalPath;
     rmSync(root, { recursive: true, force: true });
   }

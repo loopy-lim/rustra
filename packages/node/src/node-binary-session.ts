@@ -30,6 +30,8 @@ export type BinaryLoopSession = {
   invoke(command: string, args: unknown): Promise<unknown>;
   /** stdout 바이너리 청크 공급 — 프레임 경계 누적 후 디멀티플렉스한다. */
   onChunk(chunk: Buffer): void;
+  /** A new process cannot inherit an incomplete frame from its predecessor. */
+  resetReader(): void;
   /** 프로세스 exit 시 대기 중 binQueue 전체를 같은 에러로 해소(기존 계약). */
   rejectAll(error: RustraCommandError): void;
   /** 진행 중 바이너리 invocation 수 — drain(timeout) 정착 판정 근거. */
@@ -64,7 +66,7 @@ export function createBinaryLoopSession(options: {
    * 0xfffd(푸시)는 binQueue 에서 소비하지 않는다. 구분 없이 shift 하던 구조와
    * 달리, 응답을 기다리는 waiter가 없는 푸시 프레임이 와도 유실되지 않고
    * 리스너로 브로드캐스트된다. */
-  const onChunk = createBinaryFrameAccumulator((cmd, body) => {
+  const dispatchFrame = (cmd: number, body: Uint8Array) => {
     demultiplexBinaryFrame({
       cmd,
       body,
@@ -107,7 +109,8 @@ export function createBinaryLoopSession(options: {
         if (waiter) waiter.resolve(response);
       },
     });
-  });
+  };
+  let reader = createBinaryFrameAccumulator(dispatchFrame);
 
   const binaryWrite = (payload: Buffer): Promise<Uint8Array> =>
     new Promise((resolve, reject) => {
@@ -189,7 +192,12 @@ export function createBinaryLoopSession(options: {
 
   return {
     invoke: invokeBinary,
-    onChunk,
+    onChunk(chunk) {
+      reader(chunk);
+    },
+    resetReader() {
+      reader = createBinaryFrameAccumulator(dispatchFrame);
+    },
     rejectAll(error) {
       for (const waiter of binQueue) waiter.reject(error);
       binQueue = [];

@@ -26,7 +26,13 @@ export const REACT_NATIVE_CONFIG_KEYS = [
   'rustPackage',
   'rustLibrary',
 ] as const;
-export const NODE_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary', 'args'] as const;
+export const NODE_CONFIG_KEYS = [
+  'rustManifest',
+  'rustPackage',
+  'rustBinary',
+  'args',
+  'persistent',
+] as const;
 export const BUN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustLibrary'] as const;
 export const DEV_CONFIG_KEYS = ['target', 'wasm', 'dylib'] as const;
 export const DEV_WASM_CONFIG_KEYS = ['engine', 'parityGate'] as const;
@@ -102,6 +108,8 @@ export interface RustraConfig {
     rustPackage?: string;
     rustBinary?: string;
     args?: string[];
+    /** Keep one NDJSON runtime alive across calls. The binary must support serve mode. */
+    persistent?: boolean;
   };
   bun?: {
     rustManifest?: string;

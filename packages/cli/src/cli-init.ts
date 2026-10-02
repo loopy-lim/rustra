@@ -6,9 +6,10 @@ import { cliManifest, cliVersion } from './cli-runtime.js';
 import { parseCliArgs } from './cli-arg-parser.js';
 import { UsageError } from './cli-usage-error.js';
 import { closestMatch } from './cli-suggest.js';
+import { runSetup } from './cli-setup.js';
 
 /** --host 허용값 — 검증·did-you-mean·도움말이 함께 읽는 단일 출처. */
-export const INIT_HOSTS = ['node', 'react-native'] as const;
+export const INIT_HOSTS = ['node', 'bun', 'react-native'] as const;
 type InitHost = (typeof INIT_HOSTS)[number];
 
 /**
@@ -43,7 +44,7 @@ export async function runInit(args: string[]): Promise<void> {
   const parsed = parseCliArgs(args, {
     command: 'init',
     valueFlags: ['host'],
-    booleanFlags: ['force', 'help'],
+    booleanFlags: ['force', 'setup', 'help'],
     allowPositionals: true,
   });
   // help 관례 — 파서는 플래그만 채우고 출력은 cli-main 이 담당한다. 도메인
@@ -69,6 +70,8 @@ export async function runInit(args: string[]): Promise<void> {
   const detected = detectInitHosts(root);
   const hosts: InitHosts = {
     nodeRange: cliManifest.rustraTemplate.nodeRange,
+    bunRange: cliManifest.rustraTemplate.bunRange,
+    bun: hostValue === 'bun',
     reactNative: hostValue === 'react-native' || (hostValue === undefined && detected.reactNative),
   };
   const versions = templateVersions(
@@ -100,16 +103,20 @@ export async function runInit(args: string[]): Promise<void> {
   }
   console.log(`Created rustra project in ${root}:`);
   console.log(`  ${Object.keys(contents).join(', ')}`);
-  const hostSummary = hosts.reactNative ? 'node, react-native' : 'node';
+  const hostSummary = hosts.bun ? 'bun' : hosts.reactNative ? 'node, react-native' : 'node';
   // 선택 이유 표시 — --host 로 감지를 바꿨다면 그 사실을 안내해 "왜 RN이 빠졌는지"를 남긴다.
   const hostNote = hostNoteFor(hostValue, hosts);
   console.log(`  Config host sections: ${hostSummary}${hostNote}`);
+  if (parsed.flags.has('setup')) {
+    await runSetup([
+      '--config',
+      resolve(root, 'rustra.json'),
+      ...(hosts.reactNative ? [] : ['--run']),
+    ]);
+    return;
+  }
   console.log('\nNext steps:');
   console.log(`  cd ${directories[0]}`);
-  console.log('  cargo build   # first build downloads deps and takes a few minutes');
   console.log('  bun install');
-  console.log('  bun run doctor   # environment + config checks');
-  console.log('  bun run codegen');
-  console.log('  bun run demo');
-  console.log('  cargo run');
+  console.log(hosts.reactNative ? '  bun run setup' : '  bun run start');
 }

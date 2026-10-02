@@ -13,9 +13,11 @@ use rustra::hot_core::{self, DylibCore, DylibWatchConfig, HotCoreHandle};
 use rustra::tauri_support;
 use rustra_calculator_example::calculator_package;
 use std::{env, fs, path::PathBuf, sync::Arc};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let benchmark = env::var("RUSTRA_BENCH").as_deref() == Ok("1");
     if let Ok(path) = env::var("RUSTRA_TAURI_PROBE_FILE") {
         let output = calculator_package()
             .invoke_json("addNumbers", serde_json::json!({"a": 20, "b": 22}))
@@ -72,13 +74,31 @@ pub fn run() {
             swap_report,
             tauri::Builder::default(),
         )
-    } else if env::var("RUSTRA_BENCH").as_deref() == Ok("1") {
+    } else if benchmark {
         tauri_support::register_profiled(calculator_package(), tauri::Builder::default())
     } else {
         tauri_support::register_with_events(calculator_package(), tauri::Builder::default())
     };
 
     builder
-        .run(tauri::generate_context!())
-        .expect("failed to run tauri calculator app");
+        .build(tauri::generate_context!())
+        .expect("failed to build tauri calculator app")
+        .run(move |app, event| {
+            if benchmark && matches!(event, tauri::RunEvent::Ready) {
+                let window = app
+                    .get_webview_window("main")
+                    .expect("benchmark window should exist");
+                // Focus after application activation, rather than during pre-launch setup.
+                window.set_focus().expect("benchmark focus should succeed");
+                eprintln!(
+                    "RUSTRA_TAURI_BENCH_NATIVE=window-ready visible={} focused={}",
+                    window
+                        .is_visible()
+                        .expect("benchmark visibility should be readable"),
+                    window
+                        .is_focused()
+                        .expect("benchmark focus should be readable")
+                );
+            }
+        });
 }

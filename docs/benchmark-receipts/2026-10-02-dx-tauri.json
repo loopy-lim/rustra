@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-02T14:34:23.424Z",
+  "sourceSha": "58e1835e5f2b74f9a8c1e21addabcf85836534cd",
+  "sourceDirty": true,
+  "sourceTreeHash": "4cf4b96bb217cb980cd08aa117bdef3aed0a3ce2e9a006e701bcf40dc9e0d6a4",
+  "sourceFileCount": 1050,
+  "nativeArtifacts": [
+    {
+      "path": "target/release/rustra-tauri-calculator",
+      "sha256": "00c7d19ba3db458e50babfa2833c2dafa801d28e32af2ea36348033f03175608"
+    }
+  ],
+  "frontendArtifacts": [
+    {
+      "path": "examples/tauri-calculator/bench-dist/benchmark.js",
+      "sha256": "f5f2efea06f07cfc5159a5ec96e81daada9d5f260b2a286b8d39c1d8825b041c"
+    }
+  ],
+  "provenance": {
+    "sourceSnapshot": "after-build-before-execution",
+    "sourceAfterRun": {
+      "sourceSha": "58e1835e5f2b74f9a8c1e21addabcf85836534cd",
+      "sourceDirty": true,
+      "sourceTreeHash": "702a465f77b77633193e2517a69303573716de89d5ab9e91124b4e8a16d19674",
+      "sourceFileCount": 1050
+    },
+    "sourceTreeUnchangedDuringRun": false,
+    "artifactsUnchangedDuringRun": true
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "bun": "1.4.1"
+  },
+  "runtimeEvidence": [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+  ],
+  "correctness": true,
+  "benchmarkMarker": "RUSTRA_HOST_BENCH_JSON",
+  "command": "RUSTRA_TAURI_BENCH_TIMEOUT_MS=120000 bun benchmark.mjs",
+  "buildCommand": "bun run --cwd examples/tauri-calculator build:benchmark",
+  "deadlineMs": 120000,
+  "window": {
+    "visibilityState": "visible",
+    "hasFocus": false
+  },
+  "nativeWindowCheckpoint": "RUSTRA_TAURI_BENCH_NATIVE=window-ready visible=true focused=false elapsedMs=321",
+  "results": [
+    {
+      "name": "tauri-generated-webview-ipc",
+      "warmup": 100,
+      "iterations": 10000,
+      "repeats": 3,
+      "batchSize": 1000,
+      "correctness": true,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 368678.5714285713,
+      "p50Ns": 363000,
+      "p95Ns": 442000.0000000009,
+      "p99Ns": 519000.0000000001,
+      "throughputOpsPerSecond": 2712.3898091640035
+    }
+  ],
+  "decomposition": {
+    "rttAvgNs": 277777.77777770703,
+    "nativeNsAvg": 992.495,
+    "crossingResidualNs": 276785.28277770703,
+    "samples": 200,
+    "nativeMeasurementScope": "JsonDispatch work inside the blocking worker; excludes blocking-pool queue wait"
+  },
+  "checkpoints": [
+    {
+      "type": "progress",
+      "stage": "webview-ready",
+      "completedCalls": 0,
+      "elapsedMs": 587
+    },
+    {
+      "type": "progress",
+      "stage": "first-call",
+      "completedCalls": 1,
+      "elapsedMs": 629
+    },
+    {
+      "type": "progress",
+      "stage": "warmup-complete",
+      "completedCalls": 100,
+      "elapsedMs": 751
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-1",
+      "completedCalls": 1000,
+      "averageNs": 519000.0000000001,
+      "elapsedMs": 1277
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-2",
+      "completedCalls": 2000,
+      "averageNs": 427000,
+      "elapsedMs": 1708
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-3",
+      "completedCalls": 3000,
+      "averageNs": 400999.99999999977,
+      "elapsedMs": 2115
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-4",
+      "completedCalls": 4000,
+      "averageNs": 323000,
+      "elapsedMs": 2442
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-5",
+      "completedCalls": 5000,
+      "averageNs": 400000.00000000047,
+      "elapsedMs": 2848
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-6",
+      "completedCalls": 6000,
+      "averageNs": 354000,
+      "elapsedMs": 3207
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-7",
+      "completedCalls": 7000,
+      "averageNs": 371000,
+      "elapsedMs": 3584
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-8",
+      "completedCalls": 8000,
+      "averageNs": 415000,
+      "elapsedMs": 4009
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-9",
+      "completedCalls": 9000,
+      "averageNs": 388000,
+      "elapsedMs": 4402
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1-batch-10",
+      "completedCalls": 10000,
+      "averageNs": 390999.99999999953,
+      "elapsedMs": 4799
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-1",
+      "completedCalls": 10000,
+      "elapsedMs": 4803
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-1",
+      "completedCalls": 11000,
+      "averageNs": 419000,
+      "elapsedMs": 5227
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-2",
+      "completedCalls": 12000,
+      "averageNs": 403999.9999999991,
+      "elapsedMs": 5641
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-3",
+      "completedCalls": 13000,
+      "averageNs": 429000,
+      "elapsedMs": 6075
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-4",
+      "completedCalls": 14000,
+      "averageNs": 442000.0000000009,
+      "elapsedMs": 6523
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-5",
+      "completedCalls": 15000,
+      "averageNs": 363000,
+      "elapsedMs": 6890
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-6",
+      "completedCalls": 16000,
+      "averageNs": 335000,
+      "elapsedMs": 7231
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-7",
+      "completedCalls": 17000,
+      "averageNs": 325000,
+      "elapsedMs": 7561
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-8",
+      "completedCalls": 18000,
+      "averageNs": 327000,
+      "elapsedMs": 7893
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-9",
+      "completedCalls": 19000,
+      "averageNs": 329000.0000000009,
+      "elapsedMs": 8227
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2-batch-10",
+      "completedCalls": 20000,
+      "averageNs": 318999.9999999991,
+      "elapsedMs": 8551
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-2",
+      "completedCalls": 20000,
+      "elapsedMs": 8555
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-1",
+      "completedCalls": 21000,
+      "averageNs": 310999.9999999991,
+      "elapsedMs": 8872
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-2",
+      "completedCalls": 22000,
+      "averageNs": 316000,
+      "elapsedMs": 9192
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-3",
+      "completedCalls": 23000,
+      "averageNs": 340000,
+      "elapsedMs": 9536
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-4",
+      "completedCalls": 24000,
+      "averageNs": 332000,
+      "elapsedMs": 9874
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-5",
+      "completedCalls": 25000,
+      "averageNs": 411000,
+      "elapsedMs": 10291
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-6",
+      "completedCalls": 26000,
+      "averageNs": 431000,
+      "elapsedMs": 10732
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-7",
+      "completedCalls": 27000,
+      "averageNs": 378000,
+      "elapsedMs": 11116
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-8",
+      "completedCalls": 28000,
+      "averageNs": 315000,
+      "elapsedMs": 11435
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-9",
+      "completedCalls": 29000,
+      "averageNs": 323000,
+      "elapsedMs": 11763
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3-batch-10",
+      "completedCalls": 30000,
+      "averageNs": 314999.99999999814,
+      "elapsedMs": 12083
+    },
+    {
+      "type": "progress",
+      "stage": "production-repeat-3",
+      "completedCalls": 30000,
+      "elapsedMs": 12087
+    },
+    {
+      "type": "progress",
+      "stage": "profile-start",
+      "completedCalls": 30000,
+      "elapsedMs": 12093
+    },
+    {
+      "type": "progress",
+      "stage": "profile-complete",
+      "completedCalls": 200,
+      "elapsedMs": 12157
+    }
+  ],
+  "diagnosticComparison": {
+    "hiddenWindow": {
+      "completed": false,
+      "deadlineMs": 60000,
+      "lastStage": "warmup-complete",
+      "successfulFirstCall": true,
+      "warmup": 100,
+      "evidenceBoundary": "No complete production timing result; hidden-view scheduling is an inference"
+    },
+    "visibleWindowFirstRun": {
+      "completed": true,
+      "averageNs": 520035.71428571444,
+      "p50Ns": 461000.00000000023,
+      "p95Ns": 998000,
+      "hasFocus": false
+    }
+  },
+  "evidenceBoundary": "Actual macOS Tauri WebView IPC, visible but unfocused. This is not Tauri mobile/device acceptance or a before/after production-regression claim."
+}

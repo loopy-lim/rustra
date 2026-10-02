@@ -87,6 +87,11 @@ Tauri 전용 규칙 둘이 모든 구독에 적용된다. 리스너 콜백이 �
 `Package::build()`가 `event channel collision` 패닉으로 거부하므로 그런 오배선은
 런타임에 도달하지 못한다.
 
+Tauri는 문자열까지 이미 해석된 값을 전달한다. `'{"a":1}'` 같은 문자열도
+그대로 보존한다. 직렬화된 JSON 문자열을 전달하는 사용자 정의 레거시 전송은
+`subscribeEvent(name, callback, listen, { payloadEncoding: 'serialized-json' })`으로
+명시하며, 이 모드는 숫자·불리언·null까지 정확히 한 번 해석한다.
+
 **예약 채널** — `rustra://hot-core/swapped`: hot-core 스왑 보고.
 `tauri_support::register_dispatch_with_swap_events`(hot-core dylib 모드)로 등록된 Rust
 호스트가 모든 스왑 결과를 여기로 민다 — 성공이면 `{ oldContractHash, newContractHash }`,

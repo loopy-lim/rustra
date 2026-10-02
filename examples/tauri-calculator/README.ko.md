@@ -19,9 +19,17 @@ bun run build:frontend
 # 런타임 스모크 테스트
 bun run smoke
 
-# 실제 숨은 WebView에서 generated API 3,000회 측정
+# 실제 표시된 WebView에서 generated API 30,000회 측정
 bun run bench
 ```
+
+벤치마크 창을 열고 앱 시작 후 포커스를 요청하여 숨은 뷰의 스케줄링 영향을
+피합니다. 실제 표시·포커스 상태는 영수증에 기록됩니다.
+러너는 측정 배치 밖에서 `RUSTRA_TAURI_BENCH_PROGRESS` 단계 로그를 남깁니다.
+시간 초과에는 마지막 단계가 표시되고 앱 시작 실패·조기 종료는 즉시 실패합니다.
+`RUSTRA_TAURI_BENCH_TIMEOUT_MS`를 1000~600000 사이 정수로 지정하면 기본
+60초 제한을 바꿀 수 있습니다. `bun run test:benchmark-runner`는 WebView를
+열지 않고 제어된 자식 프로세스로 수집·정리를 검증합니다.
 
 ### 핫코어 dev 모드 (실험적)
 

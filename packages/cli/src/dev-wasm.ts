@@ -20,7 +20,7 @@ function wasmArtifactName(libName: string): string {
 export function wasmEngineArtifactPath(
   manifestPath: string,
   libName: string,
-  metadata = readCargoMetadata(manifestPath),
+  metadata = readCargoMetadata(manifestPath, dirname(manifestPath)),
 ): string {
   return join(
     requireTargetDirectory(metadata),
@@ -39,7 +39,7 @@ export function wasmEngineArtifactPath(
  */
 export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string> {
   const manifestPath = devWasm.manifestPath;
-  const metadata = readCargoMetadata(manifestPath);
+  const metadata = readCargoMetadata(manifestPath, dirname(manifestPath));
   const cargoPackage = selectHostPackage(metadata, manifestPath, devWasm.rustPackage);
   const cdylibs = cargoPackage.targets.filter((target) => target.crate_types.includes('cdylib'));
   if (cdylibs.length !== 1) {

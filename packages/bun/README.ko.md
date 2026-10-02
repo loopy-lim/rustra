@@ -1,5 +1,16 @@
 # @rustra/bun
 
+## 선택된 런타임의 이벤트
+
+이벤트가 있는 생성 엔트리는 명령과 같은 계약 검증된 라이브러리를 사용하는
+`subscribeEvent`를 내보낸다. 직접 만든 부트스트랩도 `rustra.subscribeEvent`를 제공한다.
+초기화된 런타임에서는 구독 호출 중 네이티브 싱크를 설치하므로 바로 다음 명령의
+첫 이벤트를 받을 수 있다. `dispose()`는 구독을 정리하고 `reload()`는 다시 연결한다.
+
+기본 네이티브 콜백은 JS 스레드에서 발생하는 동기 FFI 명령의 emit에 쓴다.
+Rust 백그라운드 스레드에서 emit한다면 `createBunEventSubscription`에 `poll` 소스를
+주입해야 한다.
+
 Bun 1.4 환경에서 Rustra cdylib를 stable C ABI로 자동 연결하는 어댑터입니다.
 
 ## Zero-config 기본 경로
@@ -26,6 +37,10 @@ const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 배포 레이아웃이 다르면 `RUSTRA_BUN_LIBRARY=/absolute/path/to/libapp.dylib`를 사용합니다.
+
+FFI 엔진과 부트스트랩은 Bun 런타임이 필요합니다. Node에서 실행하면
+`transport.unavailable` 오류가 `bun`으로 실행하거나 `@rustra/node`를 사용하도록 안내합니다.
+패키지 import와 `createBunEngine(transport)`는 Node에서도 사용할 수 있습니다.
 
 ## 공개 API
 

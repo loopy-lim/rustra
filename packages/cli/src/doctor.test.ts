@@ -295,6 +295,99 @@ const HOST_SECTIONS = {
   reactNative: { rustManifest: './Cargo.toml', rustLibrary: 'app' },
 };
 
+function withWorkflowDoctor(
+  config: Record<string, unknown>,
+  versions: { node: string; bun: string },
+  callback: (report: ReturnType<typeof collectDoctorReport>) => void,
+): void {
+  withProject(
+    {
+      'rustra.json': JSON.stringify({
+        schema: './generated/schema.json',
+        output: './generated',
+        ...config,
+      }),
+      'Cargo.toml': CARGO_TOML,
+      'generated/schema.json': SCHEMA_CONTENT,
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256(SCHEMA_CONTENT),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
+    },
+    (root) => {
+      const available = metadataRunner(root, [
+        {
+          name: 'app',
+          manifest_path: join(root, 'Cargo.toml'),
+          targets: [
+            { name: 'app', crate_types: ['rlib', 'cdylib', 'staticlib'] },
+            { name: 'generate', kind: ['bin'] },
+          ],
+        },
+      ]);
+      const runner: DoctorRunner = (command, args) => {
+        if (command === 'c++' || command === 'cmake')
+          return { ok: false, stdout: '', stderr: `${command} missing` };
+        if (command === 'node' || command === 'bun')
+          return { ok: true, stdout: versions[command], stderr: '' };
+        return available(command, args);
+      };
+      callback(collectDoctorReport(options(join(root, 'rustra.json')), runner));
+    },
+  );
+}
+
+test('Node/Bun-only doctor stays usable without C++ or CMake', () => {
+  withWorkflowDoctor({ node: {}, bun: {} }, { node: 'v20.0.0', bun: '1.4.1' }, (report) => {
+    assert.equal(doctorExitCode(report, false), 0, formatDoctorText(report));
+    for (const id of ['toolchain.cpp', 'toolchain.cmake']) {
+      const tool = report.checks.find((item) => item.id === id);
+      assert.equal(tool?.status, 'skip');
+      assert.equal(tool?.required, false);
+    }
+  });
+});
+
+test('configured C++ output keeps compiler failure without assuming a CMake build', () => {
+  withWorkflowDoctor(
+    { node: {}, cppOutput: './cpp' },
+    { node: 'v20.0.0', bun: '1.4.1' },
+    (report) => {
+      assert.equal(doctorExitCode(report, false), 1);
+      assert.equal(report.checks.find((item) => item.id === 'toolchain.cpp')?.status, 'fail');
+      assert.equal(report.checks.find((item) => item.id === 'toolchain.cmake')?.status, 'skip');
+    },
+  );
+});
+
+test('doctor rejects installed JavaScript runtimes below the advertised minimums', () => {
+  withWorkflowDoctor({}, { node: 'v16.20.2', bun: '1.3.9' }, (report) => {
+    assert.equal(report.checks.find((item) => item.id === 'js.runtime')?.status, 'fail');
+    assert.equal(doctorExitCode(report, false), 1);
+    assert.match(formatDoctorText(report), /Node.js 18\+.*Bun 1\.4\+/);
+  });
+});
+
+test('the Node adapter remains usable with a compatible Bun fallback', () => {
+  withWorkflowDoctor({ node: {}, bun: {} }, { node: 'v16.20.2', bun: '1.4.1' }, (report) => {
+    assert.equal(report.checks.find((item) => item.id === 'js.runtime')?.status, 'pass');
+    assert.equal(report.matrix?.rows.find((row) => row.target === 'node')?.runtime, 'OK');
+    assert.equal(report.matrix?.rows.find((row) => row.target === 'bun')?.runtime, 'OK');
+    assert.equal(doctorExitCode(report, false), 0);
+  });
+});
+
+test('a compatible Node cannot hide an incompatible configured Bun runtime', () => {
+  withWorkflowDoctor({ node: {}, bun: {} }, { node: 'v20.0.0', bun: '1.3.9' }, (report) => {
+    assert.equal(report.checks.find((item) => item.id === 'js.runtime')?.status, 'pass');
+    assert.equal(report.matrix?.rows.find((row) => row.target === 'node')?.runtime, 'OK');
+    assert.equal(report.matrix?.rows.find((row) => row.target === 'bun')?.runtime, 'FAIL');
+    assert.equal(doctorExitCode(report, false), 1);
+  });
+});
+
 test('multi-section config collects a matrix row for every host section', () => {
   withProject(
     {
@@ -1147,7 +1240,15 @@ function registryAsyncRunner(root: string, cargoOk = true): DoctorAsyncRunner {
           : '',
         stderr: cargoOk ? '' : 'cargo metadata unavailable',
       };
-    return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
+    const stdout =
+      command === 'rustc'
+        ? 'rustc 1.88.0'
+        : command === 'node'
+          ? 'v20.0.0'
+          : command === 'bun'
+            ? '1.4.1'
+            : '';
+    return { ok: true, stdout, stderr: '' };
   };
 }
 

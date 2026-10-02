@@ -1,31 +1,17 @@
 /**
- * `createBunBootstrap` 위의 이벤트 구독 조립 — 생성 엔트리(`bun.ts`)가 export 하는
- * `subscribeEvent` 의 실체.
+ * Synchronous event subscriptions for an already loaded Bun FFI library.
  *
- * ### 왜 별도 팩토리인가 (부트스트랩 통합이 아니라)
- *
- * `createBunBootstrap` 은 invoke 엔진을 위해 cdylib 을 dlopen 하고, 이벤트 브릿지
- * (`createBunEventBridge`)는 싱크 등록을 위해 **같은 dylib 을 다시 dlopen** 한다.
- * Bun 1.4 실증상 같은 dylib 의 2회 dlopen 은 로드 비용 없이 심볼 노출만 확장하므로
- * (bun-events.ts 모듈 JSDoc), 별도 dlopen 이 허용된다. 대신 라이브러리 **경로 계산은
- * 절대 이원화하지 않는다** — `bunLibraryCandidates` 를 그대로 재사용해 부트스트랩과
- * 동일한 우선순위(explicit `library` → `libraryCandidates` → `libraryName` 추론 →
- * `RUSTRA_BUN_LIBRARY` 오버라이드)로 해상한다. 엔트리가 같은 옵션을 두 팩토리에
- * 넘기면 두 해상이 항상 같은 파일을 가리킨다.
- *
- * ### 비동기 흡수 계약
- *
- * 브릿지 초기화(dlopen + 심볼 노출)는 비동기지만 구독 시그니처는 생성 `SubscribeFn`
- * 및 RN/Tauri `subscribeEvent` 와 동일한 **동기** `(name, callback) => unsubscribe`
- * 다. 첫 구독이 초기화를 kick 하고, 콜백은 큐에 적재됐다가 브릿지가 준비되면 등록
- * 순서대로 위임된다 — 초기화 창(window) 동안 구독 자체는 유실되지 않는다. 초기화에
- * 실패하면 실패가 고정되고 이후 subscribe 호출이 그 오류를 동기 throw 한다(fail-fast;
- * cdylib 재빌드 후 프로세스 재시작이 회복 경로 — bun-ffi reload 계약과 동일).
+ * The native sink is installed before the first subscribe call returns, so an
+ * immediate native invocation cannot race asynchronous bridge initialization.
+ * The bootstrap passes its selected library path here to preserve contract pairing.
+ * An injected polling fallback initializes asynchronously and queues subscriptions
+ * until ready. Disposal prevents either path from reviving the event bridge.
  */
 import { RustraCommandError, RustraErrorCode } from '@rustra/types';
 import { bunLibraryCandidates, type BunFfiEngineOptions } from './bun-ffi-library.js';
 import {
   createBunEventBridge,
+  createBunFfiEventBridge,
   type BunEventBridge,
   type BunEventBridgeOptions,
 } from './bun-events.js';
@@ -39,7 +25,7 @@ export type BunEventSubscriptionOptions = Pick<
 export type BunEventSubscription = {
   /**
    * rustra 이벤트를 구독한다 — `(name, callback) => unsubscribe`(동기).
-   * 브릿지 초기화 전 구독은 큐잉됐다가 준비 즉시 위임된다. dispose 후 호출은
+   * FFI 싱크는 호출 중 준비된다. 폴링 초기화 전 구독은 큐잉된다. dispose 후 호출은
    * fail-fast 로 throw 한다(초기화 부활 후보가 남지 않게).
    */
   subscribeEvent(name: string, callback: (payload: never) => void): () => void;
@@ -78,6 +64,7 @@ export function createBunEventSubscription(
   // narrowing 우회 — ensureBridge(클로저) 호출 뒤 TS 는 failure 의 재할당을
   // 추적하지 못해 null 로 좁혀버린다. 함수 경계를 거쳐 읽는다.
   const failureNow = (): { error: unknown } | null => failure;
+  const bridgeNow = (): BunEventBridge | null => bridge;
 
   const ensureBridge = (): void => {
     if (bridgeReady || failure) return;
@@ -86,8 +73,19 @@ export function createBunEventSubscription(
       failure = { error: noLibraryError() };
       return;
     }
+    if (candidates[0]) {
+      try {
+        bridge = createBunFfiEventBridge(candidates[0]);
+        return;
+      } catch (error) {
+        if (!options.poll || options.fallbackToPolling === false) {
+          failure = { error };
+          return;
+        }
+        console.warn('Rustra: FFI event sink registration failed; falling back to polling:', error);
+      }
+    }
     bridgeReady = createBunEventBridge({
-      library: candidates[0],
       poll: options.poll,
       fallbackToPolling: options.fallbackToPolling,
       pollIntervalMs: options.pollIntervalMs,
@@ -115,12 +113,15 @@ export function createBunEventSubscription(
     subscribeEvent(name, callback) {
       if (disposed) throw new Error('createBunEventSubscription: subscription was disposed');
       if (failure) throw failure.error;
-      if (bridge) return bridge.subscribeEvent(name, callback);
+      const initialized = bridgeNow();
+      if (initialized) return initialized.subscribeEvent(name, callback);
       ensureBridge();
       // 동기 해상(후보 탐색) 실패는 ensureBridge 안에서 failure 로 고정된다 —
       // 같은 호출에서 즉시 전파한다(첫 구독자가 조용히 큐에 남지 않게).
       const synchronousFailure = failureNow();
       if (synchronousFailure) throw synchronousFailure.error;
+      const prepared = bridgeNow();
+      if (prepared) return prepared.subscribeEvent(name, callback);
       const entry = { name, unsubscribe: null as (() => void) | null };
       const entries = pending.get(callback);
       if (entries) entries.push(entry);

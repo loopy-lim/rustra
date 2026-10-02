@@ -7,7 +7,7 @@
 // ────────────────────────────────────────────────────────────
 
 import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
-import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
+import { createGeneratedFields1, createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions as CoreInvokeOptions } from '@rustra/types';
 
 /**
@@ -49,10 +49,7 @@ benchEchoBytes.commandId = 'benchEchoBytes';
 
 export const benchEchoPair = createGeneratedFields2<BenchPairPayload, BenchPairPayload>(26, 'benchEchoPair', "name", "value", 'benchEchoPair');
 
-export function benchEchoString(input: BenchStringPayload, options?: InvokeOptions): Promise<BenchStringPayload> {
-  return invokeGeneratedFields1<BenchStringPayload>(24, 'benchEchoString', input, input["value"], options);
-}
-benchEchoString.commandId = 'benchEchoString';
+export const benchEchoString = createGeneratedFields1<BenchStringPayload, BenchStringPayload>(24, 'benchEchoString', "value", 'benchEchoString');
 
 export const channelDemo = createGeneratedFields2<ChannelDemoInput, ChannelDemoOutput>(18, 'channelDemo', "channel", "ticks", 'channelDemo');
 
@@ -87,20 +84,14 @@ export const emitDemo = createGeneratedFields2<EmitDemoInput, EmitDemoOutput>(11
  */
 export const gauge = createGeneratedFields2<GaugeInput, GaugeOutput>(17, 'gauge', "limit", "offset", 'gauge');
 
-export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
-  return invokeGeneratedFields1<GreetOutput>(5, 'greet', input, input["name"], options);
-}
-greet.commandId = 'greet';
+export const greet = createGeneratedFields1<GreetInput, GreetOutput>(5, 'greet', "name", 'greet');
 
 export function greetPerson(arg0: string, options?: InvokeOptions): Promise<string> {
   return invokeGenerated<string>(40, 'greetPerson', [arg0], options);
 }
 greetPerson.commandId = 'greetPerson';
 
-export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
-  return invokeGeneratedFields1<IsEvenOutput>(3, 'isEven', input, input["n"], options);
-}
-isEven.commandId = 'isEven';
+export const isEven = createGeneratedFields1<IsEvenInput, IsEvenOutput>(3, 'isEven', "n", 'isEven');
 
 export function kindEcho(input: KindEchoInput, options?: InvokeOptions): Promise<KindEchoOutput> {
   return invokeGenerated<KindEchoOutput>(33, 'kindEcho', input, options);
@@ -119,15 +110,9 @@ export function parityFind(input: ParityFindInput, options?: InvokeOptions): Pro
 }
 parityFind.commandId = 'parityFind';
 
-export function parityIndexed(input: ParityQuery, options?: InvokeOptions): Promise<ParitySearch> {
-  return invokeGeneratedFields1<ParitySearch>(38, 'parityIndexed', input, input["id"], options);
-}
-parityIndexed.commandId = 'parityIndexed';
+export const parityIndexed = createGeneratedFields1<ParityQuery, ParitySearch>(38, 'parityIndexed', "id", 'parityIndexed');
 
-export function parityResident(input: ParityQuery, options?: InvokeOptions): Promise<ParitySearch> {
-  return invokeGeneratedFields1<ParitySearch>(37, 'parityResident', input, input["id"], options);
-}
-parityResident.commandId = 'parityResident';
+export const parityResident = createGeneratedFields1<ParityQuery, ParitySearch>(37, 'parityResident', "id", 'parityResident');
 
 export function parityStore(input: ParityTree, options?: InvokeOptions): Promise<ParityStored> {
   return invokeGenerated<ParityStored>(36, 'parityStore', input, options);
@@ -159,10 +144,7 @@ export function reset(options?: InvokeOptions): Promise<void> {
 }
 reset.commandId = 'reset';
 
-export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
-  return invokeGeneratedFields1<ResourceCloseOutput>(22, 'resourceClose', input, input["handle"], options);
-}
-resourceClose.commandId = 'resourceClose';
+export const resourceClose = createGeneratedFields1<ResourceCloseInput, ResourceCloseOutput>(22, 'resourceClose', "handle", 'resourceClose');
 
 export function resourceOpen(input: ResourceOpenInput, options?: InvokeOptions): Promise<ResourceHandleOutput> {
   return invokeGenerated<ResourceHandleOutput>(19, 'resourceOpen', input, options);
@@ -180,10 +162,7 @@ resourceWrite.commandId = 'resourceWrite';
  * 런타임 registry 제어 명령. op:
  * `register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`.
  */
-export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOptions): Promise<RegistryDemoOutput> {
-  return invokeGeneratedFields1<RegistryDemoOutput>(12, 'rustraRegistryDemo', input, input["op"], options);
-}
-rustraRegistryDemo.commandId = 'rustraRegistryDemo';
+export const rustraRegistryDemo = createGeneratedFields1<RegistryDemoInput, RegistryDemoOutput>(12, 'rustraRegistryDemo', "op", 'rustraRegistryDemo');
 
 export function safeDivide(arg0: number, arg1: number, options?: InvokeOptions): Promise<number> {
   return invokeGenerated<number>(41, 'safeDivide', [arg0, arg1], options);
@@ -226,10 +205,7 @@ export function tagSet(input: TagSetInput, options?: InvokeOptions): Promise<Tag
 }
 tagSet.commandId = 'tagSet';
 
-export function toUpper(input: ToUpperInput, options?: InvokeOptions): Promise<ToUpperOutput> {
-  return invokeGeneratedFields1<ToUpperOutput>(7, 'toUpper', input, input["s"], options);
-}
-toUpper.commandId = 'toUpper';
+export const toUpper = createGeneratedFields1<ToUpperInput, ToUpperOutput>(7, 'toUpper', "s", 'toUpper');
 
 /**
  * A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨 uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실 왕복하는지 cross-wire 픽스처로 고정한다.

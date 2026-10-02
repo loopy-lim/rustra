@@ -36,12 +36,25 @@ pub trait JsonDispatch: Send + Sync {
         command: &str,
         args: serde_json::Value,
     ) -> Result<serde_json::Value, serde_json::Value>;
+
+    /// Live producer contract for host startup verification. Existing custom
+    /// dispatchers can opt into verification by overriding this method.
+    fn contract_hash(&self) -> Result<String, Value> {
+        Err(json!({
+            "code": "contract.unenforceable",
+            "message": "this JSON dispatcher does not expose its contract hash"
+        }))
+    }
 }
 
 /// 정적 패키지의 [`JsonDispatch`] 구현 — `tauri_support::rustra_dispatch` 가
 /// 오늘 하던 에러 매핑(`serde_json::to_value`)을 그대로 옮긴 것이다. 직렬화가
 /// 실패할 수 없는 에러 타입이지만 폴백 형태까지 동일하게 유지한다.
 impl JsonDispatch for Package {
+    fn contract_hash(&self) -> Result<String, Value> {
+        Ok(self.generated_contract_hash())
+    }
+
     fn invoke_json(&self, command: &str, args: Value) -> Result<Value, Value> {
         Package::invoke_json(self, command, args).map_err(|e| {
             serde_json::to_value(&e)

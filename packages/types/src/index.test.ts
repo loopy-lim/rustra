@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   configure,
   configureLazy,
+  createGeneratedFields1,
   createGeneratedFields2,
   createJsonEngine,
   createFrameEngine,
@@ -868,6 +869,169 @@ test('generated two-field command keeps options on the established path', async 
 
   assert.deepEqual(await addNumbers({ a: 20, b: 22 }, { timeoutMs: 100 }), { value: 42 });
   assert.deepEqual(calls, ['byId']);
+});
+
+test('generated one-field command caches the native route and preserves metadata', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: (id) => {
+      calls.push(`cap:${id}`);
+      return 1 | 2 | 4;
+    },
+    invokeTypedById: () => ({ value: -1 }),
+    invokeTypedRaw: (id, ...fields) => {
+      calls.push(`raw:${id}`);
+      return { even: Number(fields[0]) % 2 === 0 };
+    },
+  });
+  const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
+    1,
+    'parityIndexed',
+    'id',
+    'parityIndexed',
+  );
+  configure(createFrameEngine(native, staticRegistry('parityIndexed')));
+
+  assert.deepEqual(await parityIndexed({ id: 4 }), { even: true });
+  assert.deepEqual(await parityIndexed({ id: 5 }), { even: false });
+  assert.equal(parityIndexed.commandId, 'parityIndexed');
+  assert.equal(parityIndexed.name, 'parityIndexed');
+  // 세대 캐시 계약(A2): 능력 조회는 세대당 1회, 이후 호출은 캡처 라우트 직행.
+  assert.deepEqual(calls, ['cap:1', 'raw:1', 'raw:1']);
+});
+
+test('generated one-field command invalidates its route after configure', async () => {
+  const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
+    1,
+    'parityIndexed',
+    'id',
+  );
+  const engineForOffset = (offset: number) =>
+    createFrameEngine(
+      makeTypedNative({
+        getCodecCapabilities: () => 1 | 2 | 4,
+        invokeTypedById: () => ({ even: false }),
+        invokeTypedRaw: (_id, ...fields) => ({
+          even: (Number(fields[0]) % 2 === 0) === offset > 0,
+        }),
+      }),
+      staticRegistry('parityIndexed'),
+    );
+
+  configure(engineForOffset(-1));
+  assert.deepEqual(await parityIndexed({ id: 4 }), { even: false });
+  configure(engineForOffset(1));
+  assert.deepEqual(await parityIndexed({ id: 4 }), { even: true });
+});
+
+test('generated one-field command keeps options on the established path', async () => {
+  const calls: string[] = [];
+  const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
+    1,
+    'parityIndexed',
+    'id',
+  );
+  configure(
+    createFrameEngine(
+      makeTypedNative({
+        getCodecCapabilities: () => 1 | 2 | 4,
+        invokeTypedById: () => {
+          calls.push('byId');
+          return { even: true };
+        },
+        invokeTypedRaw: () => {
+          calls.push('raw');
+          return { even: true };
+        },
+      }),
+      staticRegistry('parityIndexed'),
+    ),
+  );
+
+  assert.deepEqual(await parityIndexed({ id: 4 }, { timeoutMs: 100 }), { even: true });
+  assert.deepEqual(calls, ['byId']);
+});
+
+test('generated one-field command falls back to the name route without field symbols', async () => {
+  const seen: Array<{ command: string; input: unknown }> = [];
+  configure({
+    invoke: async <T>(command: string, args?: unknown): Promise<T> => {
+      seen.push({ command, input: args });
+      return { even: (args as { id: number }).id % 2 === 0 } as T;
+    },
+  });
+  const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
+    38,
+    'parityIndexed',
+    'id',
+  );
+
+  // resolveGeneratedFieldsSync 이 없는 엔진: 라우트는 null 로 캐시되고 호출마다
+  // 기존 invokeGenerated 이름 경로로 폴백한다(라우트 재해결 없이).
+  assert.deepEqual(await parityIndexed({ id: 4 }), { even: true });
+  assert.deepEqual(await parityIndexed({ id: 5 }), { even: false });
+  assert.deepEqual(seen, [
+    { command: 'parityIndexed', input: { id: 4 } },
+    { command: 'parityIndexed', input: { id: 5 } },
+  ]);
+});
+
+test('lazy configuration lets the first one-field generated command initialize Rustra once', async () => {
+  let initializations = 0;
+  let calls = 0;
+  configureLazy(async () => {
+    initializations++;
+    await Promise.resolve();
+    return {
+      async invoke<T>(_command: string, args?: unknown): Promise<T> {
+        calls++;
+        const input = args as { id: number };
+        return { even: input.id % 2 === 0 } as T;
+      },
+    };
+  });
+  const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
+    38,
+    'parityIndexed',
+    'id',
+  );
+
+  const [left, right] = await Promise.all([parityIndexed({ id: 4 }), parityIndexed({ id: 5 })]);
+
+  assert.deepEqual(left, { even: true });
+  assert.deepEqual(right, { even: false });
+  assert.equal(initializations, 1, 'concurrent first calls must share native installation');
+  assert.equal(calls, 2);
+});
+
+test('unconfigured one-field generated command rejects with transport.unavailable', async () => {
+  // sentinel이 호출되면 이전 테스트 오염을 즉시 드러낸다.
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
+      38,
+      'parityIndexed',
+      'id',
+    );
+    await assert.rejects(parityIndexed({ id: 4 }), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal((err as RustraCommandError).retryable, false);
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
+  }
 });
 
 test('generated bytes dispatch selects the dedicated native path for ArrayBuffer views', async () => {

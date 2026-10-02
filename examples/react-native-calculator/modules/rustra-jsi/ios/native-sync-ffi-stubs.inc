@@ -22,6 +22,7 @@ bool rustra_ffi_invoke_cancel(uint64_t) { unexpectedStaticCore(); }
 void rustra_ffi_invoke_frame_async_into(const uint8_t*, size_t, uint8_t*, size_t,
   void*, rustra_async_into_callback_t, uint64_t*) { unexpectedStaticCore(); }
 size_t rustra_ffi_invoke_frame_into(const uint8_t*, size_t, uint8_t*, size_t, size_t*) { unexpectedStaticCore(); }
+uint8_t* rustra_ffi_invoke_frame_owned(const uint8_t*, size_t, uint8_t*, size_t, size_t*) { unexpectedStaticCore(); }
 uint32_t rustra_ffi_invoke_raw(uint16_t, const uint64_t*, size_t, uint64_t*, uint8_t*, size_t, size_t*) { unexpectedStaticCore(); }
 uint8_t rustra_ffi_has_raw(uint16_t) { unexpectedStaticCore(); }
 uint8_t* rustra_ffi_get_schema(size_t*) { unexpectedStaticCore(); }

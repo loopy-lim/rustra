@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { benchmarkArtifact, collectBenchmarkSource } from './host-benchmark-provenance.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const skipBuild = process.argv.includes('--skip-build');
@@ -54,10 +55,6 @@ const nodeVersion = (await run(['node', '--version'])).trim();
 // F01 — receipt 식별자: 이 receipt 가 어떤 소스 트리·네이티브 아티팩트에서
 // 나왔는지 후행 재검증 없이 판독 가능하게 한다. 소급 주입은 하지 않는다(이
 // 필드가 없는 기존 receipt 는 그대로 둔다) — 이후 receipt 부터 기록된다.
-function resolveSourceSha() {
-  const proc = Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: root });
-  return proc.stdout.toString().trim() || 'unknown';
-}
 function resolveNativeArtifact() {
   const dylib = resolve(
     root,
@@ -66,14 +63,28 @@ function resolveNativeArtifact() {
       process.platform
     ] ?? 'rustra_calculator_example.dll',
   );
-  const file = Bun.file(dylib);
-  return file.exists() ? dylib.slice(root.length + 1) : null;
+  return benchmarkArtifact(root, dylib.slice(root.length + 1));
 }
+const nativeArtifacts = [
+  resolveNativeArtifact(),
+  benchmarkArtifact(root, 'target/release/rustra-calculator-example'),
+  benchmarkArtifact(root, 'target/release/loop-stdio'),
+  benchmarkArtifact(
+    root,
+    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
+  ),
+  benchmarkArtifact(
+    root,
+    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}-gnu.node`,
+  ),
+].filter(Boolean);
+const libraryArtifact = resolveNativeArtifact();
 const receipt = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
-  sourceSha: resolveSourceSha(),
-  nativeArtifact: resolveNativeArtifact(),
+  ...collectBenchmarkSource(root),
+  nativeArtifact: libraryArtifact?.path ?? null,
+  nativeArtifacts,
   environment: {
     platform: process.platform,
     arch: process.arch,

@@ -30,6 +30,13 @@ case "$PLATFORM" in
     ;;
   *) echo "Unsupported RUSTRA_NATIVE_TEST_PLATFORM: $PLATFORM" >&2; exit 2 ;;
 esac
+if [[ "${RUSTRA_NATIVE_SYNC_PERF:-0}" == 1 ]]; then
+  if [[ "$PLATFORM" != mac-catalyst ]]; then
+    echo "RUSTRA_NATIVE_SYNC_PERF supports only the mac-catalyst host process." >&2
+    exit 2
+  fi
+  EXTRA_FLAGS+=(-DRUSTRA_NATIVE_SYNC_PERF=1)
+fi
 HSLICE="$HERMES/Library/Frameworks/universal/hermes.xcframework/$SLICE"
 DSLICE="$DEPS/$SLICE"
 if [[ ! -f "$DEPS/Headers/folly/dynamic.h" || ! -f "$DSLICE/ReactNativeDependencies.framework/ReactNativeDependencies" ]]; then
@@ -53,6 +60,7 @@ xcrun clang++ -std=c++20 -O1 -g -fexceptions -frtti \
   -Wl,-rpath,"$HSLICE" -Wl,-rpath,"$DSLICE" -o "$BUILD_DIR/native-sync-test"
 shasum -a 256 "$BUILD_DIR/native-sync-test" \
   "$WORKTREE/packages/react-native/native/cpp/RustraJSIBridge.cpp" \
+  "$WORKTREE/packages/react-native/native/cpp/RustraJSIBridge.hpp" \
   "$WORKTREE/packages/react-native/native/cpp/RustraSyncBinding.inc" \
   "$MODULE_DIR/generated/rustra-generated-codecs.cpp" \
   "$MODULE_DIR/generated/rustra-generated-codecs.hpp" \

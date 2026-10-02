@@ -34,11 +34,13 @@ const result = await addNumbers({ a: 20, b: 22 });
 ```ts
 type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
 
-type TauriEngineClient = {
-  invoke<T>(command: string, args?: unknown): Promise<T>;
+type TauriEngineOptions = {
+  invoke?: TauriInvoke;
+  contractHash?: string;
+  contractVerification?: 'strict' | 'warn' | 'off';
 };
 
-function createTauriEngine(options: { invoke: TauriInvoke }): TauriEngineClient;
+function createTauriEngine(options?: TauriEngineOptions): EngineClientWithBatch;
 ```
 
 ### Hot-core swap events (experimental)
@@ -54,6 +56,7 @@ type HotSwapEvent = { oldContractHash: string; newContractHash: string } | { err
 function subscribeHotSwap(
   callback: (event: HotSwapEvent) => void,
   listen?: TauriListen,
+  options?: TauriEventOptions,
 ): Promise<() => void>;
 ```
 
@@ -93,6 +96,12 @@ let builder = register(my_package, tauri::Builder::default());
 
 This adapter works through the `rustra_dispatch` endpoint that `register()` installs.
 
+Apps with existing native Tauri commands can wrap a production registration with
+`tauri_support::with_app_commands(builder, tauri::generate_handler![greet])`.
+This combines both handlers and keeps Rustra's reserved endpoints, state, events,
+and channels. Tauri's own `.invoke_handler()` replaces the previous handler.
+See the [existing-app setup example](../../docs/extending/tauri-setup.md).
+
 A real WebView IPC example and the Release performance receipts are in
 [`tauri-calculator`](../../examples/tauri-calculator/). Measured on 2026-08-24 macOS
 arm64: 279.04µs average, p50 300µs — not a direct-Rust-call smoke test, but 3,000 calls
@@ -120,4 +129,27 @@ Trusted Rust `create_channel_for`/`create_bytes_channel_for` helpers deliberatel
 retain app-wide delivery. Mock IPC and JS tests cover the ownership protocol;
 physical WebView teardown still needs native GUI acceptance on each target.
 
-The Rust `tauri` feature currently pins Tauri 2.11.1: the private chunk path is verified against that version's direct IPC delivery threshold. Review the native/JS channel boundary and rerun its tests before updating this dependency. An app requiring a different exact Tauri version must resolve that compatibility requirement first.
+The Rust `tauri` feature currently pins Tauri 2.11.5: the private chunk path is verified against that version's direct IPC delivery threshold. Review the native/JS channel boundary and rerun its tests before updating this dependency. An app requiring a different exact Tauri version must resolve that compatibility requirement first.
+
+Tauri event payloads are already decoded. Strings such as `'{"a":1}'` and
+`'"quoted"'` stay strings without another JSON parse. Only a custom legacy
+`listen` transport that supplies serialized JSON text needs the explicit fourth
+argument: `subscribeEvent(name, callback, listen, { payloadEncoding: 'serialized-json' })`.
+The same option is supported by `subscribeTauriEvent` and `subscribeHotSwap`.
+
+The Rust registration helpers execute single, batch, and profiled command work
+on Tauri's blocking pool. Slow synchronous handlers and rustra's blocking async
+executor therefore leave the WebView IPC thread available. Wire command names,
+result envelopes, batch order, and the public synchronous Rust helpers stay
+compatible. This change improves responsiveness; fresh WebView measurements are
+required before comparing latency with the historical receipts above.
+
+Generated Tauri entries verify `GENERATED_CONTRACT_HASH` through the native
+`rustra_contract_hash` endpoint with a strict default. `bootstrap.ready()` waits
+for verification; mismatched clients fail with `contract.mismatch` before a
+command executes. Old registrations or custom `JsonDispatch` implementations
+without `contract_hash()` fail with `contract.unenforceable`. Rebuild Rust and
+regenerate TypeScript together. Explicit `contractVerification: 'warn'` or
+`'off'` supports intentional compatibility/degraded operation. Manual engines
+without `contractHash` retain their unverified path. Hot-core registrations read
+the selected dylib's producer hash, using the existing swap contract gate.

@@ -5,8 +5,9 @@ import {
   parseRustraErrorString,
   RustraErrorCode,
 } from '@rustra/types';
-import type { NodeInvokeTransport } from './node-core.js';
-import type { NodeChannelBytesFrame, NodeLoopBinaryCodecs } from './node-binary-framing.js';
+import type { HandshakeFrame, LoopResponseFrame, NodeLoopTransport } from './node-loop-contract.js';
+export type { NodeLoopTransport } from './node-loop-contract.js';
+import type { NodeLoopBinaryCodecs } from './node-binary-framing.js';
 import { createBinaryLoopSession } from './node-binary-session.js';
 import {
   STDERR_TAIL_CHARS,
@@ -34,95 +35,6 @@ export {
   type UnparsedLineState,
 } from './node-ndjson-diagnostics.js';
 
-type LoopResponseFrame = {
-  id: number;
-  ok: boolean;
-  result?: unknown;
-  error?: string;
-  events?: Array<{ name: string; payload: unknown }>;
-};
-
-type HandshakeFrame = LoopResponseFrame & {
-  binary?: boolean;
-  events?: string;
-  channelBytes?: boolean;
-};
-export type NodeLoopTransport = NodeInvokeTransport & {
-  drainEvents(): Promise<Array<{ name: string; payload: unknown }>>;
-  dispose(): void;
-  readonly pid: number | null;
-  /** 'ndjson' = 레거시 라인 프로토콜, 'binary' = length-prefixed Frame (트랙 D). */
-  readonly mode: 'ndjson' | 'binary';
-  /**
-   * 런타임이 `events:"push"` 핸드셰이크 capability 를 수용했는지 — ready() 정착
-   * 후 읽는다. true 면 0xfffd 푸시 프레임이 stdout 으로 흐르고 onPushEvent
-   * 구독이 실제 이벤트를 받는다. false 면(구 런타임, 미수용, codecs 미제공으로
-   * 핸드셰이크 미실행) 푸시가 절대 오지 않으므로 구독자는 폴링을 써야 한다.
-   * node-events 의 2-모드 dispatch가 이 플래그를 능력 판별 근거로 읽는다 —
-   * 존재만으로는 판별할 수 없다(메서드는 능력과 무관하게 항상 노출됨).
-   */
-  readonly pushCapable: boolean;
-  /** 프로토콜 협상(바이너리 모드 핸드셰이크) 정착을 기다린다. */
-  ready(): Promise<void>;
-  /**
-   * 진행 중 invocation 이 모두 정착할 때까지 기다린다(최대 5초 — 초과 시 로그 후
-   * 그래도 해소). reload 직전 drain 계약(A1)의 transport 측 구현.
-   *
-   * 옵셔널 멤버: 필수로 정의하면 이 인터페이스를 구조적으로 구현하던 외부
-   * 구현체가 drain 부재로 깨진다(breaking). 호출측은 `transport.drain?.(...)` 로
-   * 우아하게 폴백한다.
-   */
-  drain?(timeoutMs?: number): Promise<void>;
-  /**
-   * 0xfffd 푸시 프레임을 구독한다 — `(event) => unsubscribe`. 런타임
-   * (loop-stdio)이 `events:"push"` 핸드셰이크로 싱크를 설치한 경우에만 프레임이
-   * 흐른다. 메서드 존재는 능력이 아니라 0xfffd 프레임 수신 "경로"의 노출일 뿐 —
-   * 실제 능력은 `pushCapable` 로 판별한다(node-events 2-모드 dispatch 계약).
-   *
-   * 옵셔널 멤버(drain? 과 동일 사유): 이 인터페이스를 구조적으로 구현하던
-   * 외부 구현체의 브레이킹을 피한다. 호출측은 `transport.onPushEvent?.(...)`
-   * 로 우아하게 폴백한다.
-   *
-   * payload 는 문자열 JSON — 파싱 책임은 구독자에 있다(폴링 drain 과 동일
-   * 셰이프 경계).
-   */
-  onPushEvent?(
-    handler: (event: { name: string; payload: string; seq: number }) => void,
-  ): () => void;
-  /**
-   * 0xfffc 채널 프레임을 구독한다 — `(frame) => unsubscribe`. `createChannel`
-   * 이 발급 핸들과 콜백을 잇는 데 쓴다(0.7 채널 트랙). 메서드 존재는 채널
-   * "경로"의 노출이고 실제 능력은 바이너리 모드 협상에 있다 — NDJSON 모드의
-   * transport 도 메서드는 갖지만 채널 프레임은 절대 오지 않는다.
-   *
-   * 필수 멤버 — 이 인터페이스의 실현체(createNodeLoopTransport)가 항상
-   * 노출하며, 채널 프레임 demux 분기는 응답/푸시와 같은 리더 안에 있다.
-   * payload 는 문자열 JSON — 파싱 책임은 채널 콜백 소유자에게 있다.
-   */
-  onChannelFrame(handler: (frame: { handle: number; payload: string }) => void): () => void;
-  /**
-   * 0xfff9 **바이너리** 채널 프레임을 구독한다 — `createNodeBytesChannel` 이
-   * 발급 핸들과 콜백을 잇는 데 쓴다. JSON 채널(0xfffc)과 같은 리더 안의 demux
-   * 분기를 공유하지만 payload 는 원시 바이트(Uint8Array)다.
-   *
-   * 옵셔널 멤버(drain?/onPushEvent? 와 동일 사유): 이 인터페이스를 구조적으로
-   * 구현하던 외부 구현체의 브레이킹을 피한다. 호출측은
-   * `transport.onChannelBytesFrame?.(...)` 로 우아하게 폴백한다.
-   */
-  onChannelBytesFrame?(handler: (frame: NodeChannelBytesFrame) => void): () => void;
-  /**
-   * 런타임이 `__hello` 에 `channelBytes: true` capability 를 에코했는지 —
-   * ready() 정착 후 읽는다. 바이너리 채널(0xfffb 모드 `0x01` 발급 → 0xfff9
-   * 프레임)은 런타임 bin 의 지원이 필요하다. false 면(구 런타임 — 모드 바이트를
-   * 무시하고 JSON 채널을 파는 위상) `createNodeBytesChannel` 이
-   * `channel.unavailable` 로 loud-fail 한다 — 조용한 경로 불일치 방지.
-   *
-   * 옵셔널 멤버(onChannelBytesFrame? 과 동일 사유). 구 런타임/구 실현체는
-   * 이 필드가 undefined 이고, 호출측은 `!== true` 를 능력 부재로 읽는다.
-   */
-  readonly channelBytesCapable?: boolean;
-};
-
 /** Persistent transport for Rust loop-stdio runtimes. */
 export function createNodeLoopTransport(options: {
   command: string;
@@ -133,12 +45,18 @@ export function createNodeLoopTransport(options: {
 }): NodeLoopTransport {
   const binaryCodecs = options.codecs;
   let child: ChildProcessWithoutNullStreams | null = null;
+  let disposed = false;
   const pending = new Map<
     number,
-    { resolve: (frame: LoopResponseFrame) => void; reject: (error: RustraCommandError) => void }
+    {
+      resolve: (frame: LoopResponseFrame) => void;
+      reject: (error: RustraCommandError) => void;
+      handshake: boolean;
+    }
   >();
   let nextId = 1;
-  let stdoutBuffer = '';
+  let stdoutBuffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+  let handshakeSettled: Promise<void> | undefined;
   // ── NDJSON 실패 라인·stderr 진단 상태 (transport 인스턴스 라이프사이클) ──
   const unparsed: UnparsedLineState = { buffer: [], warned: false };
   /** debug 모드에서만 수집 — 비 debug 는 기존대로 폐기(성능 무영향). */
@@ -161,7 +79,16 @@ export function createNodeLoopTransport(options: {
   });
 
   const ensureProcess = (): ChildProcessWithoutNullStreams => {
-    if (child && child.exitCode === null) return child;
+    if (disposed)
+      throw new RustraCommandError('transport.unavailable', 'Node loop transport was disposed');
+    if (child) {
+      if (child.exitCode === null && child.signalCode === null) return child;
+      throw new RustraCommandError(
+        'transport.error',
+        'runtime process is closing; retry after its output streams close',
+        true,
+      );
+    }
     // 프로세스 라이프마다 진단 상태를 새로 시작한다 — 죽어가는 프로세스의 늦은
     // stdout/stderr 데이터가 exit 핸들러의 소비·clear 이후 도착해 재스폰된
     // 프로세스의 exit 에 오속(stale) 첨부되는 것을, 반대 방향(dispose→재스폰이
@@ -170,58 +97,123 @@ export function createNodeLoopTransport(options: {
     // stdio 닫힘보다 먼저 온다(Node 문서)는 지연 데이터 창까지 막는 이중 잠금이다.
     unparsed.buffer.length = 0;
     stderrTail = undefined;
+    stdoutBuffer = Buffer.alloc(0);
+    mode = 'ndjson';
+    pushCapable = false;
+    channelBytesCapable = false;
+    handshakeSettled = undefined;
+    session.resetReader();
     const proc = spawn(options.command, options.args ?? [], options.spawnOptions ?? {});
     child = proc as ChildProcessWithoutNullStreams;
-    if (!proc.stdout || !proc.stderr) {
+    if (!proc.stdout || !proc.stderr || !proc.stdin) {
       child = null;
+      proc.on('error', () => {});
+      proc.kill();
       throw new RustraCommandError('transport.error', 'stdio unavailable', true);
     }
     proc.stdout.on('data', (chunk: Buffer) => {
+      if (child !== proc) return;
       if (mode === 'binary') {
         session.onChunk(chunk);
         return;
       }
-      stdoutBuffer += chunk.toString('utf8');
+      stdoutBuffer = stdoutBuffer.length ? Buffer.concat([stdoutBuffer, chunk]) : chunk;
       let newline: number;
-      while ((newline = stdoutBuffer.indexOf('\n')) >= 0) {
-        const line = stdoutBuffer.slice(0, newline).trim();
-        stdoutBuffer = stdoutBuffer.slice(newline + 1);
+      while ((newline = stdoutBuffer.indexOf(10)) >= 0) {
+        const line = stdoutBuffer.subarray(0, newline).toString('utf8').trim();
+        stdoutBuffer = stdoutBuffer.subarray(newline + 1);
         if (!line) continue;
-        let frame: LoopResponseFrame;
+        let parsed: unknown;
         try {
-          frame = JSON.parse(line) as LoopResponseFrame;
+          parsed = JSON.parse(line) as unknown;
         } catch {
           // 비 NDJSON 라인 — 정상 응답 흐름은 그대로 유지하고 진단만 남긴다
           // (debug: 싱크 이벤트+1회 warn / 비 debug: 링 버퍼 보존).
           recordUnparsedLine(line, unparsed);
           continue;
         }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          fail(
+            new RustraCommandError(
+              'invoke.malformed',
+              'Runtime returned a non-object JSON response',
+            ),
+          );
+          proc.kill();
+          return;
+        }
+        const frame = parsed as LoopResponseFrame;
+        if (typeof frame.id !== 'number') {
+          recordUnparsedLine(line, unparsed);
+          continue;
+        }
         const waiter = pending.get(frame.id);
         if (!waiter) continue;
         pending.delete(frame.id);
+        if (typeof frame.ok !== 'boolean') {
+          waiter.reject(
+            new RustraCommandError(
+              'invoke.malformed',
+              'Runtime response is missing a boolean ok field',
+            ),
+          );
+          continue;
+        }
+        if (waiter.handshake && frame.ok) {
+          const hello = frame as HandshakeFrame;
+          mode = hello.binary === true ? 'binary' : 'ndjson';
+          pushCapable = mode === 'binary' && hello.events === 'push';
+          channelBytesCapable = mode === 'binary' && hello.channelBytes === true;
+        }
         if (frame.ok) waiter.resolve(frame);
-        else waiter.reject(parseRustraErrorString(frame.error ?? 'invoke failed'));
+        else if (frame.error == null || typeof frame.error === 'string')
+          waiter.reject(parseRustraErrorString(frame.error ?? 'invoke failed'));
+        else
+          waiter.reject(
+            new RustraCommandError('invoke.malformed', 'Runtime error field must be a string'),
+          );
+        if (mode === 'binary') {
+          if (stdoutBuffer.length) session.onChunk(stdoutBuffer);
+          stdoutBuffer = Buffer.alloc(0);
+          break;
+        }
       }
     });
     proc.stderr.on('data', (chunk: Buffer) => {
+      if (child !== proc) return;
       // debug 모드에서만 수집한다 — 비 debug 는 드레인만(기존 계약, 성능 무영향).
       // 상한(STDERR_TAIL_CHARS) 이후는 앞쪽부터 탈락시켜 최근 꼬리만 유지한다.
       if (!isRustraDebugEnabled()) return;
       stderrTail = ((stderrTail ?? '') + chunk.toString('utf8')).slice(-STDERR_TAIL_CHARS);
     });
-    proc.on('exit', () => {
+    const fail = (error: RustraCommandError) => {
+      if (child !== proc) return;
+      child = null;
+      handshakeSettled = undefined;
+      mode = 'ndjson';
+      pushCapable = false;
+      channelBytesCapable = false;
+      for (const waiter of pending.values()) waiter.reject(error);
+      pending.clear();
+      session.rejectAll(error);
+      stdoutBuffer = Buffer.alloc(0);
+      unparsed.buffer.length = 0;
+      stderrTail = undefined;
+    };
+    proc.on('error', (error) => {
+      fail(new RustraCommandError('transport.error', `spawn failed: ${String(error)}`, true));
+    });
+    proc.stdin.on('error', (error) => {
+      fail(new RustraCommandError('transport.error', `write failed: ${String(error)}`, true));
+      proc.kill();
+    });
+    proc.on('close', () => {
       const error = new RustraCommandError(
         'transport.error',
         attachExitContext('runtime process exited before responding', unparsed.buffer, stderrTail),
         true,
       );
-      for (const waiter of pending.values()) waiter.reject(error);
-      pending.clear();
-      session.rejectAll(error);
-      // 보존분은 이번 exit 의 에러 메시지로 소비됐다 — 다음 라이프(재스폰)의
-      // exit 에 전 라이프 맥락을 오속 첨부하지 않도록 지운다.
-      unparsed.buffer.length = 0;
-      stderrTail = undefined;
+      fail(error);
     });
     return child;
   };
@@ -236,7 +228,7 @@ export function createNodeLoopTransport(options: {
         return;
       }
       const id = nextId++;
-      pending.set(id, { resolve, reject });
+      pending.set(id, { resolve, reject, handshake: payload.command === '__hello' });
       proc.stdin.write(`${JSON.stringify({ id, ...payload })}\n`, (error) => {
         if (error) {
           pending.delete(id);
@@ -266,19 +258,35 @@ export function createNodeLoopTransport(options: {
   // 전제이므로 생성 비용은 warm-up 에 흡수된다). handshake 실패 시 transport
   // 생성은 성공으로 두고 첫 invoke 에서 오류를 전파한다(스폰 실패 = 기존
   // transport.error 계약).
-  const handshakeSettled: Promise<void> = binaryCodecs
-    ? handshake().catch(() => {})
-    : Promise.resolve();
+  const prepare = (): Promise<void> => {
+    if (disposed)
+      return Promise.reject(
+        new RustraCommandError('transport.unavailable', 'Node loop transport was disposed'),
+      );
+    if (!binaryCodecs) return Promise.resolve();
+    try {
+      ensureProcess();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    if (!handshakeSettled) {
+      handshakeSettled = handshake();
+      // Negotiation begins eagerly; ready/invoke still receive its rejection.
+      void handshakeSettled.catch(() => {});
+    }
+    return handshakeSettled;
+  };
+  if (binaryCodecs) void prepare().catch(() => {});
 
   const isChannelCommand = (name: string): boolean =>
     name === '__createChannel' || name === '__createChannelBytes' || name === '__dropChannel';
 
   return {
     invoke(command, args) {
-      if (mode === 'binary') return session.invoke(command, args);
+      if (disposed) return prepare();
       // 채널은 바이너리 모드 전용 — 콜백 함수 값은 NDJSON 라인으로 전송 불가.
       // 조용한 command.not_found 대신 명확한 계약 에러로 loud-fail 한다.
-      if (isChannelCommand(command)) {
+      if (!binaryCodecs && isChannelCommand(command)) {
         return Promise.reject(
           new RustraCommandError(
             RustraErrorCode.ChannelUnavailable,
@@ -288,7 +296,7 @@ export function createNodeLoopTransport(options: {
       }
       if (binaryCodecs) {
         // 핸드셰이크가 아직 정착하지 않은 첫 호출 — 정착을 기다린 뒤 재분기.
-        return handshakeSettled.then(() => {
+        return prepare().then(() => {
           if (mode === 'binary') return session.invoke(command, args);
           if (isChannelCommand(command)) {
             // 정착 후에도 NDJSON 구 런타임 — 위와 동일 loud-fail(능력 부재).
@@ -307,6 +315,7 @@ export function createNodeLoopTransport(options: {
       return write({ command, args: args === undefined ? {} : args }).then((frame) => frame.result);
     },
     async drainEvents() {
+      await prepare();
       if (mode === 'binary') {
         return (await session.invoke('__drainEvents', {})) as Array<{
           name: string;
@@ -316,6 +325,15 @@ export function createNodeLoopTransport(options: {
       return (await write({ command: '__drainEvents', args: {} })).events ?? [];
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      const error = new RustraCommandError(
+        'transport.unavailable',
+        'Node loop transport was disposed',
+      );
+      for (const waiter of pending.values()) waiter.reject(error);
+      pending.clear();
+      session.rejectAll(error);
       if (child && child.exitCode === null) {
         child.stdin.end();
         child.kill();
@@ -335,7 +353,7 @@ export function createNodeLoopTransport(options: {
       return channelBytesCapable;
     },
     ready() {
-      return handshakeSettled;
+      return prepare();
     },
     onPushEvent(handler) {
       return session.onPushEvent(handler);

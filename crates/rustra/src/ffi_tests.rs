@@ -534,3 +534,206 @@ fn run_worker_running_invocation_dispatches_normally() {
     );
     assert_eq!(crate::cancel::status(id), crate::cancel::Status::Unknown);
 }
+
+// ── rustra_ffi_invoke_frame_owned — E1 owned 응답 핸드오프 ──────────────
+//
+// probe-cache 2-FFI 왕복 제거 후보의 Rust 계약: overflow 시 응답 Vec 소유권을
+// caller 에 넘기고(비동기 owned=1 프레임의 동기판), free 짝은
+// rustra_ffi_free_owned_bytes 의 정확한 (ptr, len) 1회. 와이어·핸들러 1회
+// 실행 계약은 probe 경로와 동일해야 한다.
+
+#[derive(serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+struct FrameOwnedIn {
+    payload: String,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+struct FrameOwnedOut {
+    payload: String,
+}
+
+fn frame_owned_request(payload: &str) -> Vec<u8> {
+    let mut request = vec![0u8; 2];
+    request[0..2].copy_from_slice(&1u16.to_le_bytes());
+    request.extend_from_slice(
+        &postcard::to_allocvec(&FrameOwnedIn {
+            payload: payload.to_string(),
+        })
+        .unwrap(),
+    );
+    request
+}
+
+#[test]
+fn frame_owned_dispatch_runs_handler_once_and_matches_wire() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let calls = std::sync::Arc::new(AtomicUsize::new(0));
+    let counted = calls.clone();
+    let pkg = Package::builder("test.frame-owned")
+        .command("big", move |input: FrameOwnedIn| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok::<_, crate::RustraError>(FrameOwnedOut {
+                payload: input.payload,
+            })
+        })
+        .build();
+    let request = frame_owned_request(&"x".repeat(2048));
+    let expected = pkg.invoke_frame(&request).unwrap();
+    assert!(
+        expected.len() > 512,
+        "fixture must overflow the JSI stack buffer, got {}",
+        expected.len()
+    );
+    let base = calls.load(Ordering::SeqCst);
+
+    // overflow — 같은 dispatch 안에서 heap 폴백. 핸들러는 정확히 1회.
+    let mut tiny = [0u8; 16];
+    match frame_into_dispatch(Some(&pkg), &request, &mut tiny) {
+        crate::frame_codec::DirectResponse::Buffered(bytes) => {
+            assert_eq!(bytes, expected, "overflow wire must match invoke_frame");
+        }
+        crate::frame_codec::DirectResponse::Written(_) => {
+            panic!("16-byte target must not fit a >512-byte response");
+        }
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), base + 1);
+
+    // 여유 버퍼 — caller 버퍼에 직접 기록(Written), 동일 와이어.
+    let mut roomy = vec![0u8; expected.len() + 64];
+    match frame_into_dispatch(Some(&pkg), &request, &mut roomy) {
+        crate::frame_codec::DirectResponse::Written(written) => {
+            assert_eq!(written, expected.len());
+            assert_eq!(&roomy[..written], expected.as_slice());
+        }
+        crate::frame_codec::DirectResponse::Buffered(_) => {
+            panic!("roomy target must take the direct-write path");
+        }
+    }
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        base + 2,
+        "each dispatch runs once"
+    );
+}
+
+#[test]
+fn frame_owned_dispatch_preserves_error_frame_wire() {
+    let pkg = Package::builder("test.frame-owned-err")
+        .command("boom", |_: FrameOwnedIn| {
+            Err::<FrameOwnedOut, _>(crate::RustraError::custom("test.boom", "owned path error"))
+        })
+        .build();
+    let request = frame_owned_request("err");
+    // 에러 와이어는 invoke_frame 의 에러 프레임과 바이트 단위로 동일해야 한다
+    // (호스트의 parseFrameErrorBody 메시지 보존).
+    let expected = crate::encode_frame_error(&pkg.invoke_frame(&request).unwrap_err());
+    let mut roomy = vec![0u8; expected.len() + 64];
+    match frame_into_dispatch(Some(&pkg), &request, &mut roomy) {
+        crate::frame_codec::DirectResponse::Buffered(bytes) => {
+            assert_eq!(bytes, expected, "error frame wire must be preserved");
+        }
+        crate::frame_codec::DirectResponse::Written(_) => {
+            panic!("handler errors must surface as a buffered error frame");
+        }
+    }
+}
+
+#[test]
+fn frame_owned_ffi_hands_off_overflow_with_exact_free_pair() {
+    // 전역 패키지(어느 것이든)에 대해: 여유 버퍼는 제자리 기록(null 반환),
+    // 부족한 버퍼는 owned 핸드오프 — 두 경로의 와이어가 동일하고 free 짝이
+    // 정확히 (ptr, len) 1회다(debug free_guard 가 짝 오용을 abort 로 잡는다).
+    let _pkg = ensure_global_package();
+    let request = [1u8, 0, 0, 0, 0, 0, 0, 0];
+
+    let mut roomy = vec![0u8; 4096];
+    let mut out_len = 0usize;
+    let ptr = unsafe {
+        rustra_ffi_invoke_frame_owned(
+            request.as_ptr(),
+            request.len(),
+            roomy.as_mut_ptr(),
+            roomy.len(),
+            &mut out_len,
+        )
+    };
+    assert!(ptr.is_null(), "roomy buffer must be written in place");
+    assert!(out_len >= 8, "frame responses carry the 8-byte header");
+    let expected = roomy[..out_len].to_vec();
+
+    let mut tiny = [0u8; 4];
+    let mut owned_len = 0usize;
+    let owned = unsafe {
+        rustra_ffi_invoke_frame_owned(
+            request.as_ptr(),
+            request.len(),
+            tiny.as_mut_ptr(),
+            tiny.len(),
+            &mut owned_len,
+        )
+    };
+    assert!(!owned.is_null(), "overflow must hand off an owned frame");
+    assert_eq!(owned_len, expected.len());
+    let got = unsafe { std::slice::from_raw_parts(owned, owned_len) };
+    assert_eq!(
+        got,
+        expected.as_slice(),
+        "owned frame must match the written-in-place wire"
+    );
+    // free 짝 — 정확한 (ptr, len). debug 빌드 free_guard 가 이중/오용을 잡는다.
+    unsafe { rustra_ffi_free_owned_bytes(owned, owned_len) };
+}
+
+#[test]
+fn frame_into_probe_fallback_roundtrip_survives_owned_entry() {
+    // 진입 부재 폴백(구형 코어)이 쓰는 probe → write 경로는 owned 진입과
+    // 무관하게 그대로 동작한다: probe(null buf)가 크기를 알리고, 동일 스레드의
+    // 이어지는 write 가 캐시된 응답을 정확한 크기 버퍼에 전달한다.
+    let _pkg = ensure_global_package();
+    let request = [1u8, 0, 0, 0, 0, 0, 0, 0];
+
+    // 기대 응답 — owned 진입의 제자리 기록으로 확정(두 경로 동일 와이어).
+    let mut roomy = vec![0u8; 4096];
+    let mut probe_len = 0usize;
+    let ptr = unsafe {
+        rustra_ffi_invoke_frame_owned(
+            request.as_ptr(),
+            request.len(),
+            roomy.as_mut_ptr(),
+            roomy.len(),
+            &mut probe_len,
+        )
+    };
+    assert!(ptr.is_null());
+    let expected = roomy[..probe_len].to_vec();
+
+    let mut n = unsafe {
+        rustra_ffi_invoke_frame_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut probe_len,
+        )
+    };
+    assert_eq!(n, 0, "size-probe must return 0");
+    assert_eq!(probe_len, expected.len());
+
+    let mut buf = vec![0u8; probe_len];
+    let mut written = 0usize;
+    n = unsafe {
+        rustra_ffi_invoke_frame_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut written,
+        )
+    };
+    assert_eq!(n, probe_len, "cached write must return the probed length");
+    assert_eq!(
+        buf, expected,
+        "probe-cached write must deliver the same wire"
+    );
+}

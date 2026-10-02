@@ -26,7 +26,15 @@ rustra diff --old ./schema.v1.json --new ./schema.v2.json
 
 # 7. 새 프로젝트 스캐폴드 초기화
 rustra init my-app
+
+# 8. 도구·Cargo 설정·레지스트리 연결 상태 진단 (--format json, --strict 지원)
+rustra doctor --config rustra.json
 ```
+
+Doctor는 Node 프로세스 어댑터에서 Node 18+ 또는 Bun 1.4+를 허용합니다.
+생성된 Bun FFI 클라이언트는 Bun 1.4+가 필요하며 Node 설치로 대신할 수 없습니다.
+Node/Bun 전용 프로젝트는 C++·CMake 필수 검사를 생략합니다. C++은
+React Native 또는 명시한 `cppOutput`, CMake는 React Native에서 검사합니다.
 
 전체 옵션은 `rustra --help`로 확인하세요.
 

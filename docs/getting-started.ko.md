@@ -34,6 +34,29 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 
 ## 1. 설치
 
+### 저장소에서 바로 체험하기
+
+이 체크아웃에서는 아래 한 명령으로 독립 예제를 만들고 첫 Rust 호출을 실행한다.
+Rust·Bun·저장소용 Node.js가 설치되어 있어야 한다.
+
+```bash
+bun run try:node
+# Bun FFI를 쓰려면: bun run try:bun
+```
+
+완료하면 예제 폴더를 출력한다. 그 폴더의 `src/lib.rs`를 수정한 뒤 `bun run start`를
+실행하면 타입 생성 → 의존성 설치 → Rust 빌드 → 호출을 다시 수행한다. 예제는 현재
+체크아웃의 패키지를 사용한다. 기존 프로젝트를 덮어쓰지 않는다.
+
+개발 CLI에는 `rustra init my-project --setup`과 `--host bun --setup`이 추가되었다.
+기존 프로젝트에서는 `rustra setup --run`을 사용한다. 실패하면 표시된 `setup` 명령으로
+재시도한다. `init --force`로 다시 만들 필요가 없다. 이 자동화는 아직 배포하지 않았으며,
+아래 `0.11.3` 설치 경로는 수동 시작 절차를 유지한다.
+
+RN의 `setup`은 생성 모듈 연결과 `rustra:ios`·`rustra:android` 준비 스크립트를 만든다.
+Tauri는 등록 헬퍼와 앱에 추가할 코드를 출력한다. 네이티브 앱 빌드·실행은 각 플랫폼
+도구가 필요하다. `setup --run`은 Node/Bun의 `demo` 스크립트용이다.
+
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash

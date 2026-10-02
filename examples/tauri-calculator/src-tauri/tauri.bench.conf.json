@@ -8,7 +8,8 @@
         "title": "Rustra Tauri IPC benchmark",
         "width": 480,
         "height": 320,
-        "visible": false
+        "visible": true,
+        "focus": true
       }
     ]
   }

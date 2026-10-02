@@ -31,7 +31,8 @@ export const rustra = createNodeBootstrap({
     fileURLToPath(new URL(`release/${executable}`, targetDirectory)),
     fileURLToPath(new URL(`debug/${executable}`, targetDirectory)),
   ],
-  args: ["invoke"],
+  args: ["serve"],
+  persistent: true,
   contractHash: GENERATED_CONTRACT_HASH,
   contractVerification: 'strict',
 });

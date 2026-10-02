@@ -35,6 +35,29 @@ This guide aims to get a developer new to rustra building their first package an
 
 ## 1. Installation
 
+### Try this checkout in one command
+
+With Rust, Bun and the repository's Node.js runtime installed, create an isolated example and make the first Rust call:
+
+```bash
+bun run try:node
+# For Bun FFI: bun run try:bun
+```
+
+The command prints the example directory. Edit its `src/lib.rs`, then run `bun run start`
+there to generate types, install dependencies, rebuild Rust and call it again. The example
+uses this checkout's packages and preserves existing projects.
+
+The development CLI adds `rustra init my-project --setup` and `--host bun --setup`.
+For an existing project, use `rustra setup --run`. On failure, rerun the printed `setup`
+command; recreating the project with `init --force` is unnecessary. This automation has
+not been released; the pinned `0.11.3` path below retains its manual startup steps.
+
+RN setup connects the generated module and adds `rustra:ios` / `rustra:android` preparation
+scripts. Tauri setup generates a registration helper and prints the remaining application
+connection. Native app builds and launch still require platform tools. `setup --run`
+executes a Node/Bun project's `demo` script.
+
 ### The Fastest Start — `rustra init`
 
 ```bash

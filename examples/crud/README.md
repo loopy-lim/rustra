@@ -50,10 +50,11 @@ resolution) and installs it lazily — generated commands take a single input
 object and no engine parameter, exactly like the calculator example:
 
 ```ts
-import { createItem, rustra } from './generated/node.js';
+import { createItem, getItem, rustra } from './generated/node.js';
 
 const { item } = await createItem({ name: 'Widget', value: 42 });
 console.log(item.id, item.name, item.value);
+console.log((await getItem({ id: item.id })).item);
 
 rustra.dispose(); // engine subprocess teardown
 ```
@@ -61,12 +62,11 @@ rustra.dispose(); // engine subprocess teardown
 Prerequisite: `cargo build -p rustra-crud-example` — the entry resolves
 `target/release/` first, then `target/debug/`.
 
-**Transport caveat (one-shot):** the generated Node entry spawns the stdio
-binary once per invoke, so every call runs in its own process — this example's
-in-memory Rust store does not carry across calls on this transport. The full
-stateful `create → get → update → delete` flow runs in one process via the Rust
-demo (`cargo run -p rustra-crud-example --bin rustra-crud-example`) and against a stateful
-mock engine in
-[`ts/crud-operations.test.ts`](ts/crud-operations.test.ts); for a persistent
-process see the calculator's loop transport
-([`node-performance.ts`](../calculator/apps/node-performance.ts)).
+`node.persistent: true` in this example's config keeps one Rust process alive
+across commands, so the in-memory store survives `create → get → update → delete`.
+The binary implements the NDJSON `serve` protocol. For a custom server flag,
+set `node.args` explicitly. Call `rustra.dispose()` when the application closes.
+Without this option, schemas without events retain the one-shot `invoke` protocol.
+
+Run the actual generated Node consumer with `bun run test:runtime:crud` from
+the repository root.

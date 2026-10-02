@@ -1,13 +1,9 @@
 import {
-  configureLazy,
   createFrameEngine,
   disposedBootstrapError,
-  ensureConfigured,
   RustraErrorCode,
   RustraCommandError,
-  type BootstrapState,
   type EngineSupports,
-  type FrameEngine,
 } from '@rustra/types';
 import type { Pointer } from 'bun:ffi';
 import {
@@ -48,7 +44,14 @@ export const BUN_FRAME_ENGINE_SUPPORTS: EngineSupports = {
 };
 
 export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<BunFfiRuntime> {
-  const { dlopen, FFIType, toArrayBuffer } = await import('bun:ffi');
+  const { dlopen, FFIType, toArrayBuffer } = await import('bun:ffi').catch((cause: unknown) => {
+    throw new RustraCommandError(
+      RustraErrorCode.TransportUnavailable,
+      'Bun FFI requires the Bun runtime. Run this client with bun, or use @rustra/node for a Node.js host.',
+      false,
+      cause,
+    );
+  });
   const definitions = {
     rustra_mobile_init: { args: [], returns: FFIType.void },
     rustra_ffi_invoke_frame: {
@@ -226,107 +229,4 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   return selection.runtime;
 }
 
-export type BunBootstrap = {
-  /**
-   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
-   * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
-   */
-  readonly state: BootstrapState;
-  ready(): Promise<FrameEngine>;
-  dispose(): void;
-  /**
-   * Dev-loop reload hook target (Task A1). Empirically (macOS, Bun 1.4.0),
-   * `bun:ffi` dlopen caches the library image per process: re-dlopen of a
-   * REPLACED file at the same path returns the OLD bytes while any handle of
-   * that image has ever been opened in the process — only close-then-reopen
-   * picks up new bytes, and even then only when no other handle is alive.
-   * Consequence: reload() re-runs engine init (fresh state over the resolved
-   * library) and WARNS that a rebuilt binary applies on the next process start
-   * unless every previous handle was closed first. Contract is the warning +
-   * state reset, not a true image swap — see docs/compatibility-matrix.md.
-   */
-  reload(): Promise<void>;
-};
-
-export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
-  let runtime: BunFfiRuntime | undefined;
-  let state: BootstrapState = 'initializing';
-  let reloadPromise: Promise<void> | undefined;
-  const assertActive = () => {
-    if (state === 'disposed') throw disposedBootstrapError('Bun');
-    if (!registration.isCurrent())
-      throw new RustraCommandError(
-        'transport.unavailable',
-        'Bun bootstrap registration was replaced',
-      );
-  };
-  const bootstrap = async (): Promise<FrameEngine> => {
-    assertActive();
-    const created = await createBunFfiEngine(options);
-    try {
-      assertActive();
-      runtime = created;
-      return created.engine;
-    } catch (error) {
-      created.close();
-      throw error;
-    }
-  };
-  let registration = configureLazy(bootstrap, { ownerId: 'bun' });
-  const ready = async (): Promise<FrameEngine> => {
-    assertActive();
-    const requestedRegistration = registration;
-    try {
-      const engine = (await ensureConfigured()) as FrameEngine;
-      assertActive();
-      if (requestedRegistration !== registration)
-        throw new RustraCommandError(
-          'transport.unavailable',
-          'Bun readiness was superseded by reload; call ready() again',
-        );
-      state = 'ready';
-      return engine;
-    } catch (error) {
-      if (!registration.isCurrent()) {
-        runtime?.close();
-        runtime = undefined;
-      }
-      throw error;
-    }
-  };
-  return {
-    get state() {
-      return state;
-    },
-    ready,
-    dispose() {
-      if (state === 'disposed') return;
-      state = 'disposed';
-      registration();
-      runtime?.close();
-      runtime = undefined;
-    },
-    reload() {
-      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
-      if (reloadPromise) return reloadPromise;
-      const operation = async () => {
-        assertActive();
-        if (state !== 'ready') await ready();
-        assertActive();
-        state = 'initializing';
-        runtime?.close();
-        runtime = undefined;
-        registration = configureLazy(bootstrap, { ownerId: 'bun' });
-        await ready();
-        console.warn(
-          '[bun] engine re-initialized. bun:ffi caches the library image: a rebuilt ' +
-            'cdylib applies on the next process start (reload cannot swap bytes in-process).',
-        );
-      };
-      reloadPromise = operation().finally(() => {
-        reloadPromise = undefined;
-      });
-      return reloadPromise;
-    },
-  };
-}
+export { createBunBootstrap, type BunBootstrap } from './bun-bootstrap.js';

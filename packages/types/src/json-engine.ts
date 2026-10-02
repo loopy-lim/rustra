@@ -1,4 +1,4 @@
-import { normalizeRustraError } from './errors.js';
+import { normalizeRustraError, RustraCommandError, RustraErrorCode } from './errors.js';
 import { debugRustra, isRustraDebugEnabled } from './debug.js';
 import { invokeWithTimeout } from './cancel.js';
 import type {
@@ -134,7 +134,27 @@ export function createJsonEngine(
             const args = normalizeArgs(entry.args);
             return args === entry.args ? entry : { ...entry, args };
           });
-          return Promise.resolve(rawTransport.invokeBatch(normalized)) as Promise<T[]>;
+          return Promise.resolve(rawTransport.invokeBatch(normalized))
+            .then((responses) => {
+              if (!Array.isArray(responses) || responses.length !== entries.length) {
+                throw new RustraCommandError(
+                  RustraErrorCode.InvokeMalformed,
+                  `Invalid batch response: expected ${entries.length} entries, received ${
+                    Array.isArray(responses) ? responses.length : 'a non-array value'
+                  }`,
+                );
+              }
+              return responses as T[];
+            })
+            .catch((error: unknown) => {
+              debugRustra({
+                direction: 'error',
+                transport: 'json',
+                command: `invokeBatch(${entries.length} entries)`,
+                error: String(error),
+              });
+              throw normalizeRustraError(error);
+            });
         } catch (error: unknown) {
           // transport/normalizer 의 동기 throw 도 단건 경로와 동일하게 rejected
           // Promise 로 정규화한다(R04-b) — 동기 throw 는 `.catch()` 기반 호출자를

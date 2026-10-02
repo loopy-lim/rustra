@@ -118,6 +118,12 @@ export function createNodeProcessTransport(
         reject(new RustraCommandError('transport.error', 'stdin unavailable', true));
         return;
       }
+      proc.stdin.once('error', (error) => {
+        if (settled) return;
+        settled = true;
+        reject(new RustraCommandError('transport.error', `write failed: ${String(error)}`, true));
+        proc.kill();
+      });
       proc.stdin.write(JSON.stringify({ command, args: args === undefined ? {} : args }));
       proc.stdin.end();
     });
@@ -151,10 +157,16 @@ export function createNodeProcessTransport(
 
 export type NodeBootstrapOptions = {
   command?: string;
+  /** Relative candidates resolve against spawnOptions.cwd (default: process.cwd()). */
   commandCandidates?: readonly string[];
+  /** Search Cargo target directories from spawnOptions.cwd and its ancestors. */
   binaryName?: string;
   args?: string[];
   spawnOptions?: Parameters<typeof spawn>[2];
+  /** Keep command state and events in one NDJSON runtime (`serve` by default). */
+  persistent?: boolean;
+  /** Maximum wait for runtime contract/capability probes (default 5000 ms). */
+  readinessTimeoutMs?: number;
   contractHash?: string;
   /**
    * (A2) 계약 검증 정책 — frame 엔진의 `contractVerification`(@rustra/types)과
@@ -180,6 +192,8 @@ export type NodeBootstrap = {
    */
   readonly state: BootstrapState;
   ready(): Promise<EngineClientWithBatch>;
+  /** Subscribe on the bootstrap's selected persistent runtime. */
+  subscribeEvent(name: string, callback: (payload: never) => void): () => void;
   dispose(): void;
   /**
    * Dev-loop reload hook target (Task A1): drains the bootstrap's own

@@ -1,4 +1,9 @@
 // Test ABI peers, not replacement JSI/codec/binder implementations.
+#if defined(RUSTRA_NATIVE_SYNC_PERF)
+#define RUSTRA_NATIVE_PEER_COUNT(counter) ((void)0)
+#else
+#define RUSTRA_NATIVE_PEER_COUNT(counter) (++counter)
+#endif
 namespace native_test {
 namespace jsi = facebook::jsi;
 using Table = rustra::core::CoreTable;
@@ -9,6 +14,7 @@ struct Peer {
   std::string hash, schema;
   bool raw = true;
   int hashes = 0, schemas = 0, frames = 0, raws = 0, buffers = 0, frees = 0, ownedFrees = 0;
+  int ownedFrames = 0, ownedHandoffs = 0;
   int mode = 0;
   bool pending = false;
   std::vector<uint8_t> request, response;
@@ -21,10 +27,15 @@ static uint8_t* allocate(int owner, bool owned, const uint8_t* bytes, size_t siz
   auto* p = static_cast<uint8_t*>(std::malloc(std::max<size_t>(1, size)));
   if (!p) throw std::bad_alloc();
   if (size) std::memcpy(p, bytes, size);
+#if !defined(RUSTRA_NATIVE_SYNC_PERF)
   live.emplace(p, Allocation{size, owner, owned});
+#endif
   return p;
 }
 template<int I, bool Owned> static void release(uint8_t* p, size_t size) {
+#if defined(RUSTRA_NATIVE_SYNC_PERF)
+  std::free(p);
+#else
   auto found = live.find(p);
   if (found == live.end() || found->second.owner != I || found->second.size != size || found->second.owned != Owned) {
     ++allocationErrors;
@@ -32,13 +43,14 @@ template<int I, bool Owned> static void release(uint8_t* p, size_t size) {
   }
   if constexpr (Owned) ++peers[I].ownedFrees; else ++peers[I].frees;
   live.erase(found); std::free(p);
+#endif
 }
 template<int I> static uint8_t* hash(size_t* size) {
-  ++peers[I].hashes; *size = peers[I].hash.size();
+  RUSTRA_NATIVE_PEER_COUNT(peers[I].hashes); *size = peers[I].hash.size();
   return allocate(I, false, reinterpret_cast<const uint8_t*>(peers[I].hash.data()), *size);
 }
 template<int I> static uint8_t* schema(size_t* size) {
-  ++peers[I].schemas; *size = peers[I].schema.size();
+  RUSTRA_NATIVE_PEER_COUNT(peers[I].schemas); *size = peers[I].schema.size();
   return allocate(I, false, reinterpret_cast<const uint8_t*>(peers[I].schema.data()), *size);
 }
 template<int I> static uint8_t hasRaw(uint16_t id) { return peers[I].raw && id == 23; }
@@ -47,26 +59,30 @@ static std::vector<uint8_t> errorFrame() {
   // ok=0, reserved seven bytes, body length=13, postcard strings "test", "failure".
   return {0,0,0,0,0,0,0,0,13,0,4,'t','e','s','t',7,'f','a','i','l','u','r','e'};
 }
+template<int I> static void buildFrameResponse(const uint8_t* request, size_t size) {
+  auto& p = peers[I];
+  p.request.assign(request, request + size);
+  p.response.assign(8, 0); p.response[0] = 1;
+  const auto id = size >= 2 ? request[0] | (request[1] << 8) : 0;
+  if (id == 23) {
+    if (size != 18) throw std::runtime_error("unexpected add request");
+    double a, b; std::memcpy(&a, request + 2, 8); std::memcpy(&b, request + 10, 8);
+    const double value = a + b + I * 1000;
+    const auto* bytes = reinterpret_cast<const uint8_t*>(&value);
+    p.response.insert(p.response.end(), bytes, bytes + 8);
+  } else if (id == 16 || id == 24 || id == 25 || id == 26 || id == 34) {
+    p.response.insert(p.response.end(), request + 2, request + size);
+  } else throw std::runtime_error("unexpected fake command");
+  if (p.mode == 1) p.response = errorFrame();
+  if (p.mode == 2) p.response = {1};
+}
 template<int I> static size_t frame(const uint8_t* request, size_t size, uint8_t* out, size_t cap, size_t* length) {
-  auto& p = peers[I]; ++p.frames;
+  auto& p = peers[I]; RUSTRA_NATIVE_PEER_COUNT(p.frames);
   if (p.pending) {
     if (p.request != std::vector<uint8_t>(request, request + size)) throw std::runtime_error("overflow changed request");
     p.pending = false;
   } else {
-    p.request.assign(request, request + size);
-    p.response.assign(8, 0); p.response[0] = 1;
-    const auto id = size >= 2 ? request[0] | (request[1] << 8) : 0;
-    if (id == 23) {
-      if (size != 18) throw std::runtime_error("unexpected add request");
-      double a, b; std::memcpy(&a, request + 2, 8); std::memcpy(&b, request + 10, 8);
-      const double value = a + b + I * 1000;
-      const auto* bytes = reinterpret_cast<const uint8_t*>(&value);
-      p.response.insert(p.response.end(), bytes, bytes + 8);
-    } else if (id == 16 || id == 24 || id == 25 || id == 26 || id == 34) {
-      p.response.insert(p.response.end(), request + 2, request + size);
-    } else throw std::runtime_error("unexpected fake command");
-    if (p.mode == 1) p.response = errorFrame();
-    if (p.mode == 2) p.response = {1};
+    buildFrameResponse<I>(request, size);
     if (p.mode == 3) { *length = 0; return 0; }
     auto callback = std::move(p.duringFrame); p.duringFrame = {};
     if (callback) callback();
@@ -75,9 +91,24 @@ template<int I> static size_t frame(const uint8_t* request, size_t size, uint8_t
   if (cap < *length) { p.pending = true; return SIZE_MAX; }
   std::memcpy(out, p.response.data(), *length); return *length;
 }
+// (E1) owned 응답 fake — 재시도 프로토콜 없이 1회 dispatch 로 끝낸다: 버퍼에
+// 들어가면 제자리 기록(null 반환), 넘치면 ledger 추적 owned 프레임 핸드오프.
+// 핸드오프 프레임의 free 짝(release<I,true>)이 정확히 (owner, len) 1회인지는
+// 실행 종료의 allocation ledger 검사가 증명한다.
+template<int I> static uint8_t* frameOwned(const uint8_t* request, size_t size, uint8_t* out, size_t cap, size_t* length) {
+  auto& p = peers[I]; RUSTRA_NATIVE_PEER_COUNT(p.ownedFrames);
+  buildFrameResponse<I>(request, size);
+  if (p.mode == 3) { *length = 0; return nullptr; }
+  auto callback = std::move(p.duringFrame); p.duringFrame = {};
+  if (callback) callback();
+  *length = p.response.size();
+  if (cap >= *length) { std::memcpy(out, p.response.data(), *length); return nullptr; }
+  RUSTRA_NATIVE_PEER_COUNT(p.ownedHandoffs);
+  return allocate(I, true, p.response.data(), *length);
+}
 template<int I> static uint32_t raw(uint16_t id, const uint64_t* slots, size_t count,
   uint64_t* out, uint8_t* error, size_t cap, size_t* errorSize) {
-  auto& p = peers[I]; ++p.raws;
+  auto& p = peers[I]; RUSTRA_NATIVE_PEER_COUNT(p.raws);
   if (id != 23 || count != 2) throw std::runtime_error("unexpected raw request");
   if (p.mode == 4) return UINT32_MAX;
   if (p.mode == 1) {
@@ -89,7 +120,7 @@ template<int I> static uint32_t raw(uint16_t id, const uint64_t* slots, size_t c
   double value = a + b + I * 1000; std::memcpy(out, &value, 8); return 0;
 }
 template<int I> static uint32_t buffer(uint16_t id, const uint8_t* bytes, size_t size, uint8_t** out, size_t* length) {
-  auto& p = peers[I]; ++p.buffers;
+  auto& p = peers[I]; RUSTRA_NATIVE_PEER_COUNT(p.buffers);
   if (id != 25) throw std::runtime_error("unexpected buffer command");
   static const std::string error = "test: failure";
   *length = p.mode == 1 ? error.size() : size;
@@ -101,7 +132,21 @@ template<int I> static void initTable() {
   t.contract_hash = hash<I>; t.get_schema = schema<I>; t.free = release<I,false>;
   t.has_raw = hasRaw<I>; t.has_buffer = hasBuffer<I>; t.invoke_frame_into = frame<I>;
   t.invoke_raw = raw<I>; t.invoke_buffer = buffer<I>; t.free_owned_bytes = release<I,true>;
+  // (E1) fake 는 기본적으로 구형 코어(진입 부재) — 기존 스위트 전체가
+  // probe 폴백을 검증한다. owned 경로는 useOwned 로 명시적으로 켠다.
+  t.invoke_frame_owned = nullptr;
   tables[I] = t;
+}
+static uint8_t* (*const ownedFns[12])(const uint8_t*, size_t, uint8_t*, size_t, size_t*) = {
+  frameOwned<0>, frameOwned<1>, frameOwned<2>, frameOwned<3>, frameOwned<4>, frameOwned<5>,
+  frameOwned<6>, frameOwned<7>, frameOwned<8>, frameOwned<9>, frameOwned<10>, frameOwned<11>,
+};
+static void useOwned(int id, bool on) {
+  if (id < 0 || id >= 12) throw std::runtime_error("invalid peer");
+  tables[id].invoke_frame_owned = on ? ownedFns[id] : nullptr;
+}
+static void resetOwned() {
+  for (auto& t : tables) t.invoke_frame_owned = nullptr;
 }
 static void initializePeers() {
   const std::string commands = R"([{"name":"span","commandId":16,"execution":"sync"},{"name":"benchAdd","commandId":23,"execution":"sync"},{"name":"benchEchoString","commandId":24,"execution":"sync"},{"name":"benchEchoBytes","commandId":25,"execution":"sync"},{"name":"benchEchoPair","commandId":26,"execution":"sync"},{"name":"parityEcho","commandId":34,"execution":"sync"}])";

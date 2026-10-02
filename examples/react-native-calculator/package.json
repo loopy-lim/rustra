@@ -44,7 +44,9 @@
     "bench:parity:ios": "bun scripts/run-nitro-parity.ts",
     "demo:nitro-parity": "EXPO_PUBLIC_RUSTRA_DEMO=nitro-parity expo start --dev-client",
     "test:parity": "bun test src/nitro-parity",
-    "verify:functions:ios": "bun scripts/verify-function-simulator.mjs"
+    "verify:functions:ios": "bun scripts/verify-function-simulator.mjs",
+    "rustra:ios": "node -e \"require('@rustra/generated-react-native/scripts/prepare-native.cjs').prepare('ios')\"",
+    "rustra:android": "node -e \"require('@rustra/generated-react-native/scripts/prepare-native.cjs').prepare('android')\""
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",

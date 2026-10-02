@@ -86,10 +86,11 @@ export function spawnCapturingStdout(
     child.on('close', (code, signal) => {
       finish();
       const total = ((Date.now() - started) / 1000).toFixed(1);
-      console.error(`[rustra] ✓ ${progressLabel} done in ${total}s`);
       if (code === 0) {
+        console.error(`[rustra] ✓ ${progressLabel} done in ${total}s`);
         resolveSpawn(Buffer.concat(chunks).toString('utf8'));
       } else {
+        console.error(`[rustra] ✗ ${progressLabel} failed in ${total}s`);
         rejectSpawn(new Error(`cargo ${signal ? `terminated by ${signal}` : `exit ${code}`}`));
       }
     });
@@ -149,7 +150,7 @@ export function pickCdylibArtifact(
  */
 export async function buildDylibCore(resolved: ResolvedDevDylib): Promise<string> {
   const manifestPath = resolved.manifestPath;
-  const metadata = readCargoMetadata(manifestPath);
+  const metadata = readCargoMetadata(manifestPath, dirname(manifestPath));
   const cargoPackage = selectHostPackage(metadata, manifestPath, resolved.rustPackage);
   // -p 는 요청 시에만 — rustPackage 미지정 단일 패키지 매니페스트에서는 cargo
   // 기본 멤버 선택이 정확히 그 패키지다(복수 패키지는 selectHostPackage 가 이미

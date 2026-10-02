@@ -1,18 +1,14 @@
-//! crud 예제의 실행 진입점 — calculator 예제와 동일한 stdio invoke 프로토콜.
-//!
-//! `rustra-crud-example invoke` 실행 시 stdin 의 `{command, args}` JSON 을
-//! 받아 `{ok, result}` 를 stdout 으로 돌려준다. createNodeProcessTransport
-//! (@rustra/node)와 레퍼런스 앱(examples/reference-app)이 이 진입점을 쓴다.
-
+//! CRUD stdio runtime: invoke handles one request; serve retains the store across calls.
 use rustra_crud_example::crud_package;
 use serde_json::{Value, json};
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 
 fn main() -> rustra::Result<()> {
-    if std::env::args().nth(1).as_deref() == Some("invoke") {
-        return run_invoke_stdio();
+    match std::env::args().nth(1).as_deref() {
+        Some("invoke") => return run_invoke_stdio(),
+        Some("serve") => return run_serve_stdio(),
+        _ => {}
     }
-
     let package = crud_package();
     let result = package.invoke_json("listItems", json!({}))?;
     let count = result
@@ -29,24 +25,73 @@ fn run_invoke_stdio() -> rustra::Result<()> {
     std::io::stdin()
         .take(1024 * 1024)
         .read_to_string(&mut input)?;
-    let request: Value = serde_json::from_str(&input).map_err(rustra::RustraError::invalid_args)?;
+    let response = invoke_response(&crud_package(), &input);
+    serde_json::to_writer(std::io::stdout(), &response).map_err(rustra::RustraError::internal)?;
+    Ok(())
+}
+
+fn run_serve_stdio() -> rustra::Result<()> {
+    let package = crud_package();
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout().lock();
+    for line in stdin.lock().lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let response = invoke_response(&package, &line);
+        serde_json::to_writer(&mut stdout, &response).map_err(rustra::RustraError::internal)?;
+        stdout.write_all(b"\n")?;
+        stdout.flush()?;
+    }
+    Ok(())
+}
+
+fn invoke_response(package: &rustra::Package, input: &str) -> Value {
+    let request: Value = match serde_json::from_str(input) {
+        Ok(request) => request,
+        Err(error) => return error_response(rustra::RustraError::invalid_args(error)),
+    };
+    let mut response = match handle_request(package, &request) {
+        Ok(response) => response,
+        Err(error) => error_response(error),
+    };
+    if let Some(id) = request.get("id") {
+        response["id"] = id.clone();
+    }
+    response
+}
+
+fn error_response(error: rustra::RustraError) -> Value {
+    let detail = serde_json::to_string(&error).unwrap_or_else(|_| error.to_string());
+    json!({ "ok": false, "error": detail })
+}
+
+fn handle_request(package: &rustra::Package, request: &Value) -> rustra::Result<Value> {
     let command = request
         .get("command")
         .and_then(Value::as_str)
         .ok_or_else(|| rustra::RustraError::invalid_args("missing command"))?;
-    // 생성 node 엔트리의 strict 계약 검증이 이 엔드포인트를 요구한다(
-    // contractVerification: 'strict' — calculator 예제와 동일 프로토콜).
     if command == "__rustra_contract" {
-        let hash = crud_package().generate_typescript()?.contract_hash;
-        let response = serde_json::to_vec(&json!({ "ok": true, "result": hash }))
-            .map_err(rustra::RustraError::internal)?;
-        std::io::stdout().write_all(&response)?;
-        return Ok(());
+        return Ok(json!({ "ok": true, "result": package.generate_typescript()?.contract_hash }));
+    }
+    if command == "__rustra_capabilities" {
+        return Ok(json!({ "ok": true, "result": { "events": "polling" } }));
+    }
+    if command == "__drainEvents" {
+        let events: Vec<Value> = package
+            .event_bus()
+            .take_pending_events()
+            .into_iter()
+            .map(|event| {
+                let payload: Value =
+                    serde_json::from_str(&event.payload).unwrap_or(Value::String(event.payload));
+                json!({ "name": event.name, "payload": payload })
+            })
+            .collect();
+        return Ok(json!({ "ok": true, "events": events }));
     }
     let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
-    let result = crud_package().invoke_json(command, args)?;
-    let response = serde_json::to_vec(&json!({ "ok": true, "result": result }))
-        .map_err(rustra::RustraError::internal)?;
-    std::io::stdout().write_all(&response)?;
-    Ok(())
+    let result = package.invoke_json(command, args)?;
+    Ok(json!({ "ok": true, "result": result }))
 }

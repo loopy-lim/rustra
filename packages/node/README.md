@@ -21,10 +21,33 @@ import { addNumbers } from './generated/node.js';
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-Release generated output is used first, falling back to Debug. After transpile/bundle, it
+Runtime candidates are ordered by modification time and checked against the generated
+contract, falling back to the next compatible candidate. After transpile/bundle, the client
 additionally looks for the same Cargo target in the parent of the current working
 directory. If the deployment layout differs, just set
 `RUSTRA_NODE_BINARY=/absolute/path/to/app`.
+
+For manual bootstraps, relative `commandCandidates` and `binaryName` discovery start
+from `spawnOptions.cwd` (a string or file URL), defaulting to `process.cwd()`.
+An explicit bare `command` still uses the child process's `PATH`. Missing-runtime
+errors show the working directory and checked candidate paths.
+
+## Persistent state and events
+
+The default `node: {}` invokes a fresh process for each command. For stateful services,
+use `node: { "persistent": true }`; the generated entry starts one `serve` process and
+reuses it. Set `node.args` for a custom daemon flag, such as `["--serve"]`. The producer
+must implement NDJSON request ids, `__rustra_contract`, `__rustra_capabilities`, and
+`__drainEvents`; the current `rustra init` scaffold includes this protocol.
+
+Schemas declaring events automatically select a persistent client. Import its
+`subscribeEvent` alongside generated commands; invocation and subscription share the
+contract-verified runtime. `rustra.subscribeEvent()` is also available on a manually
+created `createNodeBootstrap({ persistent: true, ... })`.
+
+Call `rustra.dispose()` when the service ends; it releases the process and subscriptions.
+`reload()` preserves subscriptions while replacing the process. Contract/capability
+probes time out after 5 seconds by default; `readinessTimeoutMs` changes that bound.
 
 ## Public API
 
@@ -80,5 +103,6 @@ need N-API level performance should opt into a separate native addon.
 Measured on 2026-08-24 macOS arm64 Release, the generated API averaged 2.76ms on the
 default one-shot path, 16.86µs on the persistent loop, and 1.26µs on N-API Frame. Use
 the default path for CLIs and low-frequency work, `createNodeLoopTransport` for servers,
-and an N-API addon for high-frequency hot paths. A runnable comparison of the three paths
+and an N-API addon for high-frequency hot paths. A runnable comparison of the generated
+client, explicit one-shot JSON, persistent JSON, persistent binary, and N-API paths
 is in [`node-performance.ts`](../../examples/calculator/apps/node-performance.ts).

@@ -268,7 +268,10 @@ export function subscribeEvent(
   listeners.add(callback);
   ensureDelivery(transport, loop);
   scheduleCapabilityVerdict(transport, loop);
+  let active = true;
   return () => {
+    if (!active) return;
+    active = false;
     const current = loops.get(transport);
     if (!current) return;
     const currentListeners = current.subscribers.get(name);

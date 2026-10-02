@@ -187,6 +187,13 @@ bun add @rustra/testing@0.7.2       # Mock engine (tests)
 bun add @rustra/devtools@0.7.2      # Invocation observability (dev)
 ```
 
+## Try the current checkout
+
+With Rust, Bun and the repository's Node.js runtime installed, run `bun run try:node` or `bun run try:bun`.
+The command creates a separate example, installs this checkout's packages, and runs the first
+Rust call. It prints the project directory; edit `src/lib.rs` there and run `bun run start`
+to regenerate, rebuild and call again. These setup commands are development features pending release.
+
 ## Quick Example
 
 ```rust
