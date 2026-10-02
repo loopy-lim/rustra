@@ -121,10 +121,10 @@ async function prepareNative(
   const instructions: string[] = [];
   if (config.reactNative) {
     const result = await prepareReactNativeHost(rnOptions(configPath, config));
+    const customizedScripts = new Set(result.conflicts.map((entry) => entry.name));
     for (const script of result.scripts) {
-      const conflict = result.conflicts.find((entry) => entry.name === script.name);
       instructions.push(
-        conflict
+        customizedScripts.has(script.name)
           ? `${script.name} is already customized. Prepare with: ${script.command}`
           : `${manager} run ${script.name}  # prepare ${script.name.endsWith('ios') ? 'iOS Pods' : 'an Android debug build'}`,
       );

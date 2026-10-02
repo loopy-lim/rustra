@@ -105,7 +105,7 @@ test('config dev preserves handwritten Rust beside manifest-owned output in src'
     assert.equal(count(runs), 2, 'owned outputs and unchanged content must not recompile Rust');
     assert.ok(reloads.length <= 2, 'a content-unchanged touch must not create a reload loop');
   } finally {
-    handle?.dispose();
+    await handle?.dispose();
     process.env.PATH = oldPath;
     rmSync(root, { recursive: true, force: true });
   }

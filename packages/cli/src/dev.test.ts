@@ -123,15 +123,16 @@ test('runDev suppresses the reload hook when regeneration fails', async () => {
     const errors: string[] = [];
     const originalError = console.error;
     console.error = (line: unknown) => errors.push(String(line));
+    let handle: Awaited<ReturnType<typeof runDev>> | undefined;
     try {
-      const handle = await runDev(['--backend', join(dir, 'backend'), '--app', join(dir, 'app')]);
+      handle = await runDev(['--backend', join(dir, 'backend'), '--app', join(dir, 'app')]);
       handle.onReload((reason) => void reloads.push(reason));
       // 이미 initial run 이 끝났고 rustBin(cargo)은 실패했으므로 reload 는 없다.
       await new Promise<void>((resolve) => setTimeout(resolve, 10));
       assert.deepEqual(reloads, [], 'failed regeneration must not emit reload');
       assert.ok(errors.some((line) => line.includes('[dev] regeneration failed')));
-      handle.dispose();
     } finally {
+      await handle?.dispose();
       console.error = originalError;
       delete process.env.RUSTRA_CLI;
     }
@@ -192,15 +193,16 @@ test('runDev logs "clean — nothing to do" and skips codegen on an up-to-date t
     const logs: string[] = [];
     const originalLog = console.log;
     console.log = (line: unknown) => logs.push(String(line));
+    let handle: Awaited<ReturnType<typeof runDev>> | undefined;
     try {
-      const handle = await runDev(['--backend', backend, '--app', app]);
+      handle = await runDev(['--backend', backend, '--app', app]);
       assert.ok(logs.some((line) => line.includes('[dev] clean — nothing to do')));
       assert.ok(
         !logs.some((line) => line.includes('regenerated')),
         'clean tree must not run codegen',
       );
-      handle.dispose();
     } finally {
+      await handle?.dispose();
       console.log = originalLog;
       delete process.env.RUSTRA_CLI;
     }

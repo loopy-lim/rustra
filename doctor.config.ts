@@ -37,6 +37,8 @@ const config = {
       },
       {
         files: [
+          // Node-only streaming consumes the hash; schema metadata remains a generated public export.
+          'examples/streaming/generated/contract.ts',
           'examples/react-native-bare-calculator/generated/commands.ts',
           'examples/react-native-bare-calculator/generated/react-native.ts',
           'examples/react-native-bare-calculator/generated/frame-codecs.ts',

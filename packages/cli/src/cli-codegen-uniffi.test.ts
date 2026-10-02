@@ -21,6 +21,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCodegen } from './cli-codegen.js';
+import type { DevWatchHandle } from './dev.js';
 import {
   UNIFFI_GENERATED_RS,
   assertBindingOutputs,
@@ -399,7 +400,7 @@ test('cli-uniffi helpers: dylib naming, output completeness, and drift compariso
 test('config dev reloads paths from atomically replaced rustra.json and watches new sources', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-dev-refresh-'));
   const env = withFakeCargo(root);
-  let handle: { dispose(): void } | undefined;
+  let handle: DevWatchHandle | undefined;
   const waitFor = async (predicate: () => boolean) => {
     const deadline = Date.now() + 3000;
     while (!predicate() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 40));
@@ -421,7 +422,7 @@ test('config dev reloads paths from atomically replaced rustra.json and watches 
     writeFileSync(join(env.project, 'src', 'new', 'lib.rs'), 'fn new_source() {}');
     await waitFor(() => spawnSequence(env.logPath).includes('run'));
   } finally {
-    handle?.dispose();
+    await handle?.dispose();
     env.restore();
     rmSync(root, { recursive: true, force: true });
   }
@@ -473,7 +474,7 @@ test('--check-bindings detects actual Swift/Kotlin and extra-file drift without 
 test('config dev does not treat its generated UniFFI Rust mirror as a new source change', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-dev-uniffi-self-'));
   const env = withFakeCargo(root, { uniffi: { output: './bindings/uniffi' } });
-  let handle: { dispose(): void } | undefined;
+  let handle: DevWatchHandle | undefined;
   try {
     const { runDev } = await import('./dev.js');
     handle = await runDev(['--config', join(env.project, 'rustra.json')]);
@@ -485,7 +486,7 @@ test('config dev does not treat its generated UniFFI Rust mirror as a new source
       'generated mirror must not start another run',
     );
   } finally {
-    handle?.dispose();
+    await handle?.dispose();
     env.restore();
     rmSync(root, { recursive: true, force: true });
   }
@@ -521,7 +522,7 @@ test('overlapping binding output is rejected before probe or any existing file c
 test('bindings inside src do not trigger their own dev rebuild loop', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-uniffi-self-watch-'));
   const env = withFakeCargo(root, { uniffi: { output: './src/bindings' } });
-  let handle: { dispose(): void } | undefined;
+  let handle: DevWatchHandle | undefined;
   try {
     const { runDev } = await import('./dev.js');
     handle = await runDev(['--config', join(env.project, 'rustra.json')]);
@@ -537,7 +538,7 @@ test('bindings inside src do not trigger their own dev rebuild loop', async () =
     await new Promise((resolve) => setTimeout(resolve, 900));
     assert.equal(builds(), initial + 1);
   } finally {
-    handle?.dispose();
+    await handle?.dispose();
     env.restore();
     rmSync(root, { recursive: true, force: true });
   }
