@@ -4,6 +4,9 @@ set -euo pipefail
 bundle_id="com.alt-shifted.react-native-calculator"
 app="${RUNNER_TEMP:?RUNNER_TEMP must be set}/rustra-ios-dd/Build/Products/Release-iphonesimulator/reactnativecalculator.app"
 log_path="$RUNNER_TEMP/rustra-ios-console.log"
+kill_error_path="$RUNNER_TEMP/rustra-ios-kill.stderr.log"
+process_path="$RUNNER_TEMP/rustra-ios-process.log"
+crash_summary_path="$RUNNER_TEMP/rustra-ios-crash-summary.json"
 attempts="${RUSTRA_SMOKE_ATTEMPTS:-60}"
 delay="${RUSTRA_SMOKE_DELAY_SECONDS:-5}"
 if [[ ! "$attempts" =~ ^[1-9][0-9]*$ || ! "$delay" =~ ^[0-9]+$ ]]; then
@@ -39,6 +42,30 @@ if [[ ! "$app_pid" =~ ^[1-9][0-9]*$ ]]; then
 fi
 trap 'xcrun simctl terminate "$sim_id" "$bundle_id" 2>/dev/null || true' EXIT
 
+failure_diagnostics() {
+  if [[ -s "$kill_error_path" ]]; then
+    echo "smoke: kill -0 stderr for pid=$app_pid" >&2
+    cat "$kill_error_path" >&2 || true
+  fi
+  echo "smoke: process diagnostic for pid=$app_pid (PID UID STAT COMM)" >&2
+  ps -p "$app_pid" -o pid=,uid=,stat=,comm= > "$process_path" 2>&1 || true
+  cat "$process_path" >&2 || true
+
+  local helper
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ci-ios-crash-summary.mjs"
+  if [[ -f "$helper" ]]; then
+    rm -f "$crash_summary_path" || true
+    if node "$helper" --pid "$app_pid" --started-at "$started_at" \
+      --sim-id "$sim_id" --output "$crash_summary_path" >&2; then
+      if [[ -f "$crash_summary_path" ]]; then
+        cat "$crash_summary_path" >&2 || true
+      fi
+    else
+      echo "smoke: crash summary diagnostic failed; original smoke failure retained" >&2
+    fi
+  fi
+}
+
 # RCTDefaultLogFunction writes os_log, which --console-pty does not capture.
 # Scope the persisted log query to this launch's PID and timestamp.
 for ((i = 0; i < attempts; i++)); do
@@ -49,11 +76,13 @@ for ((i = 0; i < attempts; i++)); do
   if grep -Fq '__RUSTRA_SMOKE_FAIL__' "$log_path"; then
     echo "::error::__RUSTRA_SMOKE_FAIL__ observed" >&2
     cat "$log_path" >&2
+    failure_diagnostics
     exit 1
   fi
-  if ! kill -0 "$app_pid" 2>/dev/null; then
+  if ! kill -0 "$app_pid" 2> "$kill_error_path"; then
     echo "::error::app process is not alive: $app_pid" >&2
     cat "$log_path" >&2
+    failure_diagnostics
     exit 1
   fi
   if grep -Fq '__RUSTRA_SMOKE_OK__' "$log_path"; then
@@ -64,4 +93,5 @@ for ((i = 0; i < attempts; i++)); do
 done
 echo "::error::__RUSTRA_SMOKE_OK__ was not observed in unified logging" >&2
 cat "$log_path" >&2
+failure_diagnostics
 exit 1
