@@ -9,7 +9,7 @@
 import { NativeModules } from 'react-native';
 import { getRustraNative as getInstalledNative } from '@rustra/react-native';
 
-type Installer = { install(): Promise<boolean | void> };
+type Installer = { install(): boolean | Promise<boolean | void> };
 
 function nativeInstaller(): Installer {
   const current = NativeModules.RustraBridge as Installer | undefined;
@@ -25,7 +25,12 @@ function nativeInstaller(): Installer {
 }
 
 export async function installRustraJSI(): Promise<void> {
-  await nativeInstaller().install();
+  const installed = await nativeInstaller().install();
+  if (installed === false) {
+    throw new Error(
+      '[rustra:install] The native JSI installer reported failure. Rebuild the native app and retry.',
+    );
+  }
   getInstalledNative();
 }
 
