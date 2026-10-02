@@ -1522,9 +1522,9 @@ test(
       handle.onReload((reason) => void reloads.push(reason));
       const edited = JSON.parse(originalSchema);
       edited.commands[0].description = 'external stale schema';
-      await triggerUntil(
+      writeFileSync(schemaPath, JSON.stringify(edited));
+      await observeUntil(
         () => logs,
-        () => writeFileSync(schemaPath, JSON.stringify(edited)),
         () => reloads.length > 0,
         'schema regeneration and reload',
       );
