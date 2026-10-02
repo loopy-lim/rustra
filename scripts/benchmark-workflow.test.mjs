@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const workflow = await readFile(new URL('../.github/workflows/bench.yml', import.meta.url), 'utf8');
 
@@ -21,6 +22,31 @@ test('benchmark workflow measures every registered core Criterion route', () => 
 
 test('benchmark summary includes the complex route log', () => {
   assert.match(workflow, /bench_complex\.txt/);
+});
+
+test('artifact names use valid with context and only successful jobs become baselines', () => {
+  const upload = workflow.split('      - name: Upload criterion artifacts')[1];
+  assert.ok(upload, 'the benchmark must preserve its artifact upload step');
+  assert.match(upload, /if:\s*always\(\)/, 'failed and cancelled runs keep diagnostic artifacts');
+  const name = /^\s+name:\s*([^\n]+)$/m.exec(upload)?.[1];
+  const parts = /^([^$]+)\$\{\{(.+)\}\}$/.exec(name ?? '');
+  assert.ok(parts, 'the artifact name must include its status-dependent suffix');
+  const [, prefix, expression] = parts;
+  // GitHub permits the job context in steps.with, but status-check functions only in if.
+  assert.doesNotMatch(
+    expression,
+    /\b(?:always|success|failure|cancelled)\s*\(/,
+    'status-check functions in with.name prevent the workflow from being parsed',
+  );
+  for (const status of ['success', 'failure', 'cancelled']) {
+    // This expression uses the shared JS/Actions subset: string comparison and &&/||.
+    const suffix = runInNewContext(expression, { job: { status } }, { timeout: 100 });
+    assert.equal(
+      `${prefix}${suffix}`,
+      status === 'success' ? 'criterion-results' : 'criterion-results-rejected',
+      `${status} must not change benchmark baseline eligibility`,
+    );
+  }
 });
 
 test('branching tree route uses the optimized profile and is included in reports', () => {
