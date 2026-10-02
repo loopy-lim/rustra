@@ -65,7 +65,7 @@
     },
     {
       "path": "../modules/rustra-jsi/src/index.ts",
-      "sha256": "6c9d182eb5a4132aea132226c4755ffd3866bf3da5617b3543561407b327e5eb"
+      "sha256": "6159334c0710e6ab19715b520cac967e393ff9ef9142926217838db6be213a88"
     },
     {
       "path": "commands.ts",

@@ -25,3 +25,9 @@ and keep progress/errors on the originating session. Reload callbacks can dispos
 their own watcher without joining themselves. Native Bun test fixtures build their
 own library instead of relying on a previously warmed checkout.
 Ignored child output cannot block verbose commands on an unread pipe.
+
+Fix iOS JSI installation with React Native's synchronous module interop. Install
+on the owning JS thread with an object-returning native method, avoiding a crash
+when a Promise's void return is read synchronously. Keep the public async
+installer and JS-thread teardown, and reject explicit native installation failure
+before accepting a previously installed global.
