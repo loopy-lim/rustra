@@ -1,10 +1,71 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { auditReleaseGates, evaluateRuns } from './check-release-gates.mjs';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const REPOSITORY = 'rustra/rustra';
+
+test('crate propagation waits for the registry even when a matching workspace package exists', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  for (const [step, crate] of [
+    ['Wait for rustra-naming index propagation', 'rustra-naming'],
+    ['Wait for crates.io index propagation', 'rustra-macros'],
+  ]) {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-index-wait-'));
+    try {
+      // Without an explicit registry Cargo resolves the matching local package
+      // immediately. The registry only exposes the version on the second poll.
+      for (const [name, source] of Object.entries({
+        cargo: `#!/bin/sh
+if [ "$1" = metadata ]; then echo '{}'; exit 0; fi
+printf '%s\\n' "$*" >> "$POLL_LOG"
+case " $* " in
+  *' --registry crates-io '*)
+    if [ -f "$REGISTRY_READY" ]; then exit 0; fi
+    touch "$REGISTRY_READY"
+    exit 101 ;;
+  *) echo 'version: 0.12.0 (from ./crates/local-workspace)'; exit 0 ;;
+esac
+`,
+        jq: '#!/bin/sh\necho 0.12.0\n',
+        sleep: '#!/bin/sh\nexit 0\n',
+      })) {
+        writeFileSync(join(root, name), source);
+        chmodSync(join(root, name), 0o755);
+      }
+      const section = workflow.split(`      - name: ${step}\n`)[1]?.split('\n      - name:')[0];
+      assert.ok(section, `missing propagation step: ${step}`);
+      const script = section.split('        run: |\n')[1].replace(/^          /gm, '');
+      const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${root}:${process.env.PATH}`,
+          POLL_LOG: join(root, 'polls.log'),
+          REGISTRY_READY: join(root, 'ready'),
+        },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const polls = readFileSync(join(root, 'polls.log'), 'utf8').trim().split('\n');
+      assert.equal(polls.length, 2, `${crate} must wait past the unavailable registry version`);
+      for (const poll of polls) {
+        assert.match(poll, new RegExp(`^info ${crate}@0\\.12\\.0 `));
+        assert.match(poll, /--registry crates-io(?: |$)/);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
 
 function run(overrides = {}) {
   return {
