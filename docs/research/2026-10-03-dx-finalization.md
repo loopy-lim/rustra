@@ -80,3 +80,28 @@ changeset 설명 보강으로 바뀐 문서·연결 영수증 해시만 현재 �
 | `/tmp/rustra-final-candidate-remainder.log`  | `649cdc20334e922e277dc04193cdb545861b8bd3a355dfa646ed326e16cf66a8` |
 | `/tmp/rustra-final-candidate-rn-package.log` | `416480ca1d444e4b71f1cad98129a2724d8f938b86d618d2a1b076f6024ce321` |
 | `/tmp/rustra-final-candidate-style.log`      | `b49de4f40fb262b4d0344f430a344cf75eb86d708934c5d53d185e0d8f07ebbe` |
+
+## 푸시 후 발견한 워크플로 오류
+
+DX 커밋 `89cf9c44ae8d828cf606fdc3fd641d6304ca2b9e`의 main 푸시와 원격 SHA
+일치를 확인했다. 커밋 훅과 pre-push의 `test:fast`도 통과했다.
+
+기존 Benchmark 워크플로는 실행 전 파싱 단계에서 실패했다.
+[해당 실행](https://github.com/loopy-lim/rustra/actions/runs/37035135766)의 실제
+annotation은 artifact `with.name`에서 `failure()` / `cancelled()`를 사용할 수
+없다는 오류였다. 이 워크플로 파일은 첫 DX 커밋에서 변경하지 않았다.
+
+[GitHub context 규칙](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability)에
+맞춰 `job.status != 'success'`로 rejected suffix를 계산하도록 보완했다.
+실패/취소 진단 artifact 보존과 성공 결과만 기준선으로 채택하는 규칙은 유지했다.
+
+- 기존 파일: actionlint 1.7.12에서 동일 오류 2개 재현.
+- 수정 후: 8개 전체 워크플로 actionlint 검사 통과.
+- benchmark/regression/environment 검사: 명시한 파일 3개, 25개 통과.
+- 실제 artifact 이름 식을 success/failure/cancelled 상태별로 평가해 기준선 선택 검증.
+
+이 후속 CI 패치는 위의 첫 DX 후보 소스 해시와 별도다. 원격 CI 전체 완료 또는
+Criterion 성능 회귀 통과를 의미하지 않는다.
+
+- `/tmp/rustra-final-all-workflows-actionlint.log`: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+- `/tmp/rustra-final-benchmark-workflow-scoped.log`: `d5db3ab62b95a784dfe067104f5982fdf68960ad10b5a52a7245857150b0c417`
