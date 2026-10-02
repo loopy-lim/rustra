@@ -154,9 +154,10 @@ export async function runWatch(args: string[]): Promise<WatchHandle> {
   return {
     dispose() {
       disposed = true;
-      loop.dispose();
+      const drained = loop.dispose();
       schemaWatch?.dispose();
       configWatch.dispose();
+      return drained;
     },
   };
 }

@@ -131,6 +131,8 @@ function seedProject(root: string, engineLib: EngineLibVariant = 'cdylib'): stri
     '  exit 0',
     'fi',
     'if [ "$1" = "run" ]; then',
+    '  [ -n "$FAKE_CARGO_LOG" ] && printf \'%s\\n\' "$*" >> "$FAKE_CARGO_LOG"',
+    '  [ -n "$FAKE_SCHEMA_DELAY" ] && sleep "$FAKE_SCHEMA_DELAY"',
     '  manifest=""; prev=""',
     '  for a in "$@"; do [ "$prev" = "--manifest-path" ] && manifest="$a"; prev="$a"; done',
     '  dir=$(dirname "$manifest")',
@@ -170,16 +172,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-// 트리거는 "한 번 쓰고 기다림"이 아니라 "루프가 반응할 때까지 재터치"다. fs.watch 는
-// 관찰 등록 직후의 첫 이벤트를 플랫폼 수준에서 잃을 수 있다(macOS 감시 스트림 arming
-// 윈도우 — 8중 동시 재현에서 첫 쓰기 24중 13 손실, Bun·Node 공통, 등록 후 25ms 유예로
-// 0으로 수렴 확인). 같은 내용을 다시 써도 mtime 이 바뀌어 새 이벤트가 걸리고,
-// 코드젠(fake cargo 복사)과 게이트 판정은 멱등하므로 재터치는 관찰 조건을 바꾸지 않는다.
+// Recovery tests may retouch until they observe progress. Retouches can queue
+// another regeneration: parity verification rearms its baseline and is stateful.
+// Tests asserting exactly one verdict per candidate must edit once and observe.
 function triggerUntil(
   captured: () => string[],
   write: () => void,
   observe: () => boolean,
   what: string,
+): Promise<void> {
+  return observeUntil(captured, observe, what, write);
+}
+
+function observeUntil(
+  captured: () => string[],
+  observe: () => boolean,
+  what: string,
+  write?: () => void,
 ): Promise<void> {
   const deadline = Date.now() + 10_000;
   const poll = async (): Promise<void> => {
@@ -188,7 +197,7 @@ function triggerUntil(
       if (Date.now() > deadline) {
         throw new Error(`timed out waiting for ${what}; captured:\n${captured().join('\n')}`);
       }
-      if (Date.now() >= nextTouch) {
+      if (write && Date.now() >= nextTouch) {
         write();
         nextTouch = Date.now() + 500;
       }
@@ -225,55 +234,69 @@ test(
 
       process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
       process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_CARGO_LOG = join(root, 'cargo-run.log');
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
       const rejectionCount = (): number =>
         errors.filter((line) => line.includes('[dev] reload rejected —')).length;
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
+        // Keep Cargo active beyond the old 500ms retouch interval. Each
+        // candidate still owns exactly one generation and one gate verdict.
+        process.env.FAKE_SCHEMA_DELAY = '0.65';
 
         // 트리거 1 — fake cargo 가 integer 계약을 쓴다 → 게이트가 거부해야 한다.
         // 거부 로그 자체가 "판정이 돌았다"는 양(陽) 관찰이자 동기화점이다.
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
-        await triggerUntil(
+        writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n');
+        await observeUntil(
           () => errors,
-          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
           () =>
             errors.some(
               (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
             ),
           'the loud drift rejection',
         );
+        assert.equal(rejectionCount(), 1);
+        assert.deepEqual(reloads, [], 'the drifted candidate must not reload');
 
         // 트리거 2 — 원래 계약으로 복귀. 첫 거부에서 기준이 드리프트 상태로
         // 재무장됐으므로 복귀 역시 "기준 대비 드리프트"로 판정된다 — 거부 2회.
         // 핵심은 (iii): 두 거부 모두 루프를 죽이지 않고 다음 변경이 다시
         // 판정됐다는 것. (같은 상태 유지 시의 통과는 rearm 단위 테스트가 담당.)
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
-        await triggerUntil(
+        writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n');
+        await observeUntil(
           () => errors,
-          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n'),
           () => rejectionCount() >= 2,
           'the second (restored-contract) rejection',
         );
 
-        // 두 번째 판정이 관찰된 뒤 짧은 유예 — 이 안에 reload 가 방출되지
-        // 않았음이 곧 부정(i) 검증이다(거부는 reload 를 방출하지 않는다).
-        await sleep(300);
-        handle.dispose();
-        assert.ok(rejectionCount() >= 2, `rejection must be loud, got: ${errors.join('\n')}`);
+        // Drain this run immediately after its verdict; a later same-contract
+        // retry is a distinct, legitimately passing candidate after rearming.
+        await handle.dispose();
+        assert.equal(
+          readFileSync(join(root, 'cargo-run.log'), 'utf8').trim().split('\n').length,
+          3,
+          'the initial run and two candidates must not create extra retry candidates',
+        );
+        assert.equal(rejectionCount(), 2, `rejection must be loud, got: ${errors.join('\n')}`);
         assert.deepEqual(
           reloads,
           [],
           'drifted reload must not be emitted; the restored contract is also re-verified ' +
-            '(baseline re-armed to the drifted state), so both triggers are rejected',
+            `(baseline re-armed to the drifted state), so both triggers are rejected:\n${errors.join('\n')}`,
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_SCHEMA_DELAY;
+        delete process.env.FAKE_CARGO_LOG;
       }
     } finally {
       process.env.PATH = originalPath;
@@ -301,8 +324,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
@@ -338,7 +362,7 @@ test(
           () => reloads.length >= 1,
           'a reload after the wasm build',
         );
-        handle.dispose();
+        await handle.dispose();
         assert.ok(
           reloads.length >= 1,
           `reload must still fire after a successful wasm build, captured:\n${errors.join('\n')}`,
@@ -350,6 +374,7 @@ test(
           'every dirty run rebuilds the wasm32 engine, not just the initial one',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_WASM_LOG;
@@ -379,13 +404,14 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
         // 유예 — 그 사이 reload 가 방출되지 않음이 곧 부정 검증이다.
         await sleep(300);
-        handle.dispose();
+        await handle.dispose();
         assert.ok(
           errors.some((line) => line.includes('[dev] regeneration failed')),
           `the wasm build failure must be loud, got:\n${errors.join('\n')}`,
@@ -400,6 +426,7 @@ test(
           'a failed wasm build must not emit reload — the host has no new engine to load',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_WASM_FAIL;
@@ -430,12 +457,13 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
         await sleep(300);
-        handle.dispose();
+        await handle.dispose();
         const failure = errors.find((line) => line.includes('[dev] regeneration failed'));
         assert.ok(failure, `the missing-cdylib case must be loud, got:\n${errors.join('\n')}`);
         assert.match(failure, /cdylib/, 'the error must name cdylib as the cause');
@@ -450,6 +478,7 @@ test(
         );
         assert.deepEqual(reloads, [], 'no reload when the engine cannot be built for wasm32');
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
       }
@@ -479,8 +508,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
         await triggerUntil(
@@ -489,7 +519,7 @@ test(
           () => reloads.length >= 1,
           'a reload with a custom-named cdylib',
         );
-        handle.dispose();
+        await handle.dispose();
         assert.ok(
           errors.some(
             (line) =>
@@ -503,6 +533,7 @@ test(
           `a correct artifact path must not break the loop, captured:\n${errors.join('\n')}`,
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
       }
@@ -532,12 +563,13 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
         await sleep(300);
-        handle.dispose();
+        await handle.dispose();
         const failure = errors.find((line) => line.includes('[dev] regeneration failed'));
         assert.ok(failure, `a silent artifact mismatch must not pass, got:\n${errors.join('\n')}`);
         assert.match(failure, /did not produce/, 'the error must name the missing artifact path');
@@ -547,6 +579,7 @@ test(
         );
         assert.deepEqual(reloads, [], 'no reload when the artifact could not be verified on disk');
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_WASM_NO_ARTIFACT;
@@ -658,6 +691,156 @@ function seedDylibProject(root: string): string {
   return project;
 }
 
+test('dispose drains a pending config read before its project can be removed', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dispose-read-'));
+  const originalPath = process.env.PATH;
+  const originalReadFile = fsPromises.readFile;
+  const logs: string[] = [];
+  const restoreConsole = captureConsole(logs);
+  let handle: DevWatchHandle | undefined;
+  let release!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  let pendingRead: Promise<unknown> | undefined;
+  try {
+    const project = seedDylibProject(root);
+    const configPath = join(project, 'rustra.json');
+    writeSchema(join(project, 'generated', 'schema.json'), 'string');
+    writeSchema(join(root, 'schema.json'), 'string');
+    process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+    process.env.FAKE_SCHEMA_FILE = join(root, 'schema.json');
+    handle = await runDev(['--config', configPath]);
+    Object.defineProperty(fsPromises, 'readFile', {
+      configurable: true,
+      writable: true,
+      value: (...args: Parameters<typeof originalReadFile>) => {
+        if (String(args[0]) !== configPath) return originalReadFile(...args);
+        entered = true;
+        pendingRead = paused.then(() => originalReadFile(...args));
+        return pendingRead;
+      },
+    });
+    syncBuiltinESMExports();
+    await triggerUntil(
+      () => logs,
+      () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn pending_read() {}\n'),
+      () => entered,
+      'a pending config read',
+    );
+    let drained = false;
+    const closing = Promise.resolve(handle.dispose()).then(() => {
+      drained = true;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(drained, false, 'dispose must own the unfinished read until it settles');
+    release();
+    await closing;
+    rmSync(project, { recursive: true, force: true });
+    assert.ok(!logs.some((line) => line.includes('regeneration failed')));
+  } finally {
+    release();
+    await pendingRead;
+    await handle?.dispose();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    Object.defineProperty(fsPromises, 'readFile', {
+      configurable: true,
+      writable: true,
+      value: originalReadFile,
+    });
+    syncBuiltinESMExports();
+    restoreConsole();
+    process.env.PATH = originalPath;
+    delete process.env.FAKE_SCHEMA_FILE;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const stage of ['run', 'build']) {
+  test(`dispose cancels the owned Cargo ${stage} before project cleanup`, async () => {
+    const root = mkdtempSync(join(tmpdir(), `rustra-dev-dispose-${stage}-`));
+    const env = { ...process.env };
+    const logs: string[] = [];
+    const restoreConsole = captureConsole(logs);
+    let handle: DevWatchHandle | undefined;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema.json'), 'string');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${env.PATH}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema.json');
+      handle = await runDev(['--config', join(project, 'rustra.json')]);
+      const originalCargo = readFileSync(join(root, FAKE_BIN, 'cargo'), 'utf8');
+      const delegate = join(root, FAKE_BIN, 'cargo-delegate');
+      writeFileSync(delegate, originalCargo);
+      chmodSync(delegate, 0o755);
+      const started = join(root, 'started');
+      const stopped = join(root, 'stopped');
+      const pauseScript = join(root, 'pause.cjs');
+      writeFileSync(
+        pauseScript,
+        `
+        const fs = require('node:fs');
+        process.on('SIGTERM', () => {
+          fs.writeFileSync(${JSON.stringify(stopped)}, 'stopped');
+          process.stderr.write('owned Cargo stopped\\n');
+          process.exit(0);
+        });
+        fs.writeFileSync(${JSON.stringify(started)}, String(process.pid));
+        setInterval(() => {}, 1000);
+      `,
+      );
+      writeFileSync(
+        join(root, FAKE_BIN, 'cargo'),
+        [
+          '#!/bin/bash',
+          `if [ "$1" = "${stage}" ]; then exec "${process.execPath}" "${pauseScript}"; fi`,
+          `exec "${delegate}" "$@"`,
+        ].join('\n'),
+      );
+      const published = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+      const before = readFileSync(published, 'utf8');
+      const reloads: string[] = [];
+      handle.onReload((reason) => void reloads.push(reason));
+      await triggerUntil(
+        () => logs,
+        () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn paused_cargo() {}\n'),
+        () => existsSync(started),
+        `the owned Cargo ${stage}`,
+      );
+      // Ignoring the return value still cancels immediately; joining is additive.
+      const closing = handle.dispose();
+      await closing;
+      assert.ok(existsSync(stopped), 'dispose must stop the actual Cargo process');
+      const pid = Number(readFileSync(started, 'utf8'));
+      assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+      assert.equal(readFileSync(published, 'utf8'), before);
+      assert.deepEqual(reloads, []);
+      assert.ok(!logs.some((line) => line.includes('regeneration failed')));
+      const afterClose = logs.length;
+      rmSync(project, { recursive: true, force: true });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(logs.length, afterClose, 'no owned output may arrive after disposal drains');
+    } finally {
+      const started = join(root, 'started');
+      if (existsSync(started)) {
+        try {
+          process.kill(Number(readFileSync(started, 'utf8')), 'SIGTERM');
+        } catch {
+          // The owned child has normally already exited during disposal.
+        }
+      }
+      await handle?.dispose();
+      restoreConsole();
+      process.env.PATH = env.PATH;
+      if (env.FAKE_SCHEMA_FILE === undefined) delete process.env.FAKE_SCHEMA_FILE;
+      else process.env.FAKE_SCHEMA_FILE = env.FAKE_SCHEMA_FILE;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
 test(
   'disposing while parity verification is pending prevents publication and watcher revival',
   { timeout: 30_000 },
@@ -719,9 +902,9 @@ test(
         'pending parity verification',
       );
       await captureEntered;
-      handle.dispose();
+      const closing = handle.dispose();
       releaseCapture();
-      await sleep(200);
+      await closing;
       assert.equal(readFileSync(livePath, 'utf8'), 'initial published core');
       assert.deepEqual(reloads, []);
       const buildsAfterClose = readFileSync(buildLog, 'utf8');
@@ -729,8 +912,8 @@ test(
       await sleep(250);
       assert.equal(readFileSync(buildLog, 'utf8'), buildsAfterClose);
     } finally {
-      handle?.dispose();
       releaseCapture();
+      await handle?.dispose();
       Object.defineProperty(fsPromises, 'readFile', {
         configurable: true,
         writable: true,
@@ -764,8 +947,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
@@ -822,7 +1006,7 @@ test(
           () => reloads.length >= 1,
           'a reload after the dylib build',
         );
-        handle.dispose();
+        await handle.dispose();
         assert.ok(
           reloads.length >= 1,
           `reload must still fire after a successful dylib build, captured:\n${errors.join('\n')}`,
@@ -833,6 +1017,7 @@ test(
           'every dirty run rebuilds the hot core, not just the initial one',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_LOG;
@@ -864,8 +1049,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
@@ -891,7 +1077,7 @@ test(
         // 후속 틱은 같은 드리프트를 다시 실행해 통과·발행할 수 있다. 이 테스트의
         // 계약은 "드리프트 틱 자체가 reload 를 내지 않는다"이므로, 후속 틱이
         // 끼어들기 전에 루프를 닫아 결정론적으로 고정한다.
-        handle.dispose();
+        await handle.dispose();
         await sleep(300);
         assert.deepEqual(
           reloads,
@@ -933,6 +1119,7 @@ test(
           'the rejected run must not leave tmp files behind',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_CONTENT;
@@ -967,8 +1154,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
@@ -996,7 +1184,7 @@ test(
             ),
           'the loud drift rejection after the stale-start recovery',
         );
-        handle.dispose();
+        await handle.dispose();
         assert.deepEqual(
           reloads,
           [],
@@ -1008,6 +1196,7 @@ test(
           'the drifted build must not reach the live path',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_CONTENT;
@@ -1039,8 +1228,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
@@ -1077,7 +1267,7 @@ test(
           () => reloads.length >= 1,
           'the re-armed passing run',
         );
-        handle.dispose();
+        await handle.dispose();
         assert.equal(
           readFileSync(liveAbs, 'utf8'),
           'drifted core bytes',
@@ -1096,6 +1286,7 @@ test(
           'the republish must not leave tmp files behind',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_CONTENT;
@@ -1128,8 +1319,9 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
@@ -1153,7 +1345,7 @@ test(
           'the first-publish drift rejection',
         );
         await sleep(300);
-        handle.dispose();
+        await handle.dispose();
         assert.ok(
           !existsSync(liveAbs),
           'a gate rejection before the first publish must not create the live artifact',
@@ -1173,6 +1365,7 @@ test(
           'no reload may be emitted when the first publish never happened',
         );
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_FAIL;
@@ -1202,12 +1395,13 @@ test(
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
+      let handle: DevWatchHandle | undefined;
       try {
-        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
         await sleep(300);
-        handle.dispose();
+        await handle.dispose();
         const failure = errors.find((line) => line.includes('[dev] regeneration failed'));
         assert.ok(failure, `the missing-cdylib case must be loud, got:\n${errors.join('\n')}`);
         assert.match(failure, /cdylib/, 'the error must name cdylib as the cause');
@@ -1222,6 +1416,7 @@ test(
         );
         assert.deepEqual(reloads, [], 'no reload when the hot core cannot be built');
       } finally {
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_DYLIB_NO_ARTIFACT;
@@ -1291,7 +1486,7 @@ for (const input of ['build script', 'workspace lock'] as const) {
         'Cargo inputs outside src must defeat the cached fingerprint',
       );
     } finally {
-      handle?.dispose();
+      await handle?.dispose();
       restore();
       process.env.PATH = originalPath;
       delete process.env.FAKE_SCHEMA_FILE;
@@ -1344,7 +1539,7 @@ test(
         'a schema edit must invalidate the skip even when Rust source bytes are unchanged',
       );
     } finally {
-      handle?.dispose();
+      await handle?.dispose();
       restore();
       process.env.PATH = originalPath;
       delete process.env.FAKE_SCHEMA_FILE;
@@ -1431,7 +1626,7 @@ test(
           'the skip tick must not touch the published live artifact',
         );
       } finally {
-        handle?.dispose();
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_CARGO_LOG;
@@ -1521,7 +1716,7 @@ test(
           'the rerun must republish the gated live artifact',
         );
       } finally {
-        handle?.dispose();
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_CARGO_LOG;
@@ -1602,7 +1797,7 @@ test(
           'the fail-safe run must republish the gated live artifact',
         );
       } finally {
-        handle?.dispose();
+        await handle?.dispose();
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_CARGO_LOG;

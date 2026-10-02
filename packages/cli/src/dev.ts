@@ -23,6 +23,7 @@ import { runLegacyDev } from './legacy-dev.js';
 import { withDevGeneratedInputExclusions } from './dev-generated-inputs.js';
 import { createParityGate } from './parity-gate.js';
 import { readFile } from 'node:fs/promises';
+import { isAbortedOperation } from './process.js';
 
 export { createWatchLoop, createReloadHooks } from './watch.js';
 export type { WatchLoop } from './watch.js';
@@ -56,7 +57,9 @@ export interface DevOptions {
  * returns — the initial forced regeneration is therefore never observed as a
  * reload; hooks see subsequent watch-loop runs only.
  */
-export type DevWatchHandle = WatchHandle & {
+export type DevWatchHandle = {
+  /** Cancels commands and watchers immediately; await before removing project inputs. */
+  dispose(): Promise<void>;
   onReload(cb: (reason: string) => void | Promise<void>): void;
 };
 
@@ -86,7 +89,7 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
   // 루프 진입 없음 — 기존 "기본값 객체로 워처 진입" 관례의 대체다. onReload 는
   // reload 루프가 세팅 전이므로 no-op 이 계약상 정확하다(초기 강제 재생성도
   // 관찰되지 않는다).
-  if (options.help) return { dispose() {}, onReload: () => {} };
+  if (options.help) return { async dispose() {}, onReload: () => {} };
   // dev 루프의 cargo 스폰(스키마 generate bin, dylib 빌드)은 프로필과 무관하게
   // 증분 컴파일을 켠다 — env 는 프로필을 양방향으로 우선하고(2026-09-21 실측),
   // 증분 여부는 cargo 핑거프린트에 없어 직접 실행하는 cargo 빌드와의 전환 재컴
@@ -101,6 +104,8 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
 }
 
 async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWatchHandle> {
+  const log = console.log;
+  const errorOutput = console.error;
   configPath = resolve(configPath);
   let config = readDevConfig(configPath);
   let manifestDir = dirname(config.manifestPath);
@@ -117,6 +122,7 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   let inputPathKey = '';
   let subscriptions: WatchHandle[] = [];
   let disposed = false;
+  const cancellation = new AbortController();
   let gate: ReturnType<typeof createParityGate> | undefined;
   let gateKey = '';
   let gateArmed = false;
@@ -181,7 +187,7 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   }
 
   const perform = async (reason: string) => {
-    console.log(`[dev] ${reason} → codegen --config ${configPath}`);
+    log(`[dev] ${reason} → codegen --config ${configPath}`);
     regenerating = true;
     try {
       const nextText = await readFile(configPath, 'utf8');
@@ -245,19 +251,21 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
         readSchemaSnapshot(config.schemaPath) === lastGeneratedSchema;
       let dylibPublish: { artifact: string; livePath: string } | undefined;
       if (skippedCargoStage) {
-        console.log('[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)');
+        log('[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)');
       } else {
         const { runCodegen } = await import('./cli-codegen.js');
-        await runCodegen(['--config', configPath]);
+        await runCodegen(['--config', configPath], { signal: cancellation.signal });
         if (disposed) return;
         lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
         if (config.devWasm) {
-          const artifact = await buildWasmEngine(config.devWasm);
-          console.log(`[dev:wasm] engine artifact: ${artifact}`);
+          const artifact = await buildWasmEngine(config.devWasm, cancellation.signal);
+          if (disposed) return;
+          log(`[dev:wasm] engine artifact: ${artifact}`);
         }
         if (config.devDylib) {
-          const artifact = await buildDylibCore(config.devDylib);
-          console.log(`[dev:dylib] core artifact: ${artifact}`);
+          const artifact = await buildDylibCore(config.devDylib, cancellation.signal);
+          if (disposed) return;
+          log(`[dev:dylib] core artifact: ${artifact}`);
           dylibPublish = { artifact, livePath: liveArtifactPath(artifact) };
         }
       }
@@ -273,10 +281,11 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
           gateArmed = true;
         } else {
           const verdict = await gate.verify();
+          if (disposed) return;
           if (!verdict.ok) {
-            console.error(`[dev] reload rejected — ${verdict.reason}`);
+            errorOutput(`[dev] reload rejected — ${verdict.reason}`);
             if (dylibPublish) {
-              console.error(
+              errorOutput(
                 existsSync(dylibPublish.livePath)
                   ? `[dev:dylib] gated live artifact untouched at ${dylibPublish.livePath} — the host keeps running the previously published core`
                   : '[dev:dylib] no gated live artifact was published — do not launch the host',
@@ -289,7 +298,7 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       if (disposed) return;
       if (dylibPublish) {
         const livePath = publishGatedArtifact(dylibPublish.artifact, dylibPublish.livePath);
-        console.log(`[dev:dylib] launch the host with RUSTRA_HOT_CORE=${livePath}`);
+        log(`[dev:dylib] launch the host with RUSTRA_HOT_CORE=${livePath}`);
       }
       // 지문 채택 — 성공 틱 한정(게이트 거부는 위에서 return, 빌드 실패는 catch 로
       // 가므로 여기에 못 미친다). 코드젠이 **소비한** 입력의 판정 시점 지문을
@@ -314,11 +323,12 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       // Replacing subscriptions must not swallow edits between the last poll
       // and publication. A new watcher starts at the current disk snapshot.
       if (editedDuringBuild) loop.schedule('Rust inputs changed during build');
-      console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
+      log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
       await reload.emitReload(reason);
     } catch (error) {
-      console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
+      if (isAbortedOperation(error, cancellation.signal)) return;
+      errorOutput(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
     } finally {
       regenerating = false;
     }
@@ -330,13 +340,15 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
     { path: configPath, onChange: () => loop.schedule('config change') },
   ]);
   await loop.run('initial', true);
-  console.log(`\n[dev] watching ${manifestDir} and ${configPath} for changes...`);
+  log(`\n[dev] watching ${manifestDir} and ${configPath} for changes...`);
   return {
     dispose() {
       disposed = true;
-      loop.dispose();
+      cancellation.abort();
+      const drained = loop.dispose();
       configWatch.dispose();
       for (const watch of subscriptions) watch.dispose();
+      return drained;
     },
     onReload: reload.onReload,
   };

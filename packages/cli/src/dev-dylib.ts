@@ -56,29 +56,34 @@ export function spawnCapturingStdout(
   args: string[],
   cwd: string,
   progressLabel: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   return new Promise((resolveSpawn, rejectSpawn) => {
-    const child = spawn('cargo', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    signal?.throwIfAborted();
+    const output = console.error;
+    const writeStderr = process.stderr.write.bind(process.stderr);
+    const child = spawn('cargo', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], signal });
     const chunks: Buffer[] = [];
     child.stdout?.on('data', (chunk: Buffer) => void chunks.push(chunk));
-    child.stderr?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
+    child.stderr?.on('data', (chunk: Buffer) => writeStderr(chunk));
     const started = Date.now();
     let tick = 0;
     const render = (suffix: string): void => {
       const elapsed = Math.floor((Date.now() - started) / 1000);
       const frame = SPINNER_FRAMES[tick % SPINNER_FRAMES.length];
-      console.error(`[rustra] ${frame} ${progressLabel} ${suffix} (${elapsed}s)`);
+      output(`[rustra] ${frame} ${progressLabel} ${suffix} (${elapsed}s)`);
       tick += 1;
     };
     const timer = setInterval(() => render('still running'), 1000);
     timer.unref?.();
-    console.error(`[rustra] ⠋ ${progressLabel}...`);
+    output(`[rustra] ⠋ ${progressLabel}...`);
     const finish = (): void => {
       if (timer) clearInterval(timer);
     };
+    let spawnError: Error | undefined;
     child.on('error', (error) => {
       finish();
-      rejectSpawn(error);
+      spawnError = error;
     });
     // close — exit 이 아니라. exit 는 stdout 드레인을 기다리지 않는다(빠른 빌드일
     //수록 data 이벤트가 exit 뒤에 온다). compiler-artifact 수신이 이 헬퍼의 전부이므로
@@ -86,12 +91,14 @@ export function spawnCapturingStdout(
     child.on('close', (code, signal) => {
       finish();
       const total = ((Date.now() - started) / 1000).toFixed(1);
-      if (code === 0) {
-        console.error(`[rustra] ✓ ${progressLabel} done in ${total}s`);
+      if (code === 0 && !spawnError) {
+        output(`[rustra] ✓ ${progressLabel} done in ${total}s`);
         resolveSpawn(Buffer.concat(chunks).toString('utf8'));
       } else {
-        console.error(`[rustra] ✗ ${progressLabel} failed in ${total}s`);
-        rejectSpawn(new Error(`cargo ${signal ? `terminated by ${signal}` : `exit ${code}`}`));
+        output(`[rustra] ✗ ${progressLabel} failed in ${total}s`);
+        rejectSpawn(
+          spawnError ?? new Error(`cargo ${signal ? `terminated by ${signal}` : `exit ${code}`}`),
+        );
       }
     });
   });
@@ -148,7 +155,11 @@ export function pickCdylibArtifact(
  * 로 남긴다(fresh 메시지가 이미 지워진 파일을 가리키는 불일치를 조용히 통과시키지
  * 않는다 — wasm 헬퍼의 did-not-produce 계약과 같은 자리다).
  */
-export async function buildDylibCore(resolved: ResolvedDevDylib): Promise<string> {
+export async function buildDylibCore(
+  resolved: ResolvedDevDylib,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted();
   const manifestPath = resolved.manifestPath;
   const metadata = readCargoMetadata(manifestPath, dirname(manifestPath));
   const cargoPackage = selectHostPackage(metadata, manifestPath, resolved.rustPackage);
@@ -169,6 +180,7 @@ export async function buildDylibCore(resolved: ResolvedDevDylib): Promise<string
       args,
       dirname(manifestPath),
       `dylib core build (${cargoPackage.name})`,
+      signal,
     );
   } catch (error) {
     throw new Error(

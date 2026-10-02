@@ -37,7 +37,11 @@ export function wasmEngineArtifactPath(
  * 패키지로 한정). 릴리스 프로필(`--release`)은 A0 스파이크가 검증한 구성
  * (opt-level "s", panic=abort)과 동일하다 — dev 편의 프로필을 새로 발명하지 않는다.
  */
-export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string> {
+export async function buildWasmEngine(
+  devWasm: ResolvedDevWasm,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted();
   const manifestPath = devWasm.manifestPath;
   const metadata = readCargoMetadata(manifestPath, dirname(manifestPath));
   const cargoPackage = selectHostPackage(metadata, manifestPath, devWasm.rustPackage);
@@ -55,6 +59,7 @@ export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string>
     ['build', '--manifest-path', manifestPath, '--target', 'wasm32-unknown-unknown', '--release'],
     dirname(manifestPath),
     {
+      signal,
       progressLabel: `wasm32 engine build (${cargoPackage.name})`,
       childOutput: 'inherit',
     },

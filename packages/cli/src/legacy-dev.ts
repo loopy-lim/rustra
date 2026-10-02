@@ -8,7 +8,7 @@ import {
 } from './dev-fingerprint.js';
 import { detectDirty, planPipeline, runOnce, type PipelinePlan } from './dev-support.js';
 import { withDevGeneratedInputExclusions } from './dev-generated-inputs.js';
-import { spawnInherit } from './process.js';
+import { isAbortedOperation, spawnInherit } from './process.js';
 import {
   createFileWatch,
   createSourceWatch,
@@ -21,6 +21,8 @@ import type { DevOptions, DevWatchHandle } from './dev.js';
 
 /** Legacy --backend/--app orchestration with the same Rust input boundary as config mode. */
 export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle> {
+  const log = console.log;
+  const errorOutput = console.error;
   const backend = resolve(options.backendDir);
   const app = resolve(options.appDir);
   const generated = join(app, 'generated');
@@ -45,6 +47,7 @@ export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle>
   let inputPathKey = '';
   let watches: WatchHandle[] = [];
   let disposed = false;
+  const cancellation = new AbortController();
   let initialized = false;
   let successfulFingerprint: string | undefined;
   let generatedSchema: string | undefined;
@@ -105,14 +108,19 @@ export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle>
       ),
     ];
   };
-  const rustBin = () => spawnInherit('cargo', ['run', '--quiet', '--bin', 'generate'], backend);
+  const rustBin = () =>
+    spawnInherit('cargo', ['run', '--quiet', '--bin', 'generate'], backend, {
+      signal: cancellation.signal,
+    });
   const tsCli = async () => {
     const cli = process.env.RUSTRA_CLI ?? findRepoCli(app);
     if (!cli) throw new Error('Rustra CLI is unavailable; set RUSTRA_CLI.');
-    await spawnInherit('node', [cli, 'generate', '--schema', schema, '--output', generated], app);
+    await spawnInherit('node', [cli, 'generate', '--schema', schema, '--output', generated], app, {
+      signal: cancellation.signal,
+    });
   };
   const perform = async (reason: string) => {
-    console.log(`[dev] ${reason} → codegen`);
+    log(`[dev] ${reason} → codegen`);
     try {
       if (!disposed) subscribe(refreshPaths());
       const next = plan();
@@ -120,7 +128,7 @@ export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle>
         successfulFingerprint = fingerprint();
         generatedSchema = readSchemaSnapshot(schema);
         initialized = true;
-        console.log('[dev] clean — nothing to do');
+        log('[dev] clean — nothing to do');
         return;
       }
       const before = fingerprint();
@@ -134,16 +142,15 @@ export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle>
       const stable = before !== undefined && before === after && beforePaths === inputPathKey;
       successfulFingerprint = stable ? before : undefined;
       if (!stable) loop.schedule('Rust inputs changed during regeneration');
-      console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
+      log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (options.inspect) {
-        console.log(
-          '[dev:inspect] Wrap your engine with createInstrumentedEngine in the app process',
-        );
-        console.log('[dev:inspect] to expose report() via console or remote: @rustra/devtools');
+        log('[dev:inspect] Wrap your engine with createInstrumentedEngine in the app process');
+        log('[dev:inspect] to expose report() via console or remote: @rustra/devtools');
       }
       if (next.rustBin) await reload.emitReload(reason);
     } catch (error) {
-      console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
+      if (isAbortedOperation(error, cancellation.signal)) return;
+      errorOutput(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
     }
   };
   const loop = createWatchLoop(perform, () => {
@@ -152,12 +159,14 @@ export async function runLegacyDev(options: DevOptions): Promise<DevWatchHandle>
   });
   subscribe(paths);
   await loop.run('initial', true);
-  console.log(`\n[dev] watching ${backend} for changes...`);
+  log(`\n[dev] watching ${backend} for changes...`);
   return {
     dispose() {
       disposed = true;
-      loop.dispose();
+      cancellation.abort();
+      const drained = loop.dispose();
       for (const watch of watches) watch.dispose();
+      return drained;
     },
     onReload: reload.onReload,
   };

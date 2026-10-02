@@ -1,10 +1,12 @@
 import { existsSync, readdirSync, lstatSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type WatchLoop = {
   run(reason: string, force?: boolean): Promise<void>;
   schedule(reason: string): void;
-  dispose(): void;
+  /** Stops scheduling immediately; await to drain the active run before removing inputs. */
+  dispose(): Promise<void>;
   /**
    * Registers a reload hook fired after a successful pipeline run that touched
    * the Rust side (the host's engine must re-initialize). Errors from hooks are
@@ -57,7 +59,7 @@ export type FileWatchSpec = {
 };
 
 export type WatchHandle = {
-  dispose(): void;
+  dispose(): void | Promise<void>;
 };
 
 /**
@@ -77,31 +79,41 @@ export function createWatchLoop(
   shouldRun: () => boolean | Promise<boolean>,
   debounceMs = 300,
 ): WatchLoop {
+  const errorOutput = console.error;
+  const runContext = new AsyncLocalStorage<object>();
+  let runIdentity: object | undefined;
   let running = false;
   let queued = false;
   let disposed = false;
+  let activeRun: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const reload = createReloadHooks();
 
-  const run = async (reason: string, force = false): Promise<void> => {
-    if (disposed) return;
+  const run = (reason: string, force = false): Promise<void> => {
+    if (disposed) return Promise.resolve();
     if (running) {
       queued = true;
-      return;
+      return Promise.resolve();
     }
     running = true;
-    try {
-      if (force || (await shouldRun())) {
-        await perform(reason);
-        await reload.emitReload(reason);
+    runIdentity = {};
+    activeRun = runContext.run(runIdentity, async () => {
+      try {
+        if ((force || (await shouldRun())) && !disposed) {
+          await perform(reason);
+          if (!disposed) await reload.emitReload(reason);
+        }
+      } finally {
+        running = false;
+        activeRun = undefined;
+        runIdentity = undefined;
+        if (queued && !disposed) {
+          queued = false;
+          schedule('queued change');
+        }
       }
-    } finally {
-      running = false;
-      if (queued && !disposed) {
-        queued = false;
-        schedule('queued change');
-      }
-    }
+    });
+    return activeRun;
   };
 
   function schedule(reason: string): void {
@@ -110,7 +122,7 @@ export function createWatchLoop(
     timer = setTimeout(() => {
       timer = null;
       void run(reason).catch((error: unknown) => {
-        console.error(
+        errorOutput(
           `[dev] scheduled run failed: ${error instanceof Error ? error.message : error}`,
         );
       });
@@ -126,6 +138,17 @@ export function createWatchLoop(
       queued = false;
       if (timer) clearTimeout(timer);
       timer = null;
+      // A callback may close its own session. Joining that run from inside it
+      // would deadlock; external callers still drain all pending callbacks.
+      if (running && runContext.getStore() === runIdentity) return Promise.resolve();
+      // The run's caller owns its error. Disposal joins its lifetime without
+      // creating a second rejection for callers that intentionally ignore it.
+      return (
+        activeRun?.then(
+          () => {},
+          () => {},
+        ) ?? Promise.resolve()
+      );
     },
   };
 }

@@ -159,27 +159,39 @@ test('an opted-in generated Node CRUD client preserves records across create, re
 
 test('the generated Bun event entry binds subscribers to the compatible selected library', () => {
   const root = project();
-  const extension =
-    process.platform === 'darwin' ? 'dylib' : process.platform === 'win32' ? 'dll' : 'so';
-  const library = `${process.platform === 'win32' ? '' : 'lib'}rustra_calculator_example.${extension}`;
-  const source = join(repoRoot, 'target/debug', library);
-  symlinkSync(source, join(root, 'target/debug', library));
-  mkdirSync(join(root, 'target/release'));
-  writeFileSync(join(root, 'target/release', library), 'incompatible native library');
-  writeFileSync(
-    join(root, 'generated/contract.js'),
-    "export const GENERATED_CONTRACT_HASH=''; export const SCHEMA_VERSION=1;",
-  );
-  const entry = generateBunEntryTs(
-    { targetDirectoryUrl: '../target/', targetName: 'rustra_calculator_example' },
-    { events: true },
-  ).replaceAll("contractVerification: 'strict'", "contractVerification: 'off'");
-  writeFileSync(join(root, 'generated/bun.js'), compileEntry(entry));
-  writeFileSync(
-    join(root, 'generated/frame-registry.js'),
-    'export const frameRegistry = new Map([["emitDemo", {commandId: 11, encode: () => Uint8Array.of(11,0,0,0).buffer, decode: () => ({ok:true,result:{emitted:1}})}]]);',
-  );
-  const consumer = String.raw`
+  try {
+    const target = join(root, 'native-target');
+    const build = spawnSync(
+      'cargo',
+      ['build', '--locked', '-p', 'rustra-calculator-example', '--lib'],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, CARGO_TARGET_DIR: target },
+        encoding: 'utf8',
+        timeout: 120_000,
+      },
+    );
+    assert.equal(build.status, 0, build.stderr || String(build.error));
+    const extension =
+      process.platform === 'darwin' ? 'dylib' : process.platform === 'win32' ? 'dll' : 'so';
+    const library = `${process.platform === 'win32' ? '' : 'lib'}rustra_calculator_example.${extension}`;
+    symlinkSync(join(target, 'debug', library), join(root, 'target/debug', library));
+    mkdirSync(join(root, 'target/release'));
+    writeFileSync(join(root, 'target/release', library), 'incompatible native library');
+    writeFileSync(
+      join(root, 'generated/contract.js'),
+      "export const GENERATED_CONTRACT_HASH=''; export const SCHEMA_VERSION=1;",
+    );
+    const entry = generateBunEntryTs(
+      { targetDirectoryUrl: '../target/', targetName: 'rustra_calculator_example' },
+      { events: true },
+    ).replaceAll("contractVerification: 'strict'", "contractVerification: 'off'");
+    writeFileSync(join(root, 'generated/bun.js'), compileEntry(entry));
+    writeFileSync(
+      join(root, 'generated/frame-registry.js'),
+      'export const frameRegistry = new Map([["emitDemo", {commandId: 11, encode: () => Uint8Array.of(11,0,0,0).buffer, decode: () => ({ok:true,result:{emitted:1}})}]]);',
+    );
+    const consumer = String.raw`
     import assert from 'node:assert/strict';
     import { rustra, events, subscribeEvent } from './generated/bun.js';
     const seen = [];
@@ -189,7 +201,6 @@ test('the generated Bun event entry binds subscribers to the compatible selected
       assert.deepEqual(seen, [{ emitted: 1 }]);
     } finally { events.dispose(); rustra.dispose(); }
   `;
-  try {
     const result = spawnSync('bun', ['-e', consumer], {
       cwd: root,
       encoding: 'utf8',
