@@ -8,8 +8,8 @@
 ## 매트릭스
 
 열 이름은 저수준 엔진 팩토리를 기준으로 한다. 생성된 호스트 진입점(기본 경로)을
-쓴다면 열 대응은 다음과 같다: `generated/node.ts` → **Node** 열(one-shot stdio
-JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI Frame 엔진 — 아래 Frame
+쓴다면 열 대응은 다음과 같다: `generated/node.ts` → **Node** 열(기본 one-shot stdio
+JSON 엔진. 이벤트가 있거나 `node.persistent: true`면 같은 persistent 런타임 사용), `generated/bun.ts` → **Bun** 열(기본값은 FFI Frame 엔진 — 아래 Frame
 행과 `supports` 표 참고), `generated/tauri.ts` → **Tauri** 열,
 `generated/react-native.ts` → RN **`createFrameEngine`** 열. RN JSON 열은 직접
 커스텀 transport를 `createReactNativeEngine`에 넘길 때만 해당한다. UniFFI
@@ -118,18 +118,16 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
 | Rust workspace crates  | 0.12.0           |
-| `@rustra/bun`          | 0.10.2           |
-| `@rustra/cli`          | 0.11.3           |
+| `@rustra/bun`          | 0.11.0           |
+| `@rustra/cli`          | 0.12.0           |
 | `@rustra/devtools`     | 0.7.2            |
-| `@rustra/node`         | 0.10.2           |
+| `@rustra/node`         | 0.11.0           |
 | `@rustra/react`        | 0.8.3            |
-| `@rustra/react-native` | 0.9.2            |
-| `@rustra/tauri`        | 0.9.3            |
+| `@rustra/react-native` | 0.10.0           |
+| `@rustra/tauri`        | 0.10.0           |
 | `@rustra/testing`      | 0.7.2            |
-| `@rustra/types`        | 0.12.0           |
+| `@rustra/types`        | 0.12.1           |
 
-<!-- release:versions:end -->
-<!-- release:versions:end -->
 <!-- release:versions:end -->
 
 JS가 생성하는 Tauri 채널은 발급한 물리 WebView에 귀속된 네이티브

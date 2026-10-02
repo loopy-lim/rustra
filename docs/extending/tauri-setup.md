@@ -9,11 +9,11 @@ working app built exactly this way lives in
 
 ## Prepare the existing app in one command
 
-With `rustra.json` at your frontend root and `"tauri": {}` enabled, run the matching
-development CLI:
+With `rustra.json` at your frontend root and `"tauri": {}` enabled, run CLI 0.12.0.
+Both the Rust core and Tauri host need Rustra 0.12.0 or later:
 
 ```bash
-rustra setup --config rustra.json
+bunx --bun @rustra/cli@0.12.0 setup --config rustra.json
 ```
 
 Setup generates clients, installs dependencies, builds the selected Rust core,
@@ -35,17 +35,18 @@ commands from the generated `tauri.js` entry and rebuild your Tauri app.
 
 Repeated setup preserves identical files and refuses to overwrite an edited
 adapter. Multiple package factories require an explicit selection rather than a
-guess. The setup command and composition helper described here are development
-source changes; use matching local Rustra and CLI sources until released.
+guess. If setup fails, fix the reported error and rerun the printed setup command.
+Preparation, native app build, WebView runtime acceptance and registry publication
+are separate checks.
 
-| #   | File                            | Change                                                          |
-| --- | ------------------------------- | --------------------------------------------------------------- |
-| 1   | Rust core crate — `src/lib.rs`  | define `#[command]` functions + a package function              |
-| 2   | Rust core crate — `rustra.json` | add `"tauri": {}` and the codegen generator keys                |
-| 3   | `src-tauri/Cargo.toml`          | depend on the core crate + `rustra` with the `tauri` feature    |
-| 4   | `src-tauri/src/main.rs`         | register the package with `tauri_support::register_with_events` |
-| 5   | `src-tauri/tauri.conf.json`     | set `app.withGlobalTauri: true`                                 |
-| 6   | frontend (e.g. `src/app.ts`)    | import from `../generated/tauri.js` — no engine setup code      |
+| #   | File                           | Change                                                          |
+| --- | ------------------------------ | --------------------------------------------------------------- |
+| 1   | Rust core crate — `src/lib.rs` | define `#[command]` functions + a package function              |
+| 2   | Frontend root — `rustra.json`  | add `"tauri": {}` and the codegen generator keys                |
+| 3   | `src-tauri/Cargo.toml`         | depend on the core crate + `rustra` with the `tauri` feature    |
+| 4   | `src-tauri/src/main.rs`        | register the package with `tauri_support::register_with_events` |
+| 5   | `src-tauri/tauri.conf.json`    | set `app.withGlobalTauri: true`                                 |
+| 6   | frontend (e.g. `src/app.ts`)   | import from `../generated/tauri.js` — no engine setup code      |
 
 ## 1. Rust core crate: commands and package
 
@@ -74,15 +75,17 @@ pub fn package() -> Package {
 
 ## 2. `rustra.json` — turn on the Tauri host
 
-Create (or extend) `rustra.json` in the Rust crate. The `tauri` block is an
-empty object — Cargo metadata plus standard Tauri APIs are inferred:
+Create (or extend) `rustra.json` at the frontend root, next to `package.json`
+and `src-tauri/`. Point `codegen.rustManifest` at the Rust core crate. In this
+layout the core is `rustra-app/`, and generated clients stay at frontend
+`generated/`. The empty `tauri` block infers standard Tauri APIs:
 
 ```json
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
   "codegen": {
-    "rustManifest": "./Cargo.toml",
+    "rustManifest": "./rustra-app/Cargo.toml",
     "rustBinary": "generate"
   },
   "tauri": {}
@@ -92,7 +95,7 @@ empty object — Cargo metadata plus standard Tauri APIs are inferred:
 Then generate the client surfaces:
 
 ```bash
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 ```
 
 This renders `generated/tauri.ts` (plus `types.ts`, `commands.ts`, `contract.ts`).
@@ -102,8 +105,8 @@ see [getting started §2-4](../getting-started.md).
 
 The generated entry supplies the expected contract hash and defaults to strict
 native startup verification. The current Rust registration exposes
-`rustra_contract_hash`; update Rust and generated TypeScript together. Before
-these changes are released, use the matching development source. Old/custom
+`rustra_contract_hash`; update Rust and generated TypeScript together. Use the
+matching Rustra and CLI release versions above. Old/custom
 native hosts need an explicit `contractVerification: 'warn'` or `'off'` if
 verification cannot be enforced.
 
@@ -111,7 +114,7 @@ verification cannot be enforced.
 
 ```toml
 [dependencies]
-rustra = { version = "0.8", features = ["tauri"] }
+rustra = { version = "0.12.0", features = ["tauri"] }
 rustra-app = { path = "../rustra-app" }   # your core crate
 ```
 
@@ -185,12 +188,12 @@ Apps that do not want the global API can instead pass
 Install the adapter once, then import the generated entry:
 
 ```bash
-bun add @rustra/tauri @rustra/types
+bun add @rustra/tauri@0.10.0 @rustra/types@0.12.1
 ```
 
 ```ts
 // src/app.ts
-import { addNumbers, subscribeEvent } from '../rustra-app/generated/tauri.js';
+import { addNumbers, subscribeEvent } from '../generated/tauri.js';
 
 // Rust-side Package::emit arrives as a typed push event (no polling)
 const unsubscribe = await subscribeEvent<{ value: number }>('calc.tick', (payload) => {

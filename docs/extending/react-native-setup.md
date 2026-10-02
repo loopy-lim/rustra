@@ -65,15 +65,34 @@ usually unnecessary.
 
 ## 3. Generation and installation
 
-Run all JavaScript work with Bun 1.4 or later.
+Add the dependencies with Bun 1.4 or later, then run setup:
 
 ```bash
-bun add @rustra/react-native @rustra/types
-bun add -d @rustra/cli
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
-bun install
+bun add @rustra/react-native@0.10.0 @rustra/types@0.12.1
+bun add -d @rustra/cli@0.12.0
+bunx --bun rustra setup --config rustra.json
 ```
+
+Setup generates the clients and local native module, installs dependencies, and
+builds the Rust core. It adds `rustra:ios` / `rustra:android` preparation scripts
+while preserving existing app scripts. If setup fails, fix the reported error
+and rerun the printed setup command. Installation respects the project's
+`packageManager` or lockfile.
+
+Prepare only the platform you use, then launch with the app's existing React
+Native or Expo command:
+
+```bash
+bun run rustra:ios      # Prepare iOS Pods
+# bun run rustra:android  # Build an Android debug APK
+```
+
+These scripts do not install or launch the app. If an existing customized script
+conflicts, use the preparation command printed by setup. RN-only apps use setup
+without `--run`; `--run` executes a Node/Bun project's `demo` script.
+Update the JS packages and native Rustra 0.12.0 together, then rebuild the app.
+Setup success, registry publication and command results on a simulator/device
+are separate checks.
 
 By default, generation produces the following layout.
 

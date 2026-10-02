@@ -2,8 +2,8 @@
 
 # rustra
 
-현재 릴리스 라인은 Rust crate 0.12.0과 아래 패키지 버전(`@rustra/types` 0.12.0·`@rustra/cli`
-0.11.3, 어댑터는 각자의 버전)을 대상으로 한다. 네이티브 라이브러리·JS 어댑터·생성물을
+현재 릴리스 라인은 Rust crate 0.12.0과 아래 패키지 버전(`@rustra/types` 0.12.1·`@rustra/cli`
+0.12.0, 어댑터는 각자의 버전)을 대상으로 한다. 네이티브 라이브러리·JS 어댑터·생성물을
 함께 갱신한다. 소비자 검증과 롤백은
 [마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다. 이번 DX
 업그레이드는 [0.11 → 0.12 안내](docs/migrations/0.11-to-0.12.ko.md)를 참고한다.
@@ -159,13 +159,44 @@ schemars = { version = "0.8", features = ["derive"] }
 ### TypeScript 어댑터 (필요한 환경만)
 
 ```bash
-bun add @rustra/node@0.10.2      # Node.js
-bun add @rustra/bun@0.10.2       # Bun
-bun add @rustra/tauri@0.9.3     # Tauri
-bun add @rustra/react-native@0.9.2  # React Native
+bun add @rustra/node@0.11.0      # Node.js
+bun add @rustra/bun@0.11.0       # Bun
+bun add @rustra/tauri@0.10.0     # Tauri
+bun add @rustra/react-native@0.10.0  # React Native
 bun add @rustra/testing@0.7.2       # Mock 엔진 (테스트)
 bun add @rustra/devtools@0.7.2      # 호출 관측성 (개발)
 ```
+
+## 첫 Rust 호출
+
+Rust와 Bun 1.4 이상이 설치되어 있으면 다음 명령으로 프로젝트 생성부터 첫 호출까지 실행한다.
+
+```bash
+bunx --bun @rustra/cli@0.12.0 init my-project --setup
+# Bun FFI를 쓰려면: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+```
+
+`--setup`은 클라이언트 생성, 의존성 설치, Rust 빌드와 Node/Bun 스캐폴드의 `echo`
+데모를 실행한다. `my-project/src/lib.rs`를 수정한 뒤 다음 명령으로 다시 호출한다.
+
+```bash
+cd my-project
+bun run start
+```
+
+`start`는 setup과 데모를 다시 실행하며, `bun run setup`은 데모 없이 준비만 한다.
+실패하면 오류를 해결하고 출력된 `rustra setup` 명령으로 재시도한다. `demo` 스크립트가
+있는 기존 프로젝트는 `rustra setup --config rustra.json --run`을 사용할 수 있다.
+재시도는 setup으로 한다. `init --force`는 스캐폴드 파일을 교체한다.
+RN/Tauri의 setup은 연결을 준비하고 남은 네이티브 앱 작업을 안내한다.
+실기기·WebView 런타임 검증을 대신하지는 않는다.
+
+## 현재 체크아웃 체험하기
+
+Rust·Bun·저장소용 Node.js가 설치되어 있으면 `bun run try:node` 또는 `bun run try:bun`을 실행한다.
+독립 예제를 만들고 현재 체크아웃의 패키지를 설치한 뒤 첫 Rust 호출을 실행한다.
+출력된 폴더의 `src/lib.rs`를 수정하고 `bun run start`로 생성·빌드·호출을 반복한다.
+이 체크아웃 검사는 registry 발행 여부를 검증하지 않는다.
 
 ## 빠른 예제
 
@@ -221,7 +252,7 @@ fn main() -> Result<()> {
 그리고 실행한다:
 
 ```bash
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 ```
 
 기존 schema만 다시 렌더링해야 하는 경우에는 `generate --config`를 직접 사용할 수
@@ -257,11 +288,12 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native@0.9.2 @rustra/types@0.12.0
-bun add -d @rustra/cli@0.11.3
-bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
-bun install
+bun add @rustra/react-native@0.10.0 @rustra/types@0.12.1
+bun add -d @rustra/cli@0.12.0
+bunx --bun rustra setup --config rustra.json
+# 사용하는 대상만 준비한 뒤 앱의 기존 명령으로 다시 빌드·실행한다:
+bun run rustra:ios      # iOS Pods
+# bun run rustra:android  # Android debug APK
 ```
 
 ```ts
@@ -755,16 +787,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # 개발 환경 진단
-bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
 
 # Rust schema + TS/C++/RN을 한 번에 생성
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 
 # generated 파일 동기화 CI 게이트 (TS/C++/RN은 쓰지 않음)
-bunx --bun @rustra/cli@0.11.3 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.12.0 generate --config rustra.json --check
 
 # Rust 소스 감시 + 통합 codegen 자동 재실행
-bunx --bun @rustra/cli@0.11.3 dev --config rustra.json
+bunx --bun @rustra/cli@0.12.0 dev --config rustra.json
 ```
 
 ## 문서

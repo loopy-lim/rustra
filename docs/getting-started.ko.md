@@ -17,14 +17,15 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 
 ## 전제 조건
 
-| 도구                         | 버전                                                                    | 확인 위치                                                                                                                        |
-| ---------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Rust 툴체인                  | 1.88+ (MSRV)                                                            | 루트 `Cargo.toml` `rust-version` / [버전 정책](versioning-policy.ko.md); 저장소 개발은 `rust-toolchain.toml` 이 1.95.0 으로 고정 |
-| Bun                          | 1.4+                                                                    | 모든 JS 쪽 명령(`rustra init`, codegen, doctor)                                                                                  |
-| Node.js                      | 22.x — 저장소 스크립트는 **>= 22.6**(`node --experimental-strip-types`) | Node 어댑터 런타임 (v22.21.1로 측정); 저장소는 `.nvmrc` 로 22.x 고정                                                             |
-| Cargo + 링커                 | 호스트별                                                                | 네이티브 빌드에 C/C++ 컴파일러 필요                                                                                              |
-| Xcode / CocoaPods            | iOS 전용                                                                | React Native iOS ([RN 설정 가이드](extending/react-native-setup.md) 참고)                                                        |
-| Android SDK/NDK 27+, Java 17 | Android 전용                                                            | React Native Android                                                                                                             |
+| 도구                         | 버전         | 필요한 경우                                                                                          |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| Rust 툴체인                  | 1.88+ (MSRV) | 앱별 Rust 빌드. 저장소 개발은 Rust 1.95.0 사용                                                       |
+| Bun                          | 1.4+         | 아래 명령과 스캐폴드 데모. Bun 어댑터에는 Bun 필요                                                   |
+| Node.js                      | 18+          | Node 어댑터의 대체 런타임. Bun으로도 실행 가능. 저장소 스크립트는 Node 22.6+ 필요                    |
+| Cargo + 네이티브 링커        | 호스트별     | Rust 빌드에는 플랫폼 링커 필요. Node/Bun만 설정한 doctor는 별도 C++ 컴파일러나 CMake를 요구하지 않음 |
+| C++ 컴파일러 / CMake         | 출력별       | C++ 출력에는 컴파일러, RN에는 둘 다 필요                                                             |
+| Xcode / CocoaPods            | iOS 전용     | React Native iOS ([RN 설정 가이드](extending/react-native-setup.ko.md) 참고)                         |
+| Android SDK/NDK 27+, Java 17 | Android 전용 | React Native Android                                                                                 |
 
 `rustra doctor`가 설정에 적용되는 행을 전부 검사한다 — [개발 허들 가이드](development-hurdles.ko.md) 참고.
 
@@ -32,54 +33,57 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 
 ## 1. 설치
 
+### 가장 빠른 시작 — `rustra init --setup`
+
+Rust와 Bun 1.4 이상이 설치되어 있으면 다음 명령을 실행한다.
+
+```bash
+bunx --bun @rustra/cli@0.12.0 init my-project --setup
+# Bun FFI를 쓰려면: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+```
+
+프로젝트 생성 → 클라이언트 생성 → 의존성 설치 → Rust 빌드 → `echo` 데모 호출까지
+수행한다. 설치할 때 프로젝트의 `packageManager` 또는 lockfile을 따른다.
+스캐폴드는 Bun을 선택하고 `setup`, `start`, `doctor`, `codegen`, `codegen:check`,
+`dev`, `demo` 스크립트를 만든다.
+
+`my-project/src/lib.rs`를 수정한 뒤 다음 명령으로 첫 호출 흐름을 반복한다.
+
+```bash
+cd my-project
+bun run start
+```
+
+`start`는 `rustra setup --config rustra.json --run`을 실행한다. `bun run setup`은
+같은 준비를 수행하되 `demo`를 실행하지 않는다. 실패하면 오류를 해결하고 출력된
+setup 명령으로 재시도한다. `init --force`는 스캐폴드 파일을 의도적으로 교체할 때만 사용한다.
+
+`--setup` 없이 만들었다면 `cd my-project`, `bun install`, `bun run start` 순서로
+시작한다. `rustra.json`과 `demo` 스크립트가 있는 기존 Node/Bun 프로젝트는
+`rustra setup --config rustra.json --run`을 사용할 수 있다.
+
+스캐폴드는 Cargo 크레이트, `echo` 명령, `generate` schema probe, `src/index.ts`,
+`rustra.json`, `package.json`, `.gitignore`, `tsconfig.json`을 포함한다.
+기본 호스트는 Node이며 `--host bun`은 네이티브 라이브러리 진입점을 추가하고
+Bun FFI를 선택한다. 생성 진입점은 첫 호출 전에 Rust와 TypeScript 계약이 일치하는지 확인한다.
+
+RN의 setup은 생성 모듈을 연결하고 `rustra:ios`·`rustra:android` 준비 스크립트를 만든다.
+Tauri는 등록 헬퍼와 앱에 추가할 코드를 출력한다. 네이티브 전용 앱은 `--run` 없이
+setup을 실행한 뒤 기존 플랫폼 명령으로 빌드·실행한다. 준비 완료는
+Simulator·실기기·WebView 런타임 검증을 뜻하지 않는다.
+
 ### 저장소에서 바로 체험하기
 
-이 체크아웃에서는 아래 한 명령으로 독립 예제를 만들고 첫 Rust 호출을 실행한다.
-Rust·Bun·저장소용 Node.js가 설치되어 있어야 한다.
+Rust·Bun·저장소용 Node.js가 설치되어 있으면 다음 명령을 실행한다.
 
 ```bash
 bun run try:node
 # Bun FFI를 쓰려면: bun run try:bun
 ```
 
-완료하면 예제 폴더를 출력한다. 그 폴더의 `src/lib.rs`를 수정한 뒤 `bun run start`를
-실행하면 타입 생성 → 의존성 설치 → Rust 빌드 → 호출을 다시 수행한다. 예제는 현재
-체크아웃의 패키지를 사용한다. 기존 프로젝트를 덮어쓰지 않는다.
-
-개발 CLI에는 `rustra init my-project --setup`과 `--host bun --setup`이 추가되었다.
-기존 프로젝트에서는 `rustra setup --run`을 사용한다. 실패하면 표시된 `setup` 명령으로
-재시도한다. `init --force`로 다시 만들 필요가 없다. 이 자동화는 아직 배포하지 않았으며,
-아래 `0.11.3` 설치 경로는 수동 시작 절차를 유지한다.
-
-RN의 `setup`은 생성 모듈 연결과 `rustra:ios`·`rustra:android` 준비 스크립트를 만든다.
-Tauri는 등록 헬퍼와 앱에 추가할 코드를 출력한다. 네이티브 앱 빌드·실행은 각 플랫폼
-도구가 필요하다. `setup --run`은 Node/Bun의 `demo` 스크립트용이다.
-
-### 가장 빠른 시작 — `rustra init`
-
-```bash
-bunx --bun @rustra/cli@0.11.3 init my-project
-cd my-project
-bun install
-bun run doctor
-bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
-cargo build          # Node 진입점이 실행할 Rust 바이너리 빌드
-bun run demo         # 생성된 Node 진입점으로 TypeScript에서 echo 호출
-cargo run            # Rust에서 직접 echo 호출
-```
-
-스캐폴드는 Cargo 크레이트(echo 예제 커맨드와 stdio 계약 프로브 포함) + `generate` bin +
-`src/index.ts` 첫 호출 예제 + Node 호스트 설정이 포함된 `rustra.json`과
-package.json(doctor/codegen/codegen:check/dev/demo 스크립트), `.gitignore`
-(target/, node_modules/, dist/), `tsconfig.json`을 만든다. Node 진입점은 첫
-호출 전에 `__rustra_contract`로 Rust binary와 생성 TS의 계약 해시를 비교한다.
-
-이미 파일이 있는 디렉터리에 다시 init하면 덮어쓰기를 차단한다. 교체하려면
-`--force`를 붙인다:
-
-```bash
-bunx --bun @rustra/cli@0.11.3 init my-project --force
-```
+완료하면 독립 예제 폴더를 출력한다. 그 폴더의 `src/lib.rs`를 수정한 뒤 `bun run start`로
+생성·설치·빌드·호출을 반복한다. 현재 체크아웃의 패키지를 사용하고 기존 프로젝트를
+보존한다. 이 검사는 registry 발행 여부를 검증하지 않는다.
 
 ### 외부 프로젝트에서 사용
 
@@ -95,10 +99,10 @@ schemars = { version = "0.8", features = ["derive"] }
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
 ```bash
-bun add @rustra/node@0.10.2      # Node.js
-bun add @rustra/bun@0.10.2       # Bun
-bun add @rustra/tauri@0.9.3     # Tauri
-bun add @rustra/react-native@0.9.2  # React Native
+bun add @rustra/node@0.11.0      # Node.js
+bun add @rustra/bun@0.11.0       # Bun
+bun add @rustra/tauri@0.10.0     # Tauri
+bun add @rustra/react-native@0.10.0  # React Native
 ```
 
 ### 모노레포 / workspace에서 사용
@@ -982,8 +986,8 @@ RN JSI `invokeTyped` 진입을 직접 호출한다. 해당 형태 밖의 명령�
 `commands.ts` 경로를 유지한다.
 
 ```bash
-bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 ```
 
 **TypeScript 측 사용:**

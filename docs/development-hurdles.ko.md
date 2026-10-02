@@ -6,17 +6,17 @@ Rustra는 Rust 명령을 네이티브 코드로 연결하므로 모든 환경 �
 없습니다. 대신 설치 전에 필요한 도구를 확인하고, Rust schema 생성과 TypeScript/C++
 생성을 한 명령으로 묶으며, 생성물의 동기화를 CI에서 자동으로 검사할 수 있습니다.
 
-이 문서는 버전을 변경하지 않은 현재 checkout의 동작을 기준으로 합니다. CLI, JS
-패키지, Rust crate는 독립적인 버전 범위를 가지므로 실제 호환성은 프로젝트의
-lockfile과 생성된 manifest를 함께 확인해야 합니다.
+이 문서는 Rust 0.12.0과 CLI 0.12.0의 개발 흐름을 설명합니다. JS 패키지는 독립적인
+버전 범위를 가지므로 [호환성 표](compatibility-matrix.ko.md), 프로젝트 lockfile과 생성된
+manifest를 함께 확인해야 합니다. setup 완료와 registry 발행·실기기 검증은 별도입니다.
 
 ## CLI 실행 — 표준 3형태
 
-| 형태                                                 | 언제                                           |
-| ---------------------------------------------------- | ---------------------------------------------- |
-| `bunx --bun @rustra/cli <cmd>`                       | 권장 일회성 형태 (설치 없음, bunx가 버전 고정) |
-| `bun add -d @rustra/cli` + `bunx --bun rustra <cmd>` | 패키지 스크립트로 CLI 명령을 돌리는 프로젝트   |
-| `bun i -g @rustra/cli` + `rustra <cmd>`              | 드물게 — 전역 바이너리가 필요한 머신만         |
+| 형태                                                        | 언제                                         |
+| ----------------------------------------------------------- | -------------------------------------------- |
+| `bunx --bun @rustra/cli@0.12.0 <cmd>`                       | 명시한 CLI 버전으로 일회성 실행              |
+| `bun add -d @rustra/cli@0.12.0` + `bunx --bun rustra <cmd>` | 패키지 스크립트로 CLI 명령을 돌리는 프로젝트 |
+| `bun i -g @rustra/cli@0.12.0` + `rustra <cmd>`              | 드물게 — 전역 바이너리가 필요한 머신만       |
 
 `rustra init`이 만드는 패키지 스크립트(`bun run doctor`, `bun run codegen`, …)는
 디펜던시 형태를 쓰고, CI와 문서 예제는 `bunx` 형태를 쓴다. 모든 명령은
@@ -81,20 +81,25 @@ mock은 비정상 경로도 커버한다:
 
 ## 첫 실행 경로
 
-새 프로젝트는 다음 순서로 시작합니다.
+새 Node 프로젝트는 한 명령으로 첫 Rust 호출까지 실행합니다.
 
 ```bash
-bunx --bun @rustra/cli init my-project
-cd my-project
-bun install
-bun run doctor
-bun run codegen
+bunx --bun @rustra/cli@0.12.0 init my-project --setup
+# Bun FFI: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
 ```
+
+수정 후에는 `cd my-project`와 `bun run start`로 생성·설치·빌드·데모를 반복합니다.
+`bun run setup`은 데모 없이 준비만 합니다. 실패하면 오류를 해결한 뒤 출력된 setup
+명령으로 재시도합니다. `init --force`로 다시 만들 필요가 없습니다.
+기존 Node/Bun 프로젝트의 `rustra setup --run`에는 `package.json`의 `demo` 스크립트가 필요합니다.
+RN/Tauri 앱은 `--run` 없이 setup을 실행하고 안내된 네이티브 작업을 마무리합니다.
 
 `rustra init`은 `rustra.json`과 다음 스크립트를 함께 만듭니다.
 
 ```json
 {
+  "setup": "rustra setup --config rustra.json",
+  "start": "rustra setup --config rustra.json --run",
   "doctor": "rustra doctor --config rustra.json",
   "codegen": "rustra codegen --config rustra.json",
   "codegen:check": "rustra codegen --config rustra.json --check",
@@ -107,16 +112,18 @@ bun run codegen
 `doctor`는 설치나 파일 변경 없이 현재 호스트를 진단합니다.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli doctor --config rustra.json --format json
-bunx --bun @rustra/cli doctor --config rustra.json --strict
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json --format json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json --strict
 ```
 
-공통으로 Rust MSRV 1.88+, Cargo, Node/Bun, C/C++ 컴파일러, CMake, Cargo manifest와
-설정된 Rust target을 확인합니다. React Native를 설정한 경우에만 macOS의
-Xcode/CocoaPods와 Android의 Java 17, `ANDROID_NDK_HOME` 또는 SDK의 NDK
+Rust MSRV 1.88+, Cargo, 설정된 Cargo manifest와 Rust target을 확인합니다.
+Node 어댑터에는 Node.js 18+ 또는 Bun 1.4+, Bun 호스트에는 Bun 1.4+가 필요합니다.
+Node/Bun만 설정하면 별도 C++ 컴파일러와 CMake 검사는 건너뜁니다. `cppOutput`은
+C++ 컴파일러를, RN은 컴파일러와 CMake를 모두 요구합니다. RN 설정이 있을 때만
+macOS의 Xcode/CocoaPods와 Android의 Java 17, `ANDROID_NDK_HOME` 또는 SDK의 NDK
 `27.1.12297006`, 기본 Rust Android target을 추가로 확인합니다. Tauri 설정에는
-호스트별 native build 도구도 포함됩니다.
+호스트별 native build 도구도 포함됩니다. Rust 빌드에 필요한 플랫폼 링커는 여전히 필요합니다.
 
 로컬 toolchain 너머를 보는 검사가 둘 있습니다. `registry.reachability`는
 `https://index.crates.io/config.json`을 3초 타임아웃으로 가져와, crates.io에 닿지 않으면
@@ -246,7 +253,7 @@ Rustra CLI 자체는 npm/Bun 패키지로 설치할 수 있습니다. 그러나 
 schema, staticlib를 포함한 애플리케이션 네이티브 산출물은 앱과 target에 종속되므로
 범용 prebuilt binary 하나로 대체할 수 없습니다.
 
-- Node/Bun만 사용하면 Rust, C/C++ linker와 Node/Bun이 필요합니다.
+- Node/Bun만 사용하면 Rust, 플랫폼 네이티브 링커와 호환 JS 런타임이 필요합니다. C++ 컴파일러는 C++ 출력·RN에서, CMake는 RN에서 별도로 검사합니다.
 - Tauri는 해당 호스트의 Rust와 C/C++ 도구가 필요합니다.
 - React Native는 iOS에서 Xcode/CocoaPods, Android에서 SDK/NDK 27+와 Java 17이
   필요하며 Expo Go가 아니라 development build를 사용합니다.
@@ -341,7 +348,7 @@ Android/iOS 앱 시작, native 이벤트 스케줄링, 실제 소비자의 Rust 
 정보를 함께 남기면 소스 코드까지 내려가지 않고도 진단할 수 있습니다.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json --format json > rustra-doctor.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json --format json > rustra-doctor.json
 bun run codegen:check
 bunx --bun @rustra/cli diff --old generated/schema.v1.json --new generated/schema.json
 ```

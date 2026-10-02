@@ -3,7 +3,7 @@ English | [한국어](./README.ko.md)
 # rustra
 
 The current release line targets Rust crates 0.12.0 and the coordinated package
-versions below (`@rustra/types` 0.12.0 / `@rustra/cli` 0.11.3, adapters at their own
+versions below (`@rustra/types` 0.12.1 / `@rustra/cli` 0.12.0, adapters at their own
 versions). Upgrade native libraries, JS adapters, and generated output together;
 see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
 checks and rollback. The 0.12 DX upgrade is documented in the
@@ -180,20 +180,44 @@ Installation versions follow the current Rust and npm manifests. Adapters have i
 ### TypeScript adapters (only the environments you need)
 
 ```bash
-bun add @rustra/node@0.10.2      # Node.js
-bun add @rustra/bun@0.10.2       # Bun
-bun add @rustra/tauri@0.9.3     # Tauri
-bun add @rustra/react-native@0.9.2  # React Native
+bun add @rustra/node@0.11.0      # Node.js
+bun add @rustra/bun@0.11.0       # Bun
+bun add @rustra/tauri@0.10.0     # Tauri
+bun add @rustra/react-native@0.10.0  # React Native
 bun add @rustra/testing@0.7.2       # Mock engine (tests)
 bun add @rustra/devtools@0.7.2      # Invocation observability (dev)
 ```
+
+## First Rust call
+
+With Rust and Bun 1.4+ installed, create a project and run its first call:
+
+```bash
+bunx --bun @rustra/cli@0.12.0 init my-project --setup
+# Bun FFI instead: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+```
+
+`--setup` generates the clients, installs dependencies, builds Rust, and runs the
+Node/Bun scaffold's `echo` demo. Edit `my-project/src/lib.rs`, then run:
+
+```bash
+cd my-project
+bun run start
+```
+
+`start` repeats setup and runs the demo; `bun run setup` prepares without running
+it. If setup fails, fix the reported error and rerun the printed `rustra setup`
+command. Existing projects with a `demo` script can use `rustra setup --config
+rustra.json --run`. Retry setup directly; `init --force` replaces scaffold files.
+RN/Tauri setup prepares the integration and prints the remaining native app steps;
+it does not establish device or WebView runtime acceptance.
 
 ## Try the current checkout
 
 With Rust, Bun and the repository's Node.js runtime installed, run `bun run try:node` or `bun run try:bun`.
 The command creates a separate example, installs this checkout's packages, and runs the first
 Rust call. It prints the project directory; edit `src/lib.rs` there and run `bun run start`
-to regenerate, rebuild and call again. These setup commands are development features pending release.
+to regenerate, rebuild and call again. Checkout checks do not verify registry publication.
 
 ## Quick Example
 
@@ -249,7 +273,7 @@ Specifying the Rust generator in `rustra.json` processes schema generation throu
 Then run:
 
 ```bash
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 ```
 
 If you only need to re-render an existing schema, use `generate --config`
@@ -286,11 +310,12 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native@0.9.2 @rustra/types@0.12.0
-bun add -d @rustra/cli@0.11.3
-bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
-bun install
+bun add @rustra/react-native@0.10.0 @rustra/types@0.12.1
+bun add -d @rustra/cli@0.12.0
+bunx --bun rustra setup --config rustra.json
+# Prepare the target you use, then rebuild/launch with the app's existing command:
+bun run rustra:ios      # iOS Pods
+# bun run rustra:android  # Android debug APK
 ```
 
 ```ts
@@ -813,16 +838,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # Diagnose the dev environment
-bunx --bun @rustra/cli@0.11.3 doctor --config rustra.json
+bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
 
 # Generate Rust schema + TS/C++/RN in one shot
-bunx --bun @rustra/cli@0.11.3 codegen --config rustra.json
+bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
 
 # Generated-file sync CI gate (TS/C++/RN excluded)
-bunx --bun @rustra/cli@0.11.3 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.12.0 generate --config rustra.json --check
 
 # Watch Rust sources + re-run integrated codegen automatically
-bunx --bun @rustra/cli@0.11.3 dev --config rustra.json
+bunx --bun @rustra/cli@0.12.0 dev --config rustra.json
 ```
 
 ## Documentation
