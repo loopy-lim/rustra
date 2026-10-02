@@ -34,19 +34,49 @@ xcrun simctl bootstatus "$sim_id" -b
 echo "smoke: installing $bundle_id"
 xcrun simctl install "$sim_id" "$app"
 started_at="@$(date +%s)"
+native_sim_dir="/tmp/rustra-ios-native-${started_at#@}-$$"
+native_sim_stdout_path="$native_sim_dir/rustra-ios-native.stdout.log"
+native_sim_stderr_path="$native_sim_dir/rustra-ios-native.stderr.log"
+native_host_dir=""
+native_launch_args=(--terminate-running-process)
+if native_sim_data_dir="$(xcrun simctl getenv "$sim_id" SIMULATOR_SHARED_RESOURCES_DIRECTORY 2>/dev/null)" \
+  && [[ -d "$native_sim_data_dir" ]]; then
+  native_host_dir="$native_sim_data_dir$native_sim_dir"
+  if mkdir -p "$native_host_dir" 2>/dev/null; then
+    native_launch_args+=(--stdout="$native_sim_stdout_path" --stderr="$native_sim_stderr_path")
+  else
+    native_host_dir=""
+  fi
+fi
+cleanup_native_logs() {
+  if [[ -n "$native_host_dir" ]]; then
+    rm -rf "$native_host_dir" || true
+  fi
+}
+trap cleanup_native_logs EXIT
 echo "smoke: launching $bundle_id"
-launch_output="$(xcrun simctl launch --terminate-running-process \
-  --stdout="$native_stdout_path" --stderr="$native_stderr_path" "$sim_id" "$bundle_id")"
+launch_output="$(xcrun simctl launch "${native_launch_args[@]}" "$sim_id" "$bundle_id")"
 echo "$launch_output"
 app_pid="${launch_output##*: }"
 if [[ ! "$app_pid" =~ ^[1-9][0-9]*$ ]]; then
   echo "::error::simctl launch did not return a valid app PID" >&2
   exit 1
 fi
-trap 'xcrun simctl terminate "$sim_id" "$bundle_id" 2>/dev/null || true' EXIT
+trap 'xcrun simctl terminate "$sim_id" "$bundle_id" 2>/dev/null || true; cleanup_native_logs' EXIT
+
+copy_native_log() {
+  if ! cp "$1" "$2" 2>/dev/null; then
+    rm -f "$2" || true
+  fi
+}
 
 failure_diagnostics() {
-  if [[ -s "$native_stderr_path" ]]; then
+  # simctl launch resolves output paths inside this simulator, not on the host.
+  if [[ -n "$native_host_dir" ]]; then
+    copy_native_log "$native_host_dir/rustra-ios-native.stdout.log" "$native_stdout_path"
+    copy_native_log "$native_host_dir/rustra-ios-native.stderr.log" "$native_stderr_path"
+  fi
+  if [[ -n "$native_host_dir" && -s "$native_stderr_path" ]]; then
     echo "smoke: native stderr for pid=$app_pid (last 80 lines, at most 16384 bytes)" >&2
     tail -c 16384 "$native_stderr_path" | tail -n 80 >&2 || true
   else
@@ -79,8 +109,8 @@ failure_diagnostics() {
 # Scope the persisted log query to this launch's PID and timestamp.
 for ((i = 0; i < attempts; i++)); do
   xcrun simctl spawn "$sim_id" log show --style compact --info --debug \
-    --start "$started_at" --process "$app_pid" \
-    --predicate 'subsystem == "com.facebook.react.log" AND category == "javascript" AND eventMessage CONTAINS "__RUSTRA_SMOKE_"' \
+    --start "$started_at" \
+    --predicate "(processIdentifier == $app_pid) AND subsystem == \"com.facebook.react.log\" AND category == \"javascript\" AND eventMessage CONTAINS \"__RUSTRA_SMOKE_\"" \
     > "$log_path"
   if grep -Fq '__RUSTRA_SMOKE_FAIL__' "$log_path"; then
     echo "::error::__RUSTRA_SMOKE_FAIL__ observed" >&2
