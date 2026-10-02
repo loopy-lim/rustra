@@ -63,7 +63,7 @@ jobs:
       - name: Restore previous baseline
         if: github.event_name != 'workflow_dispatch' || inputs.comparison_ref == ''
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v24
+        uses: dawidd6/action-download-artifact@v27
         with:
           workflow: bench.yml
           branch: main
