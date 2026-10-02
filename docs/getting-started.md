@@ -4,11 +4,9 @@ English | [한국어](./getting-started.ko.md)
 
 For ordinary functions with multiple arguments and plain returns, see [function registration](./function-registration.md).
 
-> **Frame migration:** this guide targets Rust crates 0.11.0 and shared packages
-> (`@rustra/types`, `@rustra/cli`) 0.11.0 with the adapter versions listed below.
-> Release 0.9.0 does not include the Frame rename.
-> Upgrade native libraries, JS packages, and generated output together; see the
-> [migration guide](migrations/post-0.9-frame-and-audit.md) for versions and steps.
+> **Release versions:** this guide targets Rust crates 0.12.0 and the independent
+> npm package versions pinned below. Upgrade native libraries, JS packages and
+> generated output together; see the [DX migration guide](migrations/0.11-to-0.12.md).
 
 rustra is a bridge framework that automatically generates a TypeScript client — working on Node, Bun, Tauri, and React Native alike — once you define a Rust package.
 
@@ -89,7 +87,7 @@ bunx --bun @rustra/cli@0.11.3 init my-project --force
 
 ```toml
 [dependencies]
-rustra = "0.11.0"
+rustra = "0.12.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```

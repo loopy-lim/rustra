@@ -117,7 +117,7 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
-| Rust workspace crates  | 0.11.0           |
+| Rust workspace crates  | 0.12.0           |
 | `@rustra/bun`          | 0.10.2           |
 | `@rustra/cli`          | 0.11.3           |
 | `@rustra/devtools`     | 0.7.2            |

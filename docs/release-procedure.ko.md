@@ -2,9 +2,9 @@
 
 # 발행 절차 (canary → stable → rollback)
 
-현재 릴리스 라인은 0.11 동시 업그레이드 대상이다(Rust crate 0.11.0,
-`@rustra/types`·`@rustra/cli` 0.11.0). 이미 사용한 0.9.0을
-재사용하지 않으며, 대상 버전·소비자 검증·롤백은 [릴리스 준비 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
+이번 DX 릴리스는 Rust crate 0.12.0과 호스트별 독립 npm 버전을 대상으로 한다.
+대상 버전과 소비자 업그레이드·롤백은 [0.11 → 0.12 안내](migrations/0.11-to-0.12.ko.md)를 따른다.
+버전 파일과 실제 레지스트리 발행 상태를 구분한다.
 
 감사 항목 8의 "canary 배포와 rollback 검증" 절차. 실제 실행은 별도 승인 후 진행한다.
 

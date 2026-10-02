@@ -2,10 +2,9 @@ English | [한국어](./release-procedure.ko.md)
 
 # Release procedure (canary → stable → rollback)
 
-The current release line targets the coordinated 0.11 release (Rust crates
-0.11.0, `@rustra/types`/`@rustra/cli` 0.11.0). Do not
-reuse the already published 0.9.0; see the [release preparation guide](migrations/post-0.9-frame-and-audit.md)
-for target versions, consumer checks, and rollback.
+The current DX release targets Rust crates 0.12.0 and independent npm package
+versions. See the [0.11 to 0.12 migration guide](migrations/0.11-to-0.12.md) for
+targets, consumer upgrades and rollback. Version files do not establish registry publication.
 
 Audit item 8, "canary deploy and rollback verification" procedure. Actual execution
 proceeds only after separate approval.

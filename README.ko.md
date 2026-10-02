@@ -2,10 +2,11 @@
 
 # rustra
 
-현재 릴리스 라인은 Rust crate 0.11.0과 아래 패키지 버전(`@rustra/types` 0.12.0·`@rustra/cli`
+현재 릴리스 라인은 Rust crate 0.12.0과 아래 패키지 버전(`@rustra/types` 0.12.0·`@rustra/cli`
 0.11.3, 어댑터는 각자의 버전)을 대상으로 한다. 네이티브 라이브러리·JS 어댑터·생성물을
 함께 갱신한다. 소비자 검증과 롤백은
-[마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
+[마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다. 이번 DX
+업그레이드는 [0.11 → 0.12 안내](docs/migrations/0.11-to-0.12.ko.md)를 참고한다.
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
@@ -148,7 +149,7 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.11.0"
+rustra = "0.12.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -581,7 +582,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.11.0", features = ["tauri"] }
+rustra = { version = "0.12.0", features = ["tauri"] }
 ```
 
 Rust 측:
