@@ -638,6 +638,8 @@ jobs:
     runs-on: macos-latest
     needs: [changes, rust]
     timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_RUSTRA_CI_TRACE: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.95.0
@@ -704,6 +706,11 @@ jobs:
             ${{ runner.temp }}/rustra-pod.log
             ${{ runner.temp }}/rustra-expo-prebuild-ios.log
             ${{ runner.temp }}/rustra-ios-console.log
+            ${{ runner.temp }}/rustra-ios-native.stdout.log
+            ${{ runner.temp }}/rustra-ios-native.stderr.log
+            ${{ runner.temp }}/rustra-ios-kill.stderr.log
+            ${{ runner.temp }}/rustra-ios-process.log
+            ${{ runner.temp }}/rustra-ios-crash-summary.json
           if-no-files-found: ignore
           retention-days: 14
 
