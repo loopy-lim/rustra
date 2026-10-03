@@ -34,6 +34,21 @@ import { addNumbers } from './generated/node.js';
 const { sum } = await addNumbers({ a: 42, b: 58 });
 ```
 
+구조체 없이 쓰고 싶다면? 같은 코어에 일반 Rust 함수도 그대로 등록된다:
+
+```rust
+fn add(a: i32, b: i32) -> i32 { a + b }
+
+let package = Package::builder("app.functions")
+    .function("add", add)
+    .build();
+```
+
+`PackageBuilder::function`은 매크로 없이 0~12개 위치 인자 함수를 등록한다 —
+래퍼 구조체도 `#[bridge_type]`도 필요 없다. async 핸들러나 상태 주입이
+필요하면 `#[command]` 매크로 경로를 쓴다. 자세한 내용:
+[일반 함수 등록](docs/function-registration.ko.md).
+
 아래 성능 수치는 저장소에 검증 근거로 남아 있는 값을 그대로 인용한 것이다
 (참고: [벤치마크 하이라이트](docs/marketing/benchmark-highlights.md)):
 

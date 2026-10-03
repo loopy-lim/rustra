@@ -34,6 +34,21 @@ import { addNumbers } from './generated/node.js';
 const { sum } = await addNumbers({ a: 42, b: 58 });
 ```
 
+No structs needed? The same core registers plain Rust functions too:
+
+```rust
+fn add(a: i32, b: i32) -> i32 { a + b }
+
+let package = Package::builder("app.functions")
+    .function("add", add)
+    .build();
+```
+
+`PackageBuilder::function` registers a macro-free function with 0–12
+positional arguments — no wrapper structs, no `#[bridge_type]`. When you need
+async handlers or state injection, use the `#[command]` macro path instead.
+Details: [function registration](docs/function-registration.md).
+
 Every performance number below is quoted from verified in-repo receipts (see
 [benchmark highlights](docs/marketing/benchmark-highlights.md)):
 
