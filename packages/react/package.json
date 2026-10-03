@@ -1,7 +1,7 @@
 {
   "name": "@rustra/react",
   "version": "0.8.3",
-  "description": "React and React Native bindings and hooks for rustra-bridge",
+  "description": "Type-safe React hooks for rustra clients — one Rust core generates bindings for Node, Bun, Tauri, and React Native over a compact binary wire.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -43,10 +43,15 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "react",
     "react-native",
-    "hooks"
+    "hooks",
+    "rust",
+    "typescript",
+    "ffi",
+    "bindings",
+    "type-safe",
+    "bridge"
   ],
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 {
   "name": "@rustra/tauri",
   "version": "0.10.0",
-  "description": "Tauri adapter for rustra-bridge",
+  "description": "Type-safe Tauri client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,9 +34,15 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "tauri",
-    "adapter"
+    "rust",
+    "typescript",
+    "ffi",
+    "bindings",
+    "type-safe",
+    "bridge",
+    "desktop",
+    "codegen"
   ],
   "repository": {
     "type": "git",

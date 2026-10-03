@@ -1,7 +1,7 @@
 {
   "name": "@rustra/node",
   "version": "0.11.0",
-  "description": "Node adapter for rustra-bridge",
+  "description": "Type-safe Node.js client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,9 +38,15 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "node",
-    "adapter"
+    "nodejs",
+    "rust",
+    "typescript",
+    "ffi",
+    "napi",
+    "bindings",
+    "type-safe",
+    "bridge"
   ],
   "repository": {
     "type": "git",

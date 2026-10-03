@@ -1,7 +1,7 @@
 {
   "name": "@rustra/cli",
   "version": "0.12.0",
-  "description": "CLI for rustra-bridge TypeScript code generation",
+  "description": "rustra CLI — generate type-safe TypeScript clients for Node, Bun, Tauri, and React Native from one Rust core, with schema diff gates that block breaking changes in CI.",
   "license": "MIT",
   "type": "module",
   "publishConfig": {
@@ -72,9 +72,15 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "cli",
-    "codegen"
+    "codegen",
+    "rust",
+    "typescript",
+    "ffi",
+    "bindings",
+    "bridge",
+    "schema-diff",
+    "type-safe"
   ],
   "repository": {
     "type": "git",

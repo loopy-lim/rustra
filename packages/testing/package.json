@@ -1,7 +1,7 @@
 {
   "name": "@rustra/testing",
   "version": "0.7.2",
-  "description": "Testing utilities for rustra-bridge — mock engine and contract gates",
+  "description": "Testing utilities for rustra — mock engines and contract gates for type-safe Rust-to-TypeScript clients.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,9 +35,14 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "testing",
-    "mock"
+    "mock",
+    "rust",
+    "typescript",
+    "ffi",
+    "bridge",
+    "contract-testing",
+    "type-safe"
   ],
   "repository": {
     "type": "git",

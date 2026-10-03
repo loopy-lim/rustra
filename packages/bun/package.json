@@ -1,7 +1,7 @@
 {
   "name": "@rustra/bun",
   "version": "0.11.0",
-  "description": "Bun adapter for rustra-bridge",
+  "description": "Type-safe Bun client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,9 +35,15 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "bun",
-    "adapter"
+    "rust",
+    "typescript",
+    "ffi",
+    "bindings",
+    "type-safe",
+    "bridge",
+    "binary-wire",
+    "codegen"
   ],
   "repository": {
     "type": "git",

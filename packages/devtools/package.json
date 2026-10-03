@@ -1,7 +1,7 @@
 {
   "name": "@rustra/devtools",
   "version": "0.7.2",
-  "description": "Devtools for rustra-bridge — instrumented engine with call stats",
+  "description": "Devtools for rustra — instrumented engine with call stats, built on one Rust core with type-safe clients over a compact binary wire.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,9 +34,14 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "devtools",
-    "observability"
+    "observability",
+    "rust",
+    "typescript",
+    "ffi",
+    "bridge",
+    "debugging",
+    "tracing"
   ],
   "repository": {
     "type": "git",

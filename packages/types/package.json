@@ -1,7 +1,7 @@
 {
   "name": "@rustra/types",
   "version": "0.12.1",
-  "description": "Shared types for rustra-bridge",
+  "description": "Shared types and wire contracts for rustra — one Rust core generating type-safe clients for Node, Bun, Tauri, and React Native over a compact binary wire.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,8 +31,15 @@
   },
   "keywords": [
     "rustra",
+    "types",
+    "rust",
+    "typescript",
+    "ffi",
     "bridge",
-    "types"
+    "wire-format",
+    "codegen",
+    "type-safe",
+    "bindings"
   ],
   "repository": {
     "type": "git",

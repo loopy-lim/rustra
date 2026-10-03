@@ -1,7 +1,7 @@
 {
   "name": "@rustra/react-native",
   "version": "0.10.0",
-  "description": "React Native adapter for rustra-bridge",
+  "description": "Type-safe React Native client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,9 +35,15 @@
   },
   "keywords": [
     "rustra",
-    "bridge",
     "react-native",
-    "adapter"
+    "rust",
+    "typescript",
+    "ffi",
+    "jsi",
+    "nitro",
+    "bindings",
+    "type-safe",
+    "bridge"
   ],
   "peerDependencies": {
     "react-native": ">=0.76"
