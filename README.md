@@ -1,21 +1,50 @@
-English | [한국어](./README.ko.md)
+English | [Korean](./README.ko.md)
 
 # rustra
 
-The current release line targets Rust crates 0.12.0 and the coordinated package
-versions below (`@rustra/types` 0.12.1 / `@rustra/cli` 0.12.0, adapters at their own
-versions). Upgrade native libraries, JS adapters, and generated output together;
-see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
-checks and rollback. The 0.12 DX upgrade is documented in the
-[0.11 to 0.12 migration guide](docs/migrations/0.11-to-0.12.md).
+One Rust core → type-safe clients for Node, Bun, Tauri, and React Native — over
+a compact binary wire, gated by a contract that blocks breaking schema changes
+in CI.
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
 [![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A bridge framework that generates type-safe TypeScript clients from Rust
-commands — define once in Rust, run on Node, Bun, Tauri, and React Native.
+Define once in Rust:
+
+```rust
+#[bridge_type]
+struct AddNumbersInput { a: i64, b: i64 }
+#[bridge_type]
+struct AddNumbersOutput { sum: i64 }
+
+#[command]
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { sum: input.a + input.b })
+}
+```
+
+Call from any host. `rustra codegen` emits a type-safe client per platform —
+same contract, same binary wire:
+
+```ts
+import { addNumbers } from './generated/node.js';
+
+const { sum } = await addNumbers({ a: 42, b: 58 });
+```
+
+Every performance number below is quoted from verified in-repo receipts (see
+[benchmark highlights](docs/marketing/benchmark-highlights.md)):
+
+- Request payload: **4 B** on the Frame wire vs **47 B** as JSON — ~11.8×
+  smaller (payload bytes, not end-to-end RTT)
+- Core round trip: **134 ns** mean — ~8.9× faster than the JSON path
+- Node N-API Frame hot path: **793,185 ops/s** (~2,188× the 363/s one-shot path)
+- React Native: parity with a Nitro HybridObject within **±5%** (iOS simulator)
+
+New here? [Getting started](docs/getting-started.md) has you make your first
+Rust→TypeScript call in one command.
 
 ## How It Works
 
@@ -30,6 +59,13 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 - Plain Rust functions work too — `PackageBuilder::function` registers 0–12-argument
   functions without macros and generates positional TS signatures
   ([function registration](docs/function-registration.md))
+
+The current release line targets Rust crates 0.12.0 and the coordinated package
+versions below (`@rustra/types` 0.12.1 / `@rustra/cli` 0.12.0, adapters at their own
+versions). Upgrade native libraries, JS adapters, and generated output together;
+see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
+checks and rollback. The 0.12 DX upgrade is documented in the
+[0.11 to 0.12 migration guide](docs/migrations/0.11-to-0.12.md).
 
 ## Why rustra (Comparison)
 
