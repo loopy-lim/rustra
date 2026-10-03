@@ -2,23 +2,49 @@
 
 # rustra
 
-현재 릴리스 라인은 Rust crate 0.12.0과 아래 패키지 버전(`@rustra/types` 0.12.1·`@rustra/cli`
-0.12.0, 어댑터는 각자의 버전)을 대상으로 한다. 네이티브 라이브러리·JS 어댑터·생성물을
-함께 갱신한다. 소비자 검증과 롤백은
-[마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다. 이번 DX
-업그레이드는 [0.11 → 0.12 안내](docs/migrations/0.11-to-0.12.ko.md)를 참고한다.
+하나의 Rust 코어 → Node, Bun, Tauri, React Native 어디서든 동작하는 타입 안전
+클라이언트 — compact 바이너리 와이어 위에서, CI에서 breaking 스키마 변경을
+막는 계약 게이트로 지켜진다.
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
 [![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+Rust에서 한 번 정의한다:
 
-> **English** — Define commands once in Rust, get type-safe TypeScript clients
-> for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
-> compact caller-buffer optimized binary wire (Frame). Quick start: `cargo add rustra` +
-> `bunx --bun @rustra/cli init my-project`. Full docs (Korean) below.
+```rust
+#[bridge_type]
+struct AddNumbersInput { a: i64, b: i64 }
+#[bridge_type]
+struct AddNumbersOutput { sum: i64 }
+
+#[command]
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { sum: input.a + input.b })
+}
+```
+
+어떤 호스트에서든 호출한다. `rustra codegen`은 플랫폼별 타입 안전 클라이언트를
+생성한다 — 같은 계약, 같은 바이너리 와이어:
+
+```ts
+import { addNumbers } from './generated/node.js';
+
+const { sum } = await addNumbers({ a: 42, b: 58 });
+```
+
+아래 성능 수치는 저장소에 검증 근거로 남아 있는 값을 그대로 인용한 것이다
+(참고: [벤치마크 하이라이트](docs/marketing/benchmark-highlights.md)):
+
+- 요청 페이로드: Frame 와이어에서 **4 B** vs JSON **47 B** — 약 11.8× 작음
+  (페이로드 바이트 기준이며 end-to-end RTT가 아님)
+- 코어 왕복: 평균 **134 ns** — JSON 경로보다 약 8.9× 빠름
+- Node N-API Frame 핫 경로: **793,185 ops/s** (원샷 경로 363/s 대비 약 2,188×)
+- React Native: Nitro HybridObject와 **±5%** 이내 패리티 (iOS 시뮬레이터)
+
+처음이라면? [시작하기](docs/getting-started.ko.md)에서 한 명령으로 첫
+Rust→TypeScript 호출을 만든다.
 
 ## 작동 방식
 
@@ -32,6 +58,12 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 - 일반 Rust 함수도 그대로 — `PackageBuilder::function` 으로 매크로 없이 0~12 인자
   함수를 등록하고 위치 인자 TS 시그니처를 생성합니다
   ([일반 함수 등록](docs/function-registration.ko.md))
+
+현재 릴리스 라인은 Rust crate 0.12.0과 아래 패키지 버전(`@rustra/types` 0.12.1·`@rustra/cli`
+0.12.0, 어댑터는 각자의 버전)을 대상으로 한다. 네이티브 라이브러리·JS 어댑터·생성물을
+함께 갱신한다. 소비자 검증과 롤백은
+[마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다. 이번 DX
+업그레이드는 [0.11 → 0.12 안내](docs/migrations/0.11-to-0.12.ko.md)를 참고한다.
 
 ## 왜 rustra인가 (비교)
 
