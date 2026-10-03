@@ -14,7 +14,7 @@ RN owns immediate UI state.
 Native bridge owns only engine lifecycle and platform permission UX.
 ```
 
-(From [docs/research/rust-local-engine-vs-native-bridges.md](./research/rust-local-engine-vs-native-bridges.md).)
+(From [docs/dev/research/rust-local-engine-vs-native-bridges.md](./dev/research/rust-local-engine-vs-native-bridges.md).)
 
 The library's own authorization layer is the **command-level capability system** (Runtime Authority): deny-by-default, `require_capability` at the builder, `grant_capability` at runtime. That system governs _who may call a bridge command_ — it is independent of, and does not replace, OS-level permission prompts. See the "Runtime Authority (capabilities)" section of the [Rust API Guide](./rust-api-guide.md) (Appendix: Advanced API Summary) and the `.require_capability(name, cap)` builder entry.
 
@@ -131,7 +131,7 @@ Tokens come from a versioned catalog (`DeviceCapability::ALL`): `camera`,
 exists. OS-specific permission strings (Android `NEARBY_DEVICES`, iOS `NSCameraUsageDescription`,
 macOS entitlements) are intentionally hidden behind the token — the cross-reference
 for each OS/plugin/library lives in
-[docs/research/2026-09-08-device-capabilities.md](./research/2026-09-08-device-capabilities.md).
+[docs/dev/research/2026-09-08-device-capabilities.md](./dev/research/2026-09-08-device-capabilities.md).
 
 A declaration is a contract document, not runtime gating: rustra never blocks the
 invoke and never prompts. Declaring `devices` changes schema.json (and therefore the

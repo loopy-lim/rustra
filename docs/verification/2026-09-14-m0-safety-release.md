@@ -2,7 +2,7 @@
 
 - 기준: `b1ed9aa422fb4e627131f02f67de9f50bdbfedf7` 위 `codex/m0-safety-release-gates` 작업 트리
 - SPEC: [로드맵 M0 실행 계약](../specs/2026-09-14-rustra-roadmap.md)
-- PLAN: [M0 실행 계획](../plans/2026-09-14-m0-safety-release.md), [G0 성능 기준선 계획](../plans/2026-09-14-g0-performance-baseline.md)
+- PLAN: [M0 실행 계획](../dev/plans/2026-09-14-m0-safety-release.md), [G0 성능 기준선 계획](../dev/plans/2026-09-14-g0-performance-baseline.md)
 - 상태: M0-1~M0-5 구현, 최신 후보 로컬 안전성 검증과 코어 성능 A/B 완료. 새 GitHub Actions 실행·발행은 미수행.
 
 ## 원인과 수정

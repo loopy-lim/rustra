@@ -5,8 +5,8 @@
 - Status: Accepted
 - Date: 2026-09-11
 - Related: [ADR 0001](0001-record-track-a-contract-mechanization.md),
-  [`docs/research/2026-09-11-uniffi-maturity-catchup.md`](../research/2026-09-11-uniffi-maturity-catchup.md) (historical),
-  [`docs/plans/2026-09-11-uniffi-track-b1-phase1.md`](../plans/2026-09-11-uniffi-track-b1-phase1.md),
+  [`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`](../dev/research/2026-09-11-uniffi-maturity-catchup.md) (historical),
+  [`docs/dev/plans/2026-09-11-uniffi-track-b1-phase1.md`](../dev/plans/2026-09-11-uniffi-track-b1-phase1.md),
   [UniFFI bindings guide](../extending/uniffi-bindings.md)
 
 ## Status
@@ -29,7 +29,7 @@ that want to consume Rust without the TS layer? Three options existed.
 The 2026-09-11 maturity study and the attach spike (cdylib coexistence nm
 check, three-language generation, Swift E2E, measured iOS cross-build) supplied
 the evidence, and
-[`docs/plans/2026-09-11-uniffi-track-b1-phase1.md`](../plans/2026-09-11-uniffi-track-b1-phase1.md)
+[`docs/dev/plans/2026-09-11-uniffi-track-b1-phase1.md`](../dev/plans/2026-09-11-uniffi-track-b1-phase1.md)
 fixed the direction. This ADR records the confirmed decisions as landed.
 
 ## Decision

@@ -1,7 +1,7 @@
 # 실기기 A/B 측정 런북 — E1 owned 핸드오프 · A2 emit 전환 · rn-experiment 버퍼
 
 채택 판정을 위해 남은 세 항목의 실기기 측정을 실행 가능한 런북으로 고정한 문서다. 이름 재사용
-채택 선례([프로토콜](research/2026-09-16-nitro-call-profile.md),
+채택 선례([프로토콜](dev/research/2026-09-16-nitro-call-profile.md),
 [수화물](benchmark-receipts/2026-09-18-nitro-name-reuse-ab.json), 계약
 `rustra-name-reuse-ab/v1` 형식)와 [performance-evaluation.md §7.3/§7.6](performance-evaluation.md)의
 플랜을 그대로 따른다.

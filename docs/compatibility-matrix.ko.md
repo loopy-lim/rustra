@@ -28,6 +28,12 @@ JSON 엔진. 이벤트가 있거나 `node.persistent: true`면 같은 persistent
 | 바이너리 채널 (`createBytesChannel`) | ✅ `createNodeBytesChannel` — 0xfff9 프레임 (능력 협상 게이트; 구 런타임은 `channel.unavailable` loud-fail)                                                                           | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS 스레드 send 만 — `threadsafe:false` 계약) | ✅ `createChannelBytes` — `Channel<InvokeResponseBody>` 바이트 조각 → `Uint8Array` | ✅ JSI `createChannelBytes` — ArrayBuffer 복사본                                      | ✅ 동일 JSI 바이트 경로 + `{ pollMs }` 폴백                                                   |
 | Frame 바이너리 (`createFrameEngine`) | ✅ (napi/FFI 네이티브 필요)                                                                                                                                                           | ✅ (FFI 네이티브 필요)                                                                                                 | ✅ (`rustra_dispatch` 바이너리 경로)                                               | —                                                                                     | ✅ JSI                                                                                        |
 
+### 실험적 scriptc 호스트
+
+| 호스트  | 지원 수준                            | 네이티브 연동                                                                                  | 컴파일러                           | 제약                                                                                                     |
+| ------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| scriptc | 실험적 calculator 네이티브 실행 파일 | Native FFI (`ffi.json` + 시그니처-only TypeScript 선언 + C ABI를 통한 Rust 정적 아카이브 링크) | Node >= 24 (`fnm exec --using 26`) | napi 애드온과 `dlopen` 미지원; Node/Bun 호스트 경로 재사용 불가. 위 `EngineClient` 열에는 해당하지 않음. |
+
 ## 시그널 시맨틱 상세
 
 - **사전 abort**: 모든 어댑터가 즉시 `cancelled`로 거부한다 — 요청이 전송되기 전이다.
@@ -164,7 +170,7 @@ JS 콜백을 정리하며, 페이지 이동·파괴·앱 종료에서도 소유�
   실행·invoke/event/channel 동작·reload/close 수명주기와 패키지 artifact 설치를
   확인한 영수증이 필요하다. 컨테이너 안전성 통과만으로 지원 수준을 올리지 않는다.
 - 어댑터별 안정 범위와 게이트: [compatibility-contract.md](compatibility-contract.md)
-- 취소 전파 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
+- 취소 전파 설계: `docs/dev/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
 ### 기계 판독 표면: `engine.supports` (A02)
 
@@ -292,7 +298,7 @@ Task A0 스파이크(`examples/rn-wasm-spike/`, 2026-08-31)는 `wasm32-unknown-u
 트랜스크립트: `examples/rn-wasm-spike/evidence/{ios,android}.md`.
 
 > Superseded (2026-09-09): 네이티브 dlopen 스왑이 `hot-core` 피처로 실험적
-> 채택됐다 — [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md)
+> 채택됐다 — [plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md)
 > 참고. 아래는 의사결정 기록으로 보존한다.
 
 ## 핫스왑 후속 (Task A1): 프로세스 내 리셋 채택 — dlopen 스왑 미채택

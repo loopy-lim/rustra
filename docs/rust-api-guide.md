@@ -377,7 +377,7 @@ Contract essentials (what you rely on as a user):
   the legacy native module keep working through the existing paths.
 
 Design rationale and the full C++/JSI boundary discussion:
-[direct byte-buffer design](plans/2026-08-24-rn-byte-buffer-native-path.md).
+[direct byte-buffer design](dev/plans/2026-08-24-rn-byte-buffer-native-path.md).
 
 ### Other Builder Methods
 
@@ -1296,7 +1296,7 @@ tauri_support::register_dispatch_with_swap_events(handle, reporter, builder)
 ```
 
 Design and status:
-[2026-09-09 native hot core design](plans/2026-09-09-native-hot-core-design.md).
+[2026-09-09 native hot core design](dev/plans/2026-09-09-native-hot-core-design.md).
 The React Native side of the same loop:
 [`packages/react-native/README.md`](../packages/react-native/README.md).
 

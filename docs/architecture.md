@@ -497,7 +497,7 @@ The dynamic import (Tier 3) + runtime registry path is covered by dedicated veri
 - **Concurrency smoke** — `crates/rustra/tests/frame_concurrency.rs`: no panics/deadlocks under mixed multi-threaded register/invoke/live_schema.
 - **Performance benchmarks** — `crates/rustra/benches/` (criterion): `tier_compare` (static/dynamic postcard vs Tier 3 JSON — operation-controlled), `dynamic_registry` (register/live_schema/frozen costs), `type_scaling` (dynamic postcard payload scaling). Dynamic commands are dev-only, so measured with `--profile dev`. Figures are in the "dynamic commands" section of `docs/benchmarks.md`.
 - **TS unit tests** — `packages/types/src/index.test.ts`: `createFrameEngine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
-- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` invokes four kinds of dynamic commands (Vec/String/Map/Nested) through the single Frame engine and shows live schema commandIds. For the run procedure see `docs/plans/2026-07-05-rn-verification-checklist.md`.
+- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` invokes four kinds of dynamic commands (Vec/String/Map/Nested) through the single Frame engine and shows live schema commandIds. For the run procedure see `docs/dev/plans/2026-07-05-rn-verification-checklist.md`.
 
 ---
 
@@ -591,7 +591,7 @@ running host swaps it in without restart — the native (non-wasm) dev path,
 complementary to the wasm dev target. A working setup lives in the
 [tauri-calculator example](../examples/tauri-calculator/README.md); design and
 status are in
-[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
+[plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md).
 Experimental per the [versioning policy](versioning-policy.md); release builds
 are unaffected.
 

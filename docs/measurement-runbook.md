@@ -1,7 +1,7 @@
 # On-Device A/B Measurement Runbook — E1 Owned Handoff · A2 Emit Switch · rn-experiment Buffer
 
 Executable runbook for the three pending adoption-grade device measurements. It follows the
-name-reuse adoption precedent ([protocol](research/2026-09-16-nitro-call-profile.md),
+name-reuse adoption precedent ([protocol](dev/research/2026-09-16-nitro-call-profile.md),
 [receipt](benchmark-receipts/2026-09-18-nitro-name-reuse-ab.json), contract
 `rustra-name-reuse-ab/v1` format) and the plan fixed in
 [performance-evaluation.md §7.3/§7.6](performance-evaluation.md).

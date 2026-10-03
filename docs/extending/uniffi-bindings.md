@@ -239,7 +239,7 @@ Remaining Phase 1 limitations:
 ## 8. uniffi version pin policy
 
 The workspace dependency is `uniffi = "=0.32.1"` — an **exact pin**. As the
-maturity study (`docs/research/2026-09-11-uniffi-maturity-catchup.md`)
+maturity study (`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`)
 established, uniffi churns per minor with breakage between generated bindings
 and runtime helpers, and the generated Kotlin helpers require **exactly the
 same uniffi version** as the compiled Rust component. To bump, change the

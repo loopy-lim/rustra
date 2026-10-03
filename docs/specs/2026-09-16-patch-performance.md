@@ -1,6 +1,6 @@
 # 0.10.2 성능 패치 SPEC
 
-관련 로드맵: [P1–P6 / G0](2026-09-14-rustra-roadmap.md), [기준선 PLAN](../plans/2026-09-14-g0-performance-baseline.md).
+관련 로드맵: [P1–P6 / G0](2026-09-14-rustra-roadmap.md), [기준선 PLAN](../dev/plans/2026-09-14-g0-performance-baseline.md).
 
 ## 문제와 범위
 

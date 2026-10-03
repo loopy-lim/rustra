@@ -3,7 +3,7 @@ English | [한국어](./threat-model.ko.md)
 # Threat model (A06)
 
 Status: first edition — 2026-09-07. Deferred item A06 of the stabilization
-track (`docs/plans/2026-09-05-stabilization-unified.md`: "위협 모델 — 격리
+track (`docs/dev/plans/2026-09-05-stabilization-unified.md`: "위협 모델 — 격리
 요건이 생길 때"). This document invents no mitigations: every "Mitigated by"
 entry points at code that exists in this repository today. Anything not
 backed by code is listed under [Open gaps](#open-gaps).

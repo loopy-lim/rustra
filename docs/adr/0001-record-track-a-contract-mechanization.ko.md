@@ -5,7 +5,7 @@
 - 상태: Accepted
 - 날짜: 2026-09-11
 - 관련 문서: [`docs/safety-contract.ko.md`](../safety-contract.ko.md),
-  [`docs/research/2026-09-11-uniffi-maturity-catchup.md`](../research/2026-09-11-uniffi-maturity-catchup.md)
+  [`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`](../dev/research/2026-09-11-uniffi-maturity-catchup.md)
 
 ## 상태 (Status)
 
@@ -13,7 +13,7 @@ Accepted — 2026-09-11. 구현은 Track A 작업 항목(A1–A8)으로 분할�
 
 ## 배경 (Context)
 
-Mozilla UniFFI 벤치마크 조사(`docs/research/2026-09-11-uniffi-maturity-catchup.md`)가
+Mozilla UniFFI 벤치마크 조사(`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`)가
 밝힌 성숙도의 실체는 언어 개수가 아니라 **계약의 기계화**다: 체크섬·로드시 검증·
 실패주입 픽스처·픽스처 규율, 그리고 산출물 기준 코드젠 게이트. rustra 는 일부 축에서는
 이미 앞서 있지만(공개 스키마, 와이어 freeze, 핫스왑, en/ko 문서), 강제 수준이 약한

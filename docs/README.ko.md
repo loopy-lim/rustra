@@ -4,31 +4,19 @@
 
 rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.
 
-## 읽기 경로
+## 목적별 시작 경로
 
-### 라이브러리 사용자
+- **Tauri 앱 개발:** [10분 요약](getting-started.md#10분-요약) 후 [Tauri 설정](extending/tauri-setup.md)을 따르세요.
+- **React Native 앱 개발:** [10분 요약](getting-started.md#10분-요약) 후 [React Native 설정](extending/react-native-setup.ko.md)을 따르세요.
+- **Node/Bun 성능 최적화:** [10분 요약](getting-started.md#10분-요약) 후 [transport 선택](extending/transport-guide.md)과 [벤치마크](benchmarks.md)를 확인하세요.
 
-1. [시작하기](getting-started.md) — 설치 및 첫 패키지 만들기
-2. [아키텍처 개요](architecture.md) — 전체 구조와 핵심 개념 파악
-3. [이벤트·채널](events-and-channels.md) — Rust → JS 푸시: `subscribeEvent`, `createChannel`
-4. [개발 허들 가이드](development-hurdles.md) — doctor, 통합 codegen, drift, native 경계, mock 엔진
-5. [Rust API 가이드](rust-api-guide.md) — 매크로/Builder 전체 레퍼런스
-6. [React Native 셋업](extending/react-native-setup.md) — JSI 네이티브 모듈 연결 (iOS/Android)
-7. [Tauri 셋업](extending/tauri-setup.md) — 기존 Tauri 앱에 rustra 얹기
-8. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
-9. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
-10. [UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md) — UniFFI 로 만드는 타입 안전 Kotlin/Swift 바인딩 (Android/iOS)
-11. [동적 개발 티어](dev-tier.ko.md) — loose invoke 프로토타이핑, 디바이스 토큰 실험, `test:fast`
-12. [동기 명령 바인딩](synchronous-bindings.ko.md) — 검증을 갖춘 `bindSync`, 호스트 조건, 수명 주기와 오류
-13. [API 레퍼런스(TypeDoc)](#api-레퍼런스typedoc) — 모든 `@rustra/*` 패키지의 생성 API 문서
+## 사용자 문서
 
-### 프로젝트 기여자
+- [시작하기](getting-started.md) · [아키텍처](architecture.md) · [이벤트와 채널](events-and-channels.md)
+- [개발 허들](development-hurdles.md) · [Rust API](rust-api-guide.md) · [호환성](compatibility-matrix.md)
+- [마이그레이션](migration-guide.md) · [오류 코드](error-codes.md) · [함수 등록](function-registration.md)
 
-1. [아키텍처 개요](architecture.md) — 전체 구조와 핵심 개념 파악
-2. [안전 계약](safety-contract.ko.md) — 총괄 FFI 불변식과 코드 근거가 붙은 항목별 계약
-3. [Crate 및 Package 구조](internal/crate-structure.md) — 각 crate/package의 책임과 의존성
-4. [TypeScript 코드 생성](internal/codegen.md) — schema → TS 타입 매핑, command 이름 변환
-5. [테스트 구조](internal/testing.md) — 테스트 계층, 파일별 역할, 실행 명령어
+계획·리서치·PR 메모·내부 문서·Superpowers 산출물은 [docs/dev](dev/README.md)에 보관하며 방문자 문서에는 포함하지 않습니다.
 
 ## API 레퍼런스(TypeDoc)
 
@@ -62,9 +50,9 @@ open docs/api/index.html
 | [새 Host 추가 가이드](extending/adding-host.md)                                                                                                   | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                                                                                                            |
 | [UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md)                                                                                           | 사용자 | UniFFI 로 만드는 타입 안전 Kotlin/Swift 바인딩 — transport 선택, `uniffi` 설정, 코드젠 흐름, 에러 모델, 갈림, 버전 고정                                  |
 | [동적 개발 티어](dev-tier.ko.md) ([English](dev-tier.md))                                                                                         | 사용자 | `invokeLoose` 프로토타이핑, 카탈로그 밖 토큰 실험, 게이트 프로파일                                                                                       |
-| [Crate 및 Package 구조](internal/crate-structure.md)                                                                                              | 기여자 | 각 crate/package 책임, 빌드 의존성                                                                                                                       |
-| [TypeScript 코드 생성](internal/codegen.md)                                                                                                       | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                                                                                                                  |
-| [테스트 구조](internal/testing.md)                                                                                                                | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                                                                                                                  |
+| [Crate 및 Package 구조](dev/internal/crate-structure.md)                                                                                          | 기여자 | 각 crate/package 책임, 빌드 의존성                                                                                                                       |
+| [TypeScript 코드 생성](dev/internal/codegen.md)                                                                                                   | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                                                                                                                  |
+| [테스트 구조](dev/internal/testing.md)                                                                                                            | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                                                                                                                  |
 | [호환성 계약](compatibility-contract.ko.md) ([English](compatibility-contract.md))                                                                | 기여자 | EngineClient 안정 계약, runtime acceptance gates                                                                                                         |
 | [호환성 매트릭스](compatibility-matrix.md)                                                                                                        | 사용자 | 기능(signal/취소/배치/이벤트) × 어댑터 지원 표                                                                                                           |
 | [와이어 포맷](wire-format.ko.md)                                                                                                                  | 전체   | Frame 프로토콜의 실체, 티어별 바이트, 수치 인용 규칙                                                                                                     |
@@ -78,6 +66,8 @@ open docs/api/index.html
 | [일반 함수 등록](function-registration.ko.md) ([English](function-registration.md))                                                               | 사용자 | `PackageBuilder::function`/`try_function` 으로 매크로 없이 일반 Rust 함수 연결 — 0~12 인자, 위치 인자 TS 클라이언트, `#[command]` 와의 저작 모델 비교 표 |
 | [레지스트리 온보딩](registry-onboarding.ko.md) ([English](registry-onboarding.md))                                                                | 사용자 | 발행된 `@rustra/*` 패키지 설치 — 소비자 게이트, 호환 호스트 핀, CI 검증                                                                                  |
 | [벤치마크](benchmarks.md)                                                                                                                         | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성                                                                                                       |
+| [성능 종합 평가](performance-evaluation.ko.md) ([English](performance-evaluation.md))                                                             | 기여자 | 2026-09-24 전체 재실측 보고 — 후속 후보(E1/A2/rn-experiment) 상태, 시뮬레이터 참고 수치, 기기 A/B 런북 링크                                              |
+| [측정 런북](measurement-runbook.ko.md) ([English](measurement-runbook.md))                                                                        | 기여자 | E1 owned 핸드오프 · A2 emit 전환 · rn-experiment 버퍼의 실행 가능한 실기기 A/B 플랜 — 프로토콜, 명령, 수화물 경로, 채택/기각·롤백 기준                   |
 | [복잡 데이터 codec](complex-codecs.md)                                                                                                            | 사용자 | recursive map/enum/Option wire, limits, RN 경계                                                                                                          |
 | [플랫폼 권한 가이드](platform-permissions.md)                                                                                                     | 사용자 | 플랫폼별 OS 권한 소관(iOS/Android/Windows/macOS), Tauri ACL vs rustra capability, 디바이스 역량 계약(`#[command(device(...))]`, `getDeviceStatus`)       |
 | [위협 모델](threat-model.md)                                                                                                                      | 기여자 | STRIDE 분석, 신뢰 경계, 코드 기반 완화 매핑, 미해결 간극                                                                                                 |
@@ -117,13 +107,13 @@ open docs/api/index.html
 
 ## 연구 배경
 
-[docs/research/](research/)에는 초기 iOS PoC에서 나온 bridge/benchmark/transport 연구 문서가 있다. 현재 구현과 crate명이 다를 수 있지만, 설계 판단 근거로 보존한다.
+[docs/dev/research/](dev/research/)에는 초기 iOS PoC에서 나온 bridge/benchmark/transport 연구 문서가 있다. 현재 구현과 crate명이 다를 수 있지만, 설계 판단 근거로 보존한다.
 
 ## 계획/계약/보고 기록
 
 - [docs/specs/](specs/) — 기능별 설계 사양(spec)
-- [docs/plans/](plans/) — 구현 계획 및 스파이크 기록 (역사 문서 포함)
-- [docs/prs/](prs/) — 병합된 트랙의 PR 보고서
+- [docs/dev/plans/](dev/plans/) — 구현 계획 및 스파이크 기록 (역사 문서 포함)
+- [docs/dev/prs/](dev/prs/) — 병합된 트랙의 PR 보고서
 - [docs/adr/](adr/) — 계약·강제 변경의 번호 결정 기록(안전 계약 변경은 ADR 필요)
 - [docs/verification/](verification/) — 호스트별 수동 검증 증거 기록
 - [docs/benchmark-receipts/](benchmark-receipts/) — 벤치마크 실행 영수증(JSON + 노트)

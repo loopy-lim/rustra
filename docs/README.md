@@ -4,31 +4,20 @@ English | [한국어](./README.ko.md)
 
 rustra is a bridge framework that automatically generates a host-neutral TypeScript client once you define a Rust package.
 
-## Reading Paths
+## Choose your path
 
-### Library Users
+- **Building with Tauri:** start with the [10-minute quickstart](getting-started.md#10-minute-summary), then follow [Tauri setup](extending/tauri-setup.md).
+- **Building with React Native:** start with the [10-minute quickstart](getting-started.md#10-minute-summary), then follow [React Native setup](extending/react-native-setup.md).
+- **Optimizing a Node/Bun team:** start with the [10-minute quickstart](getting-started.md#10-minute-summary), then see [transport choices](extending/transport-guide.md) and [benchmarks](benchmarks.md).
 
-1. [Getting Started](getting-started.md) — installation and building your first package
-2. [Architecture Overview](architecture.md) — grasp the overall structure and core concepts
-3. [Events and Channels](events-and-channels.md) — Rust → JS push: `subscribeEvent`, `createChannel`
-4. [Development Hurdles Guide](development-hurdles.md) — doctor, integrated codegen, drift, native boundary, mock engine
-5. [Rust API Guide](rust-api-guide.md) — full macro/Builder reference
-6. [React Native Setup](extending/react-native-setup.md) — wiring the JSI native module (iOS/Android)
-7. [Tauri Setup](extending/tauri-setup.md) — adding rustra to an existing Tauri app
-8. [Transport Replacement Guide](extending/transport-guide.md) — replacing transports such as Bun FFI, Node napi-rs
-9. [Adding a New Host Guide](extending/adding-host.md) — adding new host adapters such as Electron, Deno
-10. [UniFFI Bindings Guide](extending/uniffi-bindings.md) — typed Kotlin/Swift bindings via UniFFI (Android/iOS)
-11. [Dynamic Development Tier](dev-tier.md) — loose invoke prototyping, device token experiments, `test:fast`
-12. [Synchronous Command Bindings](synchronous-bindings.md) — guarded `bindSync`, host requirements, lifecycle and errors
-13. [API Reference (TypeDoc)](#api-reference-typedoc) — generated, browsable API docs for every `@rustra/*` package
+## User documentation
 
-### Project Contributors
+- [Getting started](getting-started.md) · [Architecture](architecture.md) · [Events and channels](events-and-channels.md)
+- [Development hurdles](development-hurdles.md) · [Rust API](rust-api-guide.md) · [Compatibility](compatibility-matrix.md)
+- [Migration guide](migration-guide.md) · [Error codes](error-codes.md) · [Function registration](function-registration.md)
+- [Tauri](extending/tauri-setup.md) · [React Native](extending/react-native-setup.md) · [Transport guide](extending/transport-guide.md)
 
-1. [Architecture Overview](architecture.md) — grasp the overall structure and core concepts
-2. [Safety Contract](safety-contract.md) — the umbrella FFI invariant and per-item contracts with code-anchored evidence
-3. [Crate and Package Structure](internal/crate-structure.md) — responsibilities and dependencies of each crate/package
-4. [TypeScript Code Generation](internal/codegen.md) — schema → TS type mapping, command name conversion
-5. [Testing Structure](internal/testing.md) — test layers, per-file roles, run commands
+Project plans, research, pull-request notes, internal references and Superpowers artifacts are maintained under [docs/dev](dev/README.md) and are not visitor documentation.
 
 ## API Reference (TypeDoc)
 
@@ -64,9 +53,9 @@ open docs/api/index.html
 | [Adding a New Host Guide](extending/adding-host.md)                                                                                                | Users        | Writing an adapter, choosing a Rust entry point, adding tests                                                                                                                                        |
 | [UniFFI Bindings Guide](extending/uniffi-bindings.md)                                                                                              | Users        | Typed Kotlin/Swift bindings via UniFFI — transport choice, the `uniffi` config, codegen flow, error model, divergences, version pin                                                                  |
 | [Dynamic Development Tier](dev-tier.md) ([한국어](dev-tier.ko.md))                                                                                 | Users        | `invokeLoose` prototyping, catalog-outside token experiments, gate profiles                                                                                                                          |
-| [Crate and Package Structure](internal/crate-structure.md)                                                                                         | Contributors | Responsibilities of each crate/package, build dependencies                                                                                                                                           |
-| [TypeScript Code Generation](internal/codegen.md)                                                                                                  | Contributors | Codegen pipeline, type mapping, limitations                                                                                                                                                          |
-| [Testing Structure](internal/testing.md)                                                                                                           | Contributors | Test layers, script chain, per-host status                                                                                                                                                           |
+| [Crate and Package Structure](dev/internal/crate-structure.md)                                                                                     | Contributors | Responsibilities of each crate/package, build dependencies                                                                                                                                           |
+| [TypeScript Code Generation](dev/internal/codegen.md)                                                                                              | Contributors | Codegen pipeline, type mapping, limitations                                                                                                                                                          |
+| [Testing Structure](dev/internal/testing.md)                                                                                                       | Contributors | Test layers, script chain, per-host status                                                                                                                                                           |
 | [Compatibility Contract](compatibility-contract.md) ([한국어](compatibility-contract.ko.md))                                                       | Contributors | EngineClient stability contract, runtime acceptance gates                                                                                                                                            |
 | [Compatibility Matrix](compatibility-matrix.md)                                                                                                    | Users        | Feature (signal/cancellation/batch/events) × adapter support table                                                                                                                                   |
 | [Wire Format](wire-format.md)                                                                                                                      | All          | What the Frame protocol actually is, per-tier bytes, quoting rules for measurements                                                                                                                  |
@@ -80,6 +69,8 @@ open docs/api/index.html
 | [Function Registration](function-registration.md) ([한국어](function-registration.ko.md))                                                          | Users        | Ordinary Rust functions via `PackageBuilder::function`/`try_function` — 0–12 args, positional TS clients, no macro, authoring-model comparison to `#[command]`                                       |
 | [Registry Onboarding](registry-onboarding.md) ([한국어](registry-onboarding.ko.md))                                                                | Users        | Installing published `@rustra/*` packages — consumer gate, compatible host pins, CI verification                                                                                                     |
 | [Benchmarks](benchmarks.md)                                                                                                                        | All          | Per-adapter performance comparison, overhead analysis, payload scaling                                                                                                                               |
+| [Performance Evaluation](performance-evaluation.md) ([한국어](performance-evaluation.ko.md))                                                       | Contributors | 2026-09-24 full re-measurement report — follow-up candidate status (E1/A2/rn-experiment), simulator reference results, device A/B runbook pointer                                                    |
+| [Measurement Runbook](measurement-runbook.md) ([한국어](measurement-runbook.ko.md))                                                                | Contributors | Executable on-device A/B plans for E1 owned handoff · A2 emit switch · rn-experiment buffer — protocol, commands, artifact paths, adoption/rejection and rollback criteria                           |
 | [Complex Data Codecs](complex-codecs.md)                                                                                                           | Users        | Recursive map/enum/Option wire, limits, RN boundary                                                                                                                                                  |
 | [Platform Permissions](platform-permissions.md)                                                                                                    | Users        | OS permission ownership per platform (iOS/Android/Windows/macOS), Tauri ACL vs rustra capabilities, device capability contract (`#[command(device(...))]`, `getDeviceStatus`)                        |
 | [Threat Model](threat-model.md)                                                                                                                    | Contributors | STRIDE analysis, trust boundaries, code-backed mitigations, open gaps                                                                                                                                |
@@ -120,13 +111,13 @@ supported path.
 
 ## Research Background
 
-[docs/research/](research/) contains bridge/benchmark/transport research documents from the early iOS PoC. Crate names may differ from the current implementation, but they are preserved as the rationale behind design decisions.
+[docs/dev/research/](dev/research/) contains bridge/benchmark/transport research documents from the early iOS PoC. Crate names may differ from the current implementation, but they are preserved as the rationale behind design decisions.
 
 ## Plans / Contracts / Report Records
 
 - [docs/specs/](specs/) — per-feature design specs
-- [docs/plans/](plans/) — implementation plans and spike records (including historical documents)
-- [docs/prs/](prs/) — PR reports for merged tracks
+- [docs/dev/plans/](dev/plans/) — implementation plans and spike records (including historical documents)
+- [docs/dev/prs/](dev/prs/) — PR reports for merged tracks
 - [docs/adr/](adr/) — numbered architecture/contract decision records (safety-contract changes require one)
 - [docs/verification/](verification/) — per-host manual verification evidence records
 - [docs/benchmark-receipts/](benchmark-receipts/) — benchmark run receipts (JSON + notes)

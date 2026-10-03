@@ -3,7 +3,7 @@
 - 확인일: 2026-09-16 (KST) · 2026-09-21 레지스트리 여정 라운드 추가 갱신
 - 제품 기준: [2026-09-14 로드맵 SPEC](../specs/2026-09-14-rustra-roadmap.md)
 - 현재 원격 main: `1f277de2e68e2242b7a6503e6e0ab731833e60e3`
-- 이번 구현: `codex/m1-registry-onboarding`, [실행 PLAN](../plans/2026-09-16-m1-registry-onboarding.md)
+- 이번 구현: `codex/m1-registry-onboarding`, [실행 PLAN](../dev/plans/2026-09-16-m1-registry-onboarding.md)
 - 최종 목표: **검증된 Node/Bun/Tauri/RN 범위에 대한 1.0**. 현재는 M0 구현·발행 완료, M1의 Node/Bun 공개 패키지 자동 여정 구현·검증 완료이며 전체 M1·1.0은 미완료다.
 
 ## 0. 2026-09-21 레지스트리 여정 라운드 (M1 보강)

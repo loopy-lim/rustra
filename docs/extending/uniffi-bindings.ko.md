@@ -222,7 +222,7 @@ do {
 ## 8. uniffi 버전 고정 정책
 
 워크스페이스 의존은 `uniffi = "=0.32.1"` — **exact pin** 이다. 성숙도 조사
-(`docs/research/2026-09-11-uniffi-maturity-catchup.md`)가 확인했듯 uniffi 는
+(`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`)가 확인했듯 uniffi 는
 minor 마다 생성 바인딩과 런타임 헬퍼의 정합성이 깨지는 churn 이 있고, 생성된
 Kotlin 헬퍼는 컴파일된 Rust 컴포넌트와 **정확히 같은 버전**의 uniffi 를
 요구한다. 버전을 올릴 때는 워크스페이스 핀을 한 곳에서 바꾸고, 같은 PR 에서

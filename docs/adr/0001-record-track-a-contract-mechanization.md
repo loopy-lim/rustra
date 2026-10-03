@@ -5,7 +5,7 @@
 - Status: Accepted
 - Date: 2026-09-11
 - Related: [`docs/safety-contract.md`](../safety-contract.md),
-  [`docs/research/2026-09-11-uniffi-maturity-catchup.md`](../research/2026-09-11-uniffi-maturity-catchup.md)
+  [`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`](../dev/research/2026-09-11-uniffi-maturity-catchup.md)
 
 ## Status
 
@@ -14,7 +14,7 @@ and proceeds per item.
 
 ## Context
 
-The Mozilla UniFFI benchmark study (`docs/research/2026-09-11-uniffi-maturity-catchup.md`)
+The Mozilla UniFFI benchmark study (`docs/dev/research/2026-09-11-uniffi-maturity-catchup.md`)
 found that maturity is not about language count but about **mechanizing contracts**:
 checksums, load-time verification, failure-injection fixtures, fixture discipline, and
 artifact-based codegen gates. rustra already leads on some axes (public schema, wire

@@ -14,7 +14,7 @@ RN owns immediate UI state.
 Native bridge owns only engine lifecycle and platform permission UX.
 ```
 
-([docs/research/rust-local-engine-vs-native-bridges.md](./research/rust-local-engine-vs-native-bridges.md) 참고.)
+([docs/dev/research/rust-local-engine-vs-native-bridges.md](./dev/research/rust-local-engine-vs-native-bridges.md) 참고.)
 
 라이브러리 자체의 인가 계층은 **명령 단위 capability 시스템**(Runtime Authority)입니다: 기본 거부(deny-by-default), 빌더에서 `require_capability`, 런타임에 `grant_capability`. 이 시스템은 *누가 브릿지 명령을 호출할 수 있는가*를 다루며, OS 수준 권한 프롬프트와는 독립적이고 이를 대체하지도 않습니다. [Rust API 가이드](./rust-api-guide.ko.md)의 "Runtime Authority (capabilities)" 부분과 빌더의 `.require_capability(name, cap)` 항목을 참고하세요.
 
@@ -131,7 +131,7 @@ fn scan_tags(input: ScanInput) -> Result<ScanOutput> { /* … */ }
 철자를 유지한다. OS별 권한 문자열(Android `NEARBY_DEVICES`, iOS
 `NSCameraUsageDescription`, macOS entitlement)은 의도적으로 토큰 뒤에 숨긴다 —
 OS/플러그인/라이브러리 교차표는
-[docs/research/2026-09-08-device-capabilities.md](./research/2026-09-08-device-capabilities.md)에
+[docs/dev/research/2026-09-08-device-capabilities.md](./dev/research/2026-09-08-device-capabilities.md)에
 있다.
 
 선언은 계약 문서이지 런타임 게이팅이 아니다 — rustra 는 invoke 를 막지 않고

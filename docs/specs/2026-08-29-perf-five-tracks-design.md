@@ -21,12 +21,13 @@ cachedProp 2단 해시와 async 이름 기반 진입 등 미세 잔여가 있고
 ## 해결 목표
 
 **현재:**
+
 - Complex 라우트 명령: `complex_decode → from_value → handler → to_value → complex_encode`
   체인으로 Value 트리 3회 왕복 (`crates/rustra/src/command.rs:133-139`). 스키마 인터프리터는
   노드마다 `schema.clone()`(`complex_codec.rs:50`), oneOf마다 variants 클론+정렬
   (`complex_codec.rs:466`). JS 코덱도 동일 구조라 echoGroups 등은 JS+Rust 이중 비용.
 - Bun generated: i64 필드가 safe integer임에도 BigInt 산술 5회+ (`rkyv-codecs.ts:279-280,
-  87-136`), fields fast route가 raw capability 미노출로 dead code → dispatch 4계층 통과
+87-136`), fields fast route가 raw capability 미노출로 dead code → dispatch 4계층 통과
   (`rkyv-engine.ts:432`), `callerBuffer.slice` 복사 잔여 (`bun/index.ts:234`).
 - Node persistent loop: NDJSON + `invoke_json`(Value 경로) + 문자열 연쇄 버퍼링
   (`packages/node/src/index.ts:328-439`, `loop-stdio.rs:31-44`).
@@ -38,6 +39,7 @@ cachedProp 2단 해시와 async 이름 기반 진입 등 미세 잔여가 있고
   make_shared/뮤텍스 3회, F3/Android 기기 실측 공백.
 
 **목표:**
+
 - Complex 코어: 스키마 사전 컴파일(트랙 A)로 매 호출 clone/정렬 제거, 이후 serde 어댑터
   (트랙 B)로 Value 트리 왕복 통째 제거. addNumbers 2.9µs → 1µs 이하 목표.
 - Bun generated: safe-integer number fast-path + raw capability 노출 + slice 제거로
@@ -98,6 +100,7 @@ generation이 없다. 이를 명시적 계약으로 고정한 뒤, 동적 명령
 ## 참고 자료
 
 ### 조사 근거 (2026-08-29 전수 조사)
+
 - Complex 코어: `crates/rustra/src/command.rs:96-258` (핸들러 생성 3분기),
   `crates/rustra/src/complex_codec.rs:29-51` (resolved_schema clone), `:466-490` (variants
   클론+정렬), `:1021-1063` (encode/encode_into/decode 진입). JS 미러:
@@ -117,13 +120,15 @@ generation이 없다. 이를 명시적 계약으로 고정한 뒤, 동적 명령
   (cachedProp)
 
 ### 벤치/측정
+
 - 현 수치: `docs/benchmarks.md` (2026-08-24 host matrix, 2026-08-28 caller-buffer 실측,
   Track B 실측)
 - 실행: `bun run bench:hosts -- --output /tmp/rustra-host-matrix.json`,
   `cargo bench -p rustra`, `bun scripts/transport-bench.mjs`
-- 이전 성능 트랙 설계: `docs/plans/2026-08-28-perf-three-tracks-design.md`
+- 이전 성능 트랙 설계: `docs/dev/plans/2026-08-28-perf-three-tracks-design.md`
 
 ### 트랙 T 근거
+
 - register 강제 tier3: `crates/rustra/src/registry.rs:118` (`force_tier3=true`),
   게이트 구조: `crates/rustra/src/command.rs:86-97` (`js_codec_supported` 재사용 가능)
 - 치환 불변식: commandId 재사용(`registry.rs:96-104`), live_schema 캐시 무효화
@@ -135,6 +140,7 @@ generation이 없다. 이를 명시적 계약으로 고정한 뒤, 동적 명령
   (서로 다른 연산 + debug 빌드 주의 문구 이미 존재)
 
 ### 검증 게이트
+
 - PINNED hex: `crates/rustra/tests/wire_fixtures.rs` ↔ `packages/types` cross-wire.test.ts ↔
   C++ `test-rustra-generated-codecs.cpp`
 - generated/ 재생성은 Rust bin + TS CLI 이중 경로, generated/는 prettier 제외

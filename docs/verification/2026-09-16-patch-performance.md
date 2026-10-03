@@ -1,6 +1,6 @@
 # 0.10.2 성능 패치 검증
 
-기준판은 발행된 0.10.1, `1f277de2e68e2242b7a6503e6e0ab731833e60e3`다. 후보 구현과 [SPEC](../specs/2026-09-16-patch-performance.md), [PLAN](../plans/2026-09-16-patch-performance.md)은 이 문서와 같은 변경에 포함된다.
+기준판은 발행된 0.10.1, `1f277de2e68e2242b7a6503e6e0ab731833e60e3`다. 후보 구현과 [SPEC](../specs/2026-09-16-patch-performance.md), [PLAN](../dev/plans/2026-09-16-patch-performance.md)은 이 문서와 같은 변경에 포함된다.
 
 ## 구현 및 호환성
 

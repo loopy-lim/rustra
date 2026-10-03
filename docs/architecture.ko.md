@@ -496,7 +496,7 @@ struct RegistryState {
 - **동시성 스모크** — `crates/rustra/tests/frame_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
 - **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(정적/동적 postcard vs Tier 3 JSON — 동일 연산 통제), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(동적 postcard payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령" 섹션.
 - **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createFrameEngine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
-- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 Frame 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
+- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 Frame 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/dev/plans/2026-07-05-rn-verification-checklist.md`.
 
 ---
 
@@ -589,7 +589,7 @@ generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))
 재시작 없이 스왑한다 — wasm dev 타깃과 상보적인 네이티브(wasm 아님) dev 경로다.
 동작 셋업은 [tauri-calculator 예제](../examples/tauri-calculator/README.md)에,
 설계와 상태는
-[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md)에
+[plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md)에
 있다. [버전 정책](versioning-policy.ko.md) 기준 실험이며 릴리스 빌드는 영향
 없다.
 

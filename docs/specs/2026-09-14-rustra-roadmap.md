@@ -5,9 +5,9 @@
 - 기준 소스: `main` / `b1ed9aa422fb4e627131f02f67de9f50bdbfedf7`
 - 우선순위: **외부 개발자 도입 → 실제 프로젝트에서 안정성 확보 → 성능 개선**
 - 범위: 제품 방향, 요구사항, 단계별 성과, 완료 기준, 1.0 조건
-- 산출물 경계: 2026-09-14 후속 요청으로 M0의 안전성·릴리스·배포 출처 공백은 SPEC 보완, [PLAN](../plans/2026-09-14-m0-safety-release.md), 구현·검증까지 진행한다. M1~M4와 신규 플랫폼 개발은 이번 구현 범위 밖이다.
+- 산출물 경계: 2026-09-14 후속 요청으로 M0의 안전성·릴리스·배포 출처 공백은 SPEC 보완, [PLAN](../dev/plans/2026-09-14-m0-safety-release.md), 구현·검증까지 진행한다. M1~M4와 신규 플랫폼 개발은 이번 구현 범위 밖이다.
 
-> 2026-09-16 후속 실행: 사용자의 전체 진행 요청에 따라 [M1 공개 패키지 검증 PLAN](../plans/2026-09-16-m1-registry-onboarding.md)을 실행한다. [최신 단계별 상태](../verification/2026-09-16-roadmap-status.md)에 구현·배포·외부 검증의 경계를 기록한다. 아래 2026-09-14 기준선은 당시 스냅샷으로 보존한다.
+> 2026-09-16 후속 실행: 사용자의 전체 진행 요청에 따라 [M1 공개 패키지 검증 PLAN](../dev/plans/2026-09-16-m1-registry-onboarding.md)을 실행한다. [최신 단계별 상태](../verification/2026-09-16-roadmap-status.md)에 구현·배포·외부 검증의 경계를 기록한다. 아래 2026-09-14 기준선은 당시 스냅샷으로 보존한다.
 
 ## 1. 방향과 성공의 정의
 
@@ -304,7 +304,7 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 
 ## 8. 기존 로드맵과의 관계
 
-[2026-09-01 로드맵](../plans/2026-09-01-roadmap-design.md)의 도입·증거 중심 방향은 계승한다. 다음 항목은 현재 소스와 사용자 지시로 재분류한다.
+[2026-09-01 로드맵](../dev/plans/2026-09-01-roadmap-design.md)의 도입·증거 중심 방향은 계승한다. 다음 항목은 현재 소스와 사용자 지시로 재분류한다.
 
 | 과거 항목                                                 | 이번 SPEC의 처리                                                            |
 | --------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -327,7 +327,7 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 - [기존 온보딩 게이트](../../scripts/onboarding-gate.mjs), [packed RN consumer 검사](../../scripts/check-packed-react-native-consumer.mjs), [기본 CI 정의](../../.github/workflows/ci.yml)
 - [타입화 에러 생성](../../packages/cli/src/generate-errors.ts), [실제 에러 생성물](../../examples/calculator/generated/errors.ts), [React 캐시](../../packages/react/src/suspense-cache.ts)
 - [Benchmark 정의](../../.github/workflows/bench.yml), [회귀 판정](../../scripts/check-criterion-regression.mjs), [호스트 수동 검증 기록](../verification-checklist.ko.md)
-- [UniFFI 현재 범위](../extending/uniffi-bindings.ko.md), [실험 hot-core 설계](../plans/2026-09-09-native-hot-core-design.md), [9월 12일 감사 기록](../superpowers/reviews/2026-09-12-audit-remediation.md)
+- [UniFFI 현재 범위](../extending/uniffi-bindings.ko.md), [실험 hot-core 설계](../dev/plans/2026-09-09-native-hot-core-design.md), [9월 12일 감사 기록](../dev/superpowers/reviews/2026-09-12-audit-remediation.md)
 
 ### 외부 1차 자료의 적용
 
@@ -345,9 +345,9 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 
 ## 10. M0 후속 구현 결과
 
-2026-09-14 요청한 M0-1~M0-5를 [PLAN](../plans/2026-09-14-m0-safety-release.md)에 따라 구현하고 [로컬 실행 검증](../verification/2026-09-14-m0-safety-release.md)을 마쳤다. Miri 213개, ASan/LSan 178개, Fuzz 3개 각각 601초를 Linux ARM64에서 통과했다.
+2026-09-14 요청한 M0-1~M0-5를 [PLAN](../dev/plans/2026-09-14-m0-safety-release.md)에 따라 구현하고 [로컬 실행 검증](../verification/2026-09-14-m0-safety-release.md)을 마쳤다. Miri 213개, ASan/LSan 178개, Fuzz 3개 각각 601초를 Linux ARM64에서 통과했다.
 
-[G0 성능 기준선 PLAN](../plans/2026-09-14-g0-performance-baseline.md)에 따라 재귀 complex route의 release A/B도 기준/후보 각각 5개 독립 프로세스로 측정했다. 비재귀 oneOf/map control은 -0.50%/+1.93%로 10% 예산 안이었고, 재귀 depth 1/8은 안전한 Value fallback 때문에 3.89x/3.13x 느렸다. 호출마다 IR을 다시 검사하던 비재귀 공통 비용은 제거했다. [원본 영수증](../benchmark-receipts/2026-09-14-m0-complex-route-ab.json)은 이 결과를 Rust 코어 경계로 제한한다.
+[G0 성능 기준선 PLAN](../dev/plans/2026-09-14-g0-performance-baseline.md)에 따라 재귀 complex route의 release A/B도 기준/후보 각각 5개 독립 프로세스로 측정했다. 비재귀 oneOf/map control은 -0.50%/+1.93%로 10% 예산 안이었고, 재귀 depth 1/8은 안전한 Value fallback 때문에 3.89x/3.13x 느렸다. 호출마다 IR을 다시 검사하던 비재귀 공통 비용은 제거했다. [원본 영수증](../benchmark-receipts/2026-09-14-m0-complex-route-ab.json)은 이 결과를 Rust 코어 경계로 제한한다.
 
 플랫폼 지원 표기도 함께 정리했다. Linux는 Alpha이며 현재 제품 근거는 빌드·smoke까지다. 최신 후보의 Linux ARM64 Miri·ASan/LSan·Fuzz는 로컬 통과했고, Actions Linux x86_64 게이트는 아직 실행하지 않았다. 컨테이너 안전성 통과를 실제 Linux GUI·패키지 설치 증거로 승격하지 않는다.
 
@@ -355,16 +355,16 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 
 ### 2026-09-16 성능 패치 후속
 
-[0.10.2 SPEC](2026-09-16-patch-performance.md)과 [PLAN](../plans/2026-09-16-patch-performance.md)에 따라 0.10.1의 안전성 비용을 줄였다. Weak 역참조를 유지하는 codec 소유 대상 테이블, optional 복사 제거, struct 탐색 개선을 각 5회 교차 측정했다. 재귀 depth 8 지연은 78.66%, 64 KiB optional은 50.36%, 32필드 struct는 59.56% 감소했다. 대조군은 2.88–9.60% 느려져 10% 예산 안이며, oneOf의 경계 근접도 함께 기록했다. [원본 영수증](../benchmark-receipts/2026-09-16-patch-performance-ab.json)과 [검증 기록](../verification/2026-09-16-patch-performance.md)을 근거로 한다. 이는 코어 측정이며 G3의 실제 소비자 p95·CPU·실기기 수용 완료를 뜻하지 않는다.
+[0.10.2 SPEC](2026-09-16-patch-performance.md)과 [PLAN](../dev/plans/2026-09-16-patch-performance.md)에 따라 0.10.1의 안전성 비용을 줄였다. Weak 역참조를 유지하는 codec 소유 대상 테이블, optional 복사 제거, struct 탐색 개선을 각 5회 교차 측정했다. 재귀 depth 8 지연은 78.66%, 64 KiB optional은 50.36%, 32필드 struct는 59.56% 감소했다. 대조군은 2.88–9.60% 느려져 10% 예산 안이며, oneOf의 경계 근접도 함께 기록했다. [원본 영수증](../benchmark-receipts/2026-09-16-patch-performance-ab.json)과 [검증 기록](../verification/2026-09-16-patch-performance.md)을 근거로 한다. 이는 코어 측정이며 G3의 실제 소비자 p95·CPU·실기기 수용 완료를 뜻하지 않는다.
 
 추가로 복합 노드의 균형·넓은·편향·큰 payload 트리를 각 5회 비교했다. 8,191노드 전체 왕복은25.805→8.675 ms, 전체 입력 검색은13.235→4.776 ms이며, 같은 값을 Rust에 미리 보관한 ID 조회는20.459 µs다. 마지막 수치는 별도 사용 패턴이며 최초 적재나 변경 비용을 포함하지 않는다. [트리 receipt](../benchmark-receipts/2026-09-16-tree-performance-ab.json)와 benchmarks의 형상·깊이·입출력 크기를 함께 읽어야 한다. 검색 자체는 같은 DFS이며 복잡한 graph·인덱스·실기기 수용은 완료 처리하지 않는다.
 
 ### 2026-09-16 Nitro 동일 조건 비교 후속
 
-[Nitro 비교 SPEC](2026-09-16-nitro-parity.md)·[PLAN](../plans/2026-09-16-nitro-parity.md)에 따라 공개 동기 API와 호출·코덱 비용을 개선하고, iOS Simulator 및 Android 실기기에서 같은 후보를 각각5회×90항목 측정했다. 공개 동기30항목 중 Nitro 동급 이상은 iOS18개, Android19개이며 전 항목 목표는 미달이다. [최종 보고서](../research/2026-09-16-nitro-parity-candidate.md)와 [원본180항목](../benchmark-receipts/2026-09-16-nitro-parity-candidate.json)에 개선·남은 차이·실패한 중간 실행을 함께 기록했다.
+[Nitro 비교 SPEC](2026-09-16-nitro-parity.md)·[PLAN](../dev/plans/2026-09-16-nitro-parity.md)에 따라 공개 동기 API와 호출·코덱 비용을 개선하고, iOS Simulator 및 Android 실기기에서 같은 후보를 각각5회×90항목 측정했다. 공개 동기30항목 중 Nitro 동급 이상은 iOS18개, Android19개이며 전 항목 목표는 미달이다. [최종 보고서](../dev/research/2026-09-16-nitro-parity-candidate.md)와 [원본180항목](../benchmark-receipts/2026-09-16-nitro-parity-candidate.json)에 개선·남은 차이·실패한 중간 실행을 함께 기록했다.
 
 동일 flat arena의 결과이며 재귀 DTO 동급, 개별 호출 p95, 전체 G3 또는 새 릴리스 완료로 승격하지 않는다. 추가 무작위 스트레스 검사는 사용자 요청으로 중단했고, 이번 후보의 성공한 fuzz·Linux LSan 증거는 주장하지 않는다.
 
 ### 2026-09-16 잔여 차이 후속 검증
 
-[후속 PLAN](../plans/2026-09-16-nitro-parity-followup.md)에 따라 Android 버퍼의 순서 의존성, 실제 DFS의 보관 용량·스택 성장, 작은 호출 후보 및 큰 객체 직렬화를 조사했다. 작은 맵 인코더를 개선했고 악화된 postcard 후보는 폐기했다. 새 iOS/Android Release의 각 5회×90항목에서 공개 동기는 양쪽 20/30, Promise API는 iOS19/30·Android20/30이 동급 이상이다. 전 항목 목표는 미달이며 모든 판정·진단 한계는 [후속 결과](../research/2026-09-16-nitro-parity-followup.md)에 남겼다. 새 발행이나 플랫폼 인증 완료로 처리하지 않는다.
+[후속 PLAN](../dev/plans/2026-09-16-nitro-parity-followup.md)에 따라 Android 버퍼의 순서 의존성, 실제 DFS의 보관 용량·스택 성장, 작은 호출 후보 및 큰 객체 직렬화를 조사했다. 작은 맵 인코더를 개선했고 악화된 postcard 후보는 폐기했다. 새 iOS/Android Release의 각 5회×90항목에서 공개 동기는 양쪽 20/30, Promise API는 iOS19/30·Android20/30이 동급 이상이다. 전 항목 목표는 미달이며 모든 판정·진단 한계는 [후속 결과](../dev/research/2026-09-16-nitro-parity-followup.md)에 남겼다. 새 발행이나 플랫폼 인증 완료로 처리하지 않는다.

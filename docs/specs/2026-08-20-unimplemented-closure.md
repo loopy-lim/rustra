@@ -8,7 +8,7 @@ priority: high
 
 # 미구현 항목 전수 마감(Unimplemented Closure) SPEC
 
-리서치: `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` (26건)
+리서치: `docs/dev/research/2026-08-20-09-55-00-unimplemented-survey.md` (26건)
 
 ## 문제
 
@@ -29,7 +29,7 @@ priority: high
 - [ ] postcard 필드 순서(알파벳) 위반이 빌드 타임에 경고된다
 - [ ] auth/streaming 예제의 `generated/`가 재생성되어 calculator/crud와 동일한 산출물 구조를 가진다
 - [ ] `rustra init` 템플릿이 현재 발행 버전(0.1.3)을 참조한다
-- [ ] `docs/internal/codegen.md` 제한사항 표가 갱신된다 (allOf/integer enum 해소, 낡은 oneOf/const 행 정정)
+- [ ] `docs/dev/internal/codegen.md` 제한사항 표가 갱신된다 (allOf/integer enum 해소, 낡은 oneOf/const 행 정정)
 
 ### WS2 — API 문서 정합성 (HIGH)
 
@@ -58,7 +58,7 @@ priority: high
 - [ ] `RendererHost` trait 존속 결정이 문서화된다 — 공개 API라 제거하지 않되, 사용처(host 통합 지점)와 Lynx 제거 배경을 모듈 독에 기록하고 `#[allow(dead_code)]`/낡은 모듈 독을 정리
 - [ ] `invokeAsync(payload, onDone): number` 옵셔널 메서드가 구현(JSI 배선)되거나 "호스트 구현 계약"으로 문서화된다
 - [ ] Lynx 잔여물 제거 — `packages/lynx/dist/`(비추적), `Example.nitro.ts` 템플릿, `trust_baseline_ffi.rs` 낡은 모듈 독, "(T3 후속)" 낡은 마커 4곳
-- [ ] `docs/plans/2026-08-10-rn-b1-verification.md` 23항목 체크리스트가 CI/벤치마크 대체 근거와 함께 폐쇄 처리된다
+- [ ] `docs/dev/plans/2026-08-10-rn-b1-verification.md` 23항목 체크리스트가 CI/벤치마크 대체 근거와 함께 폐쇄 처리된다
 
 ### WS6 — 플랫폼/검증 보강
 
@@ -85,12 +85,12 @@ priority: high
 
 ## 참고 자료
 
-- 리서치 문서: `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` (파일:줄 상세)
+- 리서치 문서: `docs/dev/research/2026-08-20-09-55-00-unimplemented-survey.md` (파일:줄 상세)
 - 코드젠 결함 근원: `packages/cli/src/generate.ts:165-206`, 생성물 `examples/crud/generated/rkyv-codecs.ts:287,318,325-332`
 - 폴백 선점 구조: `packages/types/src/index.ts:780-795` (Tier 3 JSON 폴백), `examples/crud/generated/rkyv-registry.ts:7`
 - 매크로 실제 계약: `crates/rustra-macros/src/lib.rs:100-120,151-159,387`
 - 코드젠 dual-path 재생성 관례: 메모리 `codegen-dual-path-regen` (Rust bin + TS CLI, generated/ prettier 제외, `test:ts:node`)
 - 커밋 관례: lefthook prettier 재스테이징 없음 → 커밋 후 amend (메모리 `lefthook-prettier-amend`)
-- 성능 후속 설계: `docs/plans/2026-08-18-perf-close-nitro-gap.md` Task 7, `docs/benchmarks.md:90-95`
-- 취소 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
+- 성능 후속 설계: `docs/dev/plans/2026-08-18-perf-close-nitro-gap.md` Task 7, `docs/benchmarks.md:90-95`
+- 취소 설계: `docs/dev/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 - Tier 3 설계: `crates/rustra/src/rkyv_codec.rs:22,44`

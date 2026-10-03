@@ -802,7 +802,7 @@ export const SCHEMA_VERSION = 1;
 
 - schemars가 생성한 JSON Schema. 런타임 검증, 문서 자동화, 외부 도구 연동에 활용.
 - 첫 커맨드만 발췌했다 — 실제 파일은 32개 커맨드 전부를 담는다.
-- 네 필드는 선언됐을 때만 나타나므로 선언 없는 패키지는 바이트 동일 스키마를 유지한다: 커맨드별 `errors`(`[{ code, description, retryable }]`, `#[command(error(...))]`에서 → `errors.ts`), `devices`(`["camera", ...]`, `#[command(device(...))]`에서 → `devices.ts`), `platforms`(`.platform_command`에서), 그리고 CLI가 `devices.ts` 유니언과 `codegen.device_catalog` doctor 검사에 읽는 최상위 `deviceCapabilities` 카탈로그. 전체 셰이프는 [docs/internal/codegen.ko.md](internal/codegen.ko.md) 참고.
+- 네 필드는 선언됐을 때만 나타나므로 선언 없는 패키지는 바이트 동일 스키마를 유지한다: 커맨드별 `errors`(`[{ code, description, retryable }]`, `#[command(error(...))]`에서 → `errors.ts`), `devices`(`["camera", ...]`, `#[command(device(...))]`에서 → `devices.ts`), `platforms`(`.platform_command`에서), 그리고 CLI가 `devices.ts` 유니언과 `codegen.device_catalog` doctor 검사에 읽는 최상위 `deviceCapabilities` 카탈로그. 전체 셰이프는 [docs/dev/internal/codegen.ko.md](dev/internal/codegen.ko.md) 참고.
 
 ---
 

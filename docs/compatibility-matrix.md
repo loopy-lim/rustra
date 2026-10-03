@@ -30,6 +30,12 @@ below — it is not an `EngineClient` column.
 | Binary channels (`createBytesChannel`)    | ✅ `createNodeBytesChannel` — 0xfff9 frames (capability-gated; loud-fail `channel.unavailable` on old runtimes)                                                                       | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS-thread send only — `threadsafe:false` contract) | ✅ `createChannelBytes` — `Channel<InvokeResponseBody>` raw byte fragments → `Uint8Array` | ✅ JSI `createChannelBytes` — ArrayBuffer copies                                          | ✅ same JSI bytes path + `{ pollMs }` fallback                                                                                              |
 | Frame binary (`createFrameEngine`)        | ✅ (requires the napi/FFI native)                                                                                                                                                     | ✅ (requires the FFI native)                                                                                                 | ✅ (`rustra_dispatch` binary path)                                                        | —                                                                                         | ✅ JSI                                                                                                                                      |
 
+### Experimental scriptc host
+
+| Host    | Support                                   | Native integration                                                                                      | Compiler                           | Limitations                                                                                            |
+| ------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| scriptc | Experimental calculator native executable | Native FFI (`ffi.json` + signature-only TypeScript declarations + linked Rust static archive via C ABI) | Node >= 24 (`fnm exec --using 26`) | No napi add-ons or `dlopen`; Node/Bun host paths are not reusable. Not an `EngineClient` column above. |
+
 ## Signal semantics in detail
 
 - **Pre-abort**: every adapter rejects immediately with `cancelled` — the request has not been sent yet.
@@ -112,7 +118,7 @@ physical WebView teardown still needs native GUI acceptance on each target.
   behavior, reload/close lifecycle, and installation from the packaged artifact.
   A container safety pass alone cannot promote the support level.
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
-- Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
+- Cancellation propagation design: `docs/dev/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
 ### Machine-readable surface: `engine.supports` (A02)
 
@@ -249,7 +255,7 @@ emulators/simulator — not yet on physical devices. Full hex transcripts:
 
 > Superseded (2026-09-09): the native dlopen swap described below was later
 > adopted experimentally as the `hot-core` feature — see
-> [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
+> [plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md).
 > The section is preserved as a decision record.
 
 ## Hot-swap follow-up (Task A1): process-internal reset selected — dlopen swap NOT adopted

@@ -5,8 +5,8 @@
 - 상태: Accepted
 - 날짜: 2026-09-11
 - 관련 문서: [ADR 0001](0001-record-track-a-contract-mechanization.ko.md),
-  [`docs/research/2026-09-11-uniffi-maturity-catchup.ko.md`](../research/2026-09-11-uniffi-maturity-catchup.md)(역사 문서),
-  [`docs/plans/2026-09-11-uniffi-track-b1-phase1.md`](../plans/2026-09-11-uniffi-track-b1-phase1.md),
+  [`docs/dev/research/2026-09-11-uniffi-maturity-catchup.ko.md`](../dev/research/2026-09-11-uniffi-maturity-catchup.md)(역사 문서),
+  [`docs/dev/plans/2026-09-11-uniffi-track-b1-phase1.md`](../dev/plans/2026-09-11-uniffi-track-b1-phase1.md),
   [UniFFI 바인딩 가이드](../extending/uniffi-bindings.ko.md)
 
 ## 상태 (Status)
@@ -27,7 +27,7 @@ ADR 0001 이 rustra 자신의 계약을 기계화한(Track A) 뒤 남은 질문�
 
 2026-09-11 성숙도 조사와 부착 스파이크(cdylib 공존 nm 체크, 3언어 생성, Swift
 E2E, iOS 크로스빌드 실측)가 근거를 제공했고,
-[`docs/plans/2026-09-11-uniffi-track-b1-phase1.md`](../plans/2026-09-11-uniffi-track-b1-phase1.md)가
+[`docs/dev/plans/2026-09-11-uniffi-track-b1-phase1.md`](../dev/plans/2026-09-11-uniffi-track-b1-phase1.md)가
 방향을 확정했다. 이 ADR 은 착지 결과를 기준으로 확정 결정을 기록한다.
 
 ## 결정 (Decision)

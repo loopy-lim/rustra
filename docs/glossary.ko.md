@@ -84,7 +84,7 @@ manifest/dispatch 경로에서 실제로 쓰는 페이로드 직렬화기(`crate
 `RUSTRA_HOT_CORE_DIR`가 지정한 디렉터리를 폴링한다 — 파일 경로와 디렉터리는
 서로 다른 두 변수다). **실험**
 ([versioning-policy.md](versioning-policy.md) 실험 표면 표 참고). 설계와 상태:
-[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
+[plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md).
 
 표기 표준: 두 언어 모두 `hot-core`. 한국어 서술에서 개념 설명은 핫코어/핫스왑
 병기를 허용하지만, 피처·모듈·플래그 표기는 `hot-core` / `RUSTRA_HOT_CORE` 라틴
@@ -195,7 +195,7 @@ Rust 동적 라이브러리: `crate-type = ["cdylib"]`(C ABI 동적 라이브러
 codec, JSON codec, 생성 TS/C++ codec).
 **Codec IR** — complex codec 이 컴파일되는 공유 스키마 중간 표현. TS·C++
 제너레이터가 네이티브로 인코딩할 수 있는 형태를 판정한다
-([complex-codecs.md](complex-codecs.md), [codegen.md](internal/codegen.md),
+([complex-codecs.md](complex-codecs.md), [codegen.md](dev/internal/codegen.md),
 `crates/rustra/src/complex_codec_schema.rs`).
 
 ## mirror (미러)
@@ -216,5 +216,5 @@ codec, JSON codec, 생성 TS/C++ codec).
 dioxus subsecond 핫리로드 기술. 네이티브 핫스왑 루프의 대안으로 검토하고
 **현재는 보류/기각**(Tauri lib+bin 레이아웃 빈 패치 버그 dioxus#5778; 재평가는
 Phase 4 항목). 아키텍처의 일부가 아니다 —
-[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md)
+[plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md)
 (대안 검토 절) 참고.

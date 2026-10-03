@@ -88,7 +88,7 @@ the host at the artifact (the React Native adapter instead polls a directory
 named by `RUSTRA_HOT_CORE_DIR` — a file path and a directory are two different
 variables). **Experimental** (see the experimental-surface table in
 [versioning-policy.md](versioning-policy.md)). Design and status:
-[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
+[plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md).
 
 Canonical spelling: `hot-core` in both languages. In Korean prose, concept
 descriptions may additionally use 핫코어/핫스왑 as a gloss, but the feature,
@@ -205,7 +205,7 @@ complex codec, JSON codec, the generated TS/C++ codecs).
 **Codec IR** — the shared schema intermediate representation the complex codecs
 are compiled from; it decides what the TS and C++ generators can encode natively
 ([complex-codecs.md](complex-codecs.md),
-[codegen.md](internal/codegen.md), `crates/rustra/src/complex_codec_schema.rs`).
+[codegen.md](dev/internal/codegen.md), `crates/rustra/src/complex_codec_schema.rs`).
 
 ## mirror
 
@@ -226,5 +226,5 @@ The dioxus subsecond hot-reload technology. Evaluated as an alternative for the
 native hot-swap loop and **deferred/rejected for now** (Tauri lib+bin layout
 patch bug dioxus#5778; re-evaluation is a Phase 4 item). Not part of the
 architecture — see
-[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md)
+[plans/2026-09-09-native-hot-core-design.md](dev/plans/2026-09-09-native-hot-core-design.md)
 (alternatives section).

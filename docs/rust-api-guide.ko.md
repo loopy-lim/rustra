@@ -372,7 +372,7 @@ let pkg = Package::builder("example.bytes")
   기존 경로로 동작한다.
 
 설계 근거와 C++/JSI 경계 전체 논의:
-[direct byte-buffer 설계](plans/2026-08-24-rn-byte-buffer-native-path.md).
+[direct byte-buffer 설계](dev/plans/2026-08-24-rn-byte-buffer-native-path.md).
 
 ### 기타 빌더 메서드
 
@@ -1277,7 +1277,7 @@ tauri_support::register_dispatch_with_swap_events(handle, reporter, builder)
 ```
 
 설계·상태 문서:
-[2026-09-09 네이티브 핫코어 설계](plans/2026-09-09-native-hot-core-design.md).
+[2026-09-09 네이티브 핫코어 설계](dev/plans/2026-09-09-native-hot-core-design.md).
 같은 루프의 React Native 쪽은
 [`packages/react-native/README.md`](../packages/react-native/README.md).
 

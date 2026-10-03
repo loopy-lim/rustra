@@ -83,11 +83,11 @@ there is no reason to repeat the ceremony inside the dev loop.
 - **Native hot-core** — the native (non-wasm) dev path is a separate
   experimental mechanism: `rustra dev` builds the core as a cdylib and a
   running host swaps it without restart
-  ([hot-core design](plans/2026-09-09-native-hot-core-design.md),
+  ([hot-core design](dev/plans/2026-09-09-native-hot-core-design.md),
   [glossary](glossary.md)).
 - **`rustra codegen --from-live`** — promotion scaffolding that derives
   `#[command]` skeletons from a live registry dump is a follow-up slice (design:
-  [dev-tier design](plans/2026-09-08-dev-tier-design.md) §G).
+  [dev-tier design](dev/plans/2026-09-08-dev-tier-design.md) §G).
 - **RN bundle subset** (`registry.commands`) — a separate track in the same
   Tier 3 direction (see the
-  [A13 design](plans/2026-09-08-a13-rn-registry-subset-design.md)).
+  [A13 design](dev/plans/2026-09-08-a13-rn-registry-subset-design.md)).
