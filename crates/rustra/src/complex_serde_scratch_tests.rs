@@ -230,3 +230,87 @@ fn small_complex_response_allocates_once_and_keeps_fresh_owned_results() {
     assert_eq!(first[9], 14, "later calls must not reuse an owned result");
     assert_eq!(count, 1, "body and frame must share one allocation");
 }
+
+#[test]
+fn map_entries_spill_honors_the_declared_length_hint() {
+    // serialize_map(Some(len)) 을 주는 맵(BTreeMap/HashMap)은 spill 이
+    // reserve_exact 한 번으로 끝난다. 힌트가 없으면 reserve(4)+배증이 재할당을
+    // 반복한다 — 64 항목에서 5 회. spill 때 inline 항목도 heap 으로 옮겨지므로
+    // heap 은 `len` 개 전부를 담아야 한다.
+    let (hinted, hinted_count) = allocations(|| {
+        let mut entries = MapEntries::with_length_hint(Some(64));
+        for index in 0..64u32 {
+            let key = MapBytes::<24>::Inline {
+                bytes: [index as u8; 24],
+                len: 3,
+            };
+            entries.push((key, MapBytes::<48>::default()));
+        }
+        assert_eq!(entries.len, 64);
+        assert_eq!(entries.heap.len(), 64, "heap ends up holding every entry");
+        entries
+    });
+    assert_eq!(hinted.heap.capacity(), 64);
+    assert_eq!(hinted_count, 1, "hinted spill must be a single allocation");
+
+    let (_plain, plain_count) = allocations(|| {
+        let mut entries = MapEntries::default();
+        for index in 0..64u32 {
+            let key = MapBytes::<24>::Inline {
+                bytes: [index as u8; 24],
+                len: 3,
+            };
+            entries.push((key, MapBytes::<48>::default()));
+        }
+        entries
+    });
+    assert_eq!(
+        plain_count, 5,
+        "reserve(4) plus doubling reallocates four more times"
+    );
+
+    // 2 항목 이하는 spill 없이 inline 에서 끝난다.
+    let (_inline, inline_count) = allocations(|| {
+        let mut entries = MapEntries::with_length_hint(Some(2));
+        for index in 0..2u32 {
+            let key = MapBytes::<24>::Inline {
+                bytes: [index as u8; 24],
+                len: 3,
+            };
+            entries.push((key, MapBytes::<48>::default()));
+        }
+        entries
+    });
+    assert_eq!(inline_count, 0, "small maps never reach the heap");
+}
+
+#[test]
+fn map_decode_allocations_belong_to_the_consumer_type() {
+    // 디코드는 키를 와이어에서 빌려와 검사한다(SeenKeys — 2키까지 무할당, 그 위는
+    // 상한 64 용량 HashSet 1 회). 남는 할당은 소비자 타입이 지불하는 것뿐이다:
+    // 64키 BTreeMap<String, Vec<i64>> = 소유 키 64 + 값 Vec 64 + B-tree 노드.
+    // 이 게이트는 코덱이 소비자 몫을 넘어 할당하기 시작하면 깨진다.
+    let ir = map_ir();
+    let limits = ComplexCodecLimits::DEFAULT;
+    let original: std::collections::BTreeMap<String, Vec<i64>> = (0..64)
+        .map(|index| (format!("k{index:02}"), vec![index as i64]))
+        .collect();
+    let wire = to_bytes(&original, &ir, limits).unwrap();
+    // 프로덕션과 동일하게 targets 은 등록 시점에 한 번 빌드된다 — 호출당 몫이
+    // 아니므로 계량 범위 밖에 둔다.
+    let targets = RecursiveTargets::new(&ir);
+    let (decoded, count) = allocations(|| {
+        from_bytes_direct::<std::collections::BTreeMap<String, Vec<i64>>>(
+            &wire, &ir, &targets, limits,
+        )
+    });
+    assert_eq!(decoded.unwrap(), original);
+    // 전수는 소비자 타입의 몫이다 — 소유 키 64 + 값 Vec 64 + B-tree 노드 + 중복
+    // 검사 SeenKeys HashSet. 리더·IR·targets 는 전부 빌려 쓰거나 등록 시점 몫이고,
+    // 0키 디코드가 0 할당이므로 코덱의 호출당 고정 비용은 없다. 크기별 실측:
+    // 1키→3, 2키→5, 3키→8, 64키→139.
+    assert_eq!(
+        count, 139,
+        "codec must add no allocations beyond the consumer's own type"
+    );
+}

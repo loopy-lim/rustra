@@ -44,15 +44,35 @@ struct MapEntries {
     inline: [MapEntry; 2],
     heap: Vec<MapEntry>,
     len: usize,
+    /// 남은 spill 예상 슬롯 — `with_length_hint` 이 채우고 첫 spill 에 소모한다.
+    heap_hint: usize,
 }
 
 impl MapEntries {
+    /// serde `serialize_map(len)` 이 준 길이 힌트를 첫 spill 에 정확히 한 번
+    /// 쓴다 — BTreeMap/HashMap 은 항상 `Some(len)` 을 준다. spill 때 inline 의
+    /// 항목도 heap 으로 옮겨지므로 heap 은 결국 `len` 개를 모두 담는다.
+    /// `reserve(4)` + 배증은 큰 맵에서 재할당·복사가 반복되므로, 힌트가 있으면
+    /// `reserve_exact` 로 spill 이 한 번의 할당으로 끝나게 한다. 힌트가 없거나
+    /// 거짓이면 평소처럼 배증 성장으로 돌아간다.
+    fn with_length_hint(hint: Option<usize>) -> Self {
+        Self {
+            heap_hint: hint.unwrap_or(0),
+            ..Default::default()
+        }
+    }
+
     fn push(&mut self, entry: MapEntry) {
         if self.len < self.inline.len() {
             self.inline[self.len] = entry;
         } else {
             if self.len == self.inline.len() {
-                self.heap.reserve(4);
+                if self.heap_hint > 0 {
+                    self.heap.reserve_exact(self.heap_hint);
+                    self.heap_hint = 0;
+                } else {
+                    self.heap.reserve(4);
+                }
                 for entry in &mut self.inline {
                     self.heap.push(std::mem::take(entry));
                 }

@@ -206,7 +206,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         })
     }
 
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
         let ir = self.node()?;
         let IrNode::Map { value } = ir else {
             return Err(error("expected object node"));
@@ -214,7 +214,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         Ok(SerMap {
             writer: self.writer,
             targets: self.targets,
-            buffer: MapEntries::default(),
+            buffer: MapEntries::with_length_hint(len),
             value,
             limits: self.limits,
             depth: self.depth + 1,
