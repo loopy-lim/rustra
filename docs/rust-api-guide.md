@@ -1302,6 +1302,76 @@ The React Native side of the same loop:
 
 ---
 
+## 12. Large Structures: Prefer Resident Routes over Whole-Payload Round Trips
+
+A command that takes a large tree/collection as input pays the codec round trip on
+every call, even when the query result is tiny. The measured gap is structural, not
+tunable: on the `tree_route` benchmark (release), an 8,191-node whole-tree round
+trip costs **6.771 ms** while the same search against a tree kept in Rust costs
+**19.84 µs** — a **341×** difference. The search itself (in-memory DFS) is 19.56 µs,
+so the wire, not the algorithm, dominates. Across the seven measured shapes
+(31–8,191 nodes), whole-tree echo runs 25.6 µs–6.771 ms against resident queries at
+115.6 ns–19.84 µs
+([performance-evaluation §3.6](performance-evaluation.md), [benchmarks](benchmarks.md)).
+
+The resident pattern keeps the large structure in Rust and sends only a reference
+(index/ID) and the query per call. It needs no new runtime API — the command closure
+captures shared ownership:
+
+```rust
+use std::sync::Arc;
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct LoadInput { tree: Node }
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct ResidentInput {
+    tree_index: u32,
+    target: u64,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct SearchResult {
+    found: bool,
+    id: u64,
+    visited: u64,
+}
+
+let trees: Arc<Vec<Node>> = Arc::new(load_trees()); // once, outside the hot path
+
+let pkg = Package::builder("app.docs")
+    .command("loadTree", move |input: LoadInput| -> rustra::Result<u32> {
+        // store into shared state; return the index to use in later queries
+        // (with Arc<RwLock<Vec<Node>>> for a mutable store)
+        todo!()
+    })
+    .command("findNode", move |input: ResidentInput| {
+        let root = trees
+            .get(input.tree_index as usize)
+            .ok_or_else(|| rustra::RustraError::invalid_args("unknown tree index"))?;
+        Ok(find_node(root, input.target))
+    })
+    .build();
+```
+
+Each `findNode` call sends 5 bytes and returns 13 bytes where the whole-tree
+equivalent sends 579,546 bytes for the same 8,191-node tree.
+
+**Use a resident route when** the payload is large (roughly: hundreds of nodes or
+tens of KiB and up) **and** queried more than a handful of times — repeated queries
+amortize the one-time load. **Keep the whole-payload command when** payloads are
+small or transferred once; an index/ID protocol adds state-management obligations
+(storage lifetime, invalidation on mutation) that a stateless echo does not.
+
+Measured limits, stated plainly: the resident fixture is read-only; mutation, lock
+and synchronization costs are not measured. Resident setup/storage sits outside the
+timed loop and is not free. The fixture measures worst-case linear DFS, not an
+indexed lookup. See the
+[tree receipt](benchmark-receipts/2026-09-16-tree-performance-ab.json) for every
+run.
+
+---
+
 ## Appendix: Full Examples
 
 ### Advanced API Summary (public APIs not covered in the body)

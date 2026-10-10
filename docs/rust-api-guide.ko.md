@@ -1283,6 +1283,70 @@ tauri_support::register_dispatch_with_swap_events(handle, reporter, builder)
 
 ---
 
+## 12. 대형 구조: 전체 페이로드 왕복보다 resident 라우트
+
+큰 트리/컬렉션을 입력으로 받는 커맨드는 조회 결과가 아무리 작아도 호출마다 코덱 왕복을
+전액 치른다. 측정된 격차는 튜닝으로 없어지는 것이 아니라 구조적이다. `tree_route`
+벤치(release)에서 8,191노드 트리 전체 왕복은 **6.771 ms**, 같은 탐색을 Rust 에 둔 트리로
+수행하면 **19.84 µs** — **341배** 차이. 탐색 자체(메모리 내 DFS)는 19.56 µs라 와이어가
+알고리즘을 지배한다. 측정한 7개 형상(31–8,191노드) 전체에서 트리 echo 는 25.6 µs–6.771 ms,
+resident 조회는 115.6 ns–19.84 µs다
+([performance-evaluation §3.6](performance-evaluation.md), [benchmarks](benchmarks.md)).
+
+resident 패턴은 대형 구조를 Rust 에 두고 호출마다 참조(인덱스/ID)와 조회 조건만 보낸다.
+새 런타임 API 가 필요 없다 — 커맨드 클로저가 공유 소유권을 캡처한다:
+
+```rust
+use std::sync::Arc;
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct LoadInput { tree: Node }
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct ResidentInput {
+    tree_index: u32,
+    target: u64,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct SearchResult {
+    found: bool,
+    id: u64,
+    visited: u64,
+}
+
+let trees: Arc<Vec<Node>> = Arc::new(load_trees()); // 1회, 핫패스 밖
+
+let pkg = Package::builder("app.docs")
+    .command("loadTree", move |input: LoadInput| -> rustra::Result<u32> {
+        // 공유 상태에 저장하고 이후 조회에 쓸 인덱스를 돌려준다
+        // (가변 저장소는 Arc<RwLock<Vec<Node>>>)
+        todo!()
+    })
+    .command("findNode", move |input: ResidentInput| {
+        let root = trees
+            .get(input.tree_index as usize)
+            .ok_or_else(|| rustra::RustraError::invalid_args("unknown tree index"))?;
+        Ok(find_node(root, input.target))
+    })
+    .build();
+```
+
+같은 8,191노드 트리에서 `findNode` 호출 한 번은 5바이트를 보내 13바이트를 돌려받는다.
+전체 트리 방식은 같은 결과에 579,546바이트를 보낸다.
+
+**resident 라우트를 쓸 때**: 페이로드가 크고(대략 수백 노드 또는 수십 KiB 이상) 조회가
+여러 번 이뤄질 때 — 반복 조회가 1회 적재 비용을 상각한다. **전체 페이로드 커맨드를 유지할
+때**: 페이로드가 작거나 1회 전송일 때 — 인덱스/ID 프로토콜은 무상태 echo 에 없는 상태
+관리 의무(저장소 수명, 변이 시 무효화)를 추가한다.
+
+측정 한계를 그대로 적는다: resident 픽스처는 읽기 전용이며 변이·락·동기화 비용은
+측정되지 않았다. resident 적재/저장은 시간 측정 루프 밖에 있고 공짜가 아니다. 픽스처는
+색인 조회가 아니라 최악 case 선형 DFS를 측정한다. 실행 전체는
+[트리 receipt](benchmark-receipts/2026-09-16-tree-performance-ab.json)에 있다.
+
+---
+
 ## 부록: 전체 예제
 
 ### 고급 API 요약 (문서 본문에서 다루지 않은 공개 API)
