@@ -10,7 +10,10 @@
     {
       "name": "rustra_ffi_invoke_json_into_len",
       "symbol": "rustra_ffi_invoke_json_into_len",
-      "params": ["string", "mutable-bytes"],
+      "params": [
+        "string",
+        "mutable-bytes"
+      ],
       "returns": "u64"
     },
     {
@@ -28,22 +31,30 @@
     {
       "name": "rustra_ffi_set_max_payload",
       "symbol": "rustra_ffi_set_max_payload",
-      "params": ["u64"],
+      "params": [
+        "u64"
+      ],
       "returns": "void"
     },
     {
       "name": "rustra_ffi_invoke_cancel",
       "symbol": "rustra_ffi_invoke_cancel",
-      "params": ["u64"],
+      "params": [
+        "u64"
+      ],
       "returns": "bool"
     },
     {
       "name": "rustra_ffi_cancellation_status",
       "symbol": "rustra_ffi_cancellation_status",
-      "params": ["u64"],
+      "params": [
+        "u64"
+      ],
       "returns": "u32"
     }
   ],
-  "libraries": ["../../../target/release/librustra_calculator_example.a"],
+  "libraries": [
+    "../../../target/release/librustra_calculator_example.a"
+  ],
   "system_libraries": []
 }
