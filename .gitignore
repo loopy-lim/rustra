@@ -50,3 +50,6 @@ fuzz/artifacts/
 fuzz/coverage/
 fuzz/target/
 docs/api/
+
+# Local git-history tooling workspace (untracked scratch)
+.history-rewrite/
