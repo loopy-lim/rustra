@@ -62,7 +62,7 @@
 ### Q6. `doctor.config.json` 이름 충돌 해소
 
 - **증상**: "doctor"라는 이름이 서로 무관한 4곳(`rustra doctor` CLI, 스캐폴드 `bun run doctor`, `scripts/doctor.mjs`, 루트 `doctor.config.json`)에서 쓰여 신규 기여자의 grep을 오염시킴. `doctor.config.json`은 레포 내 실참조 0건(재확인).
-- **근거**: `doctor.config.json`, `eslint.config.js`(미참조), `docs/research/2026-08-29-22-46-49-dx-audit.md:111`(기지정 이슈)
+- **근거**: `doctor.config.json`, `eslint.config.js`(미참조), `docs/dev/research/2026-08-29-22-46-49-dx-audit.md:111`(기지정 이슈)
 - **영향받는 사람**: 기여자 (첫날 혼란)
 - **해결책**: `react-doctor.config.json` 등으로 이름 변경 또는 파일 최상단 용도 주석 추가.
 

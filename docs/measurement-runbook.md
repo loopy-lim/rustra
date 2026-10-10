@@ -148,7 +148,7 @@ rollback verification build.
 
 - Pure JS + codegen change (no ABI, no native, no capability marker). Host microbench evidence
   exists (warm 20.81%, reproduced 4×, call-count invariant 660,004 = 660,004 —
-  [decision doc](research/2026-09-24-emit-switch-decision.md)).
+  [decision doc](dev/research/2026-09-24-emit-switch-decision.md)).
 - **Leading gates before the device matrix** (performance-evaluation.md §7.5 risk 2 — these
   close the not-yet-re-confirmed items):
   1. Hermes assertion suite re-run on the switched tree:
@@ -185,7 +185,7 @@ Both arms share the **same native binary**; only the JS bundle differs:
   magnitude), no significant regression anywhere, leading gates green.
 - **Rollback:** single commit `git revert` of the emit switch + regenerate all six examples'
   `generated/` with the same CLI; verify with `test:codegen-fresh:check`
-  ([decision doc rollback strategy](research/2026-09-24-emit-switch-decision.md)).
+  ([decision doc rollback strategy](dev/research/2026-09-24-emit-switch-decision.md)).
 
 ## 3. rn-experiment — buffer-path superiority re-measurement (real workloads)
 
@@ -193,7 +193,7 @@ Both arms share the **same native binary**; only the JS bundle differs:
 
 - `examples/rn-experiment` cross-compiles for `aarch64-apple-ios-sim` Release with 0
   mismatches against its generated module scripts/podspec
-  ([build evidence](research/2026-09-24-rn-experiment-ios.md)). Physical iOS uses
+  ([build evidence](dev/research/2026-09-24-rn-experiment-ios.md)). Physical iOS uses
   `RUSTRA_IOS_TARGET=aarch64-apple-ios`; Android uses
   `modules/rustra-bridge/android/build-rust-android.sh`.
 - This item is **not an install-swap A/B**: the contrast is between lanes inside one app —

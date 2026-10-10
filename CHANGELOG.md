@@ -1,7 +1,7 @@
 # Changelog
 
 이 프로젝트의 주요 변경사항을 기록합니다. 세부 내역은 git history와
-`docs/plans/`의 계획/결과 문서를 참고하세요.
+`docs/dev/plans/`의 계획/결과 문서를 참고하세요.
 
 ## Unreleased
 
@@ -158,7 +158,7 @@ packages/*/CHANGELOG.md.
   발행한다(fail-closed). `@rustra/react-native` 어댑터 C++ 셸의 `CoreTable`
   재지향으로 JS 재바인딩 없이 스왑된다(Android debuggable 빌드 한정 filesDir
   경로, iOS 시뮬레이터 env 경로). macOS·iOS 시뮬·Android 에뮬/실기기 앱
-  도메인에서 스왑 실측 통과(문서: `docs/plans/2026-09-09-native-hot-core-design.md`).
+  도메인에서 스왑 실측 통과(문서: `docs/dev/plans/2026-09-09-native-hot-core-design.md`).
   감시 실패에는 재시도 상한이 있다 — 같은 바이트(sha256)가 5회 연속 실패하면 그
   바이트를 포이즌해 새 바이트가 발행될 때까지 건너뛴다(Rust 감시 스레드와 RN
   C++ 폴링이 같은 정책).

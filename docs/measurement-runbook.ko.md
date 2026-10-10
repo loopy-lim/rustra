@@ -143,7 +143,7 @@ E1은 Rust 코어 + C++ 브리지 + 스냅샷/CHANGELOG에 걸쳐 있다. 롤백
 
 - 순수 JS + 코드젠 변경(ABI·네이티브·capability 마커 없음). 호스트 마이크로벤치 근거는
   있다(warm 20.81%, 4회 재현, 호출 수 불변 660,004 = 660,004 —
-  [결정 문서](research/2026-09-24-emit-switch-decision.md)).
+  [결정 문서](dev/research/2026-09-24-emit-switch-decision.md)).
 - **기기 행렬 전 선행 게이트**(performance-evaluation.md §7.5 리스크 2 — 미재확인 항목을
   여기서 닫는다):
   1. 전환 트리에서 Hermes 단언 스위트 재실행:
@@ -180,7 +180,7 @@ E1은 Rust 코어 + C++ 브리지 + 스냅샷/CHANGELOG에 걸쳐 있다. 롤백
   없음, 선행 게이트 녹색.
 - **롤백:** emit 전환 커밋 단일 `git revert` + 동일 CLI로 6개 예제의 `generated/` 재생성,
   `test:codegen-fresh:check` 로 확인
-  ([결정 문서 롤백 전략](research/2026-09-24-emit-switch-decision.md)).
+  ([결정 문서 롤백 전략](dev/research/2026-09-24-emit-switch-decision.md)).
 
 ## 3. rn-experiment — 버퍼 경로 우위 재측정 (실연산 워크로드)
 
@@ -188,7 +188,7 @@ E1은 Rust 코어 + C++ 브리지 + 스냅샷/CHANGELOG에 걸쳐 있다. 롤백
 
 - `examples/rn-experiment` 는 `aarch64-apple-ios-sim` Release로 크로스컴파일되며 생성 모듈
   스크립트·podspec과 불일치 0이다
-  ([빌드 증거](research/2026-09-24-rn-experiment-ios.md)). 실기기 iOS는
+  ([빌드 증거](dev/research/2026-09-24-rn-experiment-ios.md)). 실기기 iOS는
   `RUSTRA_IOS_TARGET=aarch64-apple-ios`, Android는
   `modules/rustra-bridge/android/build-rust-android.sh`.
 - 이 항목은 **설치 교체 A/B가 아니다**: 하나의 앱 안에서 레인끼리 대조한다 —

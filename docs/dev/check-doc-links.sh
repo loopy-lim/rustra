@@ -14,7 +14,7 @@
 #     (e.g. /tmp/...) point outside the repository and are skipped.
 #   - Skips link targets that resolve to a git-untracked path: some
 #     historical notes are intentionally kept as untracked originals
-#     (e.g. docs/research/2026-09-24-*), so links to them are exempt
+#     (e.g. historical research notes), so links to them are exempt
 #     from validation rather than failures.
 #   - Any other target that does not resolve to an existing file is a
 #     failure.

@@ -2,7 +2,7 @@
 
 # hot-core 프로브
 
-실험적 [`hot-core`](../../docs/plans/2026-09-09-native-hot-core-design.md)
+실험적 [`hot-core`](../../docs/dev/plans/2026-09-09-native-hot-core-design.md)
 표면을 **Rust 바이너리를 실행할 수 있는 모든 프로세스** — macOS 호스트, iOS
 시뮬레이터(`simctl spawn`), Android 에뮬레이터(`adb shell`) — 안에서 엔드투엔드로
 밟아보는 단독 검증 바이너리다. 호스트 앱의 핫 모드(`examples/tauri-calculator`)가

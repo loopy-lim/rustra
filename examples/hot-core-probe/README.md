@@ -3,7 +3,7 @@ English | [한국어](./README.ko.md)
 # hot-core Probe
 
 A standalone verification binary that exercises the experimental
-[`hot-core`](../../docs/plans/2026-09-09-native-hot-core-design.md) surface end
+[`hot-core`](../../docs/dev/plans/2026-09-09-native-hot-core-design.md) surface end
 to end inside **any process that can run a Rust binary** — the macOS host, an
 iOS simulator (`simctl spawn`), or an Android emulator (`adb shell`). The host
 app's hot mode (`examples/tauri-calculator`) performs the same sequence; this

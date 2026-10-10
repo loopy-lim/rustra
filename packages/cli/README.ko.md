@@ -43,7 +43,7 @@ React Native 또는 명시한 `cppOutput`, CMake는 React Native에서 검사합
 `RUSTRA_HOT_CORE`로 아티팩트를 받아 재시작 없이 반영합니다(parity 게이트는 wasm
 타깃과 동일하게 결합). 동작 예제는
 [tauri-calculator 예제](../../examples/tauri-calculator/README.ko.md)와
-[hot-core 설계](../../docs/plans/2026-09-09-native-hot-core-design.md)를
+[hot-core 설계](../../docs/dev/plans/2026-09-09-native-hot-core-design.md)를
 참고하세요. dylib 루프는 별도 config 파일로 유지하고(예: `dev.target: "dylib"`를
 넣은 `rustra.hot.json`) `rustra dev --config rustra.hot.json`으로 실행하세요 —
 공유 config는 기본 `native` 타깃을 유지합니다(tauri-calculator 예제가 쓰는

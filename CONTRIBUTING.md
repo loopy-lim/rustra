@@ -71,8 +71,8 @@ bun run test:local          # the locally-runnable CI battery; see docs/gate-map
 Before contributing, read the following documents:
 
 1. [Architecture Overview](docs/architecture.md) — overall structure and core concepts
-2. [Crate and Package Structure](docs/internal/crate-structure.md) — responsibilities and dependencies of each crate/package
-3. [Testing Structure](docs/internal/testing.md) — test layers and run commands
+2. [Crate and Package Structure](docs/dev/internal/crate-structure.md) — responsibilities and dependencies of each crate/package
+3. [Testing Structure](docs/dev/internal/testing.md) — test layers and run commands
 
 ---
 
@@ -235,7 +235,7 @@ Docs that quote generated code must wrap it in `docs:sync` markers so
 - Layout contract: one blank line after `begin`, then `<!-- prettier-ignore -->`
   immediately followed by the opening fence; after the closing fence, one blank
   line before `docs:sync:end`. The gate fails on structural violations.
-- Only `docs/` is scanned (`docs/plans/` excluded), so quoting this syntax in
+- Only `docs/` is scanned (`docs/dev/plans/` excluded), so quoting this syntax in
   `CONTRIBUTING.md` itself cannot false-positive.
 - The gate also enforces **en/ko mirror completeness**: every in-scope `X.md`
   must have its `X.ko.md` twin (and vice versa) — edit both sides in the same PR.
@@ -273,7 +273,7 @@ Every change must satisfy the [compatibility contract](docs/compatibility-contra
 ### When Codegen Output Looks Wrong
 
 1. Check `schema.json` — inspect whether the JSON Schema produced by schemars matches your intent
-2. Check `types.ts` — for the JSON Schema → TS type mapping rules, see the [codegen documentation](docs/internal/codegen.md)
+2. Check `types.ts` — for the JSON Schema → TS type mapping rules, see the [codegen documentation](docs/dev/internal/codegen.md)
 3. Conditional JSON Schema that rustra does not generate falls back to `unknown`, and data enums or nested collections whose wire order postcard cannot prove fall back to per-command Tier 3
 
 ### Contract Hash Mismatch

@@ -68,8 +68,8 @@ bun run test:local          # 로컬에서 돌릴 수 있는 CI 배터리; 전�
 기여 전에 다음 문서를 읽는 것을 권장한다:
 
 1. [아키텍처 개요](docs/architecture.md) — 전체 구조와 핵심 개념
-2. [Crate 및 Package 구조](docs/internal/crate-structure.md) — 각 crate/package의 책임과 의존성
-3. [테스트 구조](docs/internal/testing.md) — 테스트 계층, 실행 명령어
+2. [Crate 및 Package 구조](docs/dev/internal/crate-structure.md) — 각 crate/package의 책임과 의존성
+3. [테스트 구조](docs/dev/internal/testing.md) — 테스트 계층, 실행 명령어
 
 ---
 
@@ -233,7 +233,7 @@ bun run test:runtime:tauri   # 위 Tauri 시스템 사전조건 필요
 - 배치 규약: `begin` 다음 빈 줄 하나, 그 다음 `<!-- prettier-ignore -->`와 바로
   이어지는 여는 펜스. 닫는 펜스 뒤에는 빈 줄 하나를 두고 `docs:sync:end`. 구조
   위반은 게이트가 실패로 보고한다.
-- 스캔 범위는 `docs/`뿐(`docs/plans/` 제외)이므로 이 규약을 `CONTRIBUTING.ko.md`
+- 스캔 범위는 `docs/`뿐(`docs/dev/plans/` 제외)이므로 이 규약을 `CONTRIBUTING.ko.md`
   에 인용해도 오탐이 없다.
 - 게이트는 **en/ko 미러 완전성**도 강제한다 — 스코프 내 모든 `X.md`에는 `X.ko.md`
   쌍이(그 반대도) 있어야 한다. 같은 PR에서 양쪽을 함께 편집한다.
@@ -271,7 +271,7 @@ bun run test:runtime:tauri   # 위 Tauri 시스템 사전조건 필요
 ### 코드 생성 결과가 이상할 때
 
 1. `schema.json` 확인 — schemars가 생성한 JSON Schema가 의도한 대로인지 검사
-2. `types.ts` 확인 — JSON Schema → TS 타입 매핑 규칙은 [codegen 문서](docs/internal/codegen.md) 참조
+2. `types.ts` 확인 — JSON Schema → TS 타입 매핑 규칙은 [codegen 문서](docs/dev/internal/codegen.md) 참조
 3. rustra가 생성하지 않는 조건부 JSON Schema는 `unknown`, postcard가 와이어
    순서를 증명할 수 없는 data enum/중첩 collection은 명령 단위 Tier 3로 폴백됨
 
