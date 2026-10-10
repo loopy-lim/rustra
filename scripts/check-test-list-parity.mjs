@@ -142,7 +142,13 @@ export async function checkTestListParity({ rootPackageJsonPath, cliPackageJsonP
   );
   const reactTests = listTestFiles(REACT_SRC_REL, '.test.ts');
 
+  const runtimeScriptc = 'bun run test:runtime:scriptc';
   const reports = [
+    ...['test:runtime', 'test:local'].flatMap((name) =>
+      rootPackage.scripts[name]?.includes(runtimeScriptc)
+        ? []
+        : [`${name}: missing ${runtimeScriptc}`],
+    ),
     ...formatReport(
       'test:ts:node',
       checkDistTsCoverage(rootPackage.scripts['test:ts:node'], distTs),

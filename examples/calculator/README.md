@@ -34,6 +34,7 @@ The executables live in [`apps/node-app.ts`](apps/node-app.ts) and
 5. **Host generated entrypoints** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **Native entrypoint** — `native_entry!` in one line shares the stable C ABI and the RN staticlib
 7. **High-performance options** — measured Node persistent loop/N-API and Bun FFI Frame
+8. **scriptc native FFI** — a statically linked binary built from the generated `ffi_format` 7 manifest
 
 ## Generated Files
 
@@ -60,6 +61,28 @@ console.log(result.value); // 42
 ```
 
 This code uses a helper generated on top of `createGeneratedFields2` together with the Node host entry. Because the generated host file installs the lazy engine once, the helper is called without an engine parameter. Bun imports `../generated/bun.js` the same way, and a manual `configure()` is only needed when injecting a custom transport.
+
+## scriptc Native FFI (Statically Linked)
+
+The `scriptc` section in [`rustra.json`](rustra.json) turns on the scriptc stage of
+`rustra codegen`, which writes `scriptc/ffi.json` (the `ffi_format` 7 manifest) and
+`scriptc/scriptc-ffi.d.ts` (signature-only declarations). `scriptc build` statically
+links the Rust staticlib into a native binary — no JavaScript engine, no `dlopen`,
+no runtime symbol lookup:
+
+```bash
+bash examples/calculator/scriptc/run.sh
+# scriptc FFI zero-config result: 42
+```
+
+[`apps/scriptc-app.ts`](apps/scriptc-app.ts) calls `rustra_mobile_init()` once
+(the `native_entry!` entry), then the caller-buffer envelope
+`rustra_ffi_invoke_json_into_len(payload, buf)`, which writes the JSON response
+into a caller-owned `Uint8Array` and returns the written byte count as a `bigint`
+(`0xffff_ffff_ffff_ffffn` = failure). The manifest carries only symbols whose
+arguments scriptc's direct-call world can supply: out-pointer writes and callback
+function pointers (async, events, channels) are excluded with documented reasons
+in `packages/cli/src/cli-generate-scriptc.ts`.
 
 ## Real-World Performance Check
 

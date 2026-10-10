@@ -1,0 +1,49 @@
+{
+  "ffi_format": 7,
+  "functions": [
+    {
+      "name": "rustra_mobile_init",
+      "symbol": "rustra_mobile_init",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_invoke_json_into_len",
+      "symbol": "rustra_ffi_invoke_json_into_len",
+      "params": ["string", "mutable-bytes"],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_schema_generation",
+      "symbol": "rustra_ffi_schema_generation",
+      "params": [],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_get_max_payload",
+      "symbol": "rustra_ffi_get_max_payload",
+      "params": [],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_set_max_payload",
+      "symbol": "rustra_ffi_set_max_payload",
+      "params": ["u64"],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_invoke_cancel",
+      "symbol": "rustra_ffi_invoke_cancel",
+      "params": ["u64"],
+      "returns": "bool"
+    },
+    {
+      "name": "rustra_ffi_cancellation_status",
+      "symbol": "rustra_ffi_cancellation_status",
+      "params": ["u64"],
+      "returns": "u32"
+    }
+  ],
+  "libraries": ["../../../target/release/librustra_calculator_example.a"],
+  "system_libraries": []
+}

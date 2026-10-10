@@ -10,9 +10,11 @@ import {
   DYLIB_PROFILES,
   INSPECTOR_CONFIG_KEYS,
   ON_MISMATCH_VALUES,
+  SCRIPTC_CONFIG_KEYS,
   UNIFFI_CONFIG_KEYS,
   type DevConfig,
   type InspectorConfig,
+  type RustraScriptcConfig,
   type RustraUniffiConfig,
 } from './config-schema.js';
 
@@ -79,6 +81,34 @@ export function assertUniffiSection(uniffi: RustraUniffiConfig | undefined): voi
     throw new Error(
       unknownValueError('uniffi.dylibProfile', uniffi.dylibProfile, [...DYLIB_PROFILES]),
     );
+  }
+}
+
+/**
+ * L1 — scriptc 섹션: fail-closed 키 검사 + 리프 값 타입/허용값 검사. output 은
+ * 필수(uniffi.output 과 같은 비어있지 않은 안전 경로 계약)이고, profile/archive 는
+ * 선택 — 기본값은 소비자(cli-scriptc)가 채운다.
+ */
+export function assertScriptcSection(scriptc: RustraScriptcConfig | undefined): void {
+  if (scriptc === undefined) return;
+  assertKnownKeys(scriptc, SCRIPTC_CONFIG_KEYS, 'config scriptc');
+  if (
+    typeof scriptc.output !== 'string' ||
+    scriptc.output.length === 0 ||
+    /[\0\r\n]/.test(scriptc.output)
+  ) {
+    throw new Error('Config scriptc.output must be a non-empty safe path');
+  }
+  if (
+    scriptc.archive !== undefined &&
+    (typeof scriptc.archive !== 'string' ||
+      scriptc.archive.length === 0 ||
+      /[\0\r\n]/.test(scriptc.archive))
+  ) {
+    throw new Error('Config scriptc.archive must be a non-empty safe path');
+  }
+  if (scriptc.profile !== undefined && !DYLIB_PROFILES.includes(scriptc.profile)) {
+    throw new Error(unknownValueError('scriptc.profile', scriptc.profile, [...DYLIB_PROFILES]));
   }
 }
 

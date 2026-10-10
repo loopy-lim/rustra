@@ -55,4 +55,14 @@ export default tseslint.config(
       'no-regex-spaces': 'off',
     },
   },
+  {
+    // scriptc Native FFI 앱 — scriptc build 프로그램은 진입 파일의 트리플슬래시
+    // 참조로만 ffi 선언(.d.ts)의 전역 함수를 얻는다(--external-types 는 coverage
+    // 전용이라 빌드 type-check 에는 안 보인다). tsconfig include 로는 scriptc
+    // 체커가 못 보므로 참조가 계약이다.
+    files: ['examples/calculator/apps/scriptc-app.ts'],
+    rules: {
+      '@typescript-eslint/triple-slash-reference': 'off',
+    },
+  },
 );

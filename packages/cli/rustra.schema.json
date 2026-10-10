@@ -210,6 +210,28 @@
           "default": "debug"
         }
       }
+    },
+    "scriptc": {
+      "description": "scriptc Native FFI artifact generation (ffi.json + scriptc-ffi.d.ts, statically linked). The presence of this section enables the scriptc stage of rustra codegen.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "description": "Directory the scriptc FFI manifest and TypeScript declarations are generated into (relative to this config file).",
+          "type": "string",
+          "minLength": 1
+        },
+        "profile": {
+          "description": "Cargo profile used to resolve the staticlib archive that scriptc links. Defaults to \"release\".",
+          "enum": ["debug", "release"],
+          "default": "release"
+        },
+        "archive": {
+          "description": "Explicit path to the staticlib archive scriptc links (relative to this config file). When absent, resolved from the cargo target directory as lib<pkg>.a.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

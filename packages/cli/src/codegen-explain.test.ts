@@ -7,6 +7,7 @@ const FULL: ExplainFacts = {
   hasReactNative: true,
   positional: true,
   hostEntries: ['node.ts', 'bun.ts'],
+  hasScriptc: true,
 };
 
 test('explain lists every surface with source and stage', () => {
@@ -21,6 +22,14 @@ test('explain lists every surface with source and stage', () => {
   // 호스트 엔트리
   assert.ok(rows.some((row) => row.output === 'node.ts'));
   assert.ok(rows.some((row) => row.output === 'bun.ts'));
+  // scriptc Native FFI 표면
+  assert.ok(
+    rows.some(
+      (row) =>
+        row.output === 'scriptc/ffi.json + scriptc-ffi.d.ts' &&
+        row.stage === 'scriptc native FFI (static link)',
+    ),
+  );
   // manifest sidecar
   assert.ok(rows.some((row) => row.output === '.rustra-generated.json'));
 });
@@ -37,10 +46,12 @@ test('explain honors config without cpp/rn sections', () => {
     hasReactNative: false,
     positional: false,
     hostEntries: [],
+    hasScriptc: false,
   });
   assert.ok(!rows.some((row) => row.renderer === 'cpp codec renderer'));
   assert.ok(!rows.some((row) => row.output === 'positional-facade.ts'));
   assert.ok(!rows.some((row) => row.output === 'react-native.ts'));
+  assert.ok(!rows.some((row) => row.output.startsWith('scriptc/')));
   // 코어 TS 표면은 항상 존재한다.
   for (const core of [
     'types.ts',

@@ -16,6 +16,7 @@ import {
   resolveUniffiSrcOut,
   runUniffiBindings,
 } from './cli-uniffi.js';
+import { checkScriptcStage, runScriptcStage } from './cli-scriptc.js';
 
 function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
@@ -62,6 +63,7 @@ function printExplain(
     hasReactNative: Boolean(config.reactNative),
     positional: Boolean(config.positional),
     hostEntries,
+    hasScriptc: Boolean(config.scriptc),
   });
   // doctor/codegen/diff 가 공유하는 schemaVersion:1 관례(cli-json-format.ts) —
   // 구형 `{command:'codegen', explain}` 임의 shape 는 소비자 0건을 확인하고
@@ -168,6 +170,29 @@ export async function runCodegen(
         `Rust schema generation failed for ${target.packageName}/${target.binaryName} (${target.manifestPath})`,
         error,
       );
+    }
+    signal?.throwIfAborted();
+    // scriptc 단계 — 섹션 존재가 기능 스위치(uniffi 와 같다). 프로브가 쓴 신선한
+    // 스키마를 곧바로 소비하는 싼 단계라 cargo build 를 하는 uniffi **앞에** 둔다:
+    // 아카이브 부재 같은 설정 결함이 비싼 빌드 뒤가 아니라 즉시 표면화된다.
+    if (config.scriptc) {
+      const scriptcInput = {
+        configPath,
+        scriptc: config.scriptc,
+        target,
+        schemaOutDir,
+        progress: (message: string) => status(options.format, `[rustra] scriptc: ${message}`),
+      };
+      if (options.check) {
+        // uniffi check 표기와 같은 대칭 — 성공도 조용히 지나가지 않게 한다.
+        status(
+          options.format,
+          '[rustra] scriptc: check — ffi.json + scriptc-ffi.d.ts byte comparison',
+        );
+        checkScriptcStage(scriptcInput);
+      } else {
+        runScriptcStage(scriptcInput);
+      }
     }
     signal?.throwIfAborted();
     if (uniffi && (!options.check || options.checkBindings) && uniffiBindingOut) {

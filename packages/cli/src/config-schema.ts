@@ -16,9 +16,11 @@ export const CONFIG_ROOT_KEYS = [
   'dev',
   'inspector',
   'uniffi',
+  'scriptc',
 ] as const;
 export const CODEGEN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary'] as const;
 export const UNIFFI_CONFIG_KEYS = ['output', 'srcOut', 'dylibProfile'] as const;
+export const SCRIPTC_CONFIG_KEYS = ['output', 'profile', 'archive'] as const;
 export const DYLIB_PROFILES = ['debug', 'release'] as const;
 export const REACT_NATIVE_CONFIG_KEYS = [
   'moduleDir',
@@ -85,6 +87,22 @@ export interface RustraUniffiConfig {
   dylibProfile?: DylibProfile;
 }
 
+/**
+ * scriptc 섹션 — scriptc Native FFI 코드젠(ffi.json + scriptc-ffi.d.ts, 정적 링크).
+ * uniffi 와 같이 존재 자체가 기능 스위치다(없으면 코드젠 흐름은 이전과 바이트 동일).
+ */
+export interface RustraScriptcConfig {
+  /** ffi.json·scriptc-ffi.d.ts 가 출력되는 디렉터리 — config 파일 위치 기준 상대경로. */
+  output: string;
+  /** 링크할 staticlib 빌드 프로필. 기본값 "release". */
+  profile?: DylibProfile;
+  /**
+   * staticlib 아카이브 경로 명시 오버라이드 — config 위치 기준 상대경로. 없으면
+   * cargo metadata target 디렉터리에서 lib<package>(하이픈→밑줄).a 규약으로 해석한다.
+   */
+  archive?: string;
+}
+
 export interface RustraConfig {
   /** JSON Schema 참조(init이 삽입) — 에디터 검증 전용이며 런타임은 읽지 않는다. */
   $schema?: string;
@@ -120,4 +138,5 @@ export interface RustraConfig {
   dev?: DevConfig;
   inspector?: InspectorConfig;
   uniffi?: RustraUniffiConfig;
+  scriptc?: RustraScriptcConfig;
 }

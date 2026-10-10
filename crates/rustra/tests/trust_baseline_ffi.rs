@@ -425,6 +425,58 @@ fn caller_buffer_json_invoke_probe_then_write() {
     assert_eq!(out2, needed, "needed size must be reported on retry signal");
 }
 
+/// `rustra_ffi_invoke_json_into_len` — scriptc 형태 변형(out 포인터 없이 길이를
+/// 반환값으로)이 into 엔트리와 정확히 같은 결과를 내는가를 게이트로 고정한다.
+#[test]
+fn caller_buffer_json_invoke_len_variant_mirrors_into() {
+    use rustra::ffi::{rustra_ffi_invoke_json_into, rustra_ffi_invoke_json_into_len};
+
+    test_package().register_ffi();
+    let request = serde_json::to_vec(&serde_json::json!({
+        "command": "addNumbers", "args": { "a": 20, "b": 22 }
+    }))
+    .expect("request encodes");
+
+    // into 경로의 probe 로 필요 크기를 알아낸 뒤, 같은 크기 버퍼로 _len 변형 호출.
+    let mut needed: usize = 0;
+    unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        );
+    }
+    assert!(needed > 0);
+    let mut buf = vec![0u8; needed];
+    let n = unsafe {
+        rustra_ffi_invoke_json_into_len(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+        )
+    };
+    assert_eq!(n, needed, "_len variant must return the written byte count");
+    let resp: serde_json::Value =
+        serde_json::from_slice(&buf).expect("caller buffer holds JSON response");
+    assert_eq!(resp["ok"], true);
+    assert_eq!(resp["result"], 42);
+
+    // 부족한 버퍼 → 실패 신호는 into 경로와 같은 usize::MAX.
+    let mut small = vec![0u8; needed - 1];
+    let short = unsafe {
+        rustra_ffi_invoke_json_into_len(
+            request.as_ptr(),
+            request.len(),
+            small.as_mut_ptr(),
+            small.len(),
+        )
+    };
+    assert_eq!(short, usize::MAX, "insufficient buffer must signal retry");
+}
+
 /// 패닉 핸들러도 caller-buffer 경로에서 clean 에러 프레임으로 나온다.
 #[test]
 fn caller_buffer_json_invoke_panics_cleanly() {

@@ -135,3 +135,29 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_into(
     unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
     needed
 }
+
+/// scriptc 형태 caller-buffer 변형 — 길이를 out 포인터 대신 **반환값**으로 돌려준다.
+/// scriptc(0.2.x)의 직접 FFI 세계는 포인터 클래스 인자를 bigint 주소로만 공급할 수
+/// 있어(caller 가 쓰기 가능한 외부 메모리 주소를 얻는 프리미티브가 없다) out_len
+/// 필수 계약인 `rustra_ffi_invoke_json_into` 를 그대로 바인드할 수 없다. 이 엔트리는
+/// 같은 dispatch/probe-cache 경로를 스택 로컬 out_len 으로 위임해 구현을 단일화한다.
+///
+/// - 성공: 기록한 바이트 수를 반환한다.
+/// - `buf == null`(size-probe 모드)은 이 경로에서 관측 불가 — 0 을 반환한다
+///   (필요 크기는 사라진다; scriptc caller 는 고정 버퍼를 소유하는 모델이다).
+/// - 버퍼 부족·payload null 등 실패: `usize::MAX`.
+///
+/// # Safety
+///
+/// `rustra_ffi_invoke_json_into` 와 동일 — `payload` 는 `payload_len` 바이트 읽기
+/// 가능, `buf` 는 non-null 이며 `capacity` 바이트 쓰기 가능이어야 한다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_json_into_len(
+    payload: *const u8,
+    payload_len: usize,
+    buf: *mut u8,
+    capacity: usize,
+) -> usize {
+    let mut out_len: usize = 0;
+    unsafe { rustra_ffi_invoke_json_into(payload, payload_len, buf, capacity, &mut out_len) }
+}

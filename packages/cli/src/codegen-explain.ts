@@ -16,6 +16,8 @@ export type ExplainFacts = {
   positional: boolean;
   /** 활성 호스트 엔트리 파일명(node.ts/bun.ts/tauri.ts/react-native.ts). */
   hostEntries: string[];
+  /** scriptc Native FFI 출력(ffi.json + scriptc-ffi.d.ts)이 켜져 있는가. */
+  hasScriptc: boolean;
 };
 
 export type ExplainRow = {
@@ -61,6 +63,12 @@ export function explainCodegenSurfaces(facts: ExplainFacts): ExplainRow[] {
       output: 'react-native module scaffold',
       renderer: 'ts renderer',
       stage: 'RN native module wrapper',
+    });
+  if (facts.hasScriptc)
+    rows.push({
+      output: 'scriptc/ffi.json + scriptc-ffi.d.ts',
+      renderer: 'ts renderer',
+      stage: 'scriptc native FFI (static link)',
     });
   rows.push({
     output: '.rustra-generated.json',

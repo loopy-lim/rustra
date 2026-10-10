@@ -34,6 +34,7 @@ rustra.dispose();
 5. **Host 생성 진입점** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **네이티브 진입점** — `native_entry!` 한 줄로 stable C ABI와 RN staticlib 공유
 7. **고성능 선택지** — Node persistent loop/N-API와 Bun FFI Frame 실측
+8. **scriptc 네이티브 FFI** — 생성된 `ffi_format` 7 매니페스트로 정적 링크 바이너리 빌드
 
 ## 생성되는 파일
 
@@ -63,6 +64,26 @@ console.log(result.value); // 42
 사용합니다. 생성된 host 파일이 lazy engine을 한 번 설치하므로 helper는 engine
 파라미터 없이 호출합니다. Bun은 같은 방식으로 `../generated/bun.js`를 import하며,
 수동 `configure()`는 custom transport를 주입할 때만 필요합니다.
+
+## scriptc 네이티브 FFI(정적 링크)
+
+[`rustra.json`](rustra.json)의 `scriptc` 섹션은 `rustra codegen`의 scriptc 스테이지를
+켠다 — `scriptc/ffi.json`(`ffi_format` 7 매니페스트)와 `scriptc/scriptc-ffi.d.ts`
+(시그니처-only 선언)를 쓴다. `scriptc build`는 Rust staticlib를 네이티브 바이너리에
+정적 링크한다 — JS 엔진도, `dlopen`도, 런타임 symbol lookup도 없다:
+
+```bash
+bash examples/calculator/scriptc/run.sh
+# scriptc FFI zero-config result: 42
+```
+
+[`apps/scriptc-app.ts`](apps/scriptc-app.ts)는 `rustra_mobile_init()`(`native_entry!`
+진입)을 1회 호출한 뒤 caller-buffer envelope
+`rustra_ffi_invoke_json_into_len(payload, buf)`로 addNumbers를 호출한다. 응답 JSON은
+caller 소유 `Uint8Array`에 기록되고 기록 바이트 수가 `bigint`로 반환된다
+(`0xffff_ffff_ffff_ffffn` = 실패). 매니페스트에는 scriptc 직접 호출 세계가 공급
+가능한 인자만 실린다 — out 포인터 기록과 콜백 함수 포인터(async, 이벤트, 채널) 심볼은
+`packages/cli/src/cli-generate-scriptc.ts`에 사유와 함께 기록·제외된다.
 
 ## 실사용 성능 확인
 

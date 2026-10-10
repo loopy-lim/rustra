@@ -8,6 +8,7 @@ import {
   assertDevSection,
   assertInspectorSection,
   assertKnownKeys,
+  assertScriptcSection,
   assertUniffiSection,
 } from './config-sections.js';
 import { collectSemanticErrors } from './config-semantic.js';
@@ -179,6 +180,7 @@ export function readConfigSync(configPath: string): RustraConfig {
   assertDevSection(config.dev);
   assertInspectorSection(config.inspector);
   assertUniffiSection(config.uniffi);
+  assertScriptcSection(config.scriptc);
 
   const semanticErrors = collectSemanticErrors(config);
   if (semanticErrors.length > 0) {
