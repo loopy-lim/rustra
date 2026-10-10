@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "rootDir": "../..",
+    "outDir": "../../dist-ts",
+    "tsBuildInfoFile": "../../dist-ts/rn-experiment.tsbuildinfo",
+    "incremental": true,
+    "skipLibCheck": true
+  },
+  "include": ["generated/**/*.ts", "apps/**/*.ts", "../../packages/**/*.ts"],
+  "exclude": ["generated/react-native.ts", "generated/node.ts"]
+}

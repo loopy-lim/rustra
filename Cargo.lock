@@ -3175,6 +3175,18 @@ name = "rustra-naming"
 version = "0.12.0"
 
 [[package]]
+name = "rustra-rn-experiment"
+version = "0.12.0"
+dependencies = [
+ "flate2",
+ "rustra",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "rustra-streaming-example"
 version = "0.12.0"
 dependencies = [

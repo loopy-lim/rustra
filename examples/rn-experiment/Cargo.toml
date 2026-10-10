@@ -1,0 +1,26 @@
+[package]
+name = "rustra-rn-experiment"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+# RN 번들링 실험용 네이티브 유닛 — calculator 예제와 동일한 3면 크레이트 타입.
+# rlib: 테스트/코드젠 bin 이 패키지를 직접 호출, cdylib: Android(dlopen) 측,
+# staticlib: iOS 링크 측.
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+rustra.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# gzip compress/decompress — bytes in/out 버퍼 커맨드 실측 유닛.
+flate2.workspace = true
+# uuid v7 생성 — 문자열 스키마 커맨드 실측 유닛.
+uuid.workspace = true
+
+# 코드젠 바이너리 — src/bin/generate.rs 를 cargo 자동 발견으로 "generate" 이름에
+# 둔다. CLI codegen 의 바이너리 선택 정책(cargo.ts selectCodegenBinary)이
+# preferredName "generate" 을 먼저 찾는 calculator/crud 예제 관례와 동일.

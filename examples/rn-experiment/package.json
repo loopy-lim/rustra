@@ -1,0 +1,23 @@
+{
+  "name": "@rustra/example-rn-experiment",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "type": "module",
+  "scripts": {
+    "generate:schema": "cargo run -p rustra-rn-experiment --bin generate",
+    "codegen": "bun ../../packages/cli/src/index.ts codegen --config rustra.json",
+    "codegen:check": "bun ../../packages/cli/src/index.ts codegen --config rustra.json --check"
+  },
+  "dependencies": {
+    "@rustra/generated-react-native": "workspace:*",
+    "@rustra/node": "file:../../packages/node",
+    "@rustra/react-native": "^0.9.0",
+    "@rustra/types": "file:../../packages/types"
+  },
+  "overrides": {
+    "@rustra/types": "file:../../packages/types"
+  },
+  "workspaces": [
+    "modules/rustra-bridge"
+  ]
+}

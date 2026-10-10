@@ -1,0 +1,114 @@
+{
+  "packageId": "examples.rnexperiment",
+  "schemaVersion": 1,
+  "fieldOrder": "declaration",
+  "commands": [
+    {
+      "name": "gzipCompress",
+      "commandId": 2,
+      "inputType": "GzipPayload",
+      "outputType": "GzipPayload",
+      "inputSchema": {
+        "title": "GzipPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "GzipPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "execution": "sync"
+    },
+    {
+      "name": "gzipDecompress",
+      "commandId": 3,
+      "inputType": "GzipPayload",
+      "outputType": "GzipPayload",
+      "inputSchema": {
+        "title": "GzipPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "GzipPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "execution": "sync"
+    },
+    {
+      "name": "uuidV7",
+      "commandId": 1,
+      "inputType": "UuidV7Input",
+      "outputType": "UuidV7Output",
+      "inputSchema": {
+        "title": "UuidV7Input",
+        "type": "object"
+      },
+      "outputSchema": {
+        "title": "UuidV7Output",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "description": "표준 하이픈 형식의 UUID v7 문자열(시간 정렬 가능).",
+            "type": "string"
+          }
+        }
+      },
+      "execution": "sync",
+      "description": "UUID v7(UTC 기준 ms 타임스탬프 + 랜덤)을 생성해 문자열로 반환한다."
+    }
+  ]
+}
