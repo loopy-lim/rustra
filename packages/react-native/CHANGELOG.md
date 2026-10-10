@@ -1,5 +1,45 @@
 # @rustra/react-native
 
+## Unreleased
+
+### 성능 — 큰 응답 owned 핸드오프(probe-cache 2-FFI 왕복 제거, E1)
+
+동기 typed 호출 꼬리(`typedInvokeTail`)의 512B 스택 버퍼를 초과하는 응답이
+기존에 치르던 확정적 메모리 통과 — (i) Rust 가 요청 전체를 probe 캐시에
+복사, (ii) C++ 의 `largeBuf.resize()` zero-fill, (iii) 2차 FFI에서 요청 전체
+비교 후 응답 memcpy — 를 제거한다. 새 코어 심볼
+`rustra_ffi_invoke_frame_owned` 이 dispatch 를 1회 FFI 로 끝내고, 응답이
+버퍼에 들어가지 않으면 응답 `Vec` 의 소유권을 호스트에 넘긴다(비동기
+`owned=1` 프레임 계약의 동기판). C++ 는 디코드 후
+`rustra_ffi_free_owned_bytes` 로 정확히 `(ptr, len)` 1회 해제한다.
+
+- **와이어·스키마 불변**: 응답 바이트는 기존 `invoke_frame_into` 경로와
+  동일하고, 핸들러는 어느 경로에서도 정확히 1회 실행된다(overflow 폴백이
+  같은 dispatch 안에서 일어난다). 에러 프레임 와이어와 호스트 예외 메시지도
+  그대로다.
+- **호환성(옵셔널 엔트리)**: 새 진입은 코어 함수 테이블의 옵셔널 엔트리로
+  노출된다(이름 재사용 선례의 capability 마커 준용). 핫코어 dylib 에 심볼이
+  없으면 바인딩이 null 로 남고, 정적 코어와 C++ 셸은 함께 빌드되므로 버전
+  스케류가 없다. 진입이 null 이면 소비 측은 기존 probe-cache 경로로
+  동작한다(구형 코어 폴백). Rust 라이브러리와 네이티브 셸은 함께 갱신한다.
+- **롤백**: (1) C++ 소비 분기 제거(또는 테이블 엔트리 null), (2) Rust 진입
+  미등록, (3) 단일 커밋 revert 후 Hermes/Rust 검증 재실행. probe 캐시 코드가
+  폴백으로 남아 revert 시점에 소유권 전환 분기가 없다.
+
+**로컬 검증 증거**: `cargo test -p rustra`(owned 와이어 동일성·핸들러 1회·
+free 짝·에러 프레임 보존·probe 폴백 유지, debug free_guard 활성), Hermes
+단언 스위트 1,383 단언 0 실패(신규 "owned response handoff skips probe and
+frees the exact pair" 포함 — 할당 원장이 owner/len/이중 free 를 검증), C++
+codec 스위트 통과.
+
+**실기기 채택 판정용 측정 플랜(문서화만 수행)**: iOS 는 기존/후보 순서를
+AB, BA, AB, BA, AB 로 둔 다섯 쌍을 실행마다 설치를 교체해 10회 측정하고 각
+실행은 v2 전체 90개 항목을 통과해야 한다(대형 트리 echo 항목 위주로
+레인을 나눠 해석). Android 는 고정 후보로 원래 v2 다섯 실행을 수행하며
+이전 집단과의 차이를 인과 A/B 로 표현하지 않는다. 프로파일러 없이 측정하고
+느린 표본을 제외하지 않는다. 채택 기준은 대형 응답(8,191노드급) 레인의
+기하중앙 개선과 소형 응답 무회귀다.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -1,0 +1,123 @@
+{
+  "scope": "full benchmark suite verification: complex codec, Track B, criterion function_dispatch; single machine, fresh measurements on current checkout",
+  "date": "2026-09-24",
+  "environment": {
+    "machine": "Apple M1 Max (T6000, arm64), 8P+2E cores, 64 GiB RAM",
+    "os": "macOS 26.6.2 (Darwin 25.6.0, RELEASE_ARM64_T6000)",
+    "rustc": "1.95.0 (59807616e 2026-04-14) — pinned by rust-toolchain.toml, matches CI",
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)",
+    "bun": "1.4.1 (repo packageManager pin: bun@1.4.0)",
+    "criterion": "0.8.2",
+    "criterionMode": "Baseline::Save (default): fresh run -> new/, copied to base/; change/ only when base/ pre-existed",
+    "envSanitization": "all bun/cargo invocations ran under env -u RUSTRA_BUN_LIBRARY (loop-daemon dylib contamination)"
+  },
+  "complexCodecBench": {
+    "command": "env -u RUSTRA_BUN_LIBRARY bun scripts/complex-codec-bench.mjs",
+    "schema": "nested-map-option-set-data-enum",
+    "route": "complex-binary-js",
+    "iterations": 20000,
+    "warmup": 1000,
+    "allocationMode": "per-call-writer-and-response",
+    "requestBytes": 47,
+    "responseBytes": 53,
+    "encodeUs": 3.366,
+    "decodeUs": 3.53,
+    "encodeOpsPerSec": 297091,
+    "decodeOpsPerSec": 283286,
+    "limitations": [
+      "does not measure Rust or C++ native dispatch",
+      "single-process wall-clock sample"
+    ]
+  },
+  "trackBBench": {
+    "command": "env -u RUSTRA_BUN_LIBRARY bun scripts/track-b-bench.mjs",
+    "route": "complex-binary-js",
+    "iterations": 20000,
+    "runs": "median of 3 executions",
+    "allocationMode": "per-call-writer-and-response",
+    "results": [
+      {
+        "op": "encode",
+        "schema": "wideAgg Vec<u64>+Option<i64>",
+        "bytes": 36,
+        "us": 1.724,
+        "opsPerSec": 580046,
+        "allRunsUs": [1.934, 1.72, 1.724]
+      },
+      {
+        "op": "decode",
+        "schema": "wideAgg Vec<u64>+Option<i64>",
+        "bytes": 28,
+        "us": 0.458,
+        "opsPerSec": 2183406,
+        "allRunsUs": [0.496, 0.458, 0.448]
+      },
+      {
+        "op": "encode",
+        "schema": "tagSet Set<i64>",
+        "bytes": 7,
+        "us": 0.769,
+        "opsPerSec": 1300390,
+        "allRunsUs": [0.843, 0.72, 0.769]
+      },
+      {
+        "op": "decode",
+        "schema": "tagSet Set<i64>",
+        "bytes": 23,
+        "us": 0.939,
+        "opsPerSec": 1064963,
+        "allRunsUs": [1.014, 0.939, 0.939]
+      }
+    ],
+    "limitations": [
+      "does not measure Rust handler or C++ JSI marshalling (device smoke required)",
+      "three wall-clock executions in one process, per-op median reported",
+      "measures the JS codec path only — the C++ direct path is native and not measurable from this script"
+    ]
+  },
+  "functionDispatch": {
+    "command": "env -u RUSTRA_BUN_LIBRARY cargo bench -p rustra --bench function_dispatch",
+    "binarySha256": "366093ac246d6308268700fbef5f16086bcd757cf16b052304a03422290f07bd",
+    "sampleSize": 100,
+    "warmUpTime": "1s",
+    "measurementTime": "3s",
+    "criterionRoot": "target/criterion/function_dispatch",
+    "htmlReport": "target/criterion/function_dispatch/report/index.html",
+    "fresh": "target/criterion/function_dispatch/<bench>/new/estimates.json",
+    "estimatesMedianNs": {
+      "function_dispatch/function_frame": 37.487,
+      "function_dispatch/function_into": 14.82,
+      "function_dispatch/function_json": 39.088,
+      "function_dispatch/legacy_frame": 37.55,
+      "function_dispatch/legacy_into": 14.827,
+      "function_dispatch/legacy_json": 273.3
+    },
+    "baseline": {
+      "source": "target/criterion/function_dispatch/<bench>/pre-perf/estimates.json (snapshot 2026-09-18; identical values to the pre-run new/ that this run overwrote)",
+      "medianNs": {
+        "function_dispatch/function_frame": 46.244,
+        "function_dispatch/function_into": 15.4,
+        "function_dispatch/function_json": 49.642,
+        "function_dispatch/legacy_frame": 43.3,
+        "function_dispatch/legacy_into": 15.311,
+        "function_dispatch/legacy_json": 322.149
+      },
+      "deltaPct": {
+        "function_dispatch/function_frame": -18.94,
+        "function_dispatch/function_into": -3.76,
+        "function_dispatch/function_json": -21.26,
+        "function_dispatch/legacy_frame": -13.28,
+        "function_dispatch/legacy_into": -3.16,
+        "function_dispatch/legacy_json": -15.16
+      },
+      "receipt2026_09_22": "docs/benchmark-receipts/2026-09-22-function-dispatch-smoke.json (different bench binary; legacy_json median 441.49 ns -> -38.1% vs fresh)"
+    }
+  },
+  "conclusions": [
+    "No regressions: all six criterion benches improved 3.2-21.3% vs the pre-perf baseline; deltas are within the repo regression-gate thresholds (maxRegression 0.10, maxImprovement 0.35, no mixed improvement/regression pattern).",
+    "Baseline provenance caveat: the pre-perf baseline's compiler cannot be verified from stored data (docs/benchmarks.md cites Rust 1.98.0 for the 2026-09-16 patch measurements while this run used the pinned 1.95.0); part of the uniform improvement may be toolchain/codegen difference rather than source change.",
+    "function vs legacy dispatch is now equivalent on frame/into paths (37.5 ns / 14.8 ns both) — tuple-input functions no longer pay a dispatch penalty; json path remains ~7x slower for legacy structs (HashMap-based deserialization of named fields).",
+    "JS codec path costs are microsecond-scale (0.46-3.53 us/op), i.e. 3-4 orders of magnitude above the native frame dispatch floor (~15-40 ns), consistent with the documented motivation for C++ direct marshalling on Track B.",
+    "All numbers are single-machine single-process measurements; a CI baseline is required before using them as regression gates (agreed with rust-tests and ts-tests dependency conclusions)."
+  ]
+}
