@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -74,4 +77,40 @@ test('checkCoverageTsCoverage: react 테스트 전부 반영 시 통과, 누락 
   const { missing, stale } = checkCoverageTsCoverage(partial, emitted);
   assert.deepEqual(missing, ['packages/react/src/lifecycle.test.ts']);
   assert.deepEqual(stale, []);
+});
+
+test('checkScriptcVersionPin: 핀과 CI 리터럴이 일치하면 통과', async () => {
+  const { checkScriptcVersionPin } = await import('./check-test-list-parity.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'rustra-parity-'));
+  try {
+    const runSh = join(root, 'run.sh');
+    const ci = join(root, 'ci.yml');
+    await writeFile(runSh, 'SCRIPTC_VERSION=0.2.1\n');
+    await writeFile(ci, '- run: npm install -g scriptc@0.2.1\n');
+    assert.deepEqual(await checkScriptcVersionPin({ runShPath: runSh, ciPath: ci }), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('checkScriptcVersionPin: 어느 한쪽만 올리면 드리프트로 적발', async () => {
+  const { checkScriptcVersionPin } = await import('./check-test-list-parity.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'rustra-parity-'));
+  try {
+    const runSh = join(root, 'run.sh');
+    const ci = join(root, 'ci.yml');
+    await writeFile(runSh, 'SCRIPTC_VERSION=0.3.0\n');
+    await writeFile(ci, '- run: npm install -g scriptc@0.2.1\n');
+    const reports = await checkScriptcVersionPin({ runShPath: runSh, ciPath: ci });
+    assert.equal(reports.length, 1);
+    assert.match(reports[0], /scriptc@0\.3\.0/);
+    // 핀 자체가 사라지면 출처 상실로 실패한다.
+    await writeFile(runSh, 'cargo build\n');
+    assert.match(
+      (await checkScriptcVersionPin({ runShPath: runSh, ciPath: ci }))[0],
+      /missing SCRIPTC_VERSION/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

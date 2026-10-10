@@ -77,6 +77,12 @@ bash examples/calculator/scriptc/run.sh
 # scriptc FFI zero-config result: 42
 ```
 
+컴파일러는 핀으로 고정된다 — `run.sh`는 빌드 전 `scriptc@0.2.1`을 단정하고
+(불일치 시 설치 명령과 함께 exit 2), `PATH`에 `scriptc`가 없으면
+`fnm exec --using 26`으로 폴백한다(scriptc 는 Node >= 24를 요구). CI는
+`ts-runtime` 잡에서 같은 핀 리터럴로 이 스모크를 돈다
+(`check-test-list-parity`가 양쪽 드리프트를 검증).
+
 [`apps/scriptc-app.ts`](apps/scriptc-app.ts)는 `rustra_mobile_init()`(`native_entry!`
 진입)을 1회 호출한 뒤 caller-buffer envelope
 `rustra_ffi_invoke_json_into_len(payload, buf)`로 addNumbers를 호출한다. 응답 JSON은

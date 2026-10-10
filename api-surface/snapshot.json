@@ -866,7 +866,7 @@
       "# [path = \"complex_serde.rs\"]      fn serialize_i8 (self , value : i8) -> Result < () >"
     ],
     "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_map": [
-      "# [path = \"complex_serde.rs\"]      fn serialize_map (self , _len : Option < usize >) -> Result < Self :: SerializeMap >"
+      "# [path = \"complex_serde.rs\"]      fn serialize_map (self , len : Option < usize >) -> Result < Self :: SerializeMap >"
     ],
     "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_newtype_struct": [
       "# [path = \"complex_serde.rs\"]      fn serialize_newtype_struct < T : ser :: Serialize + ? Sized > (self , _name : & 'static str , value : & T ,) -> Result < () >"

@@ -509,6 +509,18 @@ jobs:
         run: bun run test:runtime:bun
       - name: Runtime smoke on Tauri (test:runtime:tauri)
         run: bun run test:runtime:tauri
+      # scriptc 는 Node >=24 를 요구한다(engines) — 잡 기본 node 22 는 건드리지
+      # 않기 위해 런타임 스모크 뒤에 node 26 을 PATH 앞에 두고 핀 버전을 전역
+      # 설치한다. 버전 리터럴의 단일 출처는 run.sh 의 SCRIPTC_VERSION 이며
+      # (check-test-list-parity 가 양쪽 일치를 검증), run.sh preflight 도 설치된
+      # 버전을 재단정한다(불일치 시 exit 2 + 설치 안내).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Install scriptc (pinned)
+        run: npm install -g scriptc@0.2.1
+      - name: Runtime smoke via scriptc native FFI (test:runtime:scriptc)
+        run: bun run test:runtime:scriptc
 
       # 실패 로그 보존 — bun 설치 실패는 bun-debug.log 를 남기므로 보존한다
       # (examples/tauri-calculator 설치 실패 포함).

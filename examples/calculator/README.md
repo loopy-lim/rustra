@@ -75,6 +75,12 @@ bash examples/calculator/scriptc/run.sh
 # scriptc FFI zero-config result: 42
 ```
 
+The compiler is pinned: `run.sh` asserts `scriptc@0.2.1` before building (exit 2
+with the install command on mismatch) and falls back to `fnm exec --using 26`
+when no `scriptc` is on `PATH` — scriptc requires Node >= 24. CI runs this
+smoke in the `ts-runtime` job with the same pinned literal
+(`check-test-list-parity` verifies the two cannot drift).
+
 [`apps/scriptc-app.ts`](apps/scriptc-app.ts) calls `rustra_mobile_init()` once
 (the `native_entry!` entry), then the caller-buffer envelope
 `rustra_ffi_invoke_json_into_len(payload, buf)`, which writes the JSON response

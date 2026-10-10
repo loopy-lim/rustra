@@ -9,6 +9,9 @@
 //                            명시되거나, bun:test 전용 파일이면 src/<stem>.test.ts가
 //                            bun test 세그먼트에 있어야 한다.
 //   3. coverage:ts         — packages/react/src/*.test.ts 전부가 포함되어야 한다.
+//   4. scriptc 버전 핀     — run.sh 의 SCRIPTC_VERSION 리터럴(단일 출처)이 CI
+//                            ts-runtime 의 npm install -g scriptc@<버전> 과
+//                            일치해야 한다.
 // 반대 방향(stale 참조: 디스크에 없는데 나열됨)도 함께 실패 처리한다.
 
 import { readdirSync } from 'node:fs';
@@ -124,6 +127,37 @@ function formatReport(label, { missing, stale }) {
   return lines;
 }
 
+/**
+ * scriptc 버전 핀 검사 — run.sh 의 SCRIPTC_VERSION 이 단일 출처고, CI ts-runtime
+ * 은 `npm install -g scriptc@<핀>` 으로 같은 리터럴을 써야 한다. 어느 한쪽만
+ * 올리면 로컬 preflight(run.sh, exit 2) 또는 이 검사가 깨진다.
+ * @param {{ runShPath?: string, ciPath?: string }} paths 테스트용 치환 경로.
+ * @returns {Promise<string[]>}
+ */
+export async function checkScriptcVersionPin({ runShPath, ciPath } = {}) {
+  const runShPath_ = resolve(REPO_ROOT, runShPath ?? 'examples/calculator/scriptc/run.sh');
+  const ciPath_ = resolve(REPO_ROOT, ciPath ?? '.github/workflows/ci.yml');
+  const lines = [];
+  const runSh = await readFile(runShPath_, 'utf8').catch(() => null);
+  if (runSh === null) {
+    return ['examples/calculator/scriptc/run.sh: missing (scriptc pin source)'];
+  }
+  const pin = runSh.match(/^SCRIPTC_VERSION=(\S+)$/m)?.[1];
+  if (!pin) {
+    return ['examples/calculator/scriptc/run.sh: missing SCRIPTC_VERSION=<version> pin'];
+  }
+  const ci = await readFile(ciPath_, 'utf8').catch(() => '');
+  if (!ci) {
+    lines.push(`${ciPath}: missing (scriptc CI install step source)`);
+  }
+  if (!ci.includes(`npm install -g scriptc@${pin}`)) {
+    lines.push(
+      `.github/workflows/ci.yml: missing \`npm install -g scriptc@${pin}\` — run.sh 핀과 일치시키세요`,
+    );
+  }
+  return lines;
+}
+
 export async function checkTestListParity({ rootPackageJsonPath, cliPackageJsonPath } = {}) {
   const rootPath = resolve(REPO_ROOT, rootPackageJsonPath ?? 'package.json');
   const cliPath = resolve(REPO_ROOT, cliPackageJsonPath ?? join(CLI_PACKAGE_REL, 'package.json'));
@@ -143,12 +177,14 @@ export async function checkTestListParity({ rootPackageJsonPath, cliPackageJsonP
   const reactTests = listTestFiles(REACT_SRC_REL, '.test.ts');
 
   const runtimeScriptc = 'bun run test:runtime:scriptc';
+  const scriptcReport = await checkScriptcVersionPin();
   const reports = [
     ...['test:runtime', 'test:local'].flatMap((name) =>
       rootPackage.scripts[name]?.includes(runtimeScriptc)
         ? []
         : [`${name}: missing ${runtimeScriptc}`],
     ),
+    ...scriptcReport,
     ...formatReport(
       'test:ts:node',
       checkDistTsCoverage(rootPackage.scripts['test:ts:node'], distTs),

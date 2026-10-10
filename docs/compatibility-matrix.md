@@ -32,9 +32,9 @@ below — it is not an `EngineClient` column.
 
 ### Experimental scriptc host
 
-| Host    | Support                                   | Native integration                                                                                      | Compiler                           | Limitations                                                                                            |
-| ------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| scriptc | Experimental calculator native executable | Native FFI (`ffi.json` + signature-only TypeScript declarations + linked Rust static archive via C ABI) | Node >= 24 (`fnm exec --using 26`) | No napi add-ons or `dlopen`; Node/Bun host paths are not reusable. Not an `EngineClient` column above. |
+| Host    | Support                                   | Native integration                                                                                      | Compiler                                                                                                                                           | Limitations                                                                                            |
+| ------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| scriptc | Experimental calculator native executable | Native FFI (`ffi.json` + signature-only TypeScript declarations + linked Rust static archive via C ABI) | Node >= 24; `scriptc@0.2.1` pinned — `fnm exec --using 26` locally, CI ts-runtime installs the same literal (verified by `check-test-list-parity`) | No napi add-ons or `dlopen`; Node/Bun host paths are not reusable. Not an `EngineClient` column above. |
 
 ## Signal semantics in detail
 
