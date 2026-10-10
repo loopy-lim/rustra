@@ -204,6 +204,12 @@ test('docs/plans/ 아래는 스캔에서 제외된다', () => {
     join(root, 'docs/plans/roadmap.md'),
     '<!-- docs:sync:begin x.ts -->\n\n<!-- docs:sync:end -->\n',
   );
+  // docs/dev/plans/ 로의 이동 후에도 같다(깊이 무관 제외).
+  mkdirSync(join(root, 'docs/dev/plans'), { recursive: true });
+  writeFileSync(
+    join(root, 'docs/dev/plans/roadmap.md'),
+    '<!-- docs:sync:begin x.ts -->\n\n<!-- docs:sync:end -->\n',
+  );
   const docs = collectDocs(join(root, 'docs'));
   assert.deepEqual(docs, []);
 });

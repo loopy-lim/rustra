@@ -47,7 +47,9 @@ export function collectDocs(root) {
       if (entry.name === 'node_modules') continue;
       const childRel = rel === '' ? entry.name : `${rel}/${entry.name}`;
       if (entry.isDirectory()) {
-        if (childRel === 'plans') continue; // docs/plans/ 제외
+        // plans/ 제외 — 마커 문법 자체를 인용하는 계획 문서(깊이 무관,
+        // docs/dev/plans/ 로 이동해도 같다).
+        if (entry.name === 'plans') continue;
         walk(childRel);
       } else if (entry.name.endsWith('.md')) {
         items.push(childRel);
