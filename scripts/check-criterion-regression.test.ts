@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   checkCriterionRegression,
   parseRegressionArgs,
+  provenanceDrifts,
   renderRegressionReport,
 } from './check-criterion-regression.mjs';
 
@@ -31,6 +32,28 @@ function logger(): TestLogger {
   return output;
 }
 
+/** 벤치 프로비넌스 쌍 — benchmark-environment.mjs 가 기록하는 형태의 최소 본뜩물. */
+function environmentRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1,
+    capturedAt: '2026-10-10T00:00:00.000Z',
+    restoredEnvironmentAvailable: true,
+    workflow: { GITHUB_SHA: 'deadbeef' },
+    host: { platform: 'linux', architecture: 'x64', logicalCpuCount: 4 },
+    tools: { rustc: 'rustc 1.95.0', cargo: 'cargo 1.95.0', bun: '1.4.1' },
+    configurationDigests: { RUSTFLAGS: null },
+    ...overrides,
+  };
+}
+
+async function writeProvenance(
+  root: string,
+  { restored = environmentRecord(), current = environmentRecord() } = {},
+) {
+  await Bun.write(join(root, 'runner-environment.json'), JSON.stringify(current));
+  await Bun.write(join(root, 'restored-runner-environment.json'), JSON.stringify(restored));
+}
+
 async function fixture(point: number, lower: number, upper: number): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-'));
   await mkdir(join(root, 'group/case/new'), { recursive: true });
@@ -46,6 +69,7 @@ async function fixture(point: number, lower: number, upper: number): Promise<str
       },
     }),
   );
+  await writeProvenance(root);
   return root;
 }
 
@@ -138,6 +162,97 @@ test('a statistically significant slowdown over budget fails', async () => {
   }
 });
 
+test('a comparison without baseline-era provenance is unmeasurable, not a pass', async () => {
+  const root = await fixture(0.05, 0.02, 0.08);
+  try {
+    await rm(join(root, 'restored-runner-environment.json'));
+    const output = logger();
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: output,
+    });
+    // 판정 보류(exit 2) — 출처 불명 기준선과의 상대 비교를 통과로 판정하지 않는다.
+    assert.equal(result.exitCode, 2);
+    assert.deepEqual(result.rows, []);
+    assert.match(output.errors[0], /provenance is incomplete/);
+    assert.match(output.errors[0], /restored-runner-environment\.json/);
+    assert.match(output.errors[0], /unmeasurable/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a comparison without the current-era record is unmeasurable too', async () => {
+  const root = await fixture(0.05, 0.02, 0.08);
+  try {
+    await rm(join(root, 'runner-environment.json'));
+    const output = logger();
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: output,
+    });
+    assert.equal(result.exitCode, 2);
+    assert.match(output.errors[0], /runner-environment\.json/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a corrupted provenance record is treated as unknown provenance', async () => {
+  const root = await fixture(0.05, 0.02, 0.08);
+  try {
+    await Bun.write(join(root, 'restored-runner-environment.json'), '{broken');
+    const output = logger();
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: output,
+    });
+    assert.equal(result.exitCode, 2);
+    assert.match(output.errors[0], /provenance is incomplete/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a toolchain drift between eras is advisory and reported, not a refusal', async () => {
+  const root = await fixture(0.05, 0.02, 0.08);
+  try {
+    await writeProvenance(root, {
+      restored: environmentRecord({
+        tools: { rustc: 'rustc 1.94.0', cargo: 'cargo 1.94.0', bun: '1.4.1' },
+      }),
+    });
+    const output = logger();
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: output,
+    });
+    // 자문 판정 — ImageVersion 패치 같은 흔한 드리프트까지 거부하면 게이트가
+    // 인프라 이유로 상시 실패한다. 드리프트 사실만 리포트에 남긴다.
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.provenanceDrifts, ['tools']);
+    assert.match(output.logs[0], /WARN provenance drift in "tools"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('provenanceDrifts compares only the stable sections', () => {
+  const current = environmentRecord({ workflow: { GITHUB_SHA: 'aaa' }, capturedAt: 'a' });
+  const restored = environmentRecord({ workflow: { GITHUB_SHA: 'bbb' }, capturedAt: 'b' });
+  // workflow/capturedAt 은 매 실행 변하는 값 — 어긋나도 드리프트가 아니다.
+  assert.deepEqual(provenanceDrifts(current, restored), []);
+  assert.deepEqual(provenanceDrifts(current, environmentRecord({ host: {} })), ['host']);
+  assert.deepEqual(
+    provenanceDrifts(current, environmentRecord({ configurationDigests: { RUSTFLAGS: 'x' } })),
+    ['configurationDigests'],
+  );
+});
+
 test('regression amid widespread implausible improvement flags baseline mismatch', async () => {
   // 2026-08-29 실측 사고 재현: baseline(runner A, 느림) vs 현재(runner B, 빠름)
   // — 대다수 벤치가 -40%대 '개선'을 보이는 가운데 일부가 +70%대 '회귀'.
@@ -170,6 +285,7 @@ test('regression amid widespread implausible improvement flags baseline mismatch
       );
     }
     const output = logger();
+    await writeProvenance(root);
     const result = await checkCriterionRegression({
       criterionRoot: root,
       maxRegression: 0.1,
@@ -211,6 +327,7 @@ test('a lone regression with normal improvements stays a genuine failure', async
       );
     }
     const output = logger();
+    await writeProvenance(root);
     const result = await checkCriterionRegression({
       criterionRoot: root,
       maxRegression: 0.1,
@@ -255,6 +372,13 @@ test('renderRegressionReport renders verdict badges per exit code', () => {
   const report = renderRegressionReport({ exitCode: 1, rows }, { thresholdPercent: 10 });
   assert.match(report, /`g\/slow` \| 15\.00% \| 11\.00% \.\. 20\.00% \| ❌ 회귀/u);
   assert.match(report, /`g\/fast` \| -44\.00% \| -46\.00% \.\. -42\.00% \| ⚠️ 개선 이상/u);
+  assert.doesNotMatch(report, /provenance drift/u);
+
+  const drifted = renderRegressionReport(
+    { exitCode: 0, rows: [], provenanceDrifts: ['host', 'tools'] },
+    { thresholdPercent: 10 },
+  );
+  assert.match(drifted, /provenance drift: host, tools/u);
 });
 
 test('an inconclusive comparison never claims a new baseline was accepted', () => {

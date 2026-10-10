@@ -11,6 +11,22 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// dev 프로필 전용 벤치 가드 — release(`cargo bench` 기본 프로필)로 실행하면
+/// 패키지가 frozen(`builder_build`: `!cfg!(debug_assertions)`)이라 `register`가
+/// 거부되고, criterion 내부 패닉으로 원인을 알기 어렵다. 벤치 본문 전에 명확한
+/// 안내와 함께 끝낸다(빌드는 `--no-run` 통과, 실행만 막는다).
+pub fn require_dev_profile(bench: &str) {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    eprintln!(
+        "{bench} 벤치는 dev 프로필 전용이다 — `cargo bench -p rustra --profile dev --bench {bench}`\n\
+         동적 register 경로는 debug 빌드에서만 도달한다(동적 명령은 dev-only 설계).\n\
+         release 수치와 직접 비교하지 말 것."
+    );
+    std::process::exit(2);
+}
+
 // ── Tier 1 (primitive 고정폭) ──────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

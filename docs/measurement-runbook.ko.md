@@ -40,6 +40,12 @@
    launchesPerArm, suite, validation, statistics), `arms`(arm별 description, runs,
    `binarySha256`, `bundleSha256`, `fingerprint`, launches), analysis. 원시 로그는
    `target/<item>-ab/` 에 보존한다.
+7. **호스트 criterion 벤치는 provenance 를 싣는다.** 측정 세션마다
+   `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-environment.mjs target/criterion` 를
+   실행한다 — 2회째 호출부터 직전 기록이 기준선 시대 기록(restored 쌍)이 된다. 회귀 게이트
+   (`check-criterion-regression.mjs`)는 기준선 시대 기록 없는 비교를 "측정 불가"(exit 2 —
+   판정 보류, baseline 미채택)로 판정하고, 시대 간 host/tools/flags 드리프트는 자문으로만
+   보고한다.
 
 ### 0.1 수집기·집계기 재사용 (이미 저장소에 있다)
 

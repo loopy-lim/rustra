@@ -38,6 +38,7 @@ fn build_pkg() -> Package {
 }
 
 fn bench_tier_compare(c: &mut Criterion) {
+    common::require_dev_profile("tier_compare");
     let pkg = build_pkg();
 
     let static_id = common::command_id_of(&pkg, "echo");

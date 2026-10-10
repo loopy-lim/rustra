@@ -179,6 +179,7 @@ C++ 직접 마샬링이 대체하는 JS 측 비용만 측정한다(네이티브 
    기록(function_dispatch receipt의 pre-perf 기록 방식을 전 벤치로 확장)하고,
    `check-criterion-regression.mjs`가 baseline provenance 불일치 시 "측정 불가"로
    판정하게 한다. 회귀 게이트의 귀속 불확실성을 제거하는 최우선 조치.
+   **→ 구현됨(2026-10-10, §9-1).**
 2. **oneOf untagged 경로 최적화 재시도** — 이넘 변종 태그 힌트 캐시 또는 코드젠 단계의
    discriminated encoding으로 3항 순차 시도를 축소. 회귀 예산 10% 경계의 마지막
    열화 구간을 해소한다.
@@ -191,7 +192,7 @@ C++ 직접 마샬링이 대체하는 JS 측 비용만 측정한다(네이티브 
 5. **dev 전용 벤치에 release 실행 가드** — `tier_compare`·`dynamic_registry`에
    `#[cfg(debug_assertions)]` 가드 또는 frozen 판단 시 "이 벤치는
    `--profile dev`로 실행" 안내 후 조기 종료. 패닉 대신 명확한 오류로 개발자 혼란
-   제거.
+   제거. **→ 구현됨(2026-10-10, §9-2).**
 
 ---
 
@@ -540,3 +541,37 @@ rustra-rn-experiment --target aarch64-apple-ios-sim --release` 성공(8.01s, 에
 - 부수(문서): `docs/rust-api-guide.{md,ko.md}` 의 `docs:sync` 임베드를 emit 전환 후 생성물
   import 줄로 갱신하고 `performance-evaluation.ko.md` 미러와 `docs/README` 인덱스를 추가해
   §7.6의 남은 후속 4항(docs 게이트 녹색 복원)을 닫았다.
+
+---
+
+## 9. 2026-10-10 후속 — 벤치 하네스 가드 2종 (§5 제안 1·5 구현)
+
+§5의 1번(기준선 provenance 제도화)과 5번(dev 전용 벤치 release 가드)을 구현했다. 제품
+(코덱·디스패치) 코드 변경은 없다 — 측정 신뢰성 하네스만 바뀌므로 §1~§8 수치의 비교 가능성은
+그대로다.
+
+### 9-1. 기준선 provenance 게이트
+
+- `check-criterion-regression.mjs`는 비교 판정 전에 `restored-runner-environment.json`
+  (기준선 시대 기록)과 `runner-environment.json`(현재 시대 기록)을 요구한다. 하나라도 없거나
+  깨진 경우 **exit 2 "측정 불가"** — 판정 보류, baseline 미채택. §4-5의 "벤치 기준선 계보
+  불명확" 리스크를 제도적으로 닫는다.
+- 안정 섹션(host/tools/configurationDigests)이 어긋나면 WARN 자문으로 보고한다. runner 이미지
+  패치(ImageVersion)만으로 흔들리는 필드까지 hard-fail 하면 인프라 이유로 게이트가 상시 거부되므로
+  자문으로 남기고, 거친 시대 대혼입의 방어는 기존 mixed-changes 판정(exit 3)이 담당한다.
+- 운용 규약은 런북 §0-7로 고정: 측정 세션마다
+  `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-environment.mjs target/criterion` — 2회째
+  호출부터 직전 기록이 restored 쌍이 된다. CI(`bench.yml`)는 이미 매 실행 앞에 기록하며,
+  `comparison_ref` 워크플로우는 benchmark-comparison.mjs가 기준선 설치 전에 환경을 기록하므로
+  (같은 러너) 그대로 통과한다.
+
+### 9-2. dev 전용 벤치 release 가드
+
+- `tier_compare`·`dynamic_registry` 본문 앞에 `common::require_dev_profile` 가드를 뒀다.
+  release(기본 프로필)로 실행하면 frozen 패닉 대신 명확한 안내 3줄과 함께 exit 2 — §4-6의
+  "하네스 가드 부재"를 해소한다. 빌드(`--no-run`)는 여전히 통과하므로 CI 캐시·빌드 검증에는
+  영향이 없다.
+- 실증: release 빌드 바이너리 직접 실행 → 안내 출력 + exit 2 (양쪽 벤치),
+  `--profile dev -- --quick`은 정상 측정, `cargo clippy -p rustra --all-targets -- -D warnings`
+  통과. 벤치 게이트 단위 테스트 35건 통과(provenance 신규 5케이스: 출처 불명 3형태, 시대 드리프트
+  자문, 안정 섹션 경계 포함).

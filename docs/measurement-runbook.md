@@ -40,6 +40,13 @@ Fixed rules carried over from the name-reuse precedent — do not renegotiate th
    launchesPerArm, suite, validation, statistics), `arms` (per-arm description, runs,
    `binarySha256`, `bundleSha256`, `fingerprint`, launches), analysis. Keep raw logs under
    `target/<item>-ab/`.
+7. **Host criterion benches carry provenance.** Run
+   `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-environment.mjs target/criterion` before
+   every measuring session — from the second call onward the previous record is paired as the
+   baseline-era record. The regression gate
+   (`check-criterion-regression.mjs`) treats a comparison whose baseline-era record is
+   missing as unmeasurable (exit 2 — verdict withheld, baseline not adopted), and reports
+   host/tools/flags drift across eras as advisory only.
 
 ### 0.1 Collector/aggregator reuse (already in-tree)
 

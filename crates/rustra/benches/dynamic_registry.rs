@@ -19,6 +19,7 @@ fn fresh_pkg() -> Package {
 }
 
 fn bench_register(c: &mut Criterion) {
+    common::require_dev_profile("dynamic_registry");
     let mut group = c.benchmark_group("dynamic_registry_register");
     group.sample_size(200);
 
@@ -37,6 +38,7 @@ fn bench_register(c: &mut Criterion) {
 }
 
 fn bench_live_schema(c: &mut Criterion) {
+    common::require_dev_profile("dynamic_registry");
     let pkg = fresh_pkg();
     pkg.register("echo", common::echo).unwrap();
 
@@ -51,6 +53,7 @@ fn bench_live_schema(c: &mut Criterion) {
 }
 
 fn bench_invoke_frozen_vs_mutable(c: &mut Criterion) {
+    common::require_dev_profile("dynamic_registry");
     // mutable 패키지 (debug 기본)
     // echo({v:i64})는 postcard 지원 형태라 등록 시 binary 핸들러로 승격된다
     // (639a494b, runtime_registry_tests::dynamic_unsupported_schema_stays_tier3
