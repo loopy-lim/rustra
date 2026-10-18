@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T04:44:22.667416+00:00",
+  "scope": "actual local Node and Bun watch/edit/compile failure/exact restoration/contract-change journeys, source-injected",
+  "results": {
+    "node": {
+      "receipt": "watch-node-verified.json",
+      "ok": true,
+      "sourceStable": true,
+      "producerStable": true,
+      "reloadsDuringFailure": 0
+    },
+    "bun": {
+      "receipt": "watch-bun-verified.json",
+      "ok": true,
+      "sourceStable": true,
+      "producerStable": true,
+      "reloadsDuringFailure": 0
+    },
+    "cliTests": {
+      "nodePassed": 509,
+      "bunPassed": 45,
+      "failed": 0,
+      "log": "watch-cli-final.log"
+    },
+    "helperTests": {
+      "passed": 26,
+      "failed": 0
+    },
+    "reactDoctor": {
+      "version": "0.9.12",
+      "score": 100,
+      "issues": 0,
+      "scannedFiles": 597,
+      "snapshot": "watch-candidate-snapshot.json"
+    }
+  },
+  "beforeFix": ["watch-repro-red.log", "watch-restore-red.json"],
+  "timingBoundary": "single functional journeys, fresh Bun process on each callback; no performance comparison or percentile claims",
+  "cleanup": {
+    "removedOnlySupersededBuildCaches": [
+      "target/quick-start-node-bun-PBwgMR/cargo-target",
+      "target/quick-start-node-bun-T2dnhc/cargo-target",
+      "target/quick-start-bun-bun-pjI2pQ/cargo-target",
+      "target/quick-start-node-bun-sW0lDK/cargo-target",
+      "target/quick-start-bun-bun-AlhD3v/cargo-target"
+    ],
+    "preserved": "project sources, raw JSON/logs and final Node/Bun native outputs"
+  },
+  "sources": [
+    {
+      "path": "packages/cli/src/dev.ts",
+      "sha256": "39e5a2821877c02f2a2e5be0c6ef43f6b06e4edfcd08903af0daf7c42c9ffffa"
+    },
+    {
+      "path": "packages/cli/src/dev-config.ts",
+      "sha256": "9a48497bd7e1cc00c036489b96a5ee35ca00b1dd1a5010bca18d9f518fda0502"
+    },
+    {
+      "path": "packages/cli/src/dev-host-runtime.test.ts",
+      "sha256": "87e5f24368de4be8367ef8588eebef23c65d90e78b893d2f29b98d57cf34c214"
+    },
+    {
+      "path": "packages/cli/src/dev-parity-wiring.test.ts",
+      "sha256": "79708cfc02c5790043b7301a81a7cf37554f1db943c4298f3ae714b6f1a43028"
+    },
+    {
+      "path": "scripts/onboarding-watch.mjs",
+      "sha256": "101528cdbfeb731bd80c56f855bb6543d392e58b3938b255e5b8216aa56418bd"
+    },
+    {
+      "path": "scripts/onboarding-receipt.mjs",
+      "sha256": "ab9877f4834f63b47efa15979d299798911d5525850da9c875c3432dc80cb8a1"
+    },
+    {
+      "path": "scripts/onboarding-gate.test.ts",
+      "sha256": "95494aea3796e9702759dfcdbbca6e2a083b4220eff2fcea77961a97db704b18"
+    }
+  ],
+  "files": [
+    {
+      "path": "original-runtime-repro.mjs.txt",
+      "bytes": 1236,
+      "sha256": "9df0b64fbf8bf6abf725fde22455e65a75328427ab42f1a443af3ecfda57652b"
+    },
+    {
+      "path": "watch-build-final2.log",
+      "bytes": 6,
+      "sha256": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
+    },
+    {
+      "path": "watch-bun-final.json",
+      "bytes": 18717,
+      "sha256": "a583e248a86357f7f8beae40adc135a0379fcd5d05db5173ca3c8f5173beccec"
+    },
+    {
+      "path": "watch-bun-final.json.setup.json",
+      "bytes": 7110,
+      "sha256": "8d8046e7ea4e6dc78cdfe7923a585142581b3ad42fa772945570e896fcfd5537"
+    },
+    {
+      "path": "watch-bun-final.json.setup.json.logs/first-call.log",
+      "bytes": 4371,
+      "sha256": "a5b0e23ea4899e3053d548d5700b135ae713a76780446148e77013e327fb4b62"
+    },
+    {
+      "path": "watch-bun-final.json.setup.json.logs/init.log",
+      "bytes": 687,
+      "sha256": "e2bae475112c6411dfc828fa8ed91c76999f5624f8ccff0929b3909d3a791f8a"
+    },
+    {
+      "path": "watch-bun-final.json.setup.json.logs/warm-start.log",
+      "bytes": 1846,
+      "sha256": "4429bd30473df0b513309576a594c16f6662c2eef76c768f4851d41cf754abb8"
+    },
+    {
+      "path": "watch-bun-final.log",
+      "bytes": 13794,
+      "sha256": "a59638c29cbdcad22b0c3336391c163a08c545b7478897142358096e7b783e75"
+    },
+    {
+      "path": "watch-bun-verified.json",
+      "bytes": 18120,
+      "sha256": "65c75b658eb28ea61b3711d25ab93e872f3c7ba901c6461c5fe0684b06133587"
+    },
+    {
+      "path": "watch-bun-verified.json.setup.json",
+      "bytes": 7118,
+      "sha256": "e89bcf6cb2391273cc146e81fb62169fc3e08c83482537d00576ac03d538a443"
+    },
+    {
+      "path": "watch-bun-verified.json.setup.json.logs/first-call.log",
+      "bytes": 4294,
+      "sha256": "0e3ad35b69a092a09d94ee1d880ec6f20790e5e44780a811c44ebbafefda7758"
+    },
+    {
+      "path": "watch-bun-verified.json.setup.json.logs/init.log",
+      "bytes": 687,
+      "sha256": "ce9abfdac030c72492267d8217ae62b1f05eaa55aa8adf4dff4c86ba793f393c"
+    },
+    {
+      "path": "watch-bun-verified.json.setup.json.logs/warm-start.log",
+      "bytes": 1846,
+      "sha256": "fddfeb52ec30a9c31896108dc9b4404c2d9b1a6487a66c6343a4840d903e476c"
+    },
+    {
+      "path": "watch-bun-verified.log",
+      "bytes": 13512,
+      "sha256": "406385149e74303c64a8b76ee1005d6c79e47d655d4e932feb44e6fdedb64cad"
+    },
+    {
+      "path": "watch-candidate-snapshot.json",
+      "bytes": 115876,
+      "sha256": "1ae30dcba37c98f29745348d95c01b32a851dcd9deded776a6abf77bee3035dd"
+    },
+    {
+      "path": "watch-cli-final.log",
+      "bytes": 139001,
+      "sha256": "c8b4ba7b9f3d14d77f45998b7d6a4b40452911c666e4bba9ac5588fdeda8b120"
+    },
+    {
+      "path": "watch-cli-full.log",
+      "bytes": 139053,
+      "sha256": "cbea01c8ae6f9d95977e4138394dffb5ccbedb7c8e16528f51e71d2af4b470ca"
+    },
+    {
+      "path": "watch-format-final.log",
+      "bytes": 411,
+      "sha256": "c9b5bebaa25674ca59e505181349f103b1bdb86913e355eaf72f9ee329392de0"
+    },
+    {
+      "path": "watch-helper-final.log",
+      "bytes": 5799,
+      "sha256": "f2254a393aea1211160d5157caa97cf4e633afb50851c37d1faa692d3d59ee16"
+    },
+    {
+      "path": "watch-lint-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "watch-node-final.json",
+      "bytes": 20155,
+      "sha256": "b03a9fe90abfd9c7ff5a0fab4a35b7dd40793a49ca0a8299b87235f04cf90079"
+    },
+    {
+      "path": "watch-node-final.json.setup.json",
+      "bytes": 7134,
+      "sha256": "1117f8ec1bdd09c51299e4bf0be03dc97fce1f81c028ff5786b1d975cf817ad2"
+    },
+    {
+      "path": "watch-node-final.json.setup.json.logs/first-call.log",
+      "bytes": 4306,
+      "sha256": "6662cb80100fd43667cb7cc5869c0bd47cbaee812afc08ec4bceb3869854bb18"
+    },
+    {
+      "path": "watch-node-final.json.setup.json.logs/init.log",
+      "bytes": 692,
+      "sha256": "3a4b90e04330cf9fa8c9a54ef1fecb1774d75a4fe707de8c6d4cb0c72d295992"
+    },
+    {
+      "path": "watch-node-final.json.setup.json.logs/warm-start.log",
+      "bytes": 1855,
+      "sha256": "8b7790ffb16bea8eb2a58a614fb565fe9b900b2bf88c5937833282e74ec54e8f"
+    },
+    {
+      "path": "watch-node-final.log",
+      "bytes": 14610,
+      "sha256": "60d419d9786b11c20be0dcd1ff9fb077b0083261f9af7d2f2013f2165cb997d9"
+    },
+    {
+      "path": "watch-node-verified.json",
+      "bytes": 20167,
+      "sha256": "a6a8e76b6f9dbd7a2a1cf463de417159a88e6145ee7165ac5c5c8592b893120e"
+    },
+    {
+      "path": "watch-node-verified.json.setup.json",
+      "bytes": 7109,
+      "sha256": "8e88a97a5db4c78f6655ebd43071b23c372b779c8754c1647b3e250db8b9bc47"
+    },
+    {
+      "path": "watch-node-verified.json.setup.json.logs/first-call.log",
+      "bytes": 4306,
+      "sha256": "a89a03acec1616e1b64547e2d1f40d56862a7e435b8784900090c3f3c8054e51"
+    },
+    {
+      "path": "watch-node-verified.json.setup.json.logs/init.log",
+      "bytes": 692,
+      "sha256": "475dbab5559e61d3f7e3fed208c639602cf7958223a2497d5f9e50471412f16b"
+    },
+    {
+      "path": "watch-node-verified.json.setup.json.logs/warm-start.log",
+      "bytes": 1855,
+      "sha256": "08b9f68f558340ecfc91220118a9a7e1986f9f1abd3ccdbf7fc675f52d5ad140"
+    },
+    {
+      "path": "watch-node-verified.log",
+      "bytes": 14616,
+      "sha256": "67e4c7709a5787c61a7484384ebc1f33aa8190813516c7f7340559905b8bdd55"
+    },
+    {
+      "path": "watch-react-doctor-final.log",
+      "bytes": 515,
+      "sha256": "e6429e77c1a7cce96277b5756586a74c90eb7413a25bf40ddc62dcc9ce90353c"
+    },
+    {
+      "path": "watch-repro-red.log",
+      "bytes": 3380,
+      "sha256": "6aa01dde6134a2fc3c452fdd17e046e01069a1d7065ca96da78d66e711151ce4"
+    },
+    {
+      "path": "watch-repro-setup.json",
+      "bytes": 2829,
+      "sha256": "bbe7dbaf8df62388fa052f81ac88bb86c545234055e40eb050e4a964c236a4be"
+    },
+    {
+      "path": "watch-repro-setup.log",
+      "bytes": 3450,
+      "sha256": "72f32b9540eb9b197432d8aa9a16c29185e0447a05f5458bcc076d19e94d6fd1"
+    },
+    {
+      "path": "watch-restore-red.json",
+      "bytes": 16000,
+      "sha256": "4ae78ba4039192515adf8dbe245ebe6f74e8a6bbd31bc15b8fafa99bde1899d0"
+    },
+    {
+      "path": "watch-restore-red.log",
+      "bytes": 14871,
+      "sha256": "12d311d6ebd8a7f5e3e83c42fbcc3b81e9ea363f61c6c0d99880a24aab2f2c5d"
+    },
+    {
+      "path": "watch-serial-build.log",
+      "bytes": 6,
+      "sha256": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
+    },
+    {
+      "path": "watch-serial-format.log",
+      "bytes": 29,
+      "sha256": "1f96a8b9168494cfc2e09c6e0f9671270bf5ae2a4ddfda466c503b4f65cf192b"
+    }
+  ]
+}

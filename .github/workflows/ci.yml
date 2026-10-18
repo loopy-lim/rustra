@@ -327,6 +327,10 @@ jobs:
         # 게이트로 계약한다. init 스캐폴드가 repo CLI의 dist를 소비하므로
         # bun run build 이후 실행되어야 한다.
         run: bun run test:onboarding
+      - name: Watch rebuild and compile failure recovery (Node and Bun)
+        run: |
+          bun run test:onboarding:watch --host node
+          bun run test:onboarding:watch --host bun
       - name: Docs sync gate (docs:sync 마커 ↔ 생성물)
         # 문서에 붙여 넣은 생성 코드 샘플이 현실과 갈라지는 반복 패턴을
         # 게이트로 종결한다. 마커 영역을 참조 파일과 byte-for-byte 대조한다.
@@ -501,6 +505,10 @@ jobs:
         # typescript 잡과 동일 순서 계약). @tauri-apps/cli 는 test:runtime:tauri
         # 의 `tauri build` 에 필요하다.
         run: bun install --cwd examples/tauri-calculator --frozen-lockfile
+      - name: RN experiment adapter and actual Rust consumer
+        run: bun run test:app:rn-experiment
+      - name: Resident tree generated client and lifecycle
+        run: bun run test:app:resident-tree
       - name: Runtime smoke on Node (test:runtime:node)
         # 구 test:compat → test:runtime 의 node 구간 — release FFI 바이너리를
         # 빌드해 실제 예제 앱을 구동한다.
@@ -521,6 +529,9 @@ jobs:
         run: npm install -g scriptc@0.2.1
       - name: Runtime smoke via scriptc native FFI (test:runtime:scriptc)
         run: bun run test:runtime:scriptc
+      - name: Scriptc retained callback stress (test:runtime:scriptc:stress)
+        # 스모크와 분리된 게이트 — 스트레스 실패가 스모크 단계를 덮지 않게 한다.
+        run: bun run test:runtime:scriptc:stress
 
       # 실패 로그 보존 — bun 설치 실패는 bun-debug.log 를 남기므로 보존한다
       # (examples/tauri-calculator 설치 실패 포함).

@@ -17,7 +17,7 @@
     "test": "env -u RUSTRA_BUN_LIBRARY bun run test:all",
     "test:all": "bun run test:release-tools && bun run test:types && bun run test:ts:bun && bun run test:packages && bun run --cwd packages/cli test && bun run test:complex-codec-bench && bun run test:bench-gate && bun run test:functions",
     "test:fast": "cargo check --workspace --exclude rustra-tauri-calculator -q && tsc -p examples/calculator/tsconfig.json && bun run --cwd packages/cli test",
-    "test:local": "bun run build && bun run test:release-coherence && bun run lint && bun run format:check && bun run audit:prod && bun run test:ts:node && bun run test:ts:bun && bun run test:adapters && bun run --cwd packages/cli test && bun run test:complex-codec-bench && bun run test:bench-gate && bun run test:api-surface && bun run test:codegen-fresh:check && bun run test:bindings-fresh:check && bun run test:architecture && bun run test:release-tools && bun run test:registry-consumer && bun run test:runtime:node && bun run test:runtime:crud && bun run test:runtime:bun && bun run test:runtime:scriptc && bun run test:types && bun run test:packages:check && bun run test:onboarding:check && bun run test:docs",
+    "test:local": "bun run build && bun run test:release-coherence && bun run lint && bun run format:check && bun run audit:prod && bun run test:ts:node && bun run test:ts:bun && bun run test:adapters && bun run --cwd packages/cli test && bun run test:complex-codec-bench && bun run test:bench-gate && bun run test:api-surface && bun run test:codegen-fresh:check && bun run test:bindings-fresh:check && bun run test:architecture && bun run test:release-tools && bun run test:registry-consumer && bun run test:runtime:node && bun run test:runtime:crud && bun run test:runtime:bun && bun run test:runtime:scriptc && bun run test:runtime:scriptc:stress && bun run test:types && bun run test:packages:check && bun run test:onboarding:check && bun run test:onboarding:watch --host node && bun run test:onboarding:watch --host bun && bun run test:docs",
     "test:ts:node": "cargo build -p rustra-calculator-example -q && tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/*.test.js dist-ts/examples/crud/ts/*.test.js",
     "test:types": "bun run --cwd packages/types build && bun run --cwd packages/types test",
     "test:packages": "bun run build && bun run test:packages:check",
@@ -59,7 +59,7 @@
     "test:app:streaming": "cargo build -p rustra-streaming-example && bun examples/streaming/apps/node-app.ts",
     "test:app:auth": "cargo build -p rustra-auth-example && bun examples/auth/apps/node-app.ts",
     "test:app:reference": "cargo build -p rustra-crud-example && bun examples/reference-app/src/main.ts",
-    "test:app:rn-experiment": "bun examples/rn-experiment/apps/react-native-app.ts",
+    "test:app:rn-experiment": "bun run --cwd examples/rn-experiment typecheck && bun run --cwd examples/rn-experiment typecheck:native && bun run --cwd examples/rn-experiment test && bun run --cwd examples/rn-experiment test:adapter && bun run --cwd examples/rn-experiment test:node",
     "lint": "eslint 'packages/*/src/**/*.ts' 'scripts/**/*.ts' 'examples/calculator/**/*.ts' 'examples/crud/**/*.ts' 'examples/auth/**/*.ts' 'examples/streaming/**/*.ts' 'examples/tauri-calculator/**/*.ts' 'examples/reference-app/**/*.ts' 'examples/react-native-bare-calculator/**/*.ts' 'examples/rn-wasm-spike/**/*.ts'",
     "lint:fix": "eslint 'packages/*/src/**/*.ts' 'scripts/**/*.ts' 'examples/calculator/**/*.ts' 'examples/crud/**/*.ts' 'examples/auth/**/*.ts' 'examples/streaming/**/*.ts' 'examples/tauri-calculator/**/*.ts' 'examples/reference-app/**/*.ts' 'examples/react-native-bare-calculator/**/*.ts' 'examples/rn-wasm-spike/**/*.ts' --fix",
     "format": "prettier --write 'packages/*/src/**/*.ts'",
@@ -85,7 +85,13 @@
     "bench:functions": "cargo bench -p rustra --bench function_dispatch",
     "verify:consumer:tauri": "node scripts/registry-consumer-tauri.mjs",
     "verify:consumer:rn-android": "node scripts/registry-consumer-rn-android.mjs",
-    "verify:consumer:diagnostics": "node scripts/registry-consumer-diagnostics.mjs"
+    "verify:consumer:diagnostics": "node scripts/registry-consumer-diagnostics.mjs",
+    "test:app:resident-tree": "cargo test -p rustra --example resident_tree && node examples/resident-tree/run.mjs",
+    "test:app:resident-tree:client": "bun examples/resident-tree/client.ts",
+    "test:native:hermes:run": "node examples/react-native-calculator/modules/rustra-jsi/ios/run-native-test.mjs",
+    "test:native:hermes": "bash examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh",
+    "test:onboarding:watch": "node scripts/onboarding-watch.mjs",
+    "test:runtime:scriptc:stress": "node examples/calculator/scriptc/run-stress.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1",

@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 1,
+  "evidence": "local-watch-rust-runtime",
+  "consumption": "source-injected",
+  "host": "node",
+  "ok": false,
+  "events": [
+    {
+      "type": "dev-log",
+      "afterMs": 8534.692208,
+      "stream": "stdout",
+      "text": "[dev] initial → codegen --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8627.078625,
+      "stream": "stdout",
+      "text": "[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/Cargo.toml --package rustra-app --bin generate"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8630.094916,
+      "stream": "stdout",
+      "text": "[rustra] ⠋ Rust schema generation (rustra-app/generate)..."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8690.622125,
+      "stream": "stdout",
+      "text": "[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8690.891000000001,
+      "stream": "stdout",
+      "text": "[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.797458000001,
+      "stream": "stdout",
+      "text": "Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/src/generated:"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.858291,
+      "stream": "stdout",
+      "text": "  types.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.877708,
+      "stream": "stdout",
+      "text": "  commands.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.890708,
+      "stream": "stdout",
+      "text": "  contract.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.915541,
+      "stream": "stdout",
+      "text": "  frame-codecs.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.929416,
+      "stream": "stdout",
+      "text": "  frame-registry.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8702.939458,
+      "stream": "stdout",
+      "text": "  node.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8705.346166000001,
+      "stream": "stdout",
+      "text": "[rustra] ⠋ Dev runtime (rustra-app)..."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8758.475666,
+      "stream": "stdout",
+      "text": "[rustra] ✓ Dev runtime (rustra-app) done in 0.1s"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8818.61275,
+      "stream": "stdout",
+      "text": "[dev] 1:34:16 PM regenerated"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 8818.831958,
+      "stream": "stdout",
+      "text": "\n[dev] watching /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app and /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json for changes..."
+    },
+    {
+      "type": "source-edit",
+      "afterMs": 9768.323958,
+      "scenario": "implementation-change"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10130.845833000001,
+      "stream": "stdout",
+      "text": "[dev] Rust change → codegen --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10184.600791,
+      "stream": "stdout",
+      "text": "[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/Cargo.toml --package rustra-app --bin generate"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10187.158083,
+      "stream": "stdout",
+      "text": "[rustra] ⠋ Rust schema generation (rustra-app/generate)..."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10512.287625,
+      "stream": "stdout",
+      "text": "[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.3s"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10512.372833000001,
+      "stream": "stdout",
+      "text": "[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.885458,
+      "stream": "stdout",
+      "text": "Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/src/generated:"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.929958,
+      "stream": "stdout",
+      "text": "  types.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.945958,
+      "stream": "stdout",
+      "text": "  commands.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.957083000001,
+      "stream": "stdout",
+      "text": "  contract.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.966708,
+      "stream": "stdout",
+      "text": "  frame-codecs.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.977041,
+      "stream": "stdout",
+      "text": "  frame-registry.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10518.986333,
+      "stream": "stdout",
+      "text": "  node.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10521.728708,
+      "stream": "stdout",
+      "text": "[rustra] ⠋ Dev runtime (rustra-app)..."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10740.031625000001,
+      "stream": "stdout",
+      "text": "[rustra] ✓ Dev runtime (rustra-app) done in 0.2s"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 10791.640208,
+      "stream": "stdout",
+      "text": "[dev] 1:34:18 PM regenerated"
+    },
+    {
+      "type": "rust-call",
+      "afterMs": 10838.980875000001,
+      "scenario": "implementation-change",
+      "reason": "Rust change",
+      "value": "HELLO FROM TYPESCRIPT"
+    },
+    {
+      "type": "compile-error-written",
+      "afterMs": 10842.739833000001
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11179.952208,
+      "stream": "stdout",
+      "text": "[dev] Rust change → codegen --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11250.640833000001,
+      "stream": "stdout",
+      "text": "[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/Cargo.toml --package rustra-app --bin generate"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11253.432708,
+      "stream": "stdout",
+      "text": "[rustra] ⠋ Rust schema generation (rustra-app/generate)..."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11735.822375,
+      "stream": "stdout",
+      "text": "[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.5s"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11735.899791,
+      "stream": "stdout",
+      "text": "[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.043125,
+      "stream": "stdout",
+      "text": "Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/src/generated:"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.082166,
+      "stream": "stdout",
+      "text": "  types.ts (updated)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.095041,
+      "stream": "stdout",
+      "text": "  commands.ts (updated)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.104916,
+      "stream": "stdout",
+      "text": "  contract.ts (updated)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.113583,
+      "stream": "stdout",
+      "text": "  frame-codecs.ts (updated)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.122625,
+      "stream": "stdout",
+      "text": "  frame-registry.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.130791000001,
+      "stream": "stdout",
+      "text": "  node.ts (unchanged)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11747.140958,
+      "stream": "stdout",
+      "text": "[rustra] Note: generated code changed — rebuild the runtime binary before invoking (cargo build), or invokes may fail with contract.mismatch."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11749.59325,
+      "stream": "stdout",
+      "text": "[rustra] ⠋ Dev runtime (rustra-app)..."
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11857.429625,
+      "stream": "stdout",
+      "text": "[rustra] ✗ Dev runtime (rustra-app) failed in 0.1s"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 11857.581416,
+      "stream": "stderr",
+      "text": "[dev] regeneration failed: cargo exit 101"
+    },
+    {
+      "type": "source-repaired",
+      "afterMs": 12585.278791
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 12956.369625000001,
+      "stream": "stdout",
+      "text": "[dev] Rust change → codegen --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app/rustra.json"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 13002.101625000001,
+      "stream": "stdout",
+      "text": "[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)"
+    },
+    {
+      "type": "dev-log",
+      "afterMs": 13049.497000000001,
+      "stream": "stdout",
+      "text": "[dev] 1:34:20 PM regenerated"
+    }
+  ],
+  "measurements": {
+    "watchMutationToCallMs": 1070.6569170000002,
+    "watchRunStartToCallMs": 708.1350419999999,
+    "editToWatchRunStartMs": 362.52187500000036,
+    "failureDetectionMs": 1014.8415829999994
+  },
+  "artifacts": [
+    {
+      "phase": "initial",
+      "nativeSha256": "a2df1d8eab665265a7a3946d66cd83ff56a23060c459904dd83faab657315b30",
+      "contractSha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5",
+      "rustSourceSha256": "e645af61675c9b953e9bd49b1a61f39eea8e9610956160c32e29b560cd63f7ab",
+      "configSha256": "8581dc467d7c04f6d7f095f89ea275df156bb4865799c9b0c969ddab9151cc59",
+      "manifestSha256": "8c7dfa261634973b3f3f4576450139405884c054c4d68cc9d2ad66c27601ab3d"
+    },
+    {
+      "phase": "implementation-change",
+      "nativeSha256": "398cb24803639af9b838779e41d8a9592e6d4388418d2eb61b1bf836737c5c4a",
+      "contractSha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5",
+      "rustSourceSha256": "95124737ea4d642af5390eb0203b9d6db8a0f38f751c8a3480946f5e1eed39ac",
+      "configSha256": "8581dc467d7c04f6d7f095f89ea275df156bb4865799c9b0c969ddab9151cc59",
+      "manifestSha256": "8c7dfa261634973b3f3f4576450139405884c054c4d68cc9d2ad66c27601ab3d"
+    },
+    {
+      "phase": "compile-failure",
+      "nativeSha256": "398cb24803639af9b838779e41d8a9592e6d4388418d2eb61b1bf836737c5c4a",
+      "contractSha256": "070c1d72aca3003b7e31d6f3f1cc02e7f6229faacdc489568f59752fbfbd0a7f",
+      "rustSourceSha256": "7e13856d3121b7348e128aadbc0f1e6f9231e630f8bb32cc54fa8b47e5d6f453",
+      "configSha256": "8581dc467d7c04f6d7f095f89ea275df156bb4865799c9b0c969ddab9151cc59",
+      "manifestSha256": "8c7dfa261634973b3f3f4576450139405884c054c4d68cc9d2ad66c27601ab3d"
+    }
+  ],
+  "sourceBefore": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "8ecec33505b908ebd397e3445847b62778315aeba14c30263cb1fe6e5a4e162c",
+    "sourceFileCount": 1128
+  },
+  "producerBefore": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "be596f30c5e6f633739a415143e60ba44dccfbee4575b8d27f71d1994b142d43"
+  },
+  "setupReceipt": "/tmp/rustra-20261013-watch-restore-red.json.setup.json",
+  "projectDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/app",
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v22.21.1",
+    "packageManager": "bun",
+    "packageManagerVersion": "1.4.3",
+    "scriptsRuntime": "bun",
+    "host": "node",
+    "sdkInstallationIncluded": false,
+    "cargoOffline": true
+  },
+  "cache": {
+    "cargoTarget": "fresh-project-target",
+    "cargoTargetDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/cargo-target",
+    "dependencyDownloads": "shared-cache-not-cleared"
+  },
+  "reloadsDuringFailure": 0,
+  "error": "\n$ bun run src/index.ts\n108 |     if (!lastRejection)\n109 |         throw noNodeRuntimeError();\n110 |     const described = rejections\n111 |         .map(({ candidate, reason }) => `${candidate} (modified ${runtimeMtime(candidate)}): ${reason}`)\n112 |         .join('; ');\n113 |     throw new RustraCommandError(lastRejection.code, `${lastRejection.message} Tried ${rejections.length} runtime candidate${rejections.length === 1 ? '' : 's'} (newest first): ${described}.`, lastRejection.retryable, lastRejection);\n                ^\nRustraCommandError: contract hash mismatch: native=\"eb582ca278c8c422…\" vs expected=\"c38315195c5f0aa6…\" — generated client and native binary are out of sync; regenerate the TypeScript and native codecs, rebuild the Rust archive, then rebuild the native app Tried 1 runtime candidate (newest first): /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-PBwgMR/cargo-target/debug/rustra-app (modified 2026-10-13T04:34:18.233Z): contract.mismatch.\n  retryable: false,\n frameBytes: undefined,\n       code: \"contract.mismatch\"\n\n      at selectVerifiedRuntime (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:113:11)\n      at async <anonymous> (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:226:33)\n\n78 |         return first;\n79 |     throw noNodeRuntimeError(options);\n80 | }\n81 | /** (A6) Node 계약 불일치 — Bun 구현(frame-engine-contract)과 동일한 fix 안내. */\n82 | function nodeContractMismatchError(nativeHash, expectedHash) {\n83 |     return new RustraCommandError('contract.mismatch', `contract hash mismatch: native=\"${nativeHash.slice(0, 16)}…\" vs ` +\n                ^\nRustraCommandError: contract hash mismatch: native=\"eb582ca278c8c422…\" vs expected=\"c38315195c5f0aa6…\" — generated client and native binary are out of sync; regenerate the TypeScript and native codecs, rebuild the Rust archive, then rebuild the native app\n  retryable: false,\n frameBytes: undefined,\n       code: \"contract.mismatch\"\n\n      at nodeContractMismatchError (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:83:12)\n      at <anonymous> (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:138:19)\n      at async <anonymous> (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:182:23)\n      at async selectVerifiedRuntime (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:99:35)\n      at async <anonymous> (/Users/loopy/dev/ll3/rustra-bridge/packages/node/dist/node-bootstrap.js:226:33)\n\nBun v1.4.3 (macOS arm64)\nerror: script \"demo\" exited with code 1\n\n\n1 !== 0\n",
+  "sourceAfter": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "8ecec33505b908ebd397e3445847b62778315aeba14c30263cb1fe6e5a4e162c",
+    "sourceFileCount": 1128
+  },
+  "sourceStable": true,
+  "producerAfter": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "be596f30c5e6f633739a415143e60ba44dccfbee4575b8d27f71d1994b142d43"
+  },
+  "producerStable": true,
+  "timing": "monotonic; edit-to-run includes polling and debounce; calls launch a fresh Bun process; failure-to-recovery includes a 700ms no-reload observation"
+}

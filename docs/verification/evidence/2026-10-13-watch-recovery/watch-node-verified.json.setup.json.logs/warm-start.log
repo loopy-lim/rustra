@@ -1,0 +1,35 @@
+{"command":"bun","args":["run","start"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-gvyHsF/app"}
+[rustra] Checking setup tools...
+[rustra] Generating the Rust contract and TypeScript calls...
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-gvyHsF/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-gvyHsF/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-gvyHsF/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-gvyHsF/app/src/generated:
+  types.ts (unchanged)
+  commands.ts (unchanged)
+  contract.ts (unchanged)
+  frame-codecs.ts (unchanged)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[rustra] ⠋ JavaScript dependencies...
+bun install v1.4.3 (c6da4a4d3)
+
++ @rustra/cli@../../../packages/cli
++ @rustra/node@../../../packages/node
++ @rustra/types@../../../packages/types
+
+4 packages installed [121.00ms]
+[rustra] ✓ JavaScript dependencies done in 0.1s
+[rustra] ⠋ Rust runtime (rustra-app)...
+[rustra] ✓ Rust runtime (rustra-app) done in 0.1s
+[rustra] ⠋ First Rust call...
+hello from TypeScript
+[rustra] ✓ First Rust call done in 0.0s
+[rustra] Setup complete — demo succeeded.
+$ rustra setup --config rustra.json --run
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-gvyHsF/cargo-target/debug/generate`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+$ bun run src/index.ts

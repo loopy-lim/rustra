@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { renderInitProjectFiles, templateVersions } from '../packages/cli/dist/init-template.js';
+import {
+  onboardingReceipt,
+  writeOnboardingReceipt,
+  onboardingPackageArtifact,
+} from './onboarding-receipt.mjs';
+import { parseQuickStartArgs } from './quick-start.mjs';
 import {
   commandFor,
   mutateScaffoldProject,
@@ -481,5 +487,131 @@ test('gate fails at verify when the demo re-invocation exits non-zero', async ()
     assert.match(report.error ?? '', /command not found/);
   } finally {
     pass.cleanup();
+  }
+});
+
+test('timing receipts separate first call and contract iteration, including failed stages', async () => {
+  const project = scratchProject({ typesTs: 'repeat: number;' });
+  try {
+    let time = 0;
+    const report = await runOnboardingSteps({
+      root: project.root,
+      env: {},
+      now: () => (time += 10),
+      mutate: () => {},
+      runner: async () => ({ ok: true, output: '' }),
+    });
+    const receipt = onboardingReceipt({
+      report,
+      consumption: 'source-injected',
+      sourceBefore: { sourceTreeHash: 'same' },
+      sourceAfter: { sourceTreeHash: 'same' },
+      environment: { packageManager: 'bun' },
+      rawLogDirectory: '/tmp/test-logs',
+    });
+    const demo = report.steps.find((step) => step.name === 'demo')!;
+    const mutate = report.steps.find((step) => step.name === 'mutate')!;
+    const verify = report.steps.find((step) => step.name === 'verify')!;
+    assert.equal(receipt.measurements.firstRustCallMs, demo.completedAfterMs);
+    assert.equal(
+      receipt.measurements.contractChangeToCallMs,
+      verify.completedAfterMs - mutate.startedAfterMs,
+    );
+    assert.ok(!('watchDetectionToCallMs' in receipt.measurements));
+    assert.equal(receipt.sourceStable, true);
+    assert.equal(receipt.consumption, 'source-injected');
+    assert.equal(receipt.cache.cargoTarget, 'fresh-project-target');
+    const failed = {
+      ...report,
+      ok: false,
+      steps: report.steps.slice(0, 4).map((step) => ({ ...step, ok: false })),
+    };
+    const failure = onboardingReceipt({
+      report: failed,
+      consumption: 'source-injected',
+      sourceBefore: { sourceTreeHash: 'before' },
+      sourceAfter: { sourceTreeHash: 'after' },
+      environment: {},
+      rawLogDirectory: '/tmp/test-logs',
+    });
+    assert.equal(failure.measurements.firstRustCallMs, null);
+    assert.equal(failure.measurements.contractChangeToCallMs, null);
+    assert.equal(failure.sourceStable, false);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('onboarding evidence classes and existing receipts cannot be silently replaced', () => {
+  assert.throws(
+    () => onboardingReceipt({ consumption: 'release-ish' }),
+    /unknown onboarding consumption/,
+  );
+  const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-receipt-'));
+  try {
+    const path = join(root, 'evidence.json');
+    writeOnboardingReceipt(path, { ok: true, consumption: 'source-injected' });
+    assert.throws(() => writeOnboardingReceipt(path, { ok: false }), /EEXIST/);
+    assert.equal(JSON.parse(readFileSync(path, 'utf8')).ok, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('quick-start exposes actual pnpm/yarn flows and distinct target-cache measurement modes', () => {
+  for (const manager of ['pnpm', 'yarn']) {
+    const options = parseQuickStartArgs([
+      '--package-manager',
+      manager,
+      '--measure',
+      '--cold',
+      '--host',
+      'node',
+      '--output',
+      '/tmp/probe.json',
+    ]);
+    assert.equal(options.manager, manager);
+    assert.equal(options.measure, true);
+    assert.equal(options.cold, true);
+  }
+  assert.equal(parseQuickStartArgs([]).manager, 'bun');
+  assert.throws(() => parseQuickStartArgs(['--package-manager', 'shell']), /must be bun/);
+  assert.throws(() => parseQuickStartArgs(['--output', '--clean']), /missing value/);
+  assert.throws(() => parseQuickStartArgs(['--unknown']), /unknown/);
+});
+
+test('onboarding provenance hashes built package modules, not just the unchanged CLI entry', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-built-'));
+  try {
+    writeFileSync(join(root, 'package.json'), '{"name":"test-cli","version":"1.0.0"}');
+    assert.throws(() => onboardingPackageArtifact(root), /built JavaScript is missing/);
+    mkdirSync(join(root, 'dist'));
+    writeFileSync(join(root, 'dist/index.js'), "import './setup.js';\n");
+    writeFileSync(join(root, 'dist/setup.js'), 'export const version = 1;\n');
+    const first = onboardingPackageArtifact(root)!;
+    writeFileSync(join(root, 'dist/setup.js'), 'export const version = 2;\n');
+    const second = onboardingPackageArtifact(root)!;
+    assert.equal(first.files, 3);
+    assert.notEqual(first.sha256, second.sha256);
+    assert.equal(second.version, '1.0.0');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('onboarding provenance hashes Bun file-dependency symlinks to built modules', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-links-'));
+  try {
+    writeFileSync(join(root, 'package.json'), '{"name":"linked-cli","version":"1.0.0"}');
+    mkdirSync(join(root, 'dist'));
+    const implementation = join(root, 'implementation.js');
+    writeFileSync(implementation, 'export const version = 1;');
+    symlinkSync(implementation, join(root, 'dist/index.js'));
+    const first = onboardingPackageArtifact(root)!;
+    writeFileSync(implementation, 'export const version = 2;');
+    assert.equal(first.files, 2);
+    assert.notEqual(onboardingPackageArtifact(root)!.sha256, first.sha256);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

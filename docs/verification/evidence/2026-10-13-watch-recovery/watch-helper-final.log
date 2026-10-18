@@ -1,0 +1,166 @@
+TAP version 13
+# Subtest: gate runs the full maintenance cycle in order: init → … → codegen-check → mutate → regen → verify
+ok 1 - gate runs the full maintenance cycle in order: init → … → codegen-check → mutate → regen → verify
+  ---
+  duration_ms: 5.50825
+  type: 'test'
+  ...
+# Subtest: gate fails when any step exits non-zero and names the failed step
+ok 2 - gate fails when any step exits non-zero and names the failed step
+  ---
+  duration_ms: 0.464208
+  type: 'test'
+  ...
+# Subtest: gate aborts at the first failed step without running later steps
+ok 3 - gate aborts at the first failed step without running later steps
+  ---
+  duration_ms: 0.20175
+  type: 'test'
+  ...
+# Subtest: gate converts a throwing runner into a named fail-closed report
+ok 4 - gate converts a throwing runner into a named fail-closed report
+  ---
+  duration_ms: 0.158125
+  type: 'test'
+  ...
+# Subtest: gate fails closed when the runner throws an empty Error or empty string
+ok 5 - gate fails closed when the runner throws an empty Error or empty string
+  ---
+  duration_ms: 0.224208
+  type: 'test'
+  ...
+# Subtest: gate treats a nonzero runner result with empty output as failure
+ok 6 - gate treats a nonzero runner result with empty output as failure
+  ---
+  duration_ms: 0.098125
+  type: 'test'
+  ...
+# Subtest: gate aborts when hidden workspace patch preparation fails on disk
+ok 7 - gate aborts when hidden workspace patch preparation fails on disk
+  ---
+  duration_ms: 1.92925
+  type: 'test'
+  ...
+# Subtest: scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)
+ok 8 - scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)
+  ---
+  duration_ms: 0.439459
+  type: 'test'
+  ...
+# Subtest: cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR; unset stays env-free
+ok 9 - cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR; unset stays env-free
+  ---
+  duration_ms: 6.384084
+  type: 'test'
+  ...
+# Subtest: every runner command runs inside the onboarding scratch project; verify reruns the demo
+ok 10 - every runner command runs inside the onboarding scratch project; verify reruns the demo
+  ---
+  duration_ms: 1.362875
+  type: 'test'
+  ...
+# Subtest: codegen-check gate step mirrors codegen plus --check; regen reuses codegen
+ok 11 - codegen-check gate step mirrors codegen plus --check; regen reuses codegen
+  ---
+  duration_ms: 0.401708
+  type: 'test'
+  ...
+# Subtest: mutate adds repeat to EchoInput/EchoOutput of the real Task-1 scaffold template
+ok 12 - mutate adds repeat to EchoInput/EchoOutput of the real Task-1 scaffold template
+  ---
+  duration_ms: 0.261292
+  type: 'test'
+  ...
+# Subtest: mutate refuses to re-apply over an already-mutated scaffold (anchor gone)
+ok 13 - mutate refuses to re-apply over an already-mutated scaffold (anchor gone)
+  ---
+  duration_ms: 0.25525
+  type: 'test'
+  ...
+# Subtest: mutateScaffoldProject rewrites lib.rs and index.ts on disk
+ok 14 - mutateScaffoldProject rewrites lib.rs and index.ts on disk
+  ---
+  duration_ms: 1.496042
+  type: 'test'
+  ...
+# Subtest: verify accepts generated types.ts declaring the mutated field and rejects drift
+ok 15 - verify accepts generated types.ts declaring the mutated field and rejects drift
+  ---
+  duration_ms: 2.268292
+  type: 'test'
+  ...
+# Subtest: gate fails at verify when the mutation did not reach the generated surface
+ok 16 - gate fails at verify when the mutation did not reach the generated surface
+  ---
+  duration_ms: 1.053834
+  type: 'test'
+  ...
+# Subtest: full offline cycle: real mutate + simulated regen propagates the field to verify
+ok 17 - full offline cycle: real mutate + simulated regen propagates the field to verify
+  ---
+  duration_ms: 1.363375
+  type: 'test'
+  ...
+# Subtest: report records per-step timing without threshold gating
+ok 18 - report records per-step timing without threshold gating
+  ---
+  duration_ms: 0.971625
+  type: 'test'
+  ...
+# Subtest: failed report carries timings for every step that ran
+ok 19 - failed report carries timings for every step that ran
+  ---
+  duration_ms: 0.151417
+  type: 'test'
+  ...
+# Subtest: gate fails at mutate when the fs mutation throws (catch branch)
+ok 20 - gate fails at mutate when the fs mutation throws (catch branch)
+  ---
+  duration_ms: 0.155917
+  type: 'test'
+  ...
+# Subtest: gate fails at verify when the demo re-invocation exits non-zero
+ok 21 - gate fails at verify when the demo re-invocation exits non-zero
+  ---
+  duration_ms: 0.930333
+  type: 'test'
+  ...
+# Subtest: timing receipts separate first call and contract iteration, including failed stages
+ok 22 - timing receipts separate first call and contract iteration, including failed stages
+  ---
+  duration_ms: 7.808416
+  type: 'test'
+  ...
+# Subtest: onboarding evidence classes and existing receipts cannot be silently replaced
+ok 23 - onboarding evidence classes and existing receipts cannot be silently replaced
+  ---
+  duration_ms: 1.326625
+  type: 'test'
+  ...
+# Subtest: quick-start exposes actual pnpm/yarn flows and distinct target-cache measurement modes
+ok 24 - quick-start exposes actual pnpm/yarn flows and distinct target-cache measurement modes
+  ---
+  duration_ms: 0.543041
+  type: 'test'
+  ...
+# Subtest: onboarding provenance hashes built package modules, not just the unchanged CLI entry
+ok 25 - onboarding provenance hashes built package modules, not just the unchanged CLI entry
+  ---
+  duration_ms: 17.846083
+  type: 'test'
+  ...
+# Subtest: onboarding provenance hashes Bun file-dependency symlinks to built modules
+ok 26 - onboarding provenance hashes Bun file-dependency symlinks to built modules
+  ---
+  duration_ms: 1.1915
+  type: 'test'
+  ...
+1..26
+# tests 26
+# suites 0
+# pass 26
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 260.07125

@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T04:40:54.748Z",
+  "ok": true,
+  "consumption": "source-injected",
+  "sourceBefore": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "c537cd0df86d4f4b9208b3326c8243ef99aa8a69744b99486e8ed4ea3efb1d5b",
+    "sourceFileCount": 1128
+  },
+  "sourceAfter": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "c537cd0df86d4f4b9208b3326c8243ef99aa8a69744b99486e8ed4ea3efb1d5b",
+    "sourceFileCount": 1128
+  },
+  "sourceStable": true,
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v22.21.1",
+    "packageManager": "bun",
+    "packageManagerVersion": "1.4.3",
+    "scriptsRuntime": "bun",
+    "host": "bun",
+    "sdkInstallationIncluded": false,
+    "cargoOffline": true
+  },
+  "cache": {
+    "cargoTarget": "fresh-project-target",
+    "cargoTargetDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/cargo-target",
+    "dependencyDownloads": "shared-cache-not-cleared"
+  },
+  "measurements": {
+    "firstRustCallMs": 9999.508625,
+    "warmStartMs": 637.5657500000016,
+    "contractChangeToCallMs": null,
+    "javascriptChangeToCallMs": null,
+    "rustImplementationChangeToCallMs": null,
+    "watchDetectionToCallMs": null,
+    "failureRecoveryMs": null,
+    "sdkDownloadMs": null
+  },
+  "iterationMethod": "explicit-command",
+  "rawLogDirectory": "/tmp/rustra-20261013-watch-bun-final.json.setup.json.logs",
+  "steps": [
+    {
+      "name": "init",
+      "ok": true,
+      "durationMs": 99.29795899999999,
+      "startedAfterMs": 0.14687499999999432,
+      "completedAfterMs": 99.44483399999999
+    },
+    {
+      "name": "source-setup",
+      "ok": true,
+      "durationMs": 0.8419999999999845,
+      "startedAfterMs": 99.456917,
+      "completedAfterMs": 100.29891699999999
+    },
+    {
+      "name": "first-call",
+      "ok": true,
+      "durationMs": 9899.142791,
+      "startedAfterMs": 100.36583399999998,
+      "completedAfterMs": 9999.508625
+    },
+    {
+      "name": "warm-start",
+      "ok": true,
+      "durationMs": 637.5657500000016,
+      "startedAfterMs": 10017.212375,
+      "completedAfterMs": 10654.778125
+    }
+  ],
+  "artifacts": [
+    {
+      "phase": "first-call",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "0a4290992b412a2f2362750582f3853cbd64402e20c38a4c9d55ce041ee52261"
+        },
+        {
+          "path": "bun.lock",
+          "sha256": "e58bb0ca40766bf870f3a1a88660e0660b5b76d84b9d9e47f635b485d7fb0d25"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "a2d931fa0491893c0b0ad41d9e06858a5be3567d5c4f26ffd3179a0eff81817a"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "8935247686f53fccc0dbb59cc825dd8a5b0f86f54e4a60f78f9b9cab8eb8b139"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5"
+        }
+      ],
+      "native": {
+        "path": "debug/librustra_app.dylib",
+        "sha256": "e1813af8b41d4d84edf19b6a08727028f0d5a373f910edf7dc001e155826ccf1"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "edf49ec09949a1de8631c77db1ca724a34f187453f047ed84f4238353ccfbf9f"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/bun",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app/node_modules/@rustra/bun",
+          "files": 19,
+          "sha256": "b58b08d1a617c8849a06857803020e3bfb54fe9b40038f7b9bf68ad6914bfde2"
+        }
+      ]
+    },
+    {
+      "phase": "warm-start",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "0a4290992b412a2f2362750582f3853cbd64402e20c38a4c9d55ce041ee52261"
+        },
+        {
+          "path": "bun.lock",
+          "sha256": "e58bb0ca40766bf870f3a1a88660e0660b5b76d84b9d9e47f635b485d7fb0d25"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "a2d931fa0491893c0b0ad41d9e06858a5be3567d5c4f26ffd3179a0eff81817a"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "8935247686f53fccc0dbb59cc825dd8a5b0f86f54e4a60f78f9b9cab8eb8b139"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5"
+        }
+      ],
+      "native": {
+        "path": "debug/librustra_app.dylib",
+        "sha256": "e1813af8b41d4d84edf19b6a08727028f0d5a373f910edf7dc001e155826ccf1"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "edf49ec09949a1de8631c77db1ca724a34f187453f047ed84f4238353ccfbf9f"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/bun",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app/node_modules/@rustra/bun",
+          "files": 19,
+          "sha256": "b58b08d1a617c8849a06857803020e3bfb54fe9b40038f7b9bf68ad6914bfde2"
+        }
+      ]
+    }
+  ],
+  "producerBefore": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "edf49ec09949a1de8631c77db1ca724a34f187453f047ed84f4238353ccfbf9f"
+  },
+  "producerAfter": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "edf49ec09949a1de8631c77db1ca724a34f187453f047ed84f4238353ccfbf9f"
+  },
+  "producerStable": true,
+  "projectDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-AlhD3v/app"
+}

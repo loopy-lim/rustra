@@ -1,0 +1,64 @@
+Created rustra project in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app:
+  Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+  Config host sections: node (--host)
+
+Next steps:
+  cd /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app
+  bun install
+  bun run start
+[rustra] Checking setup tools...
+[rustra] Generating the Rust contract and TypeScript calls...
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+[rustra] ⠋ Rust schema generation (rustra-app/generate) still running (1s)
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 1.5s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/src/generated:
+  types.ts
+  commands.ts
+  contract.ts
+  frame-codecs.ts
+  frame-registry.ts
+  node.ts
+[rustra] ⠋ JavaScript dependencies...
+bun install v1.4.3 (c6da4a4d3)
+
++ @rustra/cli@../../../packages/cli
++ @rustra/node@../../../packages/node
++ @rustra/types@../../../packages/types
+
+11 packages installed [667.00ms]
+[rustra] ✓ JavaScript dependencies done in 0.7s
+[rustra] ⠋ Rust runtime (rustra-app)...
+[rustra] ✓ Rust runtime (rustra-app) done in 0.3s
+[rustra] ⠋ First Rust call...
+hello from TypeScript
+[rustra] ✓ First Rust call done in 0.0s
+[rustra] Setup complete — demo succeeded.
+     Locking 42 packages to latest compatible versions
+      Adding schemars v0.8.22 (available: v1.2.2)
+   Compiling rustra v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra)
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.45s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-shared/debug/generate`
+Resolving dependencies
+Resolved, downloaded and extracted [23]
+Saved lockfile
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.27s
+$ bun run src/index.ts
+[quick-start] receipt: /tmp/rustra-20261013-watch-repro-setup.json
+file:///Users/loopy/dev/ll3/rustra-bridge/scripts/onboarding-receipt.mjs:30
+  if (files.length === 1) throw new Error(`built JavaScript is missing in ${directory}`);
+                                ^
+
+Error: built JavaScript is missing in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/node_modules/@rustra/cli
+    at onboardingPackageArtifact (file:///Users/loopy/dev/ll3/rustra-bridge/scripts/onboarding-receipt.mjs:30:33)
+    at file:///Users/loopy/dev/ll3/rustra-bridge/scripts/quick-start.mjs:174:9
+    at Array.map (<anonymous>)
+    at snapshot (file:///Users/loopy/dev/ll3/rustra-bridge/scripts/quick-start.mjs:173:57)
+    at runQuickStart (file:///Users/loopy/dev/ll3/rustra-bridge/scripts/quick-start.mjs:211:5)
+    at file:///Users/loopy/dev/ll3/rustra-bridge/scripts/quick-start.mjs:310:3
+
+Node.js v22.21.1

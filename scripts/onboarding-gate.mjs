@@ -41,6 +41,15 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { collectBenchmarkSource } from './host-benchmark-provenance.mjs';
+import {
+  captureProducerArtifact,
+  onboardingReceipt,
+  openRawLogDirectory,
+  openReceiptTarget,
+  stampProducerStability,
+  writeOnboardingReceipt,
+} from './onboarding-receipt.mjs';
 
 const PROJECT_NAME = 'onboarding-probe';
 
@@ -269,25 +278,34 @@ export async function runOnboardingSteps({
   runner,
   mutate = mutateScaffoldProject,
   env = process.env,
+  now = () => performance.now(),
 }) {
+  const journeyStartedAt = now();
   const projectDir = join(root, PROJECT_NAME);
   // 공유 타깃 옵트인 — codegen 이 cargo metadata 의 target_directory 로 생성 엔트리의
   // 바이너리 조회 경로를 굽고 demo 가 그 경로로 런타임을 찾기 때문에, build/rebuild 에만
   // 부분 주입하면 조회가 어긋나 데모가 깨진다. 설정 시 스폰되는 커맨드 전체에 동일한
   // 오버라이드를 운반시켜 흐름을 일관되게 유지한다(미설정 시 env 미부착 = 콜드 기본).
   const sharedTargetDir = sharedCargoTargetDir(env);
+  const cache = {
+    cargoTarget:
+      sharedTargetDir || env.CARGO_TARGET_DIR ? 'shared-or-external' : 'fresh-project-target',
+    cargoTargetDir: sharedTargetDir ?? env.CARGO_TARGET_DIR ?? null,
+    dependencyDownloads: 'existing-system-cache-not-cleared',
+  };
+  let workspaceInjected = false;
   const withSharedTarget = (command) =>
     sharedTargetDir ? { ...command, env: { CARGO_TARGET_DIR: sharedTargetDir } } : command;
   const steps = [];
   for (const step of ONBOARDING_STEPS) {
-    const startedAt = Date.now();
+    const startedAt = now();
     let failure = null;
     if (step.name === 'patch') {
       // 발행 전 우회 설정 — repo 크레이트가 있을 때만 .cargo/config.toml을 심는다.
       // 보고서에는 기록하지 않는다(report: false): 신규 사용자 여정의 단계가 아니라
       // 개발/CI 체크아웃의 검증 전제다.
       try {
-        injectWorkspacePatch(projectDir, repoRoot);
+        workspaceInjected = injectWorkspacePatch(projectDir, repoRoot);
       } catch (cause) {
         failure = errorText(cause);
       }
@@ -317,19 +335,29 @@ export async function runOnboardingSteps({
     }
     // Successful preparation remains an internal implementation detail. A failed hidden step must
     // still be disclosed in the report; otherwise the gate can continue after a broken prerequisite.
-    if (step.report !== false || failure !== null)
-      steps.push({ name: step.name, durationMs: Date.now() - startedAt });
+    if (step.report !== false || failure !== null) {
+      const completedAt = now();
+      steps.push({
+        name: step.name,
+        durationMs: completedAt - startedAt,
+        startedAfterMs: startedAt - journeyStartedAt,
+        completedAfterMs: completedAt - journeyStartedAt,
+        ok: failure === null,
+      });
+    }
     if (failure !== null)
       return {
         ok: false,
         steps,
+        workspaceInjected,
+        cache,
         error: `onboarding gate failed at step "${step.name}":\n${tail(failure)}`,
       };
   }
-  return { ok: true, steps };
+  return { ok: true, steps, workspaceInjected, cache };
 }
 
-function defaultRunner(step, command) {
+function defaultRunner(step, command, rawLogDirectory) {
   const label = `[onboarding:${step}] ${command.argv.join(' ')} (cwd ${command.cwd})`;
   console.log(label);
   const spawned = spawnSync(command.argv[0], command.argv.slice(1), {
@@ -340,6 +368,7 @@ function defaultRunner(step, command) {
     encoding: 'utf8',
   });
   const output = `${spawned.stdout ?? ''}${spawned.stderr ?? ''}`;
+  if (rawLogDirectory) writeFileSync(join(rawLogDirectory, `${step}.log`), `${label}\n${output}`);
   if (output.trim()) console.log(tail(output));
   return {
     ok: spawned.status === 0,
@@ -352,14 +381,48 @@ function defaultRunner(step, command) {
 
 async function main() {
   const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
+  const args = process.argv.slice(2);
+  if (args.length && (args.length !== 2 || args[0] !== '--output'))
+    throw new Error('Usage: node scripts/onboarding-gate.mjs [--output receipt.json]');
+  const output = openReceiptTarget({
+    requested: args[1] ?? process.env.RUSTRA_ONBOARDING_RECEIPT,
+    defaultName: `${Date.now()}-${process.pid}.json`,
+    repo: root,
+    label: 'onboarding',
+  });
   const scratch = mkdtempSync(join(tmpdir(), 'rustra-onboarding-'));
+  const rawLogDirectory = openRawLogDirectory(output);
+  const sourceBefore = collectBenchmarkSource(root);
+  const producerBefore = captureProducerArtifact(root);
   process.exitCode = 1;
   try {
     const report = await runOnboardingSteps({
       root: scratch,
       repoRoot: root,
-      runner: defaultRunner,
+      runner: (step, command) => defaultRunner(step, command, rawLogDirectory),
     });
+    const receipt = onboardingReceipt({
+      report,
+      sourceBefore,
+      sourceAfter: collectBenchmarkSource(root),
+      environment: {
+        platform: process.platform,
+        arch: process.arch,
+        node: process.version,
+        packageManager: 'bun',
+        host: 'node',
+        sdkInstallationIncluded: false,
+        cargoOffline: process.env.CARGO_NET_OFFLINE === 'true',
+      },
+      consumption: report.workspaceInjected
+        ? 'source-injected'
+        : 'source-cli-registry-dependencies',
+      rawLogDirectory,
+    });
+    receipt.producerBefore = producerBefore;
+    stampProducerStability(root, receipt);
+    writeOnboardingReceipt(output, receipt);
+    console.log(`[onboarding] receipt: ${output}`);
     if (!report.ok) {
       console.error(report.error);
       return;

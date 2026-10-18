@@ -1,0 +1,15 @@
+✔ Select projects › rustra-bridge, @rustra/react-native, @rustra/react
+✔ Scanned 597 files in 3.0s
+
+React Doctor — rustra-watch-source-7n55a8_y
+Score: 100 / 100 Great
+
+✔ No issues found!
+  Full diagnostics written to /tmp/react-doctor-d1ec0b32-afd5-4530-9210-dd09fc8c6900
+
+React Doctor is not installed in this project.
+Ask the user if they would like to set it up, then run:
+
+  npx react-doctor install --yes
+
+This adds agent skill files, a `doctor` package script, and react-doctor as a dev dependency.

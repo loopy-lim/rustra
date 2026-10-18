@@ -17,13 +17,14 @@ import { captureSchemaParity } from './dev-schema-capture.js';
 import {
   devInputFingerprint,
   resolveRustInputPaths,
+  type RustInputInvocation,
   type RustInputPaths,
 } from './dev-fingerprint.js';
 import { runLegacyDev } from './legacy-dev.js';
 import { withDevGeneratedInputExclusions } from './dev-generated-inputs.js';
 import { createParityGate } from './parity-gate.js';
 import { readFile } from 'node:fs/promises';
-import { isAbortedOperation } from './process.js';
+import { isAbortedOperation, spawnInherit } from './process.js';
 
 export { createWatchLoop, createReloadHooks } from './watch.js';
 export type { WatchLoop } from './watch.js';
@@ -48,9 +49,11 @@ export interface DevOptions {
 
 /**
  * Watch handle returned by `runDev`/`runConfigDev` with the engine-reload hook.
- * The callback contract: invoked AFTER codegen completes for a run that touched
- * the Rust side (rustBin) and BEFORE the loop idles again; the host drains its
- * own in-flight invocations, then re-initializes its engine. Errors from the
+ * The callback contract: invoked AFTER codegen and the configured native runtime
+ * builds complete successfully, and BEFORE the loop idles again. A failed runtime
+ * build can leave updated generated files beside the last good binary, but never
+ * emits reload. The host drains its own in-flight invocations, then re-initializes
+ * its engine. Errors from the
  * callback are logged (`[dev] reload failed: …`) and never kill the loop.
  *
  * Registration timing: `onReload` exists only after `runDev`/`runConfigDev`
@@ -130,21 +133,24 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
 
   function subscribe(): void {
     for (const watch of subscriptions) watch.dispose();
+    const producers: RustInputInvocation[] = config.nativeBuilds.map((build) => ({
+      manifestPath: build.manifestPath,
+      rustPackage: build.packageName,
+      cwd: build.cwd ?? dirname(build.manifestPath),
+    }));
+    for (const engine of [config.devDylib, config.devWasm]) {
+      if (engine)
+        producers.push({
+          manifestPath: engine.manifestPath,
+          rustPackage: engine.rustPackage,
+          cwd: dirname(engine.manifestPath),
+        });
+    }
     inputPaths = resolveRustInputPaths(
       config.manifestPath,
       config.rustPackage,
       config.root,
-      [config.devDylib, config.devWasm].flatMap((engine) =>
-        engine
-          ? [
-              {
-                manifestPath: engine.manifestPath,
-                rustPackage: engine.rustPackage,
-                cwd: dirname(engine.manifestPath),
-              },
-            ]
-          : [],
-      ),
+      producers,
     );
     const cargoExcluded = inputPaths.excluded;
     inputPaths = withDevGeneratedInputExclusions(inputPaths, config);
@@ -253,10 +259,42 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       if (skippedCargoStage) {
         log('[dev] rust inputs unchanged — skipping cargo stage (fingerprint match)');
       } else {
+        // Generation can publish a new schema before a later runtime build or
+        // parity gate fails. Restoring the last successful source must retry the
+        // whole pipeline instead of blessing those partial outputs via its old
+        // fingerprint. Only the success path below may establish a new cache.
+        lastSuccessfulFingerprint = undefined;
         const { runCodegen } = await import('./cli-codegen.js');
         await runCodegen(['--config', configPath], { signal: cancellation.signal });
         if (disposed) return;
         lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
+        // cargo run --bin generate does not relink Node's invoke binary or Bun's
+        // cdylib. Announcing reload before this build silently runs old code when
+        // the implementation changes without changing its contract hash.
+        await config.nativeBuilds.reduce(
+          (previous, build) =>
+            previous.then(() =>
+              disposed
+                ? undefined
+                : spawnInherit(
+                    'cargo',
+                    [
+                      'build',
+                      '--manifest-path',
+                      build.manifestPath,
+                      '--package',
+                      build.packageName,
+                    ],
+                    build.cwd ?? config.root,
+                    {
+                      signal: cancellation.signal,
+                      progressLabel: `Dev runtime (${build.packageName})`,
+                    },
+                  ),
+            ),
+          Promise.resolve(),
+        );
+        if (disposed) return;
         if (config.devWasm) {
           const artifact = await buildWasmEngine(config.devWasm, cancellation.signal);
           if (disposed) return;

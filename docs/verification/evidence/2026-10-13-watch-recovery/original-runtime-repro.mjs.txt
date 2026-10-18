@@ -1,0 +1,24 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { runDev } from '/Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/dev.js';
+const receipt=JSON.parse(readFileSync('/tmp/rustra-20261013-watch-repro-setup.json','utf8'));
+const app=receipt.projectDir, path=join(app,'src/lib.rs');
+const old=readFileSync(path,'utf8');
+let handle;
+try {
+ handle=await runDev(['--config',join(app,'rustra.json')]);
+ await new Promise(r=>setTimeout(r,900));
+ let done;
+ const result=new Promise((resolve,reject)=>{done={resolve,reject}});
+ const timer=setTimeout(()=>done.reject(new Error('watch reload timed out')),10000);
+ handle.onReload(()=>{
+   const value=spawnSync('bun',['run','demo'],{cwd:app,encoding:'utf8'});
+   clearTimeout(timer);
+   try { assert.equal(value.status,0,value.stderr); assert.match(value.stdout,/HELLO FROM TYPESCRIPT/,'successful watch reload must invoke new Rust implementation'); done.resolve(); }
+   catch(e) { done.reject(e); }
+ });
+ writeFileSync(path,old.replace('message: input.message','message: input.message.to_uppercase()'));
+ await result;
+} finally { await handle?.dispose(); }

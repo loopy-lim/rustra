@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T04:24:59.248Z",
+  "ok": false,
+  "consumption": "source-injected",
+  "sourceBefore": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "721383474ffea31aa886c6a07e3195814faba30a48953f0403dbdfda9dfdac29",
+    "sourceFileCount": 1115
+  },
+  "sourceAfter": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "721383474ffea31aa886c6a07e3195814faba30a48953f0403dbdfda9dfdac29",
+    "sourceFileCount": 1115
+  },
+  "sourceStable": true,
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v22.21.1",
+    "packageManager": "bun",
+    "packageManagerVersion": "1.4.3",
+    "scriptsRuntime": "bun",
+    "host": "node",
+    "sdkInstallationIncluded": false,
+    "cargoOffline": true
+  },
+  "cache": {
+    "cargoTarget": "shared-existing",
+    "cargoTargetDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-shared",
+    "dependencyDownloads": "shared-cache-not-cleared"
+  },
+  "measurements": {
+    "firstRustCallMs": 2853.073833,
+    "warmStartMs": null,
+    "contractChangeToCallMs": null,
+    "javascriptChangeToCallMs": null,
+    "rustImplementationChangeToCallMs": null,
+    "watchDetectionToCallMs": null,
+    "failureRecoveryMs": null,
+    "sdkDownloadMs": null
+  },
+  "iterationMethod": "explicit-command",
+  "rawLogDirectory": "/tmp/rustra-20261013-watch-repro-setup.json.logs",
+  "steps": [
+    {
+      "name": "init",
+      "ok": true,
+      "durationMs": 101.59466600000002,
+      "startedAfterMs": 0.06041699999997263,
+      "completedAfterMs": 101.65508299999999
+    },
+    {
+      "name": "source-setup",
+      "ok": true,
+      "durationMs": 0.32116600000000517,
+      "startedAfterMs": 101.667167,
+      "completedAfterMs": 101.98833300000001
+    },
+    {
+      "name": "first-call",
+      "ok": true,
+      "durationMs": 2751.03575,
+      "startedAfterMs": 102.03808299999997,
+      "completedAfterMs": 2853.073833
+    }
+  ],
+  "error": "built JavaScript is missing in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/node_modules/@rustra/cli",
+  "artifacts": [],
+  "producerBefore": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+  },
+  "producerAfter": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+  },
+  "producerStable": true,
+  "projectDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app"
+}

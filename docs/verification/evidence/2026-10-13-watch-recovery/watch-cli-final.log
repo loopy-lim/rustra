@@ -1,0 +1,3555 @@
+$ bun run test:compile && node --test dist-test/dependencies.test.js dist-test/cargo-metadata.test.js dist-test/cli-codegen-json.test.js dist-test/cli-codegen-text.test.js dist-test/cli-codegen-uniffi.test.js dist-test/cli-generate-scriptc.test.js dist-test/cli-scriptc.test.js dist-test/cli-init.test.js dist-test/cli-setup.test.js dist-test/setup-tauri.test.js dist-test/react-native-host.test.js dist-test/react-native-template-common.test.js dist-test/cli-json-format.test.js dist-test/codegen-explain.test.js dist-test/config-validation.test.js dist-test/dev-dylib.test.js dist-test/dev-fingerprint.test.js dist-test/dev-generated-inputs.test.js dist-test/dev-owned-output.test.js dist-test/dev-parity-wiring.test.js dist-test/dev.test.js dist-test/dev-host-runtime.test.js dist-test/legacy-dev.test.js dist-test/doctor.test.js dist-test/generate.test.js dist-test/host-entries.test.js dist-test/host-entry-runtime.test.js dist-test/inspect.test.js dist-test/parity-gate.test.js dist-test/process.test.js dist-test/schema-diff.test.js dist-test/vite.test.js dist-test/watch.test.js && bun test src/function-registration.test.ts src/cli-arg-parser.test.ts src/generated-header.test.ts src/generate-sync-contract.test.ts src/generate-sync.test.ts src/generate-bound-context.test.ts src/generate-postcard-map.test.ts
+$ tsc -p tsconfig.test.json
+TAP version 13
+# Subtest: describeCargoMetadataError appends the rustup hint only for missing cargo binary
+ok 1 - describeCargoMetadataError appends the rustup hint only for missing cargo binary
+  ---
+  duration_ms: 0.575291
+  type: 'test'
+  ...
+# Subtest: describeCargoMetadataError keeps other failures hint-free
+ok 2 - describeCargoMetadataError keeps other failures hint-free
+  ---
+  duration_ms: 0.197542
+  type: 'test'
+  ...
+# Subtest: readCargoMetadata surfaces the rustup hint when cargo is missing from PATH
+ok 3 - readCargoMetadata surfaces the rustup hint when cargo is missing from PATH
+  ---
+  duration_ms: 3.304291
+  type: 'test'
+  ...
+# Subtest: cargo metadata cache invalidates workspace inheritance and same-size manifest edits
+ok 4 - cargo metadata cache invalidates workspace inheritance and same-size manifest edits
+  ---
+  duration_ms: 180.480584
+  type: 'test'
+  ...
+# Subtest: cargo metadata cache invalidates invocation cwd configuration edits
+ok 5 - cargo metadata cache invalidates invocation cwd configuration edits
+  ---
+  duration_ms: 100.706417
+  type: 'test'
+  ...
+# Subtest: cargo metadata cache invalidates Cargo home configuration edits
+ok 6 - cargo metadata cache invalidates Cargo home configuration edits
+  ---
+  duration_ms: 86.495125
+  type: 'test'
+  ...
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/Cargo.toml --package x --bin generate
+# [rustra] ⠋ Rust schema generation (x/generate)...
+# Subtest: codegen --explain --format json carries the schemaVersion:1 surface map
+ok 7 - codegen --explain --format json carries the schemaVersion:1 surface map
+  ---
+  duration_ms: 11.017333
+  type: 'test'
+  ...
+# [rustra] ✓ Rust schema generation (x/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/Cargo.toml --package x --bin generate
+# [rustra] ⠋ Rust schema generation (x/generate)...
+# [rustra] ✓ Rust schema generation (x/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/Cargo.toml --package x --bin generate
+# [rustra] ⠋ Rust schema generation (x/generate)...
+# [rustra] ✓ Rust schema generation (x/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/Cargo.toml --package x --bin generate
+# [rustra] ⠋ Rust schema generation (x/generate)...
+# [rustra] ✓ Rust schema generation (x/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-drift-UZeOZn/proj/rustra.json
+# Subtest: codegen --format json reports drift:true when regeneration rewrites existing files
+ok 8 - codegen --format json reports drift:true when regeneration rewrites existing files
+  ---
+  duration_ms: 200.768417
+  type: 'test'
+  ...
+# Subtest: staleBinaryHint fires only on the (updated) marker and names cargo build + contract.mismatch
+ok 9 - staleBinaryHint fires only on the (updated) marker and names cargo build + contract.mismatch
+  ---
+  duration_ms: 1.080416
+  type: 'test'
+  ...
+# Subtest: codegen text mode prints the stale runtime binary hint only when regeneration drifts
+ok 10 - codegen text mode prints the stale runtime binary hint only when regeneration drifts
+  ---
+  duration_ms: 132.178542
+  type: 'test'
+  ...
+# Subtest: codegen text mode lists written files with (unchanged)/(updated) markers like generate
+ok 11 - codegen text mode lists written files with (unchanged)/(updated) markers like generate
+  ---
+  duration_ms: 72.09925
+  type: 'test'
+  ...
+# Subtest: uniffi-configured codegen spawns probe → cdylib build → bindgen and writes bindings
+ok 12 - uniffi-configured codegen spawns probe → cdylib build → bindgen and writes bindings
+  ---
+  duration_ms: 159.992584
+  type: 'test'
+  ...
+# Subtest: uniffi codegen --check only byte-compares uniffi_generated.rs and never builds
+ok 13 - uniffi codegen --check only byte-compares uniffi_generated.rs and never builds
+  ---
+  duration_ms: 224.092917
+  type: 'test'
+  ...
+# Subtest: check mode fails closed when the committed uniffi_generated.rs is absent
+ok 14 - check mode fails closed when the committed uniffi_generated.rs is absent
+  ---
+  duration_ms: 151.960541
+  type: 'test'
+  ...
+# bindgen exploded
+# Subtest: bindgen failure exits non-zero with the wrapped context
+ok 15 - bindgen failure exits non-zero with the wrapped context
+  ---
+  duration_ms: 88.424
+  type: 'test'
+  ...
+# Subtest: a missing cdylib after the build step is a clear fail-closed error
+ok 16 - a missing cdylib after the build step is a clear fail-closed error
+  ---
+  duration_ms: 34.6365
+  type: 'test'
+  ...
+# Subtest: projects without a uniffi section keep the pre-uniffi spawn sequence byte-for-byte
+ok 17 - projects without a uniffi section keep the pre-uniffi spawn sequence byte-for-byte
+  ---
+  duration_ms: 28.272375
+  type: 'test'
+  ...
+# Subtest: cli-uniffi helpers: dylib naming, output completeness, and drift comparison
+ok 18 - cli-uniffi helpers: dylib naming, output completeness, and drift comparison
+  ---
+  duration_ms: 3.825416
+  type: 'test'
+  ...
+# Subtest: config dev reloads paths from atomically replaced rustra.json and watches new sources
+ok 19 - config dev reloads paths from atomically replaced rustra.json and watches new sources
+  ---
+  duration_ms: 810.895584
+  type: 'test'
+  ...
+# Subtest: empty bindgen output cannot reuse old bindings and failure preserves the published tree
+ok 20 - empty bindgen output cannot reuse old bindings and failure preserves the published tree
+  ---
+  duration_ms: 545.328083
+  type: 'test'
+  ...
+# Subtest: --check-bindings detects actual Swift/Kotlin and extra-file drift without overwriting them
+ok 21 - --check-bindings detects actual Swift/Kotlin and extra-file drift without overwriting them
+  ---
+  duration_ms: 649.030875
+  type: 'test'
+  ...
+# Subtest: config dev does not treat its generated UniFFI Rust mirror as a new source change
+ok 22 - config dev does not treat its generated UniFFI Rust mirror as a new source change
+  ---
+  duration_ms: 1058.933458
+  type: 'test'
+  ...
+# Subtest: overlapping binding output is rejected before probe or any existing file changes
+ok 23 - overlapping binding output is rejected before probe or any existing file changes
+  ---
+  duration_ms: 29.970083
+  type: 'test'
+  ...
+# Subtest: bindings inside src do not trigger their own dev rebuild loop
+ok 24 - bindings inside src do not trigger their own dev rebuild loop
+  ---
+  duration_ms: 2633.304375
+  type: 'test'
+  ...
+# Subtest: ffi_format 7 gold — the envelope entry needs u64(7) and mutable-bytes(6+)
+ok 25 - ffi_format 7 gold — the envelope entry needs u64(7) and mutable-bytes(6+)
+  ---
+  duration_ms: 0.648083
+  type: 'test'
+  ...
+# Subtest: toScriptcTsType maps the manifest classes 1:1
+ok 26 - toScriptcTsType maps the manifest classes 1:1
+  ---
+  duration_ms: 0.160625
+  type: 'test'
+  ...
+# Subtest: resolveScriptcArchivePath follows the staticlib naming convention
+ok 27 - resolveScriptcArchivePath follows the staticlib naming convention
+  ---
+  duration_ms: 0.114
+  type: 'test'
+  ...
+# Subtest: ffi.json gold: ffi_format, function list, and library boundary
+ok 28 - ffi.json gold: ffi_format, function list, and library boundary
+  ---
+  duration_ms: 0.566333
+  type: 'test'
+  ...
+# Subtest: ffi.json gold: (ptr,len) pairs fold into single classes
+ok 29 - ffi.json gold: (ptr,len) pairs fold into single classes
+  ---
+  duration_ms: 0.214083
+  type: 'test'
+  ...
+# Subtest: ffi.json excludes out-pointer and callback symbols with documented reasons
+ok 30 - ffi.json excludes out-pointer and callback symbols with documented reasons
+  ---
+  duration_ms: 0.283166
+  type: 'test'
+  ...
+# Subtest: ffi.json serialization is stable and parses back to the manifest
+ok 31 - ffi.json serialization is stable and parses back to the manifest
+  ---
+  duration_ms: 0.360875
+  type: 'test'
+  ...
+# Subtest: declarations gold: signature-only TS for calculator schema
+ok 32 - declarations gold: signature-only TS for calculator schema
+  ---
+  duration_ms: 2.240625
+  type: 'test'
+  ...
+# Subtest: declarations record schemaVersion only when the schema carries one
+ok 33 - declarations record schemaVersion only when the schema carries one
+  ---
+  duration_ms: 0.468167
+  type: 'test'
+  ...
+# Subtest: SCRIPTC_MANIFEST_FILE and declarations file names are the committed contract
+ok 34 - SCRIPTC_MANIFEST_FILE and declarations file names are the committed contract
+  ---
+  duration_ms: 0.314167
+  type: 'test'
+  ...
+# Subtest: generation is byte-stable across runs (manifest gate parity)
+ok 35 - generation is byte-stable across runs (manifest gate parity)
+  ---
+  duration_ms: 0.511583
+  type: 'test'
+  ...
+# Subtest: empty or package-less schemas fail closed
+ok 36 - empty or package-less schemas fail closed
+  ---
+  duration_ms: 0.236708
+  type: 'test'
+  ...
+# Subtest: retained foreign callbacks have identity-paired release and omit native context from TS
+ok 37 - retained foreign callbacks have identity-paired release and omit native context from TS
+  ---
+  duration_ms: 0.119917
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-PpOCRm/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-PpOCRm/app
+#   bun install
+#   bun run start
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-PpOCRm/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-PpOCRm/app
+#   bun install
+#   bun run start
+# Subtest: runInit refuses to overwrite an existing scaffold and --force replaces it
+ok 38 - runInit refuses to overwrite an existing scaffold and --force replaces it
+  ---
+  duration_ms: 62.813042
+  type: 'test'
+  ...
+# Subtest: runInit does not treat --force-style unknown flags as positionals
+ok 39 - runInit does not treat --force-style unknown flags as positionals
+  ---
+  duration_ms: 0.728667
+  type: 'test'
+  ...
+# Subtest: runInit rejects zero or multiple project directories
+ok 40 - runInit rejects zero or multiple project directories
+  ---
+  duration_ms: 0.566875
+  type: 'test'
+  ...
+# Subtest: runInit --help exits without creating anything
+ok 41 - runInit --help exits without creating anything
+  ---
+  duration_ms: 0.322333
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-cq073L/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-cq073L/app
+#   bun install
+#   bun run start
+# Subtest: existing foreign files unrelated to the scaffold do not block init
+ok 42 - existing foreign files unrelated to the scaffold do not block init
+  ---
+  duration_ms: 8.02775
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-zGyF4t/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-zGyF4t/app
+#   bun install
+#   bun run start
+# Subtest: generated config carries a $schema reference to the shipped schema file
+ok 43 - generated config carries a $schema reference to the shipped schema file
+  ---
+  duration_ms: 8.371417
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-ECQuML/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-ECQuML/app
+#   bun install
+#   bun run start
+# Subtest: node-only detection emits only the node host section and passes full config validation
+ok 44 - node-only detection emits only the node host section and passes full config validation
+  ---
+  duration_ms: 12.585
+  type: 'test'
+  ...
+# Subtest: Bun scaffold template selects the FFI host, dependency and native crate entry
+ok 45 - Bun scaffold template selects the FFI host, dependency and native crate entry
+  ---
+  duration_ms: 0.376792
+  type: 'test'
+  ...
+# Subtest: Node and Bun scaffold templates offer setup/start and clean up the selected runtime
+ok 46 - Node and Bun scaffold templates offer setup/start and clean up the selected runtime
+  ---
+  duration_ms: 0.454959
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-bcRVkF/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: bun (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-bcRVkF/app
+#   bun install
+#   bun run start
+# Subtest: --host bun creates a validated Bun-only config and matching app entry
+ok 47 - --host bun creates a validated Bun-only config and matching app entry
+  ---
+  duration_ms: 8.378958
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-T8eRuH/apps/node:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-T8eRuH/apps/node
+#   bun install
+#   bun run start
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-T8eRuH/apps/bun:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: bun (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-T8eRuH/apps/bun
+#   bun install
+#   bun run start
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-T8eRuH/apps/react-native:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node, react-native (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-T8eRuH/apps/react-native
+#   bun install
+#   bun run setup
+# Subtest: init scaffolds remain standalone when nested inside another Cargo workspace
+ok 48 - init scaffolds remain standalone when nested inside another Cargo workspace
+  ---
+  duration_ms: 209.154083
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-UkjtyT/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node, react-native (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-UkjtyT/app
+#   bun install
+#   bun run setup
+# Subtest: --host react-native includes the reactNative section and passes full config validation
+ok 49 - --host react-native includes the reactNative section and passes full config validation
+  ---
+  duration_ms: 14.2215
+  type: 'test'
+  ...
+# Subtest: init rejects unknown --host values with the supported list
+ok 50 - init rejects unknown --host values with the supported list
+  ---
+  duration_ms: 0.545167
+  type: 'test'
+  ...
+# Subtest: unknown --host is a UsageError (exit-2 contract, closed-enum violation)
+ok 51 - unknown --host is a UsageError (exit-2 contract, closed-enum violation)
+  ---
+  duration_ms: 0.319209
+  type: 'test'
+  ...
+# Subtest: --host node suppresses a detected react-native host and says so
+ok 52 - --host node suppresses a detected react-native host and says so
+  ---
+  duration_ms: 48.080459
+  type: 'test'
+  ...
+# Subtest: Next steps reduce the first call to entering the project, installing and starting
+ok 53 - Next steps reduce the first call to entering the project, installing and starting
+  ---
+  duration_ms: 11.206666
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-yldmH5/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node, react-native (package.json)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-yldmH5/app
+#   bun install
+#   bun run setup
+# Subtest: react-native in the pre-existing package.json dependencies switches detection to RN
+ok 54 - react-native in the pre-existing package.json dependencies switches detection to RN
+  ---
+  duration_ms: 9.255083
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-wyAAJW/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node, react-native (package.json)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-wyAAJW/app
+#   bun install
+#   bun run setup
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-wyAAJW/plain:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-wyAAJW/plain
+#   bun install
+#   bun run start
+# Subtest: unscoped react-native dependency is detected and node-only deps are not
+ok 55 - unscoped react-native dependency is detected and node-only deps are not
+  ---
+  duration_ms: 23.043375
+  type: 'test'
+  ...
+# Subtest: pre-existing rustra.json still blocks init with the overwrite guidance
+ok 56 - pre-existing rustra.json still blocks init with the overwrite guidance
+  ---
+  duration_ms: 1.233542
+  type: 'test'
+  ...
+# Subtest: a missing schema file gets an actionable hint instead of a raw ENOENT
+ok 57 - a missing schema file gets an actionable hint instead of a raw ENOENT
+  ---
+  duration_ms: 7.162
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-Irlizu/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node, react-native (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-Irlizu/app
+#   bun install
+#   bun run setup
+# Subtest: RN scaffold passes the real codegen path — staticlib target exists and runGenerate succeeds
+ok 58 - RN scaffold passes the real codegen path — staticlib target exists and runGenerate succeeds
+  ---
+  duration_ms: 108.666708
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-u0s8Ga/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-u0s8Ga/app
+#   bun install
+#   bun run start
+# Subtest: node-only scaffold passes the real codegen path — lib target does not break node entries
+ok 59 - node-only scaffold passes the real codegen path — lib target does not break node entries
+  ---
+  duration_ms: 66.952542
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-yRGnTn/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-yRGnTn/app
+#   bun install
+#   bun run start
+# Subtest: every generated file carries the self-describing header exactly once
+ok 60 - every generated file carries the self-describing header exactly once
+  ---
+  duration_ms: 43.023
+  type: 'test'
+  ...
+# Created rustra project in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-6mYijz/app:
+#   Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+#   Config host sections: node, react-native (--host)
+# Next steps:
+#   cd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-init-6mYijz/app
+#   bun install
+#   bun run setup
+# Subtest: RN scaffold native entry registers its actual FFI package
+ok 61 - RN scaffold native entry registers its actual FFI package
+  ---
+  duration_ms: 742.448125
+  type: 'test'
+  ...
+# Subtest: Bun scaffold builds its native entry and executes the generated first echo
+ok 62 - Bun scaffold builds its native entry and executes the generated first echo
+  ---
+  duration_ms: 2328.134458
+  type: 'test'
+  ...
+# Subtest: formatCodegenJson renders the schemaVersion:1 report shape
+ok 63 - formatCodegenJson renders the schemaVersion:1 report shape
+  ---
+  duration_ms: 0.832334
+  type: 'test'
+  ...
+# Subtest: formatCodegenJson reports drift:true for rewritten files (write mode)
+ok 64 - formatCodegenJson reports drift:true for rewritten files (write mode)
+  ---
+  duration_ms: 0.089125
+  type: 'test'
+  ...
+# Subtest: formatExplainJson renders the schemaVersion:1 report shape
+ok 65 - formatExplainJson renders the schemaVersion:1 report shape
+  ---
+  duration_ms: 0.082917
+  type: 'test'
+  ...
+# Subtest: formatDiffJson renders the schemaVersion:1 report shape for a clean diff
+ok 66 - formatDiffJson renders the schemaVersion:1 report shape for a clean diff
+  ---
+  duration_ms: 0.588917
+  type: 'test'
+  ...
+# Subtest: formatDiffJson carries breaking changes verbatim with a clean:false flag
+ok 67 - formatDiffJson carries breaking changes verbatim with a clean:false flag
+  ---
+  duration_ms: 0.394917
+  type: 'test'
+  ...
+# Subtest: formatDiffJson carries eventRemoved and folded payload findings verbatim
+ok 68 - formatDiffJson carries eventRemoved and folded payload findings verbatim
+  ---
+  duration_ms: 0.357167
+  type: 'test'
+  ...
+# Subtest: formatDiffJson never leaks diagnoses into the schemaVersion:1 shape
+ok 69 - formatDiffJson never leaks diagnoses into the schemaVersion:1 shape
+  ---
+  duration_ms: 0.221333
+  type: 'test'
+  ...
+# Subtest: resolveScriptcOutDir resolves relative to the config directory
+ok 70 - resolveScriptcOutDir resolves relative to the config directory
+  ---
+  duration_ms: 0.487292
+  type: 'test'
+  ...
+# Subtest: resolveScriptcArchive override yields a manifest-relative forward-slash libraryRef
+ok 71 - resolveScriptcArchive override yields a manifest-relative forward-slash libraryRef
+  ---
+  duration_ms: 2.975416
+  type: 'test'
+  ...
+# Subtest: runScriptcStage writes manifest, source declarations and legacy declarations; checkScriptcStage accepts them
+ok 72 - runScriptcStage writes manifest, source declarations and legacy declarations; checkScriptcStage accepts them
+  ---
+  duration_ms: 6.422375
+  type: 'test'
+  ...
+# Subtest: checkScriptcStage fails closed on tampered and missing committed files
+ok 73 - checkScriptcStage fails closed on tampered and missing committed files
+  ---
+  duration_ms: 5.624458
+  type: 'test'
+  ...
+# Subtest: runScriptcStage refuses to write when the archive is absent (write mode only)
+ok 74 - runScriptcStage refuses to write when the archive is absent (write mode only)
+  ---
+  duration_ms: 3.266333
+  type: 'test'
+  ...
+# Subtest: setup is a real CLI command and reports the missing project config
+ok 75 - setup is a real CLI command and reports the missing project config
+  ---
+  duration_ms: 1.189958
+  type: 'test'
+  ...
+# [rustra] Checking setup tools...
+# [rustra] Generating the Rust contract and TypeScript calls...
+# [rustra] Setup complete — demo succeeded.
+# [rustra] Checking setup tools...
+# [rustra] Generating the Rust contract and TypeScript calls...
+# [rustra] Setup complete — demo succeeded.
+# Subtest: setup generates local workspaces before installing, builds before calling, and can be repeated
+ok 76 - setup generates local workspaces before installing, builds before calling, and can be repeated
+  ---
+  duration_ms: 51.191583
+  type: 'test'
+  ...
+# [rustra] Checking setup tools...
+# [rustra] Generating the Rust contract and TypeScript calls...
+# Subtest: failed build stops the first call and gives the same safe retry command
+ok 77 - failed build stops the first call and gives the same safe retry command
+  ---
+  duration_ms: 12.041333
+  type: 'test'
+  ...
+# Subtest: native-only projects reject --run before generation or install
+ok 78 - native-only projects reject --run before generation or install
+  ---
+  duration_ms: 4.768875
+  type: 'test'
+  ...
+# Subtest: setup refuses arbitrary package-manager executables before mutating files
+ok 79 - setup refuses arbitrary package-manager executables before mutating files
+  ---
+  duration_ms: 4.279125
+  type: 'test'
+  ...
+# [rustra] Checking setup tools...
+# [rustra] Generating the Rust contract and TypeScript calls...
+# [rustra] Rust contract, TypeScript calls and host Rust build are ready.
+# Native app steps:
+#   Launch the existing app
+# Subtest: a fresh RN adapter is installed before codegen, then its generated module is installed
+ok 80 - a fresh RN adapter is installed before codegen, then its generated module is installed
+  ---
+  duration_ms: 4.552958
+  type: 'test'
+  ...
+# Subtest: setup rebuilds a distinct runtime crate and deduplicates shared generator/runtime crates
+ok 81 - setup rebuilds a distinct runtime crate and deduplicates shared generator/runtime crates
+  ---
+  duration_ms: 97.967875
+  type: 'test'
+  ...
+# Subtest: core setup does not require mobile CMake or C++ tools before explicit native preparation
+ok 82 - core setup does not require mobile CMake or C++ tools before explicit native preparation
+  ---
+  duration_ms: 0.810458
+  type: 'test'
+  ...
+# Subtest: RN setup selects the same static library from a virtual workspace as codegen
+ok 83 - RN setup selects the same static library from a virtual workspace as codegen
+  ---
+  duration_ms: 121.071916
+  type: 'test'
+  ...
+# [rustra] Checking setup tools...
+# [rustra] Generating the Rust contract and TypeScript calls...
+# [rustra] Rust contract, TypeScript calls and host Rust build are ready.
+# Subtest: setup keeps the selected Cargo invocation directory for a separate RN core
+ok 84 - setup keeps the selected Cargo invocation directory for a separate RN core
+  ---
+  duration_ms: 4.785334
+  type: 'test'
+  ...
+# [rustra] Checking setup tools...
+# [rustra] Generating the Rust contract and TypeScript calls...
+# [rustra] Rust contract, TypeScript calls and host Rust build are ready.
+# Subtest: setup respects an existing package-manager lockfile when packageManager is omitted
+ok 85 - setup respects an existing package-manager lockfile when packageManager is omitted
+  ---
+  duration_ms: 9.557916
+  type: 'test'
+  ...
+# Subtest: explain lists every surface with source and stage
+ok 86 - explain lists every surface with source and stage
+  ---
+  duration_ms: 0.537958
+  type: 'test'
+  ...
+# Subtest: explain text mentions the single input and the regen command
+ok 87 - explain text mentions the single input and the regen command
+  ---
+  duration_ms: 0.23875
+  type: 'test'
+  ...
+# Subtest: explain honors config without cpp/rn sections
+ok 88 - explain honors config without cpp/rn sections
+  ---
+  duration_ms: 0.104083
+  type: 'test'
+  ...
+# Subtest: node.persistent is an additive boolean opt-in and preserves explicit runtime arguments
+ok 89 - node.persistent is an additive boolean opt-in and preserves explicit runtime arguments
+  ---
+  duration_ms: 18.282959
+  type: 'test'
+  ...
+# Subtest: wasm dev target without a reactNative section is an L2 error
+ok 90 - wasm dev target without a reactNative section is an L2 error
+  ---
+  duration_ms: 0.690334
+  type: 'test'
+  ...
+# Subtest: wasmer engine is rejected at L2 with wasm3 as the only allowed engine
+ok 91 - wasmer engine is rejected at L2 with wasm3 as the only allowed engine
+  ---
+  duration_ms: 0.875625
+  type: 'test'
+  ...
+# Subtest: parityGate under a native target is an L2 error
+ok 92 - parityGate under a native target is an L2 error
+  ---
+  duration_ms: 1.773417
+  type: 'test'
+  ...
+# Subtest: dev.wasm section under a native target is an L2 error
+ok 93 - dev.wasm section under a native target is an L2 error
+  ---
+  duration_ms: 1.720416
+  type: 'test'
+  ...
+# Subtest: inspector.onMismatch diagnose is accepted without devtools installed
+ok 94 - inspector.onMismatch diagnose is accepted without devtools installed
+  ---
+  duration_ms: 0.735208
+  type: 'test'
+  ...
+# Subtest: inspector.onMismatch hoge fails L1 listing the allowed values
+ok 95 - inspector.onMismatch hoge fails L1 listing the allowed values
+  ---
+  duration_ms: 0.816834
+  type: 'test'
+  ...
+# Subtest: a near-typo inspector.onMismatch value gets a did-you-mean suggestion
+ok 96 - a near-typo inspector.onMismatch value gets a did-you-mean suggestion
+  ---
+  duration_ms: 0.717375
+  type: 'test'
+  ...
+# Subtest: a non-string $schema value fails L1 like every other root key
+ok 97 - a non-string $schema value fails L1 like every other root key
+  ---
+  duration_ms: 1.26725
+  type: 'test'
+  ...
+# Subtest: an invalid dev.target value fails L1 with a did-you-mean suggestion
+ok 98 - an invalid dev.target value fails L1 with a did-you-mean suggestion
+  ---
+  duration_ms: 1.341042
+  type: 'test'
+  ...
+# Subtest: non-object new sections fail L1 at the object guard
+ok 99 - non-object new sections fail L1 at the object guard
+  ---
+  duration_ms: 2.982666
+  type: 'test'
+  ...
+# Subtest: a legacy config without dev/inspector sections loads exactly as before
+ok 100 - a legacy config without dev/inspector sections loads exactly as before
+  ---
+  duration_ms: 0.53775
+  type: 'test'
+  ...
+# Subtest: a dev.targt typo fails L1 closed before L2 runs
+ok 101 - a dev.targt typo fails L1 closed before L2 runs
+  ---
+  duration_ms: 0.529625
+  type: 'test'
+  ...
+# Subtest: multiple L2 violations are all collected and listed together
+ok 102 - multiple L2 violations are all collected and listed together
+  ---
+  duration_ms: 0.525417
+  type: 'test'
+  ...
+# Subtest: a complete wasm dev config with reactNative is accepted
+ok 103 - a complete wasm dev config with reactNative is accepted
+  ---
+  duration_ms: 0.58775
+  type: 'test'
+  ...
+# Subtest: uniffi section with only the required output is accepted and defaults stay unset
+ok 104 - uniffi section with only the required output is accepted and defaults stay unset
+  ---
+  duration_ms: 0.418458
+  type: 'test'
+  ...
+# Subtest: a complete uniffi section with srcOut and dylibProfile is accepted
+ok 105 - a complete uniffi section with srcOut and dylibProfile is accepted
+  ---
+  duration_ms: 0.677875
+  type: 'test'
+  ...
+# Subtest: uniffi fail-closed shapes are rejected with the offending key in the message
+ok 106 - uniffi fail-closed shapes are rejected with the offending key in the message
+  ---
+  duration_ms: 3.847416
+  type: 'test'
+  ...
+# Subtest: uniffi.dylibProfile outside debug/release fails L1 listing the allowed values
+ok 107 - uniffi.dylibProfile outside debug/release fails L1 listing the allowed values
+  ---
+  duration_ms: 1.616208
+  type: 'test'
+  ...
+# Subtest: a config without a uniffi section loads exactly as before (feature switch off)
+ok 108 - a config without a uniffi section loads exactly as before (feature switch off)
+  ---
+  duration_ms: 1.56825
+  type: 'test'
+  ...
+# Subtest: a missing config file points at rustra init instead of a raw ENOENT
+ok 109 - a missing config file points at rustra init instead of a raw ENOENT
+  ---
+  duration_ms: 0.434625
+  type: 'test'
+  ...
+# Subtest: rustra.schema.json stays in sync with the config field lists
+ok 110 - rustra.schema.json stays in sync with the config field lists
+  ---
+  duration_ms: 1.727958
+  type: 'test'
+  ...
+# Subtest: RN codegen registers modules at the owning monorepo root (covered=true)
+ok 111 - RN codegen registers modules at the owning monorepo root (covered=true)
+  ---
+  duration_ms: 21.383
+  type: 'test'
+  ...
+# Subtest: RN codegen registers modules at the owning monorepo root (covered=false)
+ok 112 - RN codegen registers modules at the owning monorepo root (covered=false)
+  ---
+  duration_ms: 7.487375
+  type: 'test'
+  ...
+# Subtest: standalone RN example does not modify an unrelated ancestor workspace
+ok 113 - standalone RN example does not modify an unrelated ancestor workspace
+  ---
+  duration_ms: 21.439042
+  type: 'test'
+  ...
+# Subtest: monorepo ownership respects brace globs and exclusions (excluded=true)
+ok 114 - monorepo ownership respects brace globs and exclusions (excluded=true)
+  ---
+  duration_ms: 13.256625
+  type: 'test'
+  ...
+# Subtest: monorepo ownership respects brace globs and exclusions (excluded=false)
+ok 115 - monorepo ownership respects brace globs and exclusions (excluded=false)
+  ---
+  duration_ms: 6.52725
+  type: 'test'
+  ...
+# Subtest: codegen preserves compatible 0.10.0 pins and independent Tauri version
+ok 116 - codegen preserves compatible 0.10.0 pins and independent Tauri version
+  ---
+  duration_ms: 3.067208
+  type: 'test'
+  ...
+# Subtest: codegen preserves compatible 0.10.2 pins and independent Tauri version
+ok 117 - codegen preserves compatible 0.10.2 pins and independent Tauri version
+  ---
+  duration_ms: 3.322625
+  type: 'test'
+  ...
+# Subtest: codegen preserves compatible ^0.10.0 pins and independent Tauri version
+ok 118 - codegen preserves compatible ^0.10.0 pins and independent Tauri version
+  ---
+  duration_ms: 1.873416
+  type: 'test'
+  ...
+# Subtest: codegen refuses incompatible or unbounded dependency 0.9.9 without rewriting it
+ok 119 - codegen refuses incompatible or unbounded dependency 0.9.9 without rewriting it
+  ---
+  duration_ms: 2.219584
+  type: 'test'
+  ...
+# Subtest: codegen refuses incompatible or unbounded dependency 0.11.0 without rewriting it
+ok 120 - codegen refuses incompatible or unbounded dependency 0.11.0 without rewriting it
+  ---
+  duration_ms: 4.365
+  type: 'test'
+  ...
+# Subtest: codegen refuses incompatible or unbounded dependency 0.10.1-beta.1 without rewriting it
+ok 121 - codegen refuses incompatible or unbounded dependency 0.10.1-beta.1 without rewriting it
+  ---
+  duration_ms: 6.235917
+  type: 'test'
+  ...
+# Subtest: codegen refuses incompatible or unbounded dependency * without rewriting it
+ok 122 - codegen refuses incompatible or unbounded dependency * without rewriting it
+  ---
+  duration_ms: 6.588917
+  type: 'test'
+  ...
+# Subtest: codegen refuses incompatible or unbounded dependency latest without rewriting it
+ok 123 - codegen refuses incompatible or unbounded dependency latest without rewriting it
+  ---
+  duration_ms: 6.680208
+  type: 'test'
+  ...
+# Subtest: missing host dependencies use their independent ranges
+ok 124 - missing host dependencies use their independent ranges
+  ---
+  duration_ms: 3.513834
+  type: 'test'
+  ...
+# Subtest: CLI patch versions do not require an unpublished Node adapter patch
+ok 125 - CLI patch versions do not require an unpublished Node adapter patch
+  ---
+  duration_ms: 0.3525
+  type: 'test'
+  ...
+# [rustra] ⠋ dylib core build (x)...
+# Subtest: Cargo progress stays with the output owner captured at command creation
+ok 126 - Cargo progress stays with the output owner captured at command creation
+  ---
+  duration_ms: 19.9825
+  type: 'test'
+  ...
+# [rustra] ✓ dylib core build (x) done in 0.0s
+# [rustra] ⠋ dylib core build (x)...
+# Subtest: buildDylibCore returns the cdylib artifact cargo reported and pins the JSON build flags
+ok 127 - buildDylibCore returns the cdylib artifact cargo reported and pins the JSON build flags
+  ---
+  duration_ms: 28.197208
+  type: 'test'
+  ...
+# [rustra] ✓ dylib core build (x) done in 0.0s
+# [rustra] ⠋ dylib core build (x)...
+# Subtest: buildDylibCore passes -p when rustPackage is resolved
+ok 128 - buildDylibCore passes -p when rustPackage is resolved
+  ---
+  duration_ms: 21.588709
+  type: 'test'
+  ...
+# Subtest: pickCdylibArtifact prefers the freshest message over stale artifacts
+ok 129 - pickCdylibArtifact prefers the freshest message over stale artifacts
+  ---
+  duration_ms: 0.242667
+  type: 'test'
+  ...
+# [rustra] ✓ dylib core build (x) done in 0.0s
+# Subtest: buildDylibCore fails loudly when no cdylib artifact message appears
+ok 130 - buildDylibCore fails loudly when no cdylib artifact message appears
+  ---
+  duration_ms: 18.305666
+  type: 'test'
+  ...
+# fake dylib build failure
+# Subtest: buildDylibCore wraps cargo build failures with the package and manifest
+ok 131 - buildDylibCore wraps cargo build failures with the package and manifest
+  ---
+  duration_ms: 14.713208
+  type: 'test'
+  ...
+# Subtest: liveArtifactPath appends -hot-live in the artifact directory for each dylib extension
+ok 132 - liveArtifactPath appends -hot-live in the artifact directory for each dylib extension
+  ---
+  duration_ms: 0.244042
+  type: 'test'
+  ...
+# Subtest: publishGatedArtifact publishes identical bytes and leaves no tmp behind
+ok 133 - publishGatedArtifact publishes identical bytes and leaves no tmp behind
+  ---
+  duration_ms: 0.968625
+  type: 'test'
+  ...
+# Subtest: publishGatedArtifact overwrites a pre-existing live file
+ok 134 - publishGatedArtifact overwrites a pre-existing live file
+  ---
+  duration_ms: 1.046958
+  type: 'test'
+  ...
+# Subtest: publishGatedArtifact fails loudly, cleans the tmp, and leaves the live file untouched
+ok 135 - publishGatedArtifact fails loudly, cleans the tmp, and leaves the live file untouched
+  ---
+  duration_ms: 0.931333
+  type: 'test'
+  ...
+# Subtest: readDevConfig fills the dylib parityGate default when the section is omitted
+ok 136 - readDevConfig fills the dylib parityGate default when the section is omitted
+  ---
+  duration_ms: 1.315792
+  type: 'test'
+  ...
+# Subtest: readDevConfig honors an explicit dylib parityGate false
+ok 137 - readDevConfig honors an explicit dylib parityGate false
+  ---
+  duration_ms: 0.79825
+  type: 'test'
+  ...
+# Subtest: readDevConfig resolves devDylib from reactNative first, then codegen, then the codegen manifest
+ok 138 - readDevConfig resolves devDylib from reactNative first, then codegen, then the codegen manifest
+  ---
+  duration_ms: 1.798125
+  type: 'test'
+  ...
+# Subtest: readDevConfig leaves devDylib and the dylib section undefined for other targets
+ok 139 - readDevConfig leaves devDylib and the dylib section undefined for other targets
+  ---
+  duration_ms: 0.933958
+  type: 'test'
+  ...
+# Subtest: readDevConfig rejects a dylib section outside the dylib target
+ok 140 - readDevConfig rejects a dylib section outside the dylib target
+  ---
+  duration_ms: 1.151875
+  type: 'test'
+  ...
+# Subtest: dev inputs resolve relative Cargo dep-info from config basedir
+ok 141 - dev inputs resolve relative Cargo dep-info from config basedir
+  ---
+  duration_ms: 236.061
+  type: 'test'
+  ...
+# Subtest: dev inputs resolve relative Cargo dep-info from environment basedir
+ok 142 - dev inputs resolve relative Cargo dep-info from environment basedir
+  ---
+  duration_ms: 187.099708
+  type: 'test'
+  ...
+# Subtest: dev inputs exclude custom Cargo output directories under a root-level library
+ok 143 - dev inputs exclude custom Cargo output directories under a root-level library
+  ---
+  duration_ms: 37.8485
+  type: 'test'
+  ...
+# Subtest: dev inputs observe creation of rust-toolchain in the invocation ancestry
+ok 144 - dev inputs observe creation of rust-toolchain in the invocation ancestry
+  ---
+  duration_ms: 289.220542
+  type: 'test'
+  ...
+# Subtest: dev inputs observe creation of rust-toolchain.toml in the invocation ancestry
+ok 145 - dev inputs observe creation of rust-toolchain.toml in the invocation ancestry
+  ---
+  duration_ms: 290.561958
+  type: 'test'
+  ...
+# Subtest: dev inputs preserve Rust sources when Cargo target-dir shares the project root
+ok 146 - dev inputs preserve Rust sources when Cargo target-dir shares the project root
+  ---
+  duration_ms: 1184.548917
+  type: 'test'
+  ...
+# Subtest: dev inputs protect engine sources from another producer sharing their target directory
+ok 147 - dev inputs protect engine sources from another producer sharing their target directory
+  ---
+  duration_ms: 1063.951333
+  type: 'test'
+  ...
+# Subtest: dev input resolution preserves two invocation cwd contexts for the same manifest
+ok 148 - dev input resolution preserves two invocation cwd contexts for the same manifest
+  ---
+  duration_ms: 104.377125
+  type: 'test'
+  ...
+# Subtest: dev inputs follow compiler and build-script inputs outside the source tree
+ok 149 - dev inputs follow compiler and build-script inputs outside the source tree
+  ---
+  duration_ms: 329.556958
+  type: 'test'
+  ...
+# Subtest: dev fingerprint excludes owned generated trees and files without hiding source edits
+ok 150 - dev fingerprint excludes owned generated trees and files without hiding source edits
+  ---
+  duration_ms: 3.457125
+  type: 'test'
+  ...
+# Subtest: dev fingerprint follows a symlinked source root like its watcher
+ok 151 - dev fingerprint follows a symlinked source root like its watcher
+  ---
+  duration_ms: 1.081292
+  type: 'test'
+  ...
+# Subtest: dev inputs include transitive local dependencies, custom targets and workspace files
+ok 152 - dev inputs include transitive local dependencies, custom targets and workspace files
+  ---
+  duration_ms: 142.3455
+  type: 'test'
+  ...
+# Subtest: rustInputFingerprint is deterministic and ignores mtime-only changes
+ok 153 - rustInputFingerprint is deterministic and ignores mtime-only changes
+  ---
+  duration_ms: 2.361792
+  type: 'test'
+  ...
+# Subtest: rustInputFingerprint walks nested source trees
+ok 154 - rustInputFingerprint walks nested source trees
+  ---
+  duration_ms: 2.000875
+  type: 'test'
+  ...
+# Subtest: all five schema-contamination edits change the fingerprint
+ok 155 - all five schema-contamination edits change the fingerprint
+  ---
+  duration_ms: 4.771458
+  type: 'test'
+  ...
+# Subtest: rustInputFingerprint covers Cargo.toml and Cargo.lock
+ok 156 - rustInputFingerprint covers Cargo.toml and Cargo.lock
+  ---
+  duration_ms: 2.628375
+  type: 'test'
+  ...
+# Subtest: rustInputFingerprint excludes target, node_modules, and .git at any depth
+ok 157 - rustInputFingerprint excludes target, node_modules, and .git at any depth
+  ---
+  duration_ms: 2.990041
+  type: 'test'
+  ...
+# Subtest: rustInputFingerprint hashes symlink entries without following them
+ok 158 - rustInputFingerprint hashes symlink entries without following them
+  ---
+  duration_ms: 2.224625
+  type: 'test'
+  ...
+# Subtest: rustInputFingerprint throws on uncertain filesystem state instead of guessing
+ok 159 - rustInputFingerprint throws on uncertain filesystem state instead of guessing
+  ---
+  duration_ms: 1.646625
+  type: 'test'
+  ...
+# Subtest: dev excludes only recorded files, including native outputs outside the TS directory
+ok 160 - dev excludes only recorded files, including native outputs outside the TS directory
+  ---
+  duration_ms: 9.76175
+  type: 'test'
+  ...
+# Subtest: dev preserves unrecorded files when the ownership manifest is missing
+ok 161 - dev preserves unrecorded files when the ownership manifest is missing
+  ---
+  duration_ms: 1.729375
+  type: 'test'
+  ...
+# Subtest: dev preserves unrecorded files when the ownership manifest is malformed
+ok 162 - dev preserves unrecorded files when the ownership manifest is malformed
+  ---
+  duration_ms: 1.1335
+  type: 'test'
+  ...
+# Subtest: dev preserves unrecorded files when the ownership manifest is invalid file ownership
+ok 163 - dev preserves unrecorded files when the ownership manifest is invalid file ownership
+  ---
+  duration_ms: 1.769958
+  type: 'test'
+  ...
+# Subtest: dev preserves unrecorded files when the ownership manifest is directory ownership
+ok 164 - dev preserves unrecorded files when the ownership manifest is directory ownership
+  ---
+  duration_ms: 1.471792
+  type: 'test'
+  ...
+# [dev] initial → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generated:
+#   types.ts
+#   commands.ts
+#   contract.ts
+#   frame-codecs.ts
+#   frame-registry.ts
+#   node.ts
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:42 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generator and /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json for changes...
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   node.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:42 PM regenerated
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.2s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   node.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# runtime compilation failed
+# [rustra] ✗ Dev runtime (runtime) failed in 0.1s
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   node.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.1s
+# [dev] 1:45:44 PM regenerated
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.1s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-ldPP8s/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   node.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:44 PM regenerated
+# [dev] initial → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# Subtest: dev rebuilds a separate node producer and suppresses reload until runtime recovery
+ok 165 - dev rebuilds a separate node producer and suppresses reload until runtime recovery
+  ---
+  duration_ms: 2950.306042
+  type: 'test'
+  ...
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generated:
+#   types.ts
+#   commands.ts
+#   contract.ts
+#   frame-codecs.ts
+#   frame-registry.ts
+#   bun.ts
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:45 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generator and /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json for changes...
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.1s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   bun.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.1s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:45 PM regenerated
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   bun.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.1s
+# [rustra] ⠋ Dev runtime (runtime)...
+# runtime compilation failed
+# [rustra] ✗ Dev runtime (runtime) failed in 0.0s
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   bun.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:46 PM regenerated
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generator/Cargo.toml --package generator --bin generate
+# [rustra] ⠋ Rust schema generation (generator/generate)...
+# [rustra] ✓ Rust schema generation (generator/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-runtime-Rd2hgX/generated:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+#   bun.ts (unchanged)
+# [rustra] ⠋ Dev runtime (generator)...
+# [rustra] ✓ Dev runtime (generator) done in 0.0s
+# [rustra] ⠋ Dev runtime (runtime)...
+# [rustra] ✓ Dev runtime (runtime) done in 0.0s
+# [dev] 1:45:47 PM regenerated
+# Subtest: dev rebuilds a separate bun producer and suppresses reload until runtime recovery
+ok 166 - dev rebuilds a separate bun producer and suppresses reload until runtime recovery
+  ---
+  duration_ms: 2521.539083
+  type: 'test'
+  ...
+# [dev] initial → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/Cargo.toml --package app --bin generate
+# [rustra] ⠋ Rust schema generation (app/generate)...
+# [rustra] ✓ Rust schema generation (app/generate) done in 0.0s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/src:
+#   types.ts
+#   commands.ts
+#   contract.ts
+#   frame-codecs.ts
+#   frame-registry.ts
+# [dev] 1:45:41 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project and /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/rustra.json for changes...
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/rustra.json
+# [rustra] Rust schema: cargo run --manifest-path /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/Cargo.toml --package app --bin generate
+# [rustra] ⠋ Rust schema generation (app/generate)...
+# [rustra] ✓ Rust schema generation (app/generate) done in 0.1s
+# [rustra] TypeScript/C++: generate --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/rustra.json
+# Generated TypeScript files in /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/src:
+#   types.ts (unchanged)
+#   commands.ts (unchanged)
+#   contract.ts (unchanged)
+#   frame-codecs.ts (unchanged)
+#   frame-registry.ts (unchanged)
+# [dev] 1:45:43 PM regenerated
+# [dev] Rust change → codegen --config /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-owned-output-gEbXiI/project/rustra.json
+# [dev] rust inputs unchanged — skipping cargo stage (fingerprint match)
+# [dev] 1:45:44 PM regenerated
+# Subtest: config dev preserves handwritten Rust beside manifest-owned output in src
+ok 167 - config dev preserves handwritten Rust beside manifest-owned output in src
+  ---
+  duration_ms: 2848.9715
+  type: 'test'
+  ...
+# Subtest: runConfigDev parity wiring: drifted codegen is rejected loudly without emitting reload
+ok 168 - runConfigDev parity wiring: drifted codegen is rejected loudly without emitting reload
+  ---
+  duration_ms: 2916.909584
+  type: 'test'
+  ...
+# Subtest: runConfigDev wasm target builds the wasm32 engine artifact and still reloads
+ok 169 - runConfigDev wasm target builds the wasm32 engine artifact and still reloads
+  ---
+  duration_ms: 903.185958
+  type: 'test'
+  ...
+# fake wasm build failure
+# Subtest: runConfigDev wasm target suppresses reload when the wasm32 build fails
+ok 170 - runConfigDev wasm target suppresses reload when the wasm32 build fails
+  ---
+  duration_ms: 411.964833
+  type: 'test'
+  ...
+# Subtest: runConfigDev wasm target fails loudly when the engine crate has no cdylib target
+ok 171 - runConfigDev wasm target fails loudly when the engine crate has no cdylib target
+  ---
+  duration_ms: 424.351583
+  type: 'test'
+  ...
+# Subtest: runConfigDev wasm target derives the artifact name from the lib target, not the package
+ok 172 - runConfigDev wasm target derives the artifact name from the lib target, not the package
+  ---
+  duration_ms: 594.819834
+  type: 'test'
+  ...
+# Subtest: runConfigDev wasm target fails closed when cargo succeeds but the artifact is missing
+ok 173 - runConfigDev wasm target fails closed when cargo succeeds but the artifact is missing
+  ---
+  duration_ms: 369.796958
+  type: 'test'
+  ...
+# Subtest: dispose drains a pending config read before its project can be removed
+ok 174 - dispose drains a pending config read before its project can be removed
+  ---
+  duration_ms: 463.98375
+  type: 'test'
+  ...
+# owned Cargo stopped
+# Subtest: dispose cancels the owned Cargo run before project cleanup
+ok 175 - dispose cancels the owned Cargo run before project cleanup
+  ---
+  duration_ms: 570.91075
+  type: 'test'
+  ...
+# owned Cargo stopped
+# Subtest: dispose cancels the owned Cargo build before project cleanup
+ok 176 - dispose cancels the owned Cargo build before project cleanup
+  ---
+  duration_ms: 570.237291
+  type: 'test'
+  ...
+# Subtest: disposing while parity verification is pending prevents publication and watcher revival
+ok 177 - disposing while parity verification is pending prevents publication and watcher revival
+  ---
+  duration_ms: 828.379125
+  type: 'test'
+  ...
+# Subtest: runConfigDev dylib target builds the cdylib core, announces RUSTRA_HOT_CORE, and reloads
+ok 178 - runConfigDev dylib target builds the cdylib core, announces RUSTRA_HOT_CORE, and reloads
+  ---
+  duration_ms: 564.601916
+  type: 'test'
+  ...
+# Subtest: runConfigDev dylib target rejects a drifted contract without emitting reload
+ok 179 - runConfigDev dylib target rejects a drifted contract without emitting reload
+  ---
+  duration_ms: 866.140583
+  type: 'test'
+  ...
+# Subtest: runConfigDev dylib target re-arms past a stale startup schema instead of a forced first rejection
+ok 180 - runConfigDev dylib target re-arms past a stale startup schema instead of a forced first rejection
+  ---
+  duration_ms: 616.492958
+  type: 'test'
+  ...
+# Subtest: runConfigDev dylib target publishes the new core once the re-armed baseline accepts the settled state
+ok 181 - runConfigDev dylib target publishes the new core once the re-armed baseline accepts the settled state
+  ---
+  duration_ms: 1381.268583
+  type: 'test'
+  ...
+# fake dylib build failure
+# Subtest: runConfigDev dylib target leaves no live artifact when the gate rejects before the first publish
+ok 182 - runConfigDev dylib target leaves no live artifact when the gate rejects before the first publish
+  ---
+  duration_ms: 847.199375
+  type: 'test'
+  ...
+# Subtest: runConfigDev dylib target fails loudly when the crate declares no cdylib
+ok 183 - runConfigDev dylib target fails loudly when the crate declares no cdylib
+  ---
+  duration_ms: 352.87825
+  type: 'test'
+  ...
+# Subtest: runConfigDev rebuilds after a build script edit
+ok 184 - runConfigDev rebuilds after a build script edit
+  ---
+  duration_ms: 578.190417
+  type: 'test'
+  ...
+# Subtest: runConfigDev rebuilds after a workspace lock edit
+ok 185 - runConfigDev rebuilds after a workspace lock edit
+  ---
+  duration_ms: 582.93625
+  type: 'test'
+  ...
+# Subtest: runConfigDev restores an externally changed schema before reloading
+ok 186 - runConfigDev restores an externally changed schema before reloading
+  ---
+  duration_ms: 582.754625
+  type: 'test'
+  ...
+# Subtest: runConfigDev skips the cargo stage when a trigger fires with byte-identical rust inputs
+ok 187 - runConfigDev skips the cargo stage when a trigger fires with byte-identical rust inputs
+  ---
+  duration_ms: 762.626791
+  type: 'test'
+  ...
+# Subtest: runConfigDev reruns the full pipeline when a schema-relevant change dirties the rust inputs
+ok 188 - runConfigDev reruns the full pipeline when a schema-relevant change dirties the rust inputs
+  ---
+  duration_ms: 1287.936542
+  type: 'test'
+  ...
+# Subtest: runConfigDev reruns the full pipeline when the generated schema is missing despite a fingerprint match
+ok 189 - runConfigDev reruns the full pipeline when the generated schema is missing despite a fingerprint match
+  ---
+  duration_ms: 884.698292
+  type: 'test'
+  ...
+# [dev] initial → codegen
+# Subtest: parseDevArgs parses backend dir and app dir
+ok 190 - parseDevArgs parses backend dir and app dir
+  ---
+  duration_ms: 0.672584
+  type: 'test'
+  ...
+# Subtest: parseDevArgs accepts config mode without requiring legacy directories
+ok 191 - parseDevArgs accepts config mode without requiring legacy directories
+  ---
+  duration_ms: 0.152917
+  type: 'test'
+  ...
+# Subtest: parseDevArgs defaults to conventional layout
+ok 192 - parseDevArgs defaults to conventional layout
+  ---
+  duration_ms: 0.057458
+  type: 'test'
+  ...
+# Subtest: parseDevArgs reports the help flag instead of returning silent defaults
+ok 193 - parseDevArgs reports the help flag instead of returning silent defaults
+  ---
+  duration_ms: 0.132125
+  type: 'test'
+  ...
+# Subtest: runDev --help returns a dummy handle instead of entering the watch loop
+ok 194 - runDev --help returns a dummy handle instead of entering the watch loop
+  ---
+  duration_ms: 0.103625
+  type: 'test'
+  ...
+# Subtest: runDev fails fast instead of silently watching a missing layout
+ok 195 - runDev fails fast instead of silently watching a missing layout
+  ---
+  duration_ms: 1.387916
+  type: 'test'
+  ...
+# Subtest: runDev enables incremental compilation for its cargo spawns unless the user set it
+ok 196 - runDev enables incremental compilation for its cargo spawns unless the user set it
+  ---
+  duration_ms: 1.023334
+  type: 'test'
+  ...
+# error: could not find `Cargo.toml` in `/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-reload-TrPySP/backend` or any parent directory
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-dev-reload-TrPySP/backend for changes...
+# Subtest: runDev suppresses the reload hook when regeneration fails
+ok 197 - runDev suppresses the reload hook when regeneration fails
+  ---
+  duration_ms: 70.665959
+  type: 'test'
+  ...
+# Subtest: createWatchLoop does not fire reload hooks when shouldRun skips the perform
+ok 198 - createWatchLoop does not fire reload hooks when shouldRun skips the perform
+  ---
+  duration_ms: 0.379209
+  type: 'test'
+  ...
+# Subtest: runDev logs "clean — nothing to do" and skips codegen on an up-to-date tree
+ok 199 - runDev logs "clean — nothing to do" and skips codegen on an up-to-date tree
+  ---
+  duration_ms: 5.653916
+  type: 'test'
+  ...
+# Subtest: readDevConfig exposes wasm dev settings including parityGate default
+ok 200 - readDevConfig exposes wasm dev settings including parityGate default
+  ---
+  duration_ms: 2.024083
+  type: 'test'
+  ...
+# Subtest: readDevConfig honors an explicit parityGate false and native default
+ok 201 - readDevConfig honors an explicit parityGate false and native default
+  ---
+  duration_ms: 1.286
+  type: 'test'
+  ...
+# Subtest: readDevConfig fills the parityGate default when target=wasm omits the wasm section
+ok 202 - readDevConfig fills the parityGate default when target=wasm omits the wasm section
+  ---
+  duration_ms: 0.791042
+  type: 'test'
+  ...
+# Subtest: readDevConfig resolves devWasm from reactNative first, then codegen, then the codegen manifest
+ok 203 - readDevConfig resolves devWasm from reactNative first, then codegen, then the codegen manifest
+  ---
+  duration_ms: 4.258417
+  type: 'test'
+  ...
+# Subtest: readDevConfig leaves devWasm undefined for the native target
+ok 204 - readDevConfig leaves devWasm undefined for the native target
+  ---
+  duration_ms: 1.01525
+  type: 'test'
+  ...
+# Subtest: createWatchLoop parity orchestration rejects a drifted reload and keeps the old engine state
+ok 205 - createWatchLoop parity orchestration rejects a drifted reload and keeps the old engine state
+  ---
+  duration_ms: 1.23125
+  type: 'test'
+  ...
+# Subtest: readDevConfig rejects a config without a Cargo manifest
+ok 206 - readDevConfig rejects a config without a Cargo manifest
+  ---
+  duration_ms: 0.817208
+  type: 'test'
+  ...
+# Subtest: readDevConfig rejects unsafe path values before resolving them
+ok 207 - readDevConfig rejects unsafe path values before resolving them
+  ---
+  duration_ms: 0.576334
+  type: 'test'
+  ...
+# Subtest: planPipeline reports which stages are dirty after a rust-only change
+ok 208 - planPipeline reports which stages are dirty after a rust-only change
+  ---
+  duration_ms: 0.057458
+  type: 'test'
+  ...
+# Subtest: planPipeline skips rust bin when only codecs are stale
+ok 209 - planPipeline skips rust bin when only codecs are stale
+  ---
+  duration_ms: 0.042917
+  type: 'test'
+  ...
+# Subtest: detectDirty: rust src newer than schema.json → rustNewerThanSchema
+ok 210 - detectDirty: rust src newer than schema.json → rustNewerThanSchema
+  ---
+  duration_ms: 1.669292
+  type: 'test'
+  ...
+# Subtest: detectDirty: schema newer → not dirty (rust)
+ok 211 - detectDirty: schema newer → not dirty (rust)
+  ---
+  duration_ms: 1.49875
+  type: 'test'
+  ...
+# Subtest: runOnce executes dirty stages in order and skips clean ones
+ok 212 - runOnce executes dirty stages in order and skips clean ones
+  ---
+  duration_ms: 0.161375
+  type: 'test'
+  ...
+# Subtest: createWatchLoop coalesces changes while a run is in flight
+ok 213 - createWatchLoop coalesces changes while a run is in flight
+  ---
+  duration_ms: 8.8295
+  type: 'test'
+  ...
+# Subtest: createWatchLoop fires reload hooks after a successful perform
+ok 214 - createWatchLoop fires reload hooks after a successful perform
+  ---
+  duration_ms: 0.233625
+  type: 'test'
+  ...
+# Subtest: createWatchLoop reload hook errors are logged and do not break the loop
+ok 215 - createWatchLoop reload hook errors are logged and do not break the loop
+  ---
+  duration_ms: 0.267708
+  type: 'test'
+  ...
+# Subtest: Rust 1.88 satisfies the MSRV and Rust 1.87 fails
+ok 216 - Rust 1.88 satisfies the MSRV and Rust 1.87 fails
+  ---
+  duration_ms: 1.049375
+  type: 'test'
+  ...
+# Subtest: strict mode promotes warnings to a failing exit code
+ok 217 - strict mode promotes warnings to a failing exit code
+  ---
+  duration_ms: 0.177125
+  type: 'test'
+  ...
+# Subtest: non-required failures do not fail the doctor command
+ok 218 - non-required failures do not fail the doctor command
+  ---
+  duration_ms: 0.056583
+  type: 'test'
+  ...
+# Subtest: doctor probes identical native commands once per report
+ok 219 - doctor probes identical native commands once per report
+  ---
+  duration_ms: 2.649708
+  type: 'test'
+  ...
+# Subtest: async doctor prefetches independent probes concurrently
+ok 220 - async doctor prefetches independent probes concurrently
+  ---
+  duration_ms: 2.042667
+  type: 'test'
+  ...
+# Subtest: Node/Bun-only config does not require RN platform tools
+ok 221 - Node/Bun-only config does not require RN platform tools
+  ---
+  duration_ms: 1.895333
+  type: 'test'
+  ...
+# Subtest: missing Android NDK reports the pinned version and an actionable fix
+ok 222 - missing Android NDK reports the pinned version and an actionable fix
+  ---
+  duration_ms: 1.209667
+  type: 'test'
+  ...
+# Subtest: doctor formatters expose stable JSON and readable fixes
+ok 223 - doctor formatters expose stable JSON and readable fixes
+  ---
+  duration_ms: 0.243125
+  type: 'test'
+  ...
+# Subtest: doctor args default to rustra.json and text output
+ok 224 - doctor args default to rustra.json and text output
+  ---
+  duration_ms: 1.453709
+  type: 'test'
+  ...
+# Subtest: Node/Bun-only doctor stays usable without C++ or CMake
+ok 225 - Node/Bun-only doctor stays usable without C++ or CMake
+  ---
+  duration_ms: 3.063792
+  type: 'test'
+  ...
+# Subtest: configured C++ output keeps compiler failure without assuming a CMake build
+ok 226 - configured C++ output keeps compiler failure without assuming a CMake build
+  ---
+  duration_ms: 2.431041
+  type: 'test'
+  ...
+# Subtest: doctor rejects installed JavaScript runtimes below the advertised minimums
+ok 227 - doctor rejects installed JavaScript runtimes below the advertised minimums
+  ---
+  duration_ms: 3.265875
+  type: 'test'
+  ...
+# Subtest: the Node adapter remains usable with a compatible Bun fallback
+ok 228 - the Node adapter remains usable with a compatible Bun fallback
+  ---
+  duration_ms: 3.193334
+  type: 'test'
+  ...
+# Subtest: a compatible Node cannot hide an incompatible configured Bun runtime
+ok 229 - a compatible Node cannot hide an incompatible configured Bun runtime
+  ---
+  duration_ms: 2.241958
+  type: 'test'
+  ...
+# Subtest: multi-section config collects a matrix row for every host section
+ok 230 - multi-section config collects a matrix row for every host section
+  ---
+  duration_ms: 3.141833
+  type: 'test'
+  ...
+# Subtest: a red section fails the run without aborting the other sections
+ok 231 - a red section fails the run without aborting the other sections
+  ---
+  duration_ms: 3.477417
+  type: 'test'
+  ...
+# Subtest: sections referencing different Rust manifests emit one consistency warning
+ok 232 - sections referencing different Rust manifests emit one consistency warning
+  ---
+  duration_ms: 2.323958
+  type: 'test'
+  ...
+# Subtest: single-section config stays matrix-free for backward compatibility
+ok 233 - single-section config stays matrix-free for backward compatibility
+  ---
+  duration_ms: 2.133375
+  type: 'test'
+  ...
+# Subtest: text formatter renders the matrix table
+ok 234 - text formatter renders the matrix table
+  ---
+  duration_ms: 2.192791
+  type: 'test'
+  ...
+# Subtest: async doctor prefetches per-section cargo metadata probes
+ok 235 - async doctor prefetches per-section cargo metadata probes
+  ---
+  duration_ms: 1.66725
+  type: 'test'
+  ...
+# Subtest: tauri matrix row has an em-dash build cell and a runtime cell driven by tauri.platform_tools
+ok 236 - tauri matrix row has an em-dash build cell and a runtime cell driven by tauri.platform_tools
+  ---
+  duration_ms: 2.768833
+  type: 'test'
+  ...
+# Subtest: async doctor prefetches divergent section manifests without false prefetch failures
+ok 237 - async doctor prefetches divergent section manifests without false prefetch failures
+  ---
+  duration_ms: 2.312375
+  type: 'test'
+  ...
+# Subtest: wasm dev target warns about cooperative cancellation and checks the wasm32 rust target
+ok 238 - wasm dev target warns about cooperative cancellation and checks the wasm32 rust target
+  ---
+  duration_ms: 2.031125
+  type: 'test'
+  ...
+# Subtest: wasm dev target fails the required check when the wasm32 rust target is missing
+ok 239 - wasm dev target fails the required check when the wasm32 rust target is missing
+  ---
+  duration_ms: 2.58325
+  type: 'test'
+  ...
+# Subtest: doctor flags missing generated manifest
+ok 240 - doctor flags missing generated manifest
+  ---
+  duration_ms: 1.29275
+  type: 'test'
+  ...
+# Subtest: doctor flags schema drift after schema.json change
+ok 241 - doctor flags schema drift after schema.json change
+  ---
+  duration_ms: 2.228125
+  type: 'test'
+  ...
+# Subtest: doctor flags generator version drift
+ok 242 - doctor flags generator version drift
+  ---
+  duration_ms: 1.391875
+  type: 'test'
+  ...
+# Subtest: doctor passes fresh generated output
+ok 243 - doctor passes fresh generated output
+  ---
+  duration_ms: 1.427125
+  type: 'test'
+  ...
+# Subtest: freshness check is skipped when the schema itself is missing
+ok 244 - freshness check is skipped when the schema itself is missing
+  ---
+  duration_ms: 0.890292
+  type: 'test'
+  ...
+# Subtest: doctor passes device tokens inside the catalog
+ok 245 - doctor passes device tokens inside the catalog
+  ---
+  duration_ms: 1.043709
+  type: 'test'
+  ...
+# Subtest: doctor fails on device tokens outside the catalog
+ok 246 - doctor fails on device tokens outside the catalog
+  ---
+  duration_ms: 0.892083
+  type: 'test'
+  ...
+# Subtest: doctor warns when declared devices lack the catalog field
+ok 247 - doctor warns when declared devices lack the catalog field
+  ---
+  duration_ms: 1.883833
+  type: 'test'
+  ...
+# Subtest: doctor skips the catalog check without device declarations
+ok 248 - doctor skips the catalog check without device declarations
+  ---
+  duration_ms: 1.051125
+  type: 'test'
+  ...
+# Subtest: registry reachability passes when the probe fetch succeeds and cargo is present
+ok 249 - registry reachability passes when the probe fetch succeeds and cargo is present
+  ---
+  duration_ms: 19.815958
+  type: 'test'
+  ...
+# Subtest: registry reachability warns with proxy/offline hints when the probe fetch fails
+ok 250 - registry reachability warns with proxy/offline hints when the probe fetch fails
+  ---
+  duration_ms: 1.76575
+  type: 'test'
+  ...
+# Subtest: registry reachability warns when the registry responds with a non-200 status
+ok 251 - registry reachability warns when the registry responds with a non-200 status
+  ---
+  duration_ms: 2.819
+  type: 'test'
+  ...
+# Subtest: registry reachability is skipped when cargo is unavailable
+ok 252 - registry reachability is skipped when cargo is unavailable
+  ---
+  duration_ms: 0.786667
+  type: 'test'
+  ...
+# Subtest: registry reachability probe fetches the crates.io sparse index config
+ok 253 - registry reachability probe fetches the crates.io sparse index config
+  ---
+  duration_ms: 1.125583
+  type: 'test'
+  ...
+# Subtest: native dev target emits neither the wasm notice nor the wasm32 target check
+ok 254 - native dev target emits neither the wasm notice nor the wasm32 target check
+  ---
+  duration_ms: 1.715458
+  type: 'test'
+  ...
+# Subtest: bound codec retains only its command layout and dispatches by its own identity
+ok 255 - bound codec retains only its command layout and dispatches by its own identity
+  ---
+  duration_ms: 7.257459
+  type: 'test'
+  ...
+# Subtest: raw and buffer bound results use their actual output field layout
+ok 256 - raw and buffer bound results use their actual output field layout
+  ---
+  duration_ms: 0.614625
+  type: 'test'
+  ...
+# Subtest: tuple synthetic names are retained once without command-specific logic
+ok 257 - tuple synthetic names are retained once without command-specific logic
+  ---
+  duration_ms: 0.4335
+  type: 'test'
+  ...
+# Subtest: complex dispatch retains empty layouts and unit raw output stays undefined
+ok 258 - complex dispatch retains empty layouts and unit raw output stays undefined
+  ---
+  duration_ms: 3.040209
+  type: 'test'
+  ...
+# Subtest: generateTypesTs re-exports EngineClient and RustraError
+ok 259 - generateTypesTs re-exports EngineClient and RustraError
+  ---
+  duration_ms: 0.364
+  type: 'test'
+  ...
+# Subtest: generateTypesTs maps tuple types
+ok 260 - generateTypesTs maps tuple types
+  ---
+  duration_ms: 0.701833
+  type: 'test'
+  ...
+# Subtest: generateTypesTs maps Record types
+ok 261 - generateTypesTs maps Record types
+  ---
+  duration_ms: 0.104792
+  type: 'test'
+  ...
+# Subtest: generateTypesTs maps Set types (uniqueItems)
+ok 262 - generateTypesTs maps Set types (uniqueItems)
+  ---
+  duration_ms: 0.620459
+  type: 'test'
+  ...
+# Subtest: generateTypesTs exposes all byte-buffer runtime representations
+ok 263 - generateTypesTs exposes all byte-buffer runtime representations
+  ---
+  duration_ms: 1.186958
+  type: 'test'
+  ...
+# Subtest: direct byte capability fails closed for optional or extra-required fields
+ok 264 - direct byte capability fails closed for optional or extra-required fields
+  ---
+  duration_ms: 0.675208
+  type: 'test'
+  ...
+# Subtest: generateTypesTs emits recursive self-referencing types
+ok 265 - generateTypesTs emits recursive self-referencing types
+  ---
+  duration_ms: 0.335375
+  type: 'test'
+  ...
+# Subtest: collectDefinitions gathers nested definitions recursively
+ok 266 - collectDefinitions gathers nested definitions recursively
+  ---
+  duration_ms: 0.083084
+  type: 'test'
+  ...
+# Subtest: generateTypesTs maps oneOf with const tags to discriminated unions
+ok 267 - generateTypesTs maps oneOf with const tags to discriminated unions
+  ---
+  duration_ms: 0.115541
+  type: 'test'
+  ...
+# Subtest: generateCommandsTs produces command function
+ok 268 - generateCommandsTs produces command function
+  ---
+  duration_ms: 0.188292
+  type: 'test'
+  ...
+# Subtest: generateCommandsTs emits 1-field commands via createGeneratedFields1 factory
+ok 269 - generateCommandsTs emits 1-field commands via createGeneratedFields1 factory
+  ---
+  duration_ms: 0.094541
+  type: 'test'
+  ...
+# Subtest: generateCommandsTs keeps complex inputs on the generic route
+ok 270 - generateCommandsTs keeps complex inputs on the generic route
+  ---
+  duration_ms: 0.344042
+  type: 'test'
+  ...
+# Subtest: generateCommandsTs handles void input and JSDoc description
+ok 271 - generateCommandsTs handles void input and JSDoc description
+  ---
+  duration_ms: 0.112375
+  type: 'test'
+  ...
+# Subtest: generateTypesTs emits JSDoc comments from schema description
+ok 272 - generateTypesTs emits JSDoc comments from schema description
+  ---
+  duration_ms: 0.073375
+  type: 'test'
+  ...
+# Subtest: generated TypeScript has clean JSDoc blank lines and one final newline
+ok 273 - generated TypeScript has clean JSDoc blank lines and one final newline
+  ---
+  duration_ms: 0.845625
+  type: 'test'
+  ...
+# Subtest: generateContractTs produces hash constant
+ok 274 - generateContractTs produces hash constant
+  ---
+  duration_ms: 0.357292
+  type: 'test'
+  ...
+# Subtest: generateContractTs exports schemaVersion from the schema
+ok 275 - generateContractTs exports schemaVersion from the schema
+  ---
+  duration_ms: 0.054
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsHpp declares dispatch API
+ok 276 - generateFrameCodecsHpp declares dispatch API
+  ---
+  duration_ms: 0.074125
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp emits per-command encode/decode + dispatch
+ok 277 - generateFrameCodecsCpp emits per-command encode/decode + dispatch
+  ---
+  duration_ms: 1.03475
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp assigns tuple decode values to array slots
+ok 278 - generateFrameCodecsCpp assigns tuple decode values to array slots
+  ---
+  duration_ms: 0.467667
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp owns finite property names within each invocation
+ok 279 - generateFrameCodecsCpp owns finite property names within each invocation
+  ---
+  duration_ms: 0.786916
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp emits by_id switch dispatch (P0-3)
+ok 280 - generateFrameCodecsCpp emits by_id switch dispatch (P0-3)
+  ---
+  duration_ms: 0.755541
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp emits raw capability and public result-shape restoration
+ok 281 - generateFrameCodecsCpp emits raw capability and public result-shape restoration
+  ---
+  duration_ms: 0.187708
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp maps each postcard field kind to the right push/read
+ok 282 - generateFrameCodecsCpp maps each postcard field kind to the right push/read
+  ---
+  duration_ms: 0.276541
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp is pure C++ (no TS leakage)
+ok 283 - generateFrameCodecsCpp is pure C++ (no TS leakage)
+  ---
+  duration_ms: 0.802584
+  type: 'test'
+  ...
+# Subtest: generateTypesTs maps allOf to intersection and integer enum to literal union
+ok 284 - generateTypesTs maps allOf to intersection and integer enum to literal union
+  ---
+  duration_ms: 0.127583
+  type: 'test'
+  ...
+# Subtest: generateTypesTs exposes bigint for int64 and C++ joins with BigInt decode
+ok 285 - generateTypesTs exposes bigint for int64 and C++ joins with BigInt decode
+  ---
+  duration_ms: 0.248917
+  type: 'test'
+  ...
+# Subtest: int64/uint64 fields join the postcard fast path with 64-bit helpers
+ok 286 - int64/uint64 fields join the postcard fast path with 64-bit helpers
+  ---
+  duration_ms: 0.3465
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsTs encodes Option fields (no silent drop)
+ok 287 - generateFrameCodecsTs encodes Option fields (no silent drop)
+  ---
+  duration_ms: 0.575209
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsTs encodes Vec<String> and Vec<Struct>
+ok 288 - generateFrameCodecsTs encodes Vec<String> and Vec<Struct>
+  ---
+  duration_ms: 0.643584
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsTs encodes string enums as variant index
+ok 289 - generateFrameCodecsTs encodes string enums as variant index
+  ---
+  duration_ms: 0.25575
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsTs decodes string enums as literal unions
+ok 290 - generateFrameCodecsTs decodes string enums as literal unions
+  ---
+  duration_ms: 0.090041
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsTs encodes primitive-valued dynamic maps deterministically
+ok 291 - generateFrameCodecsTs encodes primitive-valued dynamic maps deterministically
+  ---
+  duration_ms: 0.346667
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsTs promotes complex maps and data enums to the complex codec
+ok 292 - generateFrameCodecsTs promotes complex maps and data enums to the complex codec
+  ---
+  duration_ms: 0.372667
+  type: 'test'
+  ...
+# Subtest: generateFrameRegistryTs routes supported complex commands to the complex codec
+ok 293 - generateFrameRegistryTs routes supported complex commands to the complex codec
+  ---
+  duration_ms: 0.19575
+  type: 'test'
+  ...
+# Subtest: ambiguous oneOf schemas stay on the Tier 3 fallback
+ok 294 - ambiguous oneOf schemas stay on the Tier 3 fallback
+  ---
+  duration_ms: 0.105458
+  type: 'test'
+  ...
+# Subtest: codec IR accepts explicit oneOf keys for anonymous variants and sorts wire order
+ok 295 - codec IR accepts explicit oneOf keys for anonymous variants and sorts wire order
+  ---
+  duration_ms: 0.437
+  type: 'test'
+  ...
+# Subtest: single-entry allOf newtype handles stay on the postcard fast path
+ok 296 - single-entry allOf newtype handles stay on the postcard fast path
+  ---
+  duration_ms: 0.216958
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp promotes supported complex commands to native static codec
+ok 297 - generateFrameCodecsCpp promotes supported complex commands to native static codec
+  ---
+  duration_ms: 0.541959
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp promotes primitive-element Sets to the native complex codec
+ok 298 - generateFrameCodecsCpp promotes primitive-element Sets to the native complex codec
+  ---
+  duration_ms: 0.3265
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp keeps object-element Sets on the JS complex route
+ok 299 - generateFrameCodecsCpp keeps object-element Sets on the JS complex route
+  ---
+  duration_ms: 0.106167
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp promotes wide-int complex commands with BigInt safe-range decode
+ok 300 - generateFrameCodecsCpp promotes wide-int complex commands with BigInt safe-range decode
+  ---
+  duration_ms: 1.2755
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp emits bounded recursive reference functions
+ok 301 - generateFrameCodecsCpp emits bounded recursive reference functions
+  ---
+  duration_ms: 0.258917
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp positional codecs enforce arity and preserve enum wire
+ok 302 - generateFrameCodecsCpp positional codecs enforce arity and preserve enum wire
+  ---
+  duration_ms: 0.420084
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp positional f32 uses four-byte postcard wire
+ok 303 - generateFrameCodecsCpp positional f32 uses four-byte postcard wire
+  ---
+  duration_ms: 0.203209
+  type: 'test'
+  ...
+# Subtest: generateFrameCodecsCpp validates numeric inputs before native casts
+ok 304 - generateFrameCodecsCpp validates numeric inputs before native casts
+  ---
+  duration_ms: 0.244084
+  type: 'test'
+  ...
+# Subtest: generatePositionalFacadeTs emits positional signatures for simple commands
+ok 305 - generatePositionalFacadeTs emits positional signatures for simple commands
+  ---
+  duration_ms: 0.390166
+  type: 'test'
+  ...
+# Subtest: generatePositionalFacadeTs uses positional params for ≤3 primitive fields
+ok 306 - generatePositionalFacadeTs uses positional params for ≤3 primitive fields
+  ---
+  duration_ms: 0.0635
+  type: 'test'
+  ...
+# Subtest: facade callPos command set exactly matches C++ positional codec set
+ok 307 - facade callPos command set exactly matches C++ positional codec set
+  ---
+  duration_ms: 0.739792
+  type: 'test'
+  ...
+# Subtest: generatePositionalFacadeTs does not accept or ignore InvokeOptions
+ok 308 - generatePositionalFacadeTs does not accept or ignore InvokeOptions
+  ---
+  duration_ms: 0.158542
+  type: 'test'
+  ...
+# Subtest: generatePositionalFacadeTs helpers are async so sync throws become rejections
+ok 309 - generatePositionalFacadeTs helpers are async so sync throws become rejections
+  ---
+  duration_ms: 0.114375
+  type: 'test'
+  ...
+# Subtest: generated facade wrapper returns a rejected Promise when native is not installed
+ok 310 - generated facade wrapper returns a rejected Promise when native is not installed
+  ---
+  duration_ms: 33.901
+  type: 'test'
+  ...
+# Subtest: parsePackageSchema rejects hostile identifiers
+ok 311 - parsePackageSchema rejects hostile identifiers
+  ---
+  duration_ms: 0.677542
+  type: 'test'
+  ...
+# Subtest: parsePackageSchema diagnoses generic type names with a rebuild hint
+ok 312 - parsePackageSchema diagnoses generic type names with a rebuild hint
+  ---
+  duration_ms: 0.099083
+  type: 'test'
+  ...
+# Subtest: parsePackageSchema accepts the declaration-order marker and rejects unknown values
+ok 313 - parsePackageSchema accepts the declaration-order marker and rejects unknown values
+  ---
+  duration_ms: 2.59875
+  type: 'test'
+  ...
+# Subtest: parsePackageSchema rejects hostile nested definitions keys
+ok 314 - parsePackageSchema rejects hostile nested definitions keys
+  ---
+  duration_ms: 0.180792
+  type: 'test'
+  ...
+# Subtest: parsePackageSchema rejects hostile property names and $ref targets
+ok 315 - parsePackageSchema rejects hostile property names and $ref targets
+  ---
+  duration_ms: 0.10675
+  type: 'test'
+  ...
+# Subtest: generated code escapes hostile descriptions (JSDoc breakout)
+ok 316 - generated code escapes hostile descriptions (JSDoc breakout)
+  ---
+  duration_ms: 0.128625
+  type: 'test'
+  ...
+# Subtest: generated code escapes hostile enum/const string literals
+ok 317 - generated code escapes hostile enum/const string literals
+  ---
+  duration_ms: 0.093458
+  type: 'test'
+  ...
+# Subtest: templateVersions permits independent CLI, types, and Cargo versions
+ok 318 - templateVersions permits independent CLI, types, and Cargo versions
+  ---
+  duration_ms: 0.09825
+  type: 'test'
+  ...
+# Subtest: init scaffold has a real shared package and executable codegen bin
+ok 319 - init scaffold has a real shared package and executable codegen bin
+  ---
+  duration_ms: 0.261291
+  type: 'test'
+  ...
+# Subtest: codegen and generate parsers accept short help and JSON output format
+ok 320 - codegen and generate parsers accept short help and JSON output format
+  ---
+  duration_ms: 0.345875
+  type: 'test'
+  ...
+# Subtest: config parser rejects unknown keys instead of silently skipping a host
+ok 321 - config parser rejects unknown keys instead of silently skipping a host
+  ---
+  duration_ms: 1.557209
+  type: 'test'
+  ...
+# Subtest: config parser suggests the closest known key for a typo
+ok 322 - config parser suggests the closest known key for a typo
+  ---
+  duration_ms: 1.757875
+  type: 'test'
+  ...
+# Subtest: selectCodegenBinary prefers generate, accepts one binary, and rejects ambiguity
+ok 323 - selectCodegenBinary prefers generate, accepts one binary, and rejects ambiguity
+  ---
+  duration_ms: 0.26525
+  type: 'test'
+  ...
+# Subtest: generated manifest records schema and file hashes
+ok 324 - generated manifest records schema and file hashes
+  ---
+  duration_ms: 0.177917
+  type: 'test'
+  ...
+# Subtest: Frame migration removes only unchanged legacy codecs recorded by the old manifest
+ok 325 - Frame migration removes only unchanged legacy codecs recorded by the old manifest
+  ---
+  duration_ms: 40.66975
+  type: 'test'
+  ...
+# Subtest: Frame migration preserves edited legacy codecs and refuses before rewriting outputs
+ok 326 - Frame migration preserves edited legacy codecs and refuses before rewriting outputs
+  ---
+  duration_ms: 4.37825
+  type: 'test'
+  ...
+# Subtest: generated check rejects unrecorded legacy leftovers without deleting them
+ok 327 - generated check rejects unrecorded legacy leftovers without deleting them
+  ---
+  duration_ms: 6.017042
+  type: 'test'
+  ...
+# Subtest: Frame migration preserves a legacy path replaced by a symlink
+ok 328 - Frame migration preserves a legacy path replaced by a symlink
+  ---
+  duration_ms: 1.97525
+  type: 'test'
+  ...
+# Subtest: obsolete optional outputs fail check without writes and are removed on regeneration
+ok 329 - obsolete optional outputs fail check without writes and are removed on regeneration
+  ---
+  duration_ms: 11.656459
+  type: 'test'
+  ...
+# Subtest: cleanup rejects an out-of-root manifest entry before removing any generated files
+ok 330 - cleanup rejects an out-of-root manifest entry before removing any generated files
+  ---
+  duration_ms: 2.955875
+  type: 'test'
+  ...
+# Subtest: cleanup rejects a directory symlink alias of a current generated output
+ok 331 - cleanup rejects a directory symlink alias of a current generated output
+  ---
+  duration_ms: 4.6595
+  type: 'test'
+  ...
+# Subtest: generated check reports missing files without writing
+ok 332 - generated check reports missing files without writing
+  ---
+  duration_ms: 1.13175
+  type: 'test'
+  ...
+# Subtest: generated check rejects changed bytes and leaves them unchanged
+ok 333 - generated check rejects changed bytes and leaves them unchanged
+  ---
+  duration_ms: 1.084542
+  type: 'test'
+  ...
+# Subtest: generated check distinguishes a stale manifest from changed generated bytes
+ok 334 - generated check distinguishes a stale manifest from changed generated bytes
+  ---
+  duration_ms: 1.0805
+  type: 'test'
+  ...
+# Subtest: React Native entry owns lazy native setup and re-exports generated commands
+ok 335 - React Native entry owns lazy native setup and re-exports generated commands
+  ---
+  duration_ms: 0.109333
+  type: 'test'
+  ...
+# Subtest: desktop host entries own lazy setup and preserve explicit escape hatches
+ok 336 - desktop host entries own lazy setup and preserve explicit escape hatches
+  ---
+  duration_ms: 0.210167
+  type: 'test'
+  ...
+# Subtest: host entries wire subscribeEvent when the schema declares events
+ok 337 - host entries wire subscribeEvent when the schema declares events
+  ---
+  duration_ms: 0.0645
+  type: 'test'
+  ...
+# Subtest: host entries stay byte-identical when the schema declares no events
+ok 338 - host entries stay byte-identical when the schema declares no events
+  ---
+  duration_ms: 0.07
+  type: 'test'
+  ...
+# Subtest: React Native Cargo target inference uses the manifest package and staticlib name
+ok 339 - React Native Cargo target inference uses the manifest package and staticlib name
+  ---
+  duration_ms: 0.173667
+  type: 'test'
+  ...
+# Subtest: React Native Cargo target inference fails with an actionable ambiguous-workspace hint
+ok 340 - React Native Cargo target inference fails with an actionable ambiguous-workspace hint
+  ---
+  duration_ms: 0.113
+  type: 'test'
+  ...
+# Subtest: React Native Cargo target inference never substitutes a different requested package
+ok 341 - React Native Cargo target inference never substitutes a different requested package
+  ---
+  duration_ms: 0.069917
+  type: 'test'
+  ...
+# Subtest: React Native scaffold is Expo-independent and collision-resistant
+ok 342 - React Native scaffold is Expo-independent and collision-resistant
+  ---
+  duration_ms: 2.9715
+  type: 'test'
+  ...
+# Subtest: React Native scaffold loud-fails when the adapter is not installed
+ok 343 - React Native scaffold loud-fails when the adapter is not installed
+  ---
+  duration_ms: 0.310292
+  type: 'test'
+  ...
+# Subtest: React Native scaffold embeds the app-local adapter path even when validation resolves a hoisted adapter
+ok 344 - React Native scaffold embeds the app-local adapter path even when validation resolves a hoisted adapter
+  ---
+  duration_ms: 2.875917
+  type: 'test'
+  ...
+# Subtest: React Native scaffold ignores a complete adapter package with the wrong version
+ok 345 - React Native scaffold ignores a complete adapter package with the wrong version
+  ---
+  duration_ms: 4.590458
+  type: 'test'
+  ...
+# Subtest: React Native scaffold reports when only a stale complete adapter is installed
+ok 346 - React Native scaffold reports when only a stale complete adapter is installed
+  ---
+  duration_ms: 2.800458
+  type: 'test'
+  ...
+# Subtest: React Native scaffold no longer carries the legacy benchmark flag
+ok 347 - React Native scaffold no longer carries the legacy benchmark flag
+  ---
+  duration_ms: 2.234291
+  type: 'test'
+  ...
+# Subtest: generateEventsTs emits payload types, name union, and subscribe helper
+ok 348 - generateEventsTs emits payload types, name union, and subscribe helper
+  ---
+  duration_ms: 0.190958
+  type: 'test'
+  ...
+# Subtest: generateEventsTs returns empty string without events (backcompat)
+ok 349 - generateEventsTs returns empty string without events (backcompat)
+  ---
+  duration_ms: 0.055125
+  type: 'test'
+  ...
+# Subtest: generateErrorsTs emits per-command code unions and type guards
+ok 350 - generateErrorsTs emits per-command code unions and type guards
+  ---
+  duration_ms: 0.325584
+  type: 'test'
+  ...
+# Subtest: generateErrorsTs guard JSDoc declares the open runtime contract
+ok 351 - generateErrorsTs guard JSDoc declares the open runtime contract
+  ---
+  duration_ms: 0.099292
+  type: 'test'
+  ...
+# Subtest: generateErrorsTs returns empty string without declarations (backcompat)
+ok 352 - generateErrorsTs returns empty string without declarations (backcompat)
+  ---
+  duration_ms: 0.077708
+  type: 'test'
+  ...
+# Subtest: errors declarations leave commands.ts/types.ts bytes unchanged
+ok 353 - errors declarations leave commands.ts/types.ts bytes unchanged
+  ---
+  duration_ms: 0.2285
+  type: 'test'
+  ...
+# Subtest: generateErrorsTs fails loud on PascalCase key collision
+ok 354 - generateErrorsTs fails loud on PascalCase key collision
+  ---
+  duration_ms: 0.08475
+  type: 'test'
+  ...
+# Subtest: generateErrorsTs fails loud on command symbol collision
+ok 355 - generateErrorsTs fails loud on command symbol collision
+  ---
+  duration_ms: 0.209833
+  type: 'test'
+  ...
+# Subtest: generateErrorsTs fails loud on invalid error code tokens
+ok 356 - generateErrorsTs fails loud on invalid error code tokens
+  ---
+  duration_ms: 0.109167
+  type: 'test'
+  ...
+# Subtest: generateFromSchema writes errors.ts only when declared
+ok 357 - generateFromSchema writes errors.ts only when declared
+  ---
+  duration_ms: 9.566583
+  type: 'test'
+  ...
+# Subtest: generateDevicesTs emits package union and per-command constants
+ok 358 - generateDevicesTs emits package union and per-command constants
+  ---
+  duration_ms: 0.4045
+  type: 'test'
+  ...
+# Subtest: generateDevicesTs returns empty string without declarations (backcompat)
+ok 359 - generateDevicesTs returns empty string without declarations (backcompat)
+  ---
+  duration_ms: 0.09525
+  type: 'test'
+  ...
+# Subtest: device declarations leave commands.ts/types.ts/errors.ts bytes unchanged
+ok 360 - device declarations leave commands.ts/types.ts/errors.ts bytes unchanged
+  ---
+  duration_ms: 0.254375
+  type: 'test'
+  ...
+# Subtest: generateDevicesTs renders out-of-catalog tokens with a dev marker
+ok 361 - generateDevicesTs renders out-of-catalog tokens with a dev marker
+  ---
+  duration_ms: 0.248458
+  type: 'test'
+  ...
+# Subtest: generateDevicesTs throws when declared devices lack the schema catalog
+ok 362 - generateDevicesTs throws when declared devices lack the schema catalog
+  ---
+  duration_ms: 0.083041
+  type: 'test'
+  ...
+# Subtest: generateDevicesTs fails loud on command symbol collision
+ok 363 - generateDevicesTs fails loud on command symbol collision
+  ---
+  duration_ms: 0.095
+  type: 'test'
+  ...
+# Subtest: generateFromSchema writes devices.ts only when declared
+ok 364 - generateFromSchema writes devices.ts only when declared
+  ---
+  duration_ms: 13.794291
+  type: 'test'
+  ...
+# Subtest: postcardHelperSource declares 64-bit varint/zigzag helpers
+ok 365 - postcardHelperSource declares 64-bit varint/zigzag helpers
+  ---
+  duration_ms: 0.138584
+  type: 'test'
+  ...
+# Subtest: postcardHelperSource 64-bit helpers round-trip u64 and i64 boundaries
+ok 366 - postcardHelperSource 64-bit helpers round-trip u64 and i64 boundaries
+  ---
+  duration_ms: 4.577958
+  type: 'test'
+  ...
+# Subtest: postcardHelperSource zigzag64 round-trips i64 boundaries
+ok 367 - postcardHelperSource zigzag64 round-trips i64 boundaries
+  ---
+  duration_ms: 2.655917
+  type: 'test'
+  ...
+# Subtest: generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and decode known bytes
+ok 368 - generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and decode known bytes
+  ---
+  duration_ms: 4.650959
+  type: 'test'
+  ...
+# Subtest: postcardHelperSource decoder rejects overlong and out-of-range encodings
+ok 369 - postcardHelperSource decoder rejects overlong and out-of-range encodings
+  ---
+  duration_ms: 4.911875
+  type: 'test'
+  ...
+# Subtest: postcardHelperSource encoders reject negative and out-of-i64 inputs
+ok 370 - postcardHelperSource encoders reject negative and out-of-i64 inputs
+  ---
+  duration_ms: 2.832459
+  type: 'test'
+  ...
+# Subtest: generateFromSchema names the schema file when its JSON is broken
+ok 371 - generateFromSchema names the schema file when its JSON is broken
+  ---
+  duration_ms: 1.340875
+  type: 'test'
+  ...
+# Subtest: generated C++ oneOf variants commit only on their exact inline enum tag
+ok 372 - generated C++ oneOf variants commit only on their exact inline enum tag
+  ---
+  duration_ms: 0.418542
+  type: 'test'
+  ...
+# Subtest: ordinary function positional facades preserve generated signatures and routes
+ok 373 - ordinary function positional facades preserve generated signatures and routes
+  ---
+  duration_ms: 1358.806042
+  type: 'test'
+  ...
+# Subtest: host entries use the codegen invocation directory Cargo config and isolate its cache
+ok 374 - host entries use the codegen invocation directory Cargo config and isolate its cache
+  ---
+  duration_ms: 70.225834
+  type: 'test'
+  ...
+# Subtest: runtime target URLs survive symlinked app and Cargo target roots before outputs exist
+ok 375 - runtime target URLs survive symlinked app and Cargo target roots before outputs exist
+  ---
+  duration_ms: 40.049708
+  type: 'test'
+  ...
+# Subtest: runtime target URLs preserve Cargo directory names containing URL delimiters
+ok 376 - runtime target URLs preserve Cargo directory names containing URL delimiters
+  ---
+  duration_ms: 129.691292
+  type: 'test'
+  ...
+# Subtest: node/bun sections fall back to codegen.rustManifest before walking up
+ok 377 - node/bun sections fall back to codegen.rustManifest before walking up
+  ---
+  duration_ms: 31.122334
+  type: 'test'
+  ...
+# Subtest: node section still fails loud when neither section nor codegen names a manifest
+ok 378 - node section still fails loud when neither section nor codegen names a manifest
+  ---
+  duration_ms: 1.130833
+  type: 'test'
+  ...
+# Subtest: the generated Node event entry invokes and subscribes on one persistent runtime
+ok 379 - the generated Node event entry invokes and subscribes on one persistent runtime
+  ---
+  duration_ms: 256.977625
+  type: 'test'
+  ...
+# Subtest: an opted-in generated Node CRUD client preserves records across create, read, update and delete
+ok 380 - an opted-in generated Node CRUD client preserves records across create, read, update and delete
+  ---
+  duration_ms: 280.775916
+  type: 'test'
+  ...
+# Subtest: the generated Bun event entry binds subscribers to the compatible selected library
+ok 381 - the generated Bun event entry binds subscribers to the compatible selected library
+  ---
+  duration_ms: 9450.15025
+  type: 'test'
+  ...
+# Subtest: the generated Node streaming entry receives background events from its invoked runtime
+ok 382 - the generated Node streaming entry receives background events from its invoked runtime
+  ---
+  duration_ms: 324.921833
+  type: 'test'
+  ...
+# Subtest: inspect renders a hex dump file as the pinned field tree
+ok 383 - inspect renders a hex dump file as the pinned field tree
+  ---
+  duration_ms: 4.334375
+  type: 'test'
+  ...
+# Subtest: inspect accepts raw snapshot bytes with the same output
+ok 384 - inspect accepts raw snapshot bytes with the same output
+  ---
+  duration_ms: 1.57625
+  type: 'test'
+  ...
+# Subtest: inspect tolerates 0x prefix and whitespace inside hex dumps
+ok 385 - inspect tolerates 0x prefix and whitespace inside hex dumps
+  ---
+  duration_ms: 1.077667
+  type: 'test'
+  ...
+# Subtest: inspect strips \# comment lines — the golden fixture artifact format
+ok 386 - inspect strips \# comment lines — the golden fixture artifact format
+  ---
+  duration_ms: 1.048959
+  type: 'test'
+  ...
+# Subtest: inspect fails loud on non-hex non-JSON bytes with path context
+ok 387 - inspect fails loud on non-hex non-JSON bytes with path context
+  ---
+  duration_ms: 1.639667
+  type: 'test'
+  ...
+# Subtest: inspect fails loud on hex-encoded truncated JSON with a byte position
+ok 388 - inspect fails loud on hex-encoded truncated JSON with a byte position
+  ---
+  duration_ms: 1.307959
+  type: 'test'
+  ...
+# Subtest: inspect fails loud on valid JSON with a wrong shape, naming the field path
+ok 389 - inspect fails loud on valid JSON with a wrong shape, naming the field path
+  ---
+  duration_ms: 1.123791
+  type: 'test'
+  ...
+# Subtest: inspect fails loud on a missing file, keeping the underlying reason
+ok 390 - inspect fails loud on a missing file, keeping the underlying reason
+  ---
+  duration_ms: 0.646292
+  type: 'test'
+  ...
+# Subtest: inspect rejects zero or multiple dump files
+ok 391 - inspect rejects zero or multiple dump files
+  ---
+  duration_ms: 0.725916
+  type: 'test'
+  ...
+# Subtest: inspect --help stays silent internally; cli-help owns the usage text
+ok 392 - inspect --help stays silent internally; cli-help owns the usage text
+  ---
+  duration_ms: 0.697667
+  type: 'test'
+  ...
+# Subtest: generate help documents --watch like the top-level help
+ok 393 - generate help documents --watch like the top-level help
+  ---
+  duration_ms: 0.169416
+  type: 'test'
+  ...
+# Subtest: inspect rejects unknown flags with the arg-parser hint
+ok 394 - inspect rejects unknown flags with the arg-parser hint
+  ---
+  duration_ms: 0.803334
+  type: 'test'
+  ...
+# Subtest: formatInspectText renders null identity fields and empty lists deterministically
+ok 395 - formatInspectText renders null identity fields and empty lists deterministically
+  ---
+  duration_ms: 0.094917
+  type: 'test'
+  ...
+# Subtest: decodeDump converges hex text and raw bytes to the identical byte array
+ok 396 - decodeDump converges hex text and raw bytes to the identical byte array
+  ---
+  duration_ms: 0.504041
+  type: 'test'
+  ...
+# [dev] initial → codegen
+# [dev] 1:45:42 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-Uhgei8/backend for changes...
+# [dev] Rust change → codegen
+# [dev] 1:45:43 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev watches handwritten Rust adjacent to generated files
+ok 397 - legacy dev watches handwritten Rust adjacent to generated files
+  ---
+  duration_ms: 1205.663166
+  type: 'test'
+  ...
+# [dev] 1:45:43 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-CXdMrU/backend for changes...
+# [dev] Cargo change → codegen
+# [dev] 1:45:44 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev rebuilds and reloads after Cargo.toml changes
+ok 398 - legacy dev rebuilds and reloads after Cargo.toml changes
+  ---
+  duration_ms: 1227.240958
+  type: 'test'
+  ...
+# [dev] 1:45:45 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-H4hxtn/backend for changes...
+# [dev] Cargo change → codegen
+# [dev] 1:45:45 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev rebuilds and reloads after Cargo.lock changes
+ok 399 - legacy dev rebuilds and reloads after Cargo.lock changes
+  ---
+  duration_ms: 1243.092333
+  type: 'test'
+  ...
+# [dev] 1:45:46 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-qJmTHx/backend for changes...
+# [dev] Cargo change → codegen
+# [dev] 1:45:46 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev rebuilds and reloads after build.rs changes
+ok 400 - legacy dev rebuilds and reloads after build.rs changes
+  ---
+  duration_ms: 1094.579541
+  type: 'test'
+  ...
+# [dev] 1:45:47 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-4A3Luf/backend for changes...
+# [dev] Rust change → codegen
+# [dev] 1:45:47 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev rebuilds and reloads after same-mtime Rust content changes
+ok 401 - legacy dev rebuilds and reloads after same-mtime Rust content changes
+  ---
+  duration_ms: 1049.7175
+  type: 'test'
+  ...
+# [dev] 1:45:48 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-9qvQds/backend for changes...
+# [dev] Rust change → codegen
+# [dev] 1:45:48 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev rebuilds and reloads after Rust source deletion changes
+ok 402 - legacy dev rebuilds and reloads after Rust source deletion changes
+  ---
+  duration_ms: 1043.038292
+  type: 'test'
+  ...
+# [dev] 1:45:49 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-n4rQ6t/backend for changes...
+# [dev] Rust change → codegen
+# [dev] 1:45:49 PM regenerated
+# [dev] initial → codegen
+# Subtest: legacy dev rebuilds and reloads after local dependency source changes
+ok 403 - legacy dev rebuilds and reloads after local dependency source changes
+  ---
+  duration_ms: 1053.244375
+  type: 'test'
+  ...
+# [dev] 1:45:50 PM regenerated
+# [dev] watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-legacy-dev-LaFS70/backend for changes...
+# Subtest: legacy dev skips unchanged touches and excludes owned/custom target output
+ok 404 - legacy dev skips unchanged touches and excludes owned/custom target output
+  ---
+  duration_ms: 866.727125
+  type: 'test'
+  ...
+# Subtest: createParityGate passes when the post-reload state matches the snapshot
+ok 405 - createParityGate passes when the post-reload state matches the snapshot
+  ---
+  duration_ms: 0.662834
+  type: 'test'
+  ...
+# Subtest: createParityGate rejects when the contract hash drifts after reload
+ok 406 - createParityGate rejects when the contract hash drifts after reload
+  ---
+  duration_ms: 0.925417
+  type: 'test'
+  ...
+# Subtest: createParityGate rejects when the golden wire bytes drift after reload
+ok 407 - createParityGate rejects when the golden wire bytes drift after reload
+  ---
+  duration_ms: 0.128125
+  type: 'test'
+  ...
+# Subtest: createParityGate verify rejects when capture throws after reload
+ok 408 - createParityGate verify rejects when capture throws after reload
+  ---
+  duration_ms: 0.111584
+  type: 'test'
+  ...
+# Subtest: createParityGate arm failure reports an unusable baseline
+ok 409 - createParityGate arm failure reports an unusable baseline
+  ---
+  duration_ms: 0.357084
+  type: 'test'
+  ...
+# Subtest: createParityGate disarm skips verification
+ok 410 - createParityGate disarm skips verification
+  ---
+  duration_ms: 0.093833
+  type: 'test'
+  ...
+# Subtest: createParityGate rearms to the current state after every verdict
+ok 411 - createParityGate rearms to the current state after every verdict
+  ---
+  duration_ms: 0.095917
+  type: 'test'
+  ...
+# Subtest: createParityGate survives a transient capture failure without going silent
+ok 412 - createParityGate survives a transient capture failure without going silent
+  ---
+  duration_ms: 0.110792
+  type: 'test'
+  ...
+# Subtest: createParityGate keeps rejecting while capture stays broken
+ok 413 - createParityGate keeps rejecting while capture stays broken
+  ---
+  duration_ms: 3.416292
+  type: 'test'
+  ...
+# Subtest: spawnInherit progress spinner
+    # Subtest: ignored verbose output cannot block a child on an unread pipe
+    ok 1 - ignored verbose output cannot block a child on an unread pipe
+      ---
+      duration_ms: 46.126417
+      type: 'test'
+      ...
+    # Subtest: forwarded output stays with the stream owner captured at child creation
+    ok 2 - forwarded output stays with the stream owner captured at child creation
+      ---
+      duration_ms: 40.069459
+      type: 'test'
+      ...
+    # Subtest: waits for inherited output pipes to close before completing
+    ok 3 - waits for inherited output pipes to close before completing
+      ---
+      duration_ms: 198.505916
+      type: 'test'
+      ...
+    # Subtest: emits spinner frames and elapsed time while a command runs
+    ok 4 - emits spinner frames and elapsed time while a command runs
+      ---
+      duration_ms: 1388.820625
+      type: 'test'
+      ...
+    # Subtest: spinner respects a fake timer-compatible 1s cadence for short commands
+    ok 5 - spinner respects a fake timer-compatible 1s cadence for short commands
+      ---
+      duration_ms: 55.524958
+      type: 'test'
+      ...
+    # Subtest: failure verdict replaces the done mark and the rejection keeps the exit code
+    ok 6 - failure verdict replaces the done mark and the rejection keeps the exit code
+      ---
+      duration_ms: 33.161333
+      type: 'test'
+      ...
+    1..6
+ok 414 - spawnInherit progress spinner
+  ---
+  duration_ms: 1763.314542
+  type: 'suite'
+  ...
+# Subtest: generated native preparation runs Pods from the existing app iOS directory
+ok 415 - generated native preparation runs Pods from the existing app iOS directory
+  ---
+  duration_ms: 159.589125
+  type: 'test'
+  ...
+# Subtest: generated native preparation honors the app Gemfile without installing gems
+ok 416 - generated native preparation honors the app Gemfile without installing gems
+  ---
+  duration_ms: 109.382791
+  type: 'test'
+  ...
+# Subtest: generated Expo preparation creates only the absent requested native project before Pods
+ok 417 - generated Expo preparation creates only the absent requested native project before Pods
+  ---
+  duration_ms: 164.767542
+  type: 'test'
+  ...
+# Subtest: generated Android preparation builds without device installation or SDK downloads
+ok 418 - generated Android preparation builds without device installation or SDK downloads
+  ---
+  duration_ms: 65.725166
+  type: 'test'
+  ...
+# Subtest: generated preparation does not replace an existing partial native project
+ok 419 - generated preparation does not replace an existing partial native project
+  ---
+  duration_ms: 43.134167
+  type: 'test'
+  ...
+# Subtest: generated preparation stops on tool failure and gives the failing native step
+ok 420 - generated preparation stops on tool failure and gives the failing native step
+  ---
+  duration_ms: 71.284292
+  type: 'test'
+  ...
+# Subtest: RN host scripts preserve existing commands and remain byte-identical on repeat
+ok 421 - RN host scripts preserve existing commands and remain byte-identical on repeat
+  ---
+  duration_ms: 12.024958
+  type: 'test'
+  ...
+# Subtest: RN bootstrap declares only the missing adapter before initial installation
+ok 422 - RN bootstrap declares only the missing adapter before initial installation
+  ---
+  duration_ms: 5.906792
+  type: 'test'
+  ...
+# Subtest: RN bootstrap preserves local adapter dependency and skips already complete installation
+ok 423 - RN bootstrap preserves local adapter dependency and skips already complete installation
+  ---
+  duration_ms: 3.147792
+  type: 'test'
+  ...
+# Subtest: RN bootstrap refuses stale missing generated workspace before any manifest rewrite
+ok 424 - RN bootstrap refuses stale missing generated workspace before any manifest rewrite
+  ---
+  duration_ms: 3.733917
+  type: 'test'
+  ...
+# Subtest: RN preparation runs through its installed generated package script
+ok 425 - RN preparation runs through its installed generated package script
+  ---
+  duration_ms: 169.423458
+  type: 'test'
+  ...
+# Subtest: RN host script conflicts leave the original manifest bytes untouched
+ok 426 - RN host script conflicts leave the original manifest bytes untouched
+  ---
+  duration_ms: 11.661917
+  type: 'test'
+  ...
+# Subtest: RN bootstrap rejects malformed dependency objects before rewriting package.json
+ok 427 - RN bootstrap rejects malformed dependency objects before rewriting package.json
+  ---
+  duration_ms: 4.364875
+  type: 'test'
+  ...
+# Subtest: RN bootstrap rejects an installed incompatible adapter without altering declared dependencies
+ok 428 - RN bootstrap rejects an installed incompatible adapter without altering declared dependencies
+  ---
+  duration_ms: 5.388208
+  type: 'test'
+  ...
+# Subtest: generated RN install rejects false before reading a previously installed native
+ok 429 - generated RN install rejects false before reading a previously installed native
+  ---
+  duration_ms: 142.424792
+  type: 'test'
+  ...
+# Subtest: generated RN install rejects Promise.resolve(false) before reading a previously installed native
+ok 430 - generated RN install rejects Promise.resolve(false) before reading a previously installed native
+  ---
+  duration_ms: 112.214
+  type: 'test'
+  ...
+# Subtest: generated RN install verifies native only after sync success
+ok 431 - generated RN install verifies native only after sync success
+  ---
+  duration_ms: 68.70775
+  type: 'test'
+  ...
+# Subtest: generated RN install verifies native only after async success
+ok 432 - generated RN install verifies native only after async success
+  ---
+  duration_ms: 82.403833
+  type: 'test'
+  ...
+# Subtest: generated RN install preserves an original sync native error
+ok 433 - generated RN install preserves an original sync native error
+  ---
+  duration_ms: 73.340125
+  type: 'test'
+  ...
+# Subtest: generated RN install preserves an original async native error
+ok 434 - generated RN install preserves an original async native error
+  ---
+  duration_ms: 62.729166
+  type: 'test'
+  ...
+# Subtest: detects no changes for identical schemas
+ok 435 - detects no changes for identical schemas
+  ---
+  duration_ms: 1.422791
+  type: 'test'
+  ...
+# Subtest: detects removed command
+ok 436 - detects removed command
+  ---
+  duration_ms: 0.085833
+  type: 'test'
+  ...
+# Subtest: detects removed field
+ok 437 - detects removed field
+  ---
+  duration_ms: 4.938292
+  type: 'test'
+  ...
+# Subtest: detects type change
+ok 438 - detects type change
+  ---
+  duration_ms: 0.463333
+  type: 'test'
+  ...
+# Subtest: detects required field added
+ok 439 - detects required field added
+  ---
+  duration_ms: 5.110583
+  type: 'test'
+  ...
+# Subtest: detects an existing optional field becoming required
+ok 440 - detects an existing optional field becoming required
+  ---
+  duration_ms: 0.376458
+  type: 'test'
+  ...
+# Subtest: detects nested referenced schema changes
+ok 441 - detects nested referenced schema changes
+  ---
+  duration_ms: 15.481041
+  type: 'test'
+  ...
+# Subtest: resolves command-level nested refs instead of treating them as opaque
+ok 442 - resolves command-level nested refs instead of treating them as opaque
+  ---
+  duration_ms: 0.280791
+  type: 'test'
+  ...
+# Subtest: formatDiffResult shows breaking changes
+ok 443 - formatDiffResult shows breaking changes
+  ---
+  duration_ms: 0.386167
+  type: 'test'
+  ...
+# Subtest: formatDiffResult shows no breaking for clean diff
+ok 444 - formatDiffResult shows no breaking for clean diff
+  ---
+  duration_ms: 0.359792
+  type: 'test'
+  ...
+# Subtest: formatDiffResult rendering is byte-identical when no diagnoses exist
+ok 445 - formatDiffResult rendering is byte-identical when no diagnoses exist
+  ---
+  duration_ms: 5.949583
+  type: 'test'
+  ...
+# Subtest: diagnoses command id displacement: same name, changed id
+ok 446 - diagnoses command id displacement: same name, changed id
+  ---
+  duration_ms: 0.187167
+  type: 'test'
+  ...
+# Subtest: renders the command_id_changed bullet with matching header count
+ok 447 - renders the command_id_changed bullet with matching header count
+  ---
+  duration_ms: 0.192667
+  type: 'test'
+  ...
+# Subtest: skips id-displacement diagnosis for schemas without ids on either side
+ok 448 - skips id-displacement diagnosis for schemas without ids on either side
+  ---
+  duration_ms: 2.381834
+  type: 'test'
+  ...
+# Subtest: skips id-displacement diagnosis when both sides are id-less
+ok 449 - skips id-displacement diagnosis when both sides are id-less
+  ---
+  duration_ms: 0.180792
+  type: 'test'
+  ...
+# Subtest: insertion displacing the id fires both displaced and alias_missing diagnoses
+ok 450 - insertion displacing the id fires both displaced and alias_missing diagnoses
+  ---
+  duration_ms: 0.14825
+  type: 'test'
+  ...
+# Subtest: diagnoses missing alias: old id is consumed by a different command
+ok 451 - diagnoses missing alias: old id is consumed by a different command
+  ---
+  duration_ms: 0.321125
+  type: 'test'
+  ...
+# Subtest: detects removed event
+ok 452 - detects removed event
+  ---
+  duration_ms: 0.16625
+  type: 'test'
+  ...
+# Subtest: detects event payload field removal as breaking
+ok 453 - detects event payload field removal as breaking
+  ---
+  duration_ms: 0.2085
+  type: 'test'
+  ...
+# Subtest: renders event payload type change with from → to
+ok 454 - renders event payload type change with from → to
+  ---
+  duration_ms: 0.084625
+  type: 'test'
+  ...
+# Subtest: event addition is non-breaking even when the old schema has no events section
+ok 455 - event addition is non-breaking even when the old schema has no events section
+  ---
+  duration_ms: 0.059625
+  type: 'test'
+  ...
+# Subtest: new required payload field folds to (absent), not (optional)
+ok 456 - new required payload field folds to (absent), not (optional)
+  ---
+  duration_ms: 1.232167
+  type: 'test'
+  ...
+# Subtest: payload definition removal folds to event_payload_changed
+ok 457 - payload definition removal folds to event_payload_changed
+  ---
+  duration_ms: 0.177917
+  type: 'test'
+  ...
+# Subtest: diagnoses wire-incompatible type change with cause sentence
+ok 458 - diagnoses wire-incompatible type change with cause sentence
+  ---
+  duration_ms: 0.121584
+  type: 'test'
+  ...
+# Subtest: runDiff reports the offending file path and a regenerate hint for invalid JSON
+ok 459 - runDiff reports the offending file path and a regenerate hint for invalid JSON
+  ---
+  duration_ms: 25.728833
+  type: 'test'
+  ...
+# Subtest: runDiff wraps a missing schema file instead of leaking raw ENOENT
+ok 460 - runDiff wraps a missing schema file instead of leaking raw ENOENT
+  ---
+  duration_ms: 5.332625
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: enum ordinal
+ok 461 - diff rejects wire change: enum ordinal
+  ---
+  duration_ms: 0.513542
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: integer signedness
+ok 462 - diff rejects wire change: integer signedness
+  ---
+  duration_ms: 0.1385
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: float width
+ok 463 - diff rejects wire change: float width
+  ---
+  duration_ms: 0.111459
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: tuple positions
+ok 464 - diff rejects wire change: tuple positions
+  ---
+  duration_ms: 0.182667
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: map values
+ok 465 - diff rejects wire change: map values
+  ---
+  duration_ms: 0.212459
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: option contents
+ok 466 - diff rejects wire change: option contents
+  ---
+  duration_ms: 0.467
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: variant payload
+ok 467 - diff rejects wire change: variant payload
+  ---
+  duration_ms: 0.450791
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: allOf contents
+ok 468 - diff rejects wire change: allOf contents
+  ---
+  duration_ms: 0.174334
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: field order
+ok 469 - diff rejects wire change: field order
+  ---
+  duration_ms: 0.426084
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: optional field addition
+ok 470 - diff rejects wire change: optional field addition
+  ---
+  duration_ms: 0.378542
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: variant order
+ok 471 - diff rejects wire change: variant order
+  ---
+  duration_ms: 0.090333
+  type: 'test'
+  ...
+# Subtest: diff rejects wire change: fixed array size
+ok 472 - diff rejects wire change: fixed array size
+  ---
+  duration_ms: 0.115709
+  type: 'test'
+  ...
+# Subtest: recursive references terminate while changes are reported at both sibling paths
+ok 473 - recursive references terminate while changes are reported at both sibling paths
+  ---
+  duration_ms: 0.366041
+  type: 'test'
+  ...
+# Subtest: metadata edits remain nonbreaking
+ok 474 - metadata edits remain nonbreaking
+  ---
+  duration_ms: 0.093
+  type: 'test'
+  ...
+# Subtest: migration gate rejects schema pairs that silently reinterpret actual postcard bytes
+ok 475 - migration gate rejects schema pairs that silently reinterpret actual postcard bytes
+  ---
+  duration_ms: 20.722541
+  type: 'test'
+  ...
+# Subtest: removed command-level ref targets are breaking even when the ref object is reused
+ok 476 - removed command-level ref targets are breaking even when the ref object is reused
+  ---
+  duration_ms: 0.153667
+  type: 'test'
+  ...
+# Subtest: oneOf fallback titles are discriminator keys rather than inert metadata
+ok 477 - oneOf fallback titles are discriminator keys rather than inert metadata
+  ---
+  duration_ms: 0.174667
+  type: 'test'
+  ...
+# Subtest: Tauri setup generates one-call native registration and preserves app sources/config
+ok 478 - Tauri setup generates one-call native registration and preserves app sources/config
+  ---
+  duration_ms: 114.526125
+  type: 'test'
+  ...
+# Subtest: repeat Tauri setup leaves generated files and already-enabled config byte-identical
+ok 479 - repeat Tauri setup leaves generated files and already-enabled config byte-identical
+  ---
+  duration_ms: 52.552042
+  type: 'test'
+  ...
+# Subtest: Tauri setup refuses to overwrite an edited adapter before changing global config
+ok 480 - Tauri setup refuses to overwrite an edited adapter before changing global config
+  ---
+  duration_ms: 138.539375
+  type: 'test'
+  ...
+# Subtest: Tauri setup reuses an existing renamed core dependency and its custom package function
+ok 481 - Tauri setup reuses an existing renamed core dependency and its custom package function
+  ---
+  duration_ms: 115.157041
+  type: 'test'
+  ...
+# Subtest: Tauri setup rejects ambiguous producers without guessing or writing files
+ok 482 - Tauri setup rejects ambiguous producers without guessing or writing files
+  ---
+  duration_ms: 69.628334
+  type: 'test'
+  ...
+# Subtest: Tauri setup does not infer fake factories inside comments, strings, or nested modules
+ok 483 - Tauri setup does not infer fake factories inside comments, strings, or nested modules
+  ---
+  duration_ms: 113.054416
+  type: 'test'
+  ...
+# Subtest: Tauri setup can use the native crate itself as producer without a self-dependency
+ok 484 - Tauri setup can use the native crate itself as producer without a self-dependency
+  ---
+  duration_ms: 47.717959
+  type: 'test'
+  ...
+# Subtest: Tauri setup rejects malformed app config before writing its adapter
+ok 485 - Tauri setup rejects malformed app config before writing its adapter
+  ---
+  duration_ms: 49.592333
+  type: 'test'
+  ...
+# Subtest: Cargo snippet retains the producer local workspace source and features
+ok 486 - Cargo snippet retains the producer local workspace source and features
+  ---
+  duration_ms: 6.53825
+  type: 'test'
+  ...
+# Subtest: Tauri setup reports the exact missing native manifest and skips other hosts
+ok 487 - Tauri setup reports the exact missing native manifest and skips other hosts
+  ---
+  duration_ms: 4.58725
+  type: 'test'
+  ...
+# Subtest: rustraPlugin returns vite plugin with name and hooks
+ok 488 - rustraPlugin returns vite plugin with name and hooks
+  ---
+  duration_ms: 0.507041
+  type: 'test'
+  ...
+# Subtest: rustraPlugin handles buildStart gracefully when directory is absent
+ok 489 - rustraPlugin handles buildStart gracefully when directory is absent
+  ---
+  duration_ms: 0.3
+  type: 'test'
+  ...
+# Subtest: source watch follows directories created after startup and recreated roots
+ok 490 - source watch follows directories created after startup and recreated roots
+  ---
+  duration_ms: 263.548708
+  type: 'test'
+  ...
+# Subtest: source watch follows a symlinked root and reports original-namespace paths
+ok 491 - source watch follows a symlinked root and reports original-namespace paths
+  ---
+  duration_ms: 213.115
+  type: 'test'
+  ...
+# Subtest: source watch follows a retargeted root and stops observing the retired tree
+ok 492 - source watch follows a retargeted root and stops observing the retired tree
+  ---
+  duration_ms: 566.922875
+  type: 'test'
+  ...
+# Subtest: file watch follows a retargeted directory in the original namespace
+ok 493 - file watch follows a retargeted directory in the original namespace
+  ---
+  duration_ms: 316.805667
+  type: 'test'
+  ...
+# Subtest: source watch excludes newly created custom outputs but observes adjacent source files
+ok 494 - source watch excludes newly created custom outputs but observes adjacent source files
+  ---
+  duration_ms: 313.920375
+  type: 'test'
+  ...
+# Subtest: source watch excludes traversal through a canonical alias before reading the subtree
+ok 495 - source watch excludes traversal through a canonical alias before reading the subtree
+  ---
+  duration_ms: 104.011458
+  type: 'test'
+  ...
+# Subtest: source watch refreshes exclusions when the subscribed symlink changes
+ok 496 - source watch refreshes exclusions when the subscribed symlink changes
+  ---
+  duration_ms: 357.274542
+  type: 'test'
+  ...
+# Subtest: relative source watch paths stay bound to their original working directory
+ok 497 - relative source watch paths stay bound to their original working directory
+  ---
+  duration_ms: 505.104458
+  type: 'test'
+  ...
+# Subtest: file watch follows initially missing and atomically replaced files
+ok 498 - file watch follows initially missing and atomically replaced files
+  ---
+  duration_ms: 362.782375
+  type: 'test'
+  ...
+# Subtest: a reload callback can await disposal without joining itself
+ok 499 - a reload callback can await disposal without joining itself
+  ---
+  duration_ms: 0.838917
+  type: 'test'
+  ...
+# Subtest: external disposal still drains a pending reload callback
+ok 500 - external disposal still drains a pending reload callback
+  ---
+  duration_ms: 0.665917
+  type: 'test'
+  ...
+# Subtest: scheduled pipeline failures are reported and the next run recovers
+ok 501 - scheduled pipeline failures are reported and the next run recovers
+  ---
+  duration_ms: 42.265583
+  type: 'test'
+  ...
+# Subtest: polling reports transient read failures and recovers without dropping the subscription
+ok 502 - polling reports transient read failures and recovers without dropping the subscription
+  ---
+  duration_ms: 208.985834
+  type: 'test'
+  ...
+# Watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-schema-watch-pWCEz7/first.json for changes...
+# Only the schema file is watched — Rust edits need a regenerate source (cargo run … generate) or "rustra dev".
+# [1:45:49 PM] Regenerated
+# [1:45:49 PM] Regenerated
+# Subtest: schema watch reloads config and follows a newly selected schema file
+ok 503 - schema watch reloads config and follows a newly selected schema file
+  ---
+  duration_ms: 484.139667
+  type: 'test'
+  ...
+# Watching /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-schema-recover-VtqfD0/first.json for changes...
+# Only the schema file is watched — Rust edits need a regenerate source (cargo run … generate) or "rustra dev".
+# Regeneration failed: Schema file not found: /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-schema-recover-VtqfD0/missing.json. Run the Rust contract probe first (e.g. "cargo run" with the package's generate bin) or point --schema/--config at the right file in rustra.json, then re-run "rustra generate".
+# [1:45:50 PM] Regenerated
+# Regeneration failed: Invalid schema.json at /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-schema-recover-VtqfD0/malformed.json: Expected property name or '}' in JSON at position 1 (line 1 column 2). The file must be valid JSON; regenerate it with "cargo run" (the package's generate bin) or fix it manually.
+# [1:45:50 PM] Regenerated
+# Subtest: schema watch follows a new path even while it is missing or malformed
+ok 504 - schema watch follows a new path even while it is missing or malformed
+  ---
+  duration_ms: 1131.668709
+  type: 'test'
+  ...
+1..504
+# tests 509
+# suites 1
+# pass 509
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17775.157958
+bun test v1.4.3 (c6da4a4d3)
+
+src/generate-bound-context.test.ts:
+(pass) bound codec retains only its command layout and dispatches by its own identity [5.10ms]
+(pass) raw and buffer bound results use their actual output field layout [0.36ms]
+(pass) tuple synthetic names are retained once without command-specific logic [0.28ms]
+(pass) complex dispatch retains empty layouts and unit raw output stays undefined [0.36ms]
+
+src/function-registration.test.ts:
+(pass) function tuple roots use postcard and positional helpers, with no native object codec [1.05ms]
+(pass) rust-internal root type names are sanitized to inline types with deprecated aliases [0.29ms]
+(pass) function arity metadata requires a matching fixed tuple or unit [0.37ms]
+(pass) function metadata differences are visible to schema diff [1.58ms]
+(pass) native does not re-admit functions with complex output or unit roots [0.06ms]
+(pass) legacy object fixed-array fields select the shared postcard codec and decline stale native vectors [0.14ms]
+(pass) generated closed-struct codecs retain actual postcard tuple bytes [9.12ms]
+(pass) static legacy depth boundary agrees with live postcard and preserves existing bytes [2.33ms]
+
+src/cli-arg-parser.test.ts:
+(pass) parseCliArgs > rejects unknown flags with closest-flag suggestion [0.25ms]
+(pass) parseCliArgs > usage errors are UsageError instances (exit-2 contract) [0.11ms]
+(pass) parseCliArgs > runtime failures are NOT UsageError instances (exit-1 contract) [0.01ms]
+(pass) parseCliArgs > command-level missing-required-argument errors are UsageError instances [0.23ms]
+(pass) parseCliArgs > parseCodegenArgs adopts ./rustra.json as the default config when present [0.50ms]
+(pass) parseCliArgs > unknown top-level command rejects with UsageError and a did-you-mean [8.69ms]
+(pass) parseCliArgs > supports --flag=value [0.03ms]
+(pass) parseCliArgs > preserves equals signs inside inline option values [0.03ms]
+(pass) parseCliArgs > rejects unknown flags without a close match with the available set [0.07ms]
+(pass) parseCliArgs > reports near-miss flags past a typo [0.04ms]
+(pass) parseCliArgs > accepts separated --flag value and normalizes -h to help [0.02ms]
+(pass) parseCliArgs > boolean flags reject an inline value [0.03ms]
+(pass) parseCliArgs > value flags require a value [0.02ms]
+(pass) parseCliArgs > positionals are rejected unless allowed [0.06ms]
+
+src/generate-sync-contract.test.ts:
+(pass) canonical native codec identity matches the exact schema bytes used by JS [1501.01ms]
+
+src/generate-sync.test.ts:
+(pass) generated postcard codec keeps producer eligibility and flat field order at runtime [1.94ms]
+(pass) generated complex codec keeps eligibility without pretending complex input is positional [1.02ms]
+(pass) generated bytes route metadata only marks a required single byte field [0.50ms]
+
+src/generated-header.test.ts:
+(pass) generatedFileHeader > deterministic — same inputs, same bytes [0.03ms]
+(pass) generatedFileHeader > contains source, regen command, do-not-edit, and stage [0.04ms]
+(pass) generatedFileHeader > ends with a single blank line — content follows directly [0.01ms]
+(pass) header syntax per file type — CI01 root cause > json 파일은 주석 문법이 없어 헤더를 찍지 않는다
+(pass) header syntax per file type — CI01 root cause > shell은 shebang 뒤에 # 주석 헤더를 부착한다 [0.04ms]
+(pass) header syntax per file type — CI01 root cause > shebang 없는 shell도 # 헤더로 시작한다 [0.02ms]
+(pass) header syntax per file type — CI01 root cause > ruby podspec은 # 주석 헤더를 부착한다 [0.01ms]
+(pass) header syntax per file type — CI01 root cause > xml은 <!-- --> 헤더를 부착하고 주석 본문에 -- 를 쓰지 않는다 [0.07ms]
+(pass) header syntax per file type — CI01 root cause > CMakeLists는 # 주석 헤더를 부착한다
+(pass) header syntax per file type — CI01 root cause > gradle/kotlin/ts/cpp는 // 헤더를 유지한다 [0.03ms]
+(pass) header syntax per file type — CI01 root cause > 확장자 없는/미지 파일은 // 기본값을 유지한다 — 기존 호출부 호환 [0.01ms]
+(pass) header syntax per file type — CI01 root cause > 중첩 경로는 basename으로 문법을 판정한다 [0.01ms]
+(pass) header syntax per file type — CI01 root cause > 확장자 대소문자 무관하게 JSON을 판정한다 — config.JSON 도 무헤더 [0.02ms]
+(pass) header syntax per file type — CI01 root cause > 헤더 파싱 헬퍼 headerFor가 스트립을 대칭 달성한다 [0.14ms]
+
+src/generate-postcard-map.test.ts:
+(pass) nested typed string map decoder typechecks without weakening the DTO [1354.85ms]
+
+ 45 pass
+ 0 fail
+ 74 expect() calls
+Ran 45 tests across 7 files. [3.13s]

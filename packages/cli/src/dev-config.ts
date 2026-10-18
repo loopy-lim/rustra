@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { findCargoManifest } from './cargo.js';
 import { readConfigSync } from './config.js';
+import { resolveSetupBuilds, type SetupBuild } from './setup-builds.js';
 
 /** wasm dev 타깃 엔진 빌드(Task A3)에 필요한 해석된 설정 — 엔진 crate 위치와 패키지. */
 export interface ResolvedDevWasm {
@@ -28,6 +29,8 @@ export interface ResolvedDevConfig {
   devWasm?: ResolvedDevWasm;
   /** target=dylib 일 때만 존재 — 네이티브 cdylib 핫 코어 빌드의 매니페스트·패키지 해석값. */
   devDylib?: ResolvedDevDylib;
+  /** Node/Bun runtimes must be rebuilt before announcing a successful reload. */
+  nativeBuilds: SetupBuild[];
 }
 
 function resolveDevSection(config: ReturnType<typeof readConfigSync>) {
@@ -123,6 +126,15 @@ export function readDevConfig(configPath: string): ResolvedDevConfig {
     dev,
     devWasm: resolveDevWasm(config, root, manifestPath),
     devDylib: resolveDevDylib(config, root, manifestPath),
+    nativeBuilds:
+      (config.node || config.bun) && (!dev?.target || dev.target === 'native')
+        ? // 첫 엔트리는 코드젠 제너레이터지만 빼면 안 된다 — 제너레이터와 런타임이
+          // 같은 크레이트의 다른 bin인 스캐폴드(온보딩) 레이아웃에서 cargo run
+          // --bin generate 는 런타임 bin을 빌드하지 않으므로 이 cargo build 가
+          // 구현 변경 뒤의 재링크 몫이다. 제너레이터-전용 크레이트 레이아웃에서만
+          // no-op 스폰이 된다.
+          resolveSetupBuilds(configPath, { ...config, reactNative: undefined })
+        : [],
   };
 }
 

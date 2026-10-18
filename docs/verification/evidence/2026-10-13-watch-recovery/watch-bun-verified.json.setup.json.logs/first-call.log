@@ -1,0 +1,88 @@
+{"command":"/Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node","args":["/Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js","setup","--config","/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app/rustra.json","--run"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app"}
+[rustra] Checking setup tools...
+[rustra] Generating the Rust contract and TypeScript calls...
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+[rustra] ⠋ Rust schema generation (rustra-app/generate) still running (1s)
+[rustra] ⠙ Rust schema generation (rustra-app/generate) still running (2s)
+[rustra] ⠹ Rust schema generation (rustra-app/generate) still running (3s)
+[rustra] ⠸ Rust schema generation (rustra-app/generate) still running (4s)
+[rustra] ⠼ Rust schema generation (rustra-app/generate) still running (5s)
+[rustra] ⠴ Rust schema generation (rustra-app/generate) still running (6s)
+[rustra] ⠦ Rust schema generation (rustra-app/generate) still running (7s)
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 7.1s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app/src/generated:
+  types.ts
+  commands.ts
+  contract.ts
+  frame-codecs.ts
+  frame-registry.ts
+  bun.ts
+[rustra] ⠋ JavaScript dependencies...
+bun install v1.4.3 (c6da4a4d3)
+
++ @rustra/cli@../../../packages/cli
++ @rustra/bun@../../../packages/bun
++ @rustra/types@../../../packages/types
+
+13 packages installed [169.00ms]
+[rustra] ✓ JavaScript dependencies done in 0.2s
+[rustra] ⠋ Rust runtime (rustra-app)...
+[rustra] ✓ Rust runtime (rustra-app) done in 0.4s
+[rustra] ⠋ First Rust call...
+hello from TypeScript
+[rustra] ✓ First Rust call done in 0.1s
+[rustra] Setup complete — demo succeeded.
+     Locking 42 packages to latest compatible versions
+      Adding schemars v0.8.22 (available: v1.2.2)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling serde v1.0.229
+   Compiling libc v0.2.190
+   Compiling zmij v1.0.23
+   Compiling thiserror v2.0.21
+   Compiling autocfg v1.5.1
+   Compiling serde_json v1.0.151
+   Compiling hashbrown v0.17.1
+   Compiling generic-array v0.14.7
+   Compiling equivalent v1.0.2
+   Compiling schemars v0.8.22
+   Compiling hashbrown v0.12.3
+   Compiling indexmap v1.9.3
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.5
+   Compiling rustra-naming v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra-naming)
+   Compiling dyn-clone v1.0.20
+   Compiling hex v0.4.3
+   Compiling indexmap v2.14.2
+   Compiling syn v3.0.7
+   Compiling syn v2.0.119
+   Compiling cpufeatures v0.2.17
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling serde_derive_internals v0.29.1
+   Compiling schemars_derive v0.8.22
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling rustra-macros v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra-macros)
+   Compiling cobs v0.3.0
+   Compiling postcard v1.1.3
+   Compiling rustra v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra)
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.11s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/cargo-target/debug/generate`
+Resolving dependencies
+Resolved, downloaded and extracted [1]
+Saved lockfile
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
+$ bun run src/index.ts

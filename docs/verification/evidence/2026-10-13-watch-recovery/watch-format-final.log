@@ -1,0 +1,8 @@
+packages/cli/src/dev.ts 76ms (unchanged)
+packages/cli/src/dev-config.ts 13ms (unchanged)
+packages/cli/src/dev-host-runtime.test.ts 17ms
+packages/cli/src/dev-parity-wiring.test.ts 114ms (unchanged)
+scripts/onboarding-watch.mjs 24ms (unchanged)
+scripts/onboarding-receipt.mjs 5ms (unchanged)
+scripts/onboarding-gate.test.ts 29ms (unchanged)
+docs/dev/research/2026-10-13-watch-runtime-recovery.md 30ms (unchanged)

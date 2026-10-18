@@ -1,0 +1,9 @@
+{"command":"/Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node","args":["/Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js","init","/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app","--host","bun"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge"}
+Created rustra project in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app:
+  Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+  Config host sections: bun (--host)
+
+Next steps:
+  cd /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-bun-bun-GfKVBR/app
+  bun install
+  bun run start

@@ -1,0 +1,55 @@
+[dev] initial → codegen --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/rustra.json
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-shared/debug/generate`
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/src/generated:
+  types.ts (unchanged)
+  commands.ts (unchanged)
+  contract.ts (unchanged)
+  frame-codecs.ts (unchanged)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[dev] 1:25:27 PM regenerated
+
+[dev] watching /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app and /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/rustra.json for changes...
+[dev] Rust change → codegen --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/rustra.json
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-shared/debug/generate`
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.3s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-bun-s7JOZu/app/src/generated:
+  types.ts (unchanged)
+  commands.ts (unchanged)
+  contract.ts (unchanged)
+  frame-codecs.ts (unchanged)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[dev] 1:25:29 PM regenerated
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: successful watch reload must invoke new Rust implementation
+    at file:///private/tmp/rustra-watch-repro.mjs:19:60
+    at file:///Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/watch.js:19:103
+    at async Promise.allSettled (index 0)
+    at async Object.emitReload (file:///Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/watch.js:19:29)
+    at async perform (file:///Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/dev.js:273:13)
+    at async file:///Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/watch.js:62:21 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'hello from TypeScript\n',
+  expected: /HELLO FROM TYPESCRIPT/,
+  operator: 'match',
+  diff: 'simple'
+}
+
+Node.js v22.21.1

@@ -235,6 +235,7 @@ test(
       process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
       process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
       process.env.FAKE_CARGO_LOG = join(root, 'cargo-run.log');
+      const originalSource = readFileSync(join(project, 'src', 'lib.rs'), 'utf8');
 
       const errors: string[] = [];
       const restore = captureConsole(errors);
@@ -269,7 +270,10 @@ test(
         // 핵심은 (iii): 두 거부 모두 루프를 죽이지 않고 다음 변경이 다시
         // 판정됐다는 것. (같은 상태 유지 시의 통과는 rearm 단위 테스트가 담당.)
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
-        writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n');
+        // Restore the exact successful fingerprint. A rejected candidate has
+        // already written new schema bytes, so an old cache hit would wrongly
+        // accept those bytes without running Cargo on the restored source.
+        writeFileSync(join(project, 'src', 'lib.rs'), originalSource);
         await observeUntil(
           () => errors,
           () => rejectionCount() >= 2,
