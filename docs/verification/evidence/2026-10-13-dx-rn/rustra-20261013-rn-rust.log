@@ -1,0 +1,38 @@
+   Compiling rustra-rn-experiment v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/examples/rn-experiment)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.89s
+     Running unittests src/lib.rs (target/debug/deps/rustra_rn_experiment-f4616e049bba86ba)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/generate.rs (target/debug/deps/generate-1383d95348c991b6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/rustra_rn_experiment-26de81eec1ec00b2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rn_experiment.rs (target/debug/deps/rn_experiment-cfbd5139dcef68c5)
+
+running 6 tests
+test uuid_v7_string_schema_contract ... ok
+test gzip_rejects_invalid_stream_with_args_error ... ok
+test schema_declares_three_commands_with_expected_shapes ... ok
+test gzip_round_trip_via_buffer_ffi ... ok
+test gzip_rejects_decompression_beyond_payload_limit ... ok
+test gzip_round_trip_via_typed_wire ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests rustra_rn_experiment
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

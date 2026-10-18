@@ -1,0 +1,17 @@
+[onboarding:regen] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js codegen --config rustra.json (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.6s
+[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json
+Generated TypeScript files in /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/src/generated:
+  types.ts (updated)
+  commands.ts (updated)
+  contract.ts (updated)
+  frame-codecs.ts (updated)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[rustra] Note: generated code changed — rebuild the runtime binary before invoking (cargo build), or invokes may fail with contract.mismatch.
+   Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/onboarding-shared/debug/generate`

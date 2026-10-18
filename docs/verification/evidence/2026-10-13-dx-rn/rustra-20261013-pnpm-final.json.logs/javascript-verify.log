@@ -1,0 +1,3 @@
+{"command":"pnpm","args":["run","demo"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app"}
+javascript iteration
+$ bun run src/index.ts

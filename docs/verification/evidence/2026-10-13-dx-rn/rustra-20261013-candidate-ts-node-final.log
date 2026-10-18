@@ -1,0 +1,469 @@
+$ cargo build -p rustra-calculator-example -q && tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/*.test.js dist-ts/examples/crud/ts/*.test.js
+TAP version 13
+# Subtest: node adapter forwards generated commands to injected Node transport
+ok 1 - node adapter forwards generated commands to injected Node transport
+  ---
+  duration_ms: 1.064709
+  type: 'test'
+  ...
+# Subtest: bun adapter forwards generated commands to injected Bun transport
+ok 2 - bun adapter forwards generated commands to injected Bun transport
+  ---
+  duration_ms: 0.171291
+  type: 'test'
+  ...
+# Subtest: tauri adapter routes generated commands through rustra_dispatch
+ok 3 - tauri adapter routes generated commands through rustra_dispatch
+  ---
+  duration_ms: 0.251167
+  type: 'test'
+  ...
+# Subtest: react native adapter forwards generated commands through JSI native module
+ok 4 - react native adapter forwards generated commands through JSI native module
+  ---
+  duration_ms: 0.349334
+  type: 'test'
+  ...
+# Subtest: adapter packages keep host-specific imports out of the shared contract path
+ok 5 - adapter packages keep host-specific imports out of the shared contract path
+  ---
+  duration_ms: 6.819
+  type: 'test'
+  ...
+# Subtest: cross-wire addNumbers: Rust response → TS codec.decode
+ok 6 - cross-wire addNumbers: Rust response → TS codec.decode
+  ---
+  duration_ms: 0.805333
+  type: 'test'
+  ...
+# Subtest: cross-wire addNumbers: TS codec.encode → Rust request wire
+ok 7 - cross-wire addNumbers: TS codec.encode → Rust request wire
+  ---
+  duration_ms: 0.172125
+  type: 'test'
+  ...
+# Subtest: encodeInto is byte-identical to encode across representative commands
+ok 8 - encodeInto is byte-identical to encode across representative commands
+  ---
+  duration_ms: 0.499792
+  type: 'test'
+  ...
+# Subtest: cross-wire greet: Rust response → TS codec.decode
+ok 9 - cross-wire greet: Rust response → TS codec.decode
+  ---
+  duration_ms: 0.217042
+  type: 'test'
+  ...
+# Subtest: cross-wire greet: TS codec.encode → Rust request wire
+ok 10 - cross-wire greet: TS codec.encode → Rust request wire
+  ---
+  duration_ms: 0.072708
+  type: 'test'
+  ...
+# Subtest: cross-wire divide: Rust error frame → TS codec.decode → RustraError
+ok 11 - cross-wire divide: Rust error frame → TS codec.decode → RustraError
+  ---
+  duration_ms: 0.09675
+  type: 'test'
+  ...
+# Subtest: cross-wire divide: TS codec.encode → Rust request wire
+ok 12 - cross-wire divide: TS codec.encode → Rust request wire
+  ---
+  duration_ms: 0.125167
+  type: 'test'
+  ...
+# Subtest: cross-wire frame layout: success has ok=1 at byte 0, payload at offset 8
+ok 13 - cross-wire frame layout: success has ok=1 at byte 0, payload at offset 8
+  ---
+  duration_ms: 0.366541
+  type: 'test'
+  ...
+# Subtest: cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10
+ok 14 - cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10
+  ---
+  duration_ms: 0.301333
+  type: 'test'
+  ...
+# Subtest: cross-wire sizeOf: TS encode → Rust request / Rust response → TS decode
+ok 15 - cross-wire sizeOf: TS encode → Rust request / Rust response → TS decode
+  ---
+  duration_ms: 0.4285
+  type: 'test'
+  ...
+# Subtest: cross-wire scoreTotal: map structure + response round-trip
+ok 16 - cross-wire scoreTotal: map structure + response round-trip
+  ---
+  duration_ms: 0.42975
+  type: 'test'
+  ...
+# Subtest: cross-wire span: postcard tuple is prefix-free
+ok 17 - cross-wire span: postcard tuple is prefix-free
+  ---
+  duration_ms: 0.194292
+  type: 'test'
+  ...
+# Subtest: cross-wire gauge: unsigned fields use plain varint, not zigzag
+ok 18 - cross-wire gauge: unsigned fields use plain varint, not zigzag
+  ---
+  duration_ms: 0.143542
+  type: 'test'
+  ...
+# Subtest: cross-wire gauge u64::MAX: 10-byte LEB128 round-trip
+ok 19 - cross-wire gauge u64::MAX: 10-byte LEB128 round-trip
+  ---
+  duration_ms: 0.075
+  type: 'test'
+  ...
+# Subtest: cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip
+ok 20 - cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip
+  ---
+  duration_ms: 0.068875
+  type: 'test'
+  ...
+# Subtest: cross-wire span 2^53-1: largest exact number
+ok 21 - cross-wire span 2^53-1: largest exact number
+  ---
+  duration_ms: 0.115708
+  type: 'test'
+  ...
+# Subtest: cross-wire span 2^53+1: decode restores bigint beyond number precision
+ok 22 - cross-wire span 2^53+1: decode restores bigint beyond number precision
+  ---
+  duration_ms: 0.0625
+  type: 'test'
+  ...
+# Subtest: cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream
+ok 23 - cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream
+  ---
+  duration_ms: 0.137208
+  type: 'test'
+  ...
+# Subtest: cross-wire wideAgg: empty vec + None option
+ok 24 - cross-wire wideAgg: empty vec + None option
+  ---
+  duration_ms: 0.058542
+  type: 'test'
+  ...
+# Subtest: cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream boundaries
+ok 25 - cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream boundaries
+  ---
+  duration_ms: 0.062083
+  type: 'test'
+  ...
+# Subtest: cross-wire tagSet: TS Set iteration-order encode matches Rust request wire
+ok 26 - cross-wire tagSet: TS Set iteration-order encode matches Rust request wire
+  ---
+  duration_ms: 1.109042
+  type: 'test'
+  ...
+# Subtest: cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins
+ok 27 - cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins
+  ---
+  duration_ms: 0.101417
+  type: 'test'
+  ...
+# Subtest: cross-wire tagSet: Rust response → TS decode restores a real Set<string>
+ok 28 - cross-wire tagSet: Rust response → TS decode restores a real Set<string>
+  ---
+  duration_ms: 0.358
+  type: 'test'
+  ...
+# Subtest: cross-wire kindEcho unit variant: enum tag wire is a single variant index
+ok 29 - cross-wire kindEcho unit variant: enum tag wire is a single variant index
+  ---
+  duration_ms: 0.189125
+  type: 'test'
+  ...
+# Subtest: cross-wire kindEcho data variant: index + struct body on request and response
+ok 30 - cross-wire kindEcho data variant: index + struct body on request and response
+  ---
+  duration_ms: 0.391875
+  type: 'test'
+  ...
+# Subtest: cross-wire processItem: nested struct wire + declaration-order output
+ok 31 - cross-wire processItem: nested struct wire + declaration-order output
+  ---
+  duration_ms: 0.319
+  type: 'test'
+  ...
+# Subtest: cross-wire echoGroups: sorted map → vec<string> wire is fully pinned
+ok 32 - cross-wire echoGroups: sorted map → vec<string> wire is fully pinned
+  ---
+  duration_ms: 0.360458
+  type: 'test'
+  ...
+# Subtest: cross-wire sizeOf 2KB payload: length varint framing and raw copy
+ok 33 - cross-wire sizeOf 2KB payload: length varint framing and raw copy
+  ---
+  duration_ms: 0.849625
+  type: 'test'
+  ...
+# Subtest: device declarations surface as generated constants
+ok 34 - device declarations surface as generated constants
+  ---
+  duration_ms: 0.766
+  type: 'test'
+  ...
+# Subtest: declared capability status is queryable through the host provider
+ok 35 - declared capability status is queryable through the host provider
+  ---
+  duration_ms: 0.253083
+  type: 'test'
+  ...
+# Subtest: a device-declared command still invokes without runtime gating
+ok 36 - a device-declared command still invokes without runtime gating
+  ---
+  duration_ms: 0.442083
+  type: 'test'
+  ...
+# Subtest: field-order: decode pinned non-alphabetical frame → {ok,frozen,message} (Rust 선언순)
+ok 37 - field-order: decode pinned non-alphabetical frame → {ok,frozen,message} (Rust 선언순)
+  ---
+  duration_ms: 0.665584
+  type: 'test'
+  ...
+# Subtest: field-order: ok/frozen distinct values are not swapped
+ok 38 - field-order: ok/frozen distinct values are not swapped
+  ---
+  duration_ms: 0.082791
+  type: 'test'
+  ...
+# Subtest: field-order: alphabetical-order codec would mis-decode (드리프트 회귀 가드)
+ok 39 - field-order: alphabetical-order codec would mis-decode (드리프트 회귀 가드)
+  ---
+  duration_ms: 0.104083
+  type: 'test'
+  ...
+# Subtest: generated command helper calls the host EngineClient invoke contract
+ok 40 - generated command helper calls the host EngineClient invoke contract
+  ---
+  duration_ms: 0.962791
+  type: 'test'
+  ...
+# Subtest: generated client stays host neutral for Node, Bun, Tauri, and React Native
+ok 41 - generated client stays host neutral for Node, Bun, Tauri, and React Native
+  ---
+  duration_ms: 6.181625
+  type: 'test'
+  ...
+# Subtest: calculator journey: invoke → events → progress → cancel → unsubscribe → recovery → dispose
+ok 42 - calculator journey: invoke → events → progress → cancel → unsubscribe → recovery → dispose
+  ---
+  duration_ms: 1345.93275
+  type: 'test'
+  ...
+# Subtest: invokeLoose prototypes a command by name without a generated client
+ok 43 - invokeLoose prototypes a command by name without a generated client
+  ---
+  duration_ms: 0.813167
+  type: 'test'
+  ...
+# Subtest: decode empty buffer → too_short (no throw)
+ok 44 - decode empty buffer → too_short (no throw)
+  ---
+  duration_ms: 0.568459
+  type: 'test'
+  ...
+# Subtest: decode sub-8-byte buffer → too_short (no throw)
+ok 45 - decode sub-8-byte buffer → too_short (no throw)
+  ---
+  duration_ms: 0.132125
+  type: 'test'
+  ...
+# Subtest: decode well-formed success frame → ok (대조: 음성 위양성 방지)
+ok 46 - decode well-formed success frame → ok (대조: 음성 위양성 방지)
+  ---
+  duration_ms: 0.128375
+  type: 'test'
+  ...
+# Subtest: decode error frame → { code, message } (divide-by-zero)
+ok 47 - decode error frame → { code, message } (divide-by-zero)
+  ---
+  duration_ms: 0.192334
+  type: 'test'
+  ...
+# Subtest: divideCodec.decode empty buffer → too_short (codec 무관 동일 가드)
+ok 48 - divideCodec.decode empty buffer → too_short (codec 무관 동일 가드)
+  ---
+  duration_ms: 0.094
+  type: 'test'
+  ...
+# Subtest: engine: too-short response → reject RustraCommandError(invoke.too_short)
+ok 49 - engine: too-short response → reject RustraCommandError(invoke.too_short)
+  ---
+  duration_ms: 1.136167
+  type: 'test'
+  ...
+# Subtest: engine: error response → reject RustraCommandError(command code)
+ok 50 - engine: error response → reject RustraCommandError(command code)
+  ---
+  duration_ms: 0.23075
+  type: 'test'
+  ...
+# Subtest: engine: empty response → reject RustraCommandError(invoke.too_short)
+ok 51 - engine: empty response → reject RustraCommandError(invoke.too_short)
+  ---
+  duration_ms: 0.124
+  type: 'test'
+  ...
+# Subtest: napi: error crosses the wire as structured JSON (code preserved)
+ok 52 - napi: error crosses the wire as structured JSON (code preserved)
+  ---
+  duration_ms: 0.334083
+  type: 'test'
+  ...
+# Subtest: host apps use generated zero-config entrypoints without local transport wiring
+ok 53 - host apps use generated zero-config entrypoints without local transport wiring
+  ---
+  duration_ms: 29.374084
+  type: 'test'
+  ...
+# Subtest: react native runtime fixture exposes a native Rust-backed invoke module
+ok 54 - react native runtime fixture exposes a native Rust-backed invoke module
+  ---
+  duration_ms: 3.041625
+  type: 'test'
+  ...
+#     subprocess: avg=5408026ns p50=5382459ns p99=6023500ns
+# Subtest: transport performance
+    # Subtest: subprocess: addNumbers returns correct result
+    ok 1 - subprocess: addNumbers returns correct result
+      ---
+      duration_ms: 24.576125
+      type: 'test'
+      ...
+    # Subtest: subprocess: latency within threshold (p50)
+    ok 2 - subprocess: latency within threshold (p50)
+      ---
+      duration_ms: 652.318292
+      type: 'test'
+      ...
+    # Subtest: napi-rs: .node file not found, skipping
+    ok 3 - napi-rs: .node file not found, skipping # SKIP
+      ---
+      duration_ms: 0.058542
+      type: 'test'
+      ...
+    1..3
+ok 55 - transport performance
+  ---
+  duration_ms: 677.561
+  type: 'suite'
+  ...
+# Subtest: isDivideError narrows a declared domain error code
+ok 56 - isDivideError narrows a declared domain error code
+  ---
+  duration_ms: 0.790292
+  type: 'test'
+  ...
+# Subtest: isDivideError rejects undeclared codes — the runtime contract stays open
+ok 57 - isDivideError rejects undeclared codes — the runtime contract stays open
+  ---
+  duration_ms: 0.121208
+  type: 'test'
+  ...
+# Subtest: isDivideError rejects non-RustraCommandError values
+ok 58 - isDivideError rejects non-RustraCommandError values
+  ---
+  duration_ms: 0.057875
+  type: 'test'
+  ...
+# Subtest: resource guards cover the declared resource.not_found code
+ok 59 - resource guards cover the declared resource.not_found code
+  ---
+  duration_ms: 0.161625
+  type: 'test'
+  ...
+# Subtest: createItem sends correct command and returns item
+ok 60 - createItem sends correct command and returns item
+  ---
+  duration_ms: 0.730583
+  type: 'test'
+  ...
+# Subtest: getItem retrieves item by id
+ok 61 - getItem retrieves item by id
+  ---
+  duration_ms: 0.274792
+  type: 'test'
+  ...
+# Subtest: getItem returns null for missing item
+ok 62 - getItem returns null for missing item
+  ---
+  duration_ms: 0.068209
+  type: 'test'
+  ...
+# Subtest: listItems returns filtered items
+ok 63 - listItems returns filtered items
+  ---
+  duration_ms: 0.073041
+  type: 'test'
+  ...
+# Subtest: updateItem patches name and value
+ok 64 - updateItem patches name and value
+  ---
+  duration_ms: 0.128917
+  type: 'test'
+  ...
+# Subtest: deleteItem returns deleted status
+ok 65 - deleteItem returns deleted status
+  ---
+  duration_ms: 0.059584
+  type: 'test'
+  ...
+# Subtest: updateItem encode includes Option fields (name/value) — past silent-drop regression
+ok 66 - updateItem encode includes Option fields (name/value) — past silent-drop regression
+  ---
+  duration_ms: 1.642916
+  type: 'test'
+  ...
+# Subtest: updateItem encode with Some(value) — both options present
+ok 67 - updateItem encode with Some(value) — both options present
+  ---
+  duration_ms: 0.2725
+  type: 'test'
+  ...
+# Subtest: updateItem decode round-trips Option fields
+ok 68 - updateItem decode round-trips Option fields
+  ---
+  duration_ms: 0.30375
+  type: 'test'
+  ...
+# Subtest: updateItem decode None item
+ok 69 - updateItem decode None item
+  ---
+  duration_ms: 0.065875
+  type: 'test'
+  ...
+# Subtest: listItems encode includes Option<minValue>
+ok 70 - listItems encode includes Option<minValue>
+  ---
+  duration_ms: 0.090583
+  type: 'test'
+  ...
+# Subtest: listItems decode round-trips Vec<struct>
+ok 71 - listItems decode round-trips Vec<struct>
+  ---
+  duration_ms: 0.194125
+  type: 'test'
+  ...
+# Subtest: createItem/getItem round-trip
+ok 72 - createItem/getItem round-trip
+  ---
+  duration_ms: 0.205542
+  type: 'test'
+  ...
+# Subtest: all crud commands are registered — no silent partial codecs
+ok 73 - all crud commands are registered — no silent partial codecs
+  ---
+  duration_ms: 0.170209
+  type: 'test'
+  ...
+1..73
+# tests 75
+# suites 1
+# pass 74
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 1431.32575

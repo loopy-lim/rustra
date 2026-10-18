@@ -1,0 +1,9 @@
+[onboarding:init] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js init onboarding-probe (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT)
+Created rustra project in /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe:
+  Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+  Config host sections: node
+
+Next steps:
+  cd onboarding-probe
+  bun install
+  bun run start

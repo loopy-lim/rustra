@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T04:03:38.013Z",
+  "ok": true,
+  "consumption": "source-injected",
+  "sourceBefore": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "721383474ffea31aa886c6a07e3195814faba30a48953f0403dbdfda9dfdac29",
+    "sourceFileCount": 1115
+  },
+  "sourceAfter": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "721383474ffea31aa886c6a07e3195814faba30a48953f0403dbdfda9dfdac29",
+    "sourceFileCount": 1115
+  },
+  "sourceStable": true,
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v22.21.1",
+    "packageManager": "bun",
+    "host": "node",
+    "sdkInstallationIncluded": false,
+    "cargoOffline": true
+  },
+  "cache": {
+    "cargoTarget": "shared-or-external",
+    "cargoTargetDir": "/Users/loopy/dev/ll3/rustra-bridge/target/onboarding-shared",
+    "dependencyDownloads": "existing-system-cache-not-cleared"
+  },
+  "measurements": {
+    "firstRustCallMs": 8477.77,
+    "warmStartMs": null,
+    "contractChangeToCallMs": 1061.9582499999997,
+    "javascriptChangeToCallMs": null,
+    "rustImplementationChangeToCallMs": null,
+    "watchDetectionToCallMs": null,
+    "failureRecoveryMs": null,
+    "sdkDownloadMs": null
+  },
+  "iterationMethod": "explicit-command",
+  "rawLogDirectory": "/tmp/rustra-20261013-gate-final.json.logs",
+  "steps": [
+    {
+      "name": "init",
+      "durationMs": 92.18370800000002,
+      "startedAfterMs": 0.027999999999991587,
+      "completedAfterMs": 92.21170800000002,
+      "ok": true
+    },
+    {
+      "name": "doctor",
+      "durationMs": 207.04908400000002,
+      "startedAfterMs": 92.665291,
+      "completedAfterMs": 299.714375,
+      "ok": true
+    },
+    {
+      "name": "build",
+      "durationMs": 7718.675625,
+      "startedAfterMs": 299.719625,
+      "completedAfterMs": 8018.39525,
+      "ok": true
+    },
+    {
+      "name": "codegen",
+      "durationMs": 304.17383399999926,
+      "startedAfterMs": 8018.484791,
+      "completedAfterMs": 8322.658625,
+      "ok": true
+    },
+    {
+      "name": "demo",
+      "durationMs": 155.1051669999997,
+      "startedAfterMs": 8322.664832999999,
+      "completedAfterMs": 8477.77,
+      "ok": true
+    },
+    {
+      "name": "codegen-check",
+      "durationMs": 304.69120799999837,
+      "startedAfterMs": 8477.7765,
+      "completedAfterMs": 8782.467708,
+      "ok": true
+    },
+    {
+      "name": "mutate",
+      "durationMs": 2.4610410000004777,
+      "startedAfterMs": 8782.472624999999,
+      "completedAfterMs": 8784.933666,
+      "ok": true
+    },
+    {
+      "name": "regen",
+      "durationMs": 708.0337920000002,
+      "startedAfterMs": 8784.938541,
+      "completedAfterMs": 9492.972333000002,
+      "ok": true
+    },
+    {
+      "name": "rebuild",
+      "durationMs": 294.7520830000012,
+      "startedAfterMs": 9492.977208,
+      "completedAfterMs": 9787.729291,
+      "ok": true
+    },
+    {
+      "name": "verify",
+      "durationMs": 56.69670899999983,
+      "startedAfterMs": 9787.734165999998,
+      "completedAfterMs": 9844.430874999998,
+      "ok": true
+    }
+  ],
+  "producerBefore": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+  },
+  "producerAfter": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+  },
+  "producerStable": true
+}

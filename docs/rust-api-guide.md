@@ -1318,41 +1318,20 @@ The resident pattern keeps the large structure in Rust and sends only a referenc
 (index/ID) and the query per call. It needs no new runtime API — the command closure
 captures shared ownership:
 
-```rust
-use std::sync::Arc;
+Run the [resident tree example](../examples/resident-tree/README.md):
 
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct LoadInput { tree: Node }
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct ResidentInput {
-    tree_index: u32,
-    target: u64,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct SearchResult {
-    found: bool,
-    id: u64,
-    visited: u64,
-}
-
-let trees: Arc<Vec<Node>> = Arc::new(load_trees()); // once, outside the hot path
-
-let pkg = Package::builder("app.docs")
-    .command("loadTree", move |input: LoadInput| -> rustra::Result<u32> {
-        // store into shared state; return the index to use in later queries
-        // (with Arc<RwLock<Vec<Node>>> for a mutable store)
-        todo!()
-    })
-    .command("findNode", move |input: ResidentInput| {
-        let root = trees
-            .get(input.tree_index as usize)
-            .ok_or_else(|| rustra::RustraError::invalid_args("unknown tree index"))?;
-        Ok(find_node(root, input.target))
-    })
-    .build();
+```bash
+bun run build
+bun run test:app:resident-tree
 ```
+
+Its [Rust state](../crates/rustra/examples/support/resident_tree_model.rs) implements
+`loadTree`, `findNode`, `updateNode`, `releaseTree` and `clearTrees`. The generated
+TypeScript consumer verifies the contract and rejects released or stale-generation
+handles. IDs are never reused within the process. Trees, nodes and depth have explicit
+limits. `receipt.json` includes initial load, whole/resident per-call timings,
+request bytes and a measured break-even estimate. The example uses debug NDJSON;
+the historical binary benchmark below is a separate measurement.
 
 Each `findNode` call sends 5 bytes and returns 13 bytes where the whole-tree
 equivalent sends 579,546 bytes for the same 8,191-node tree.

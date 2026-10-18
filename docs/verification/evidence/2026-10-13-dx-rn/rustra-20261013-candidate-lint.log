@@ -1,0 +1,21 @@
+$ eslint 'packages/*/src/**/*.ts' 'scripts/**/*.ts' 'examples/calculator/**/*.ts' 'examples/crud/**/*.ts' 'examples/auth/**/*.ts' 'examples/streaming/**/*.ts' 'examples/tauri-calculator/**/*.ts' 'examples/reference-app/**/*.ts' 'examples/react-native-bare-calculator/**/*.ts' 'examples/rn-wasm-spike/**/*.ts'
+
+/private/tmp/rustra-doctor-final-4uf0t28g/examples/auth/apps/node-app.ts
+   13:21  warning  'RustraCommandError' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  112:9   warning  There is no `cause` attached to the symptom error being thrown                        preserve-caught-error
+
+/private/tmp/rustra-doctor-final-4uf0t28g/examples/auth/ts/auth.test.ts
+  3:21  warning  'RustraCommandError' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/private/tmp/rustra-doctor-final-4uf0t28g/examples/calculator/ts/adapter-compat.test.ts
+  74:15  warning  'command' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  74:24  warning  'args' is assigned a value but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+
+/private/tmp/rustra-doctor-final-4uf0t28g/examples/crud/ts/crud-operations.test.ts
+  9:38  warning  'args' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/private/tmp/rustra-doctor-final-4uf0t28g/examples/streaming/ts/streaming.test.ts
+  9:38  warning  'args' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 7 problems (0 errors, 7 warnings)
+

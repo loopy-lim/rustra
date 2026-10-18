@@ -1,0 +1,34 @@
+{"command":"yarn","args":["run","start"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/app"}
+yarn run v1.22.22
+$ rustra setup --config rustra.json --run
+[rustra] Checking setup tools...
+[rustra] Generating the Rust contract and TypeScript calls...
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/app/src/generated:
+  types.ts (unchanged)
+  commands.ts (unchanged)
+  contract.ts (unchanged)
+  frame-codecs.ts (unchanged)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[rustra] ⠋ JavaScript dependencies...
+[1/4] Resolving packages...
+success Already up-to-date.
+[rustra] ✓ JavaScript dependencies done in 0.1s
+[rustra] ⠋ Rust runtime (rustra-app)...
+[rustra] ✓ Rust runtime (rustra-app) done in 0.0s
+[rustra] ⠋ First Rust call...
+$ bun run src/index.ts
+hello from TypeScript
+[rustra] ✓ First Rust call done in 0.1s
+[rustra] Setup complete — demo succeeded.
+Done in 0.72s.
+warning Cannot find a suitable global folder. Tried these: "/usr/local, /Users/loopy/.yarn"
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/cargo-target/debug/generate`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+warning Cannot find a suitable global folder. Tried these: "/usr/local, /Users/loopy/.yarn"

@@ -1,0 +1,6 @@
+{"command":"yarn","args":["run","demo"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-yarn-E3lXJn/app"}
+yarn run v1.22.22
+$ bun run src/index.ts
+javascript iteration
+Done in 0.05s.
+warning Cannot find a suitable global folder. Tried these: "/usr/local, /Users/loopy/.yarn"

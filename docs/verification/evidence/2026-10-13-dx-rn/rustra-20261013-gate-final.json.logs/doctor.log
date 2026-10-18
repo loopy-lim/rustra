@@ -1,0 +1,18 @@
+[onboarding:doctor] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js doctor --config rustra.json (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+PASS config.file Config file is readable: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json
+PASS rustc.present rustc is available
+PASS rustc.msrv Rust 1.98.0 satisfies MSRV 1.88
+PASS cargo.present cargo is available
+PASS registry.reachability crates.io registry is reachable
+PASS js.runtime Node.js 18+ is available
+PASS node.runtime Node.js 18+ is available for the Node adapter
+SKIP toolchain.cpp C/C++ compiler is not required by the configured hosts
+SKIP toolchain.cmake CMake is not required by the configured hosts
+PASS section.node.build node: binary rustra-app from package rustra-app
+PASS codegen.rust_manifest Cargo manifest: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml
+PASS codegen.rust_binary Rust generator: rustra-app / generate
+WARN codegen.schema_output Schema is not generated yet: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/generated/schema.json
+  fix: Run rustra codegen --config rustra.json
+WARN codegen.output_directory Generated output directory will be created: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/src/generated
+  fix: Create the output directory or grant write permission
+SKIP codegen.generated_freshness Skipped freshness because schema.json is not generated yet

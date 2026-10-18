@@ -1,0 +1,39 @@
+{"command":"pnpm","args":["run","start"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app"}
+[rustra] Checking setup tools...
+[rustra] Generating the Rust contract and TypeScript calls...
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/src/generated:
+  types.ts (unchanged)
+  commands.ts (unchanged)
+  contract.ts (unchanged)
+  frame-codecs.ts (unchanged)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[rustra] ⠋ JavaScript dependencies...
+? Verifying lockfile against supply-chain policies (6 entries)...
+Update available! 12.6.0 → 12.11.2.
+Changelog: https://pnpm.io/v/12.11.2
+To update, run: pnpm self-update
+✓ Lockfile passes supply-chain policies (6 entries in 200ms)
+Lockfile is up to date, resolution step is skipped
+Packages: +3
++++
+Progress: resolved 3, reused 0, downloaded 0, added 3, done
+Done in 229ms using pnpm v12.6.0
+[rustra] ✓ JavaScript dependencies done in 0.2s
+[rustra] ⠋ Rust runtime (rustra-app)...
+[rustra] ✓ Rust runtime (rustra-app) done in 0.1s
+[rustra] ⠋ First Rust call...
+hello from TypeScript
+[rustra] ✓ First Rust call done in 0.1s
+[rustra] Setup complete — demo succeeded.
+$ rustra setup --config rustra.json --run
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/cargo-target/debug/generate`
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+$ bun run src/index.ts

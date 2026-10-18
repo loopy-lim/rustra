@@ -4,9 +4,10 @@
 // 생성 명령(gzip 왕복 바이트 일치, uuid v7 형식, 어댑터 에러 경로)을 점검한다.
 import { gzipCompress, gzipDecompress, uuidV7 } from '../generated/commands.js';
 import { RustraCommandError } from '../generated/types.js';
-// barrel(index) 대신 개별 모듈 import — react-doctor no-barrel-import.
-import { configure } from '../../../packages/types/src/global-config.js';
-import { createReactNativeEngine } from '../../../packages/react-native/src/react-native-core.js';
+// Use the same public package instances as generated commands and errors.
+// Mixing src/ imports and package dist/ creates distinct RustraCommandError classes.
+import { configure } from '@rustra/types';
+import { createReactNativeEngine } from '@rustra/react-native';
 import { gzipSync, gunzipSync } from 'node:zlib';
 
 const encoder = new TextEncoder();

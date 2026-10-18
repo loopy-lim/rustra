@@ -1296,41 +1296,20 @@ resident 조회는 115.6 ns–19.84 µs다
 resident 패턴은 대형 구조를 Rust 에 두고 호출마다 참조(인덱스/ID)와 조회 조건만 보낸다.
 새 런타임 API 가 필요 없다 — 커맨드 클로저가 공유 소유권을 캡처한다:
 
-```rust
-use std::sync::Arc;
+[실행 가능한 resident tree 예제](../examples/resident-tree/README.md)를 사용한다.
 
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct LoadInput { tree: Node }
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct ResidentInput {
-    tree_index: u32,
-    target: u64,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct SearchResult {
-    found: bool,
-    id: u64,
-    visited: u64,
-}
-
-let trees: Arc<Vec<Node>> = Arc::new(load_trees()); // 1회, 핫패스 밖
-
-let pkg = Package::builder("app.docs")
-    .command("loadTree", move |input: LoadInput| -> rustra::Result<u32> {
-        // 공유 상태에 저장하고 이후 조회에 쓸 인덱스를 돌려준다
-        // (가변 저장소는 Arc<RwLock<Vec<Node>>>)
-        todo!()
-    })
-    .command("findNode", move |input: ResidentInput| {
-        let root = trees
-            .get(input.tree_index as usize)
-            .ok_or_else(|| rustra::RustraError::invalid_args("unknown tree index"))?;
-        Ok(find_node(root, input.target))
-    })
-    .build();
+```bash
+bun run build
+bun run test:app:resident-tree
 ```
+
+[Rust 상태 구현](../crates/rustra/examples/support/resident_tree_model.rs)은
+`loadTree`, `findNode`, `updateNode`, `releaseTree`, `clearTrees`를 제공한다.
+생성 TypeScript 소비자가 계약을 확인하고 해제된 핸들과 이전 generation을 거부한다.
+프로세스 안에서 ID를 재사용하지 않으며 트리 수·노드 수·깊이를 제한한다.
+`receipt.json`에 초기 적재 시간, 전체/resident 개별 호출 시간, 요청 바이트,
+관측된 손익분기점을 남긴다. 이 실행 예제는 debug NDJSON이며 아래의 과거 binary
+벤치마크와 측정 범위가 다르다.
 
 같은 8,191노드 트리에서 `findNode` 호출 한 번은 5바이트를 보내 13바이트를 돌려받는다.
 전체 트리 방식은 같은 결과에 579,546바이트를 보낸다.

@@ -1,0 +1,417 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T04:04:07.418Z",
+  "ok": true,
+  "consumption": "source-injected",
+  "sourceBefore": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "721383474ffea31aa886c6a07e3195814faba30a48953f0403dbdfda9dfdac29",
+    "sourceFileCount": 1115
+  },
+  "sourceAfter": {
+    "sourceSha": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+    "sourceDirty": true,
+    "sourceTreeHash": "721383474ffea31aa886c6a07e3195814faba30a48953f0403dbdfda9dfdac29",
+    "sourceFileCount": 1115
+  },
+  "sourceStable": true,
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v22.21.1",
+    "packageManager": "pnpm",
+    "packageManagerVersion": "12.6.0",
+    "scriptsRuntime": "bun",
+    "host": "node",
+    "sdkInstallationIncluded": false,
+    "cargoOffline": true
+  },
+  "cache": {
+    "cargoTarget": "fresh-project-target",
+    "cargoTargetDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/cargo-target",
+    "dependencyDownloads": "shared-cache-not-cleared"
+  },
+  "measurements": {
+    "firstRustCallMs": 9837.872000000001,
+    "warmStartMs": 727.1857920000002,
+    "contractChangeToCallMs": 1037.8857079999998,
+    "javascriptChangeToCallMs": 51.31416700000045,
+    "rustImplementationChangeToCallMs": 798.9589169999999,
+    "watchDetectionToCallMs": null,
+    "failureRecoveryMs": null,
+    "sdkDownloadMs": null
+  },
+  "iterationMethod": "explicit-command",
+  "rawLogDirectory": "/tmp/rustra-20261013-pnpm-current.json.logs",
+  "steps": [
+    {
+      "name": "init",
+      "ok": true,
+      "durationMs": 85.564833,
+      "startedAfterMs": 0.05316700000000196,
+      "completedAfterMs": 85.618
+    },
+    {
+      "name": "source-setup",
+      "ok": true,
+      "durationMs": 0.35712499999999636,
+      "startedAfterMs": 85.631958,
+      "completedAfterMs": 85.989083
+    },
+    {
+      "name": "first-call",
+      "ok": true,
+      "durationMs": 9751.835000000001,
+      "startedAfterMs": 86.03699999999998,
+      "completedAfterMs": 9837.872000000001
+    },
+    {
+      "name": "warm-start",
+      "ok": true,
+      "durationMs": 727.1857920000002,
+      "startedAfterMs": 9888.835125000001,
+      "completedAfterMs": 10616.020917000002
+    },
+    {
+      "name": "javascript-change",
+      "ok": true,
+      "durationMs": 0.18470800000068266,
+      "startedAfterMs": 10645.90075,
+      "completedAfterMs": 10646.085458000001
+    },
+    {
+      "name": "javascript-verify",
+      "ok": true,
+      "durationMs": 51.122417000000496,
+      "startedAfterMs": 10646.0925,
+      "completedAfterMs": 10697.214917000001
+    },
+    {
+      "name": "implementation-change",
+      "ok": true,
+      "durationMs": 0.1227920000001177,
+      "startedAfterMs": 10710.503,
+      "completedAfterMs": 10710.625792
+    },
+    {
+      "name": "implementation-verify",
+      "ok": true,
+      "durationMs": 798.8266669999994,
+      "startedAfterMs": 10710.635250000001,
+      "completedAfterMs": 11509.461917
+    },
+    {
+      "name": "mutate",
+      "ok": true,
+      "durationMs": 0.4310829999994894,
+      "startedAfterMs": 11521.728500000001,
+      "completedAfterMs": 11522.159583
+    },
+    {
+      "name": "verify",
+      "ok": true,
+      "durationMs": 1037.4285409999993,
+      "startedAfterMs": 11522.185667000002,
+      "completedAfterMs": 12559.614208
+    }
+  ],
+  "artifacts": [
+    {
+      "phase": "first-call",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "f17dfbfa8061cacfcf550f65fff70306eeea1742e0a368d8e0f6da369025c7e5"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "7fa0a967634c85e794130b2e6f3064851325a5b42e4b3f13427f2a434f35edb9"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "e645af61675c9b953e9bd49b1a61f39eea8e9610956160c32e29b560cd63f7ab"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "81a5a231c7b218bba572f06655d9001c7f54a82edfefca893c927352037f701d"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5"
+        }
+      ],
+      "native": {
+        "path": "debug/rustra-app",
+        "sha256": "315db7db7c779a75349d8ec1c39f42668f53e1cfe9c690aa212598fb39a28244"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+cli@file+..+..+..+packages+cli/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+types@file+..+..+..+packages+types/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/node",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+node@file+..+..+..+packages+node/node_modules/@rustra/node",
+          "files": 21,
+          "sha256": "9473eba7a6bc508a754ae5696ecd8c8b74c39390bde19b962152b5bfb1e62e93"
+        }
+      ]
+    },
+    {
+      "phase": "warm-start",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "f17dfbfa8061cacfcf550f65fff70306eeea1742e0a368d8e0f6da369025c7e5"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "7fa0a967634c85e794130b2e6f3064851325a5b42e4b3f13427f2a434f35edb9"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "e645af61675c9b953e9bd49b1a61f39eea8e9610956160c32e29b560cd63f7ab"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "81a5a231c7b218bba572f06655d9001c7f54a82edfefca893c927352037f701d"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5"
+        }
+      ],
+      "native": {
+        "path": "debug/rustra-app",
+        "sha256": "315db7db7c779a75349d8ec1c39f42668f53e1cfe9c690aa212598fb39a28244"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+cli@file+..+..+..+packages+cli/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+types@file+..+..+..+packages+types/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/node",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+node@file+..+..+..+packages+node/node_modules/@rustra/node",
+          "files": 21,
+          "sha256": "9473eba7a6bc508a754ae5696ecd8c8b74c39390bde19b962152b5bfb1e62e93"
+        }
+      ]
+    },
+    {
+      "phase": "javascript-change",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "f17dfbfa8061cacfcf550f65fff70306eeea1742e0a368d8e0f6da369025c7e5"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "7fa0a967634c85e794130b2e6f3064851325a5b42e4b3f13427f2a434f35edb9"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "e645af61675c9b953e9bd49b1a61f39eea8e9610956160c32e29b560cd63f7ab"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "3d9322d47247107d8d6121b19339853cf058c0e6aa954bb9bfba20b4258ba48d"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5"
+        }
+      ],
+      "native": {
+        "path": "debug/rustra-app",
+        "sha256": "315db7db7c779a75349d8ec1c39f42668f53e1cfe9c690aa212598fb39a28244"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+cli@file+..+..+..+packages+cli/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+types@file+..+..+..+packages+types/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/node",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+node@file+..+..+..+packages+node/node_modules/@rustra/node",
+          "files": 21,
+          "sha256": "9473eba7a6bc508a754ae5696ecd8c8b74c39390bde19b962152b5bfb1e62e93"
+        }
+      ]
+    },
+    {
+      "phase": "implementation-change",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "f17dfbfa8061cacfcf550f65fff70306eeea1742e0a368d8e0f6da369025c7e5"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "7fa0a967634c85e794130b2e6f3064851325a5b42e4b3f13427f2a434f35edb9"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "95124737ea4d642af5390eb0203b9d6db8a0f38f751c8a3480946f5e1eed39ac"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "81a5a231c7b218bba572f06655d9001c7f54a82edfefca893c927352037f701d"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "85ed6df29454d572f79e841eb727443ab9192eed1f4d6a792447e74c410572b5"
+        }
+      ],
+      "native": {
+        "path": "debug/rustra-app",
+        "sha256": "06191eae8f02f0d9a71f6c4efe9ef5c80edde0419d75340c0a37e77794a6cc88"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+cli@file+..+..+..+packages+cli/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+types@file+..+..+..+packages+types/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/node",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+node@file+..+..+..+packages+node/node_modules/@rustra/node",
+          "files": 21,
+          "sha256": "9473eba7a6bc508a754ae5696ecd8c8b74c39390bde19b962152b5bfb1e62e93"
+        }
+      ]
+    },
+    {
+      "phase": "contract-change",
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "c3f68c6d3776714fa70766b9727bfcac5359ef7007dafbff3e4acdf4b2eed540"
+        },
+        {
+          "path": "package.json",
+          "sha256": "f17dfbfa8061cacfcf550f65fff70306eeea1742e0a368d8e0f6da369025c7e5"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "7fa0a967634c85e794130b2e6f3064851325a5b42e4b3f13427f2a434f35edb9"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "7e13856d3121b7348e128aadbc0f1e6f9231e630f8bb32cc54fa8b47e5d6f453"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "ed7ede6fefffb8a1ed68358adbf7a62028df93cba49ce48edb396f25f33f61e8"
+        },
+        {
+          "path": "src/generated/contract.ts",
+          "sha256": "070c1d72aca3003b7e31d6f3f1cc02e7f6229faacdc489568f59752fbfbd0a7f"
+        }
+      ],
+      "native": {
+        "path": "debug/rustra-app",
+        "sha256": "c202d30c2bd3bf8c3348a9d19d2daf49da188ef0a6f9c1572635a5aa4a690eb5"
+      },
+      "installedPackages": [
+        {
+          "name": "@rustra/cli",
+          "version": "0.12.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+cli@file+..+..+..+packages+cli/node_modules/@rustra/cli",
+          "files": 151,
+          "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+        },
+        {
+          "name": "@rustra/types",
+          "version": "0.12.1",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+types@file+..+..+..+packages+types/node_modules/@rustra/types",
+          "files": 53,
+          "sha256": "7732498ce3e6466aac158bbf0487d184f49d004531707140b6893ef7d0d86bc1"
+        },
+        {
+          "name": "@rustra/node",
+          "version": "0.11.0",
+          "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app/node_modules/.pnpm/@rustra+node@file+..+..+..+packages+node/node_modules/@rustra/node",
+          "files": 21,
+          "sha256": "9473eba7a6bc508a754ae5696ecd8c8b74c39390bde19b962152b5bfb1e62e93"
+        }
+      ]
+    }
+  ],
+  "producerBefore": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+  },
+  "producerAfter": {
+    "name": "@rustra/cli",
+    "version": "0.12.0",
+    "resolvedDirectory": "/Users/loopy/dev/ll3/rustra-bridge/packages/cli",
+    "files": 151,
+    "sha256": "faebdb0b84ac21c3032188b3cd677b43506a4e2912d3cd3cd28cf6f844ae64da"
+  },
+  "producerStable": true,
+  "projectDir": "/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-sNIfna/app"
+}

@@ -65,6 +65,22 @@ fn gzip_rejects_invalid_stream_with_args_error() {
 }
 
 #[test]
+fn gzip_rejects_decompression_beyond_payload_limit() {
+    // A tiny valid gzip member must not cause unbounded expansion before FFI's
+    // final output-length check. Exercise the typed path too, which bypasses FFI.
+    let limit = rustra::ffi::max_payload_bytes();
+    let compressed = gzip_compress(GzipPayload {
+        data: vec![0; limit + 1],
+    })
+    .unwrap();
+    assert!(compressed.data.len() < 4096);
+    let error = rn_experiment_package()
+        .invoke::<_, GzipPayload>("gzipDecompress", compressed)
+        .unwrap_err();
+    assert_eq!(error.code(), "payload.too_large");
+}
+
+#[test]
 fn gzip_round_trip_via_buffer_ffi() {
     // 첫 호출이 FFI 전역 컨텍스트에 패키지를 등록한다(OnceLock first-wins).
     let _ = rn_experiment_package();

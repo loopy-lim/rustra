@@ -1,0 +1,15 @@
+[onboarding:codegen] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js codegen --config rustra.json (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json
+Generated TypeScript files in /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/src/generated:
+  types.ts
+  commands.ts
+  contract.ts
+  frame-codecs.ts
+  frame-registry.ts
+  node.ts
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/onboarding-shared/debug/generate`

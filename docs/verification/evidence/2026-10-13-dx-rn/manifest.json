@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T04:06:02.535749+00:00",
+  "scope": "local source-injected onboarding and RN host/collector verification; no device benchmark result",
+  "candidate": {
+    "snapshot": "rustra-20261013-candidate-source-snapshot.json",
+    "excludes": [
+      "pre-existing user untracked calculator/apps/bun-ffi-bench.ts",
+      "pre-existing user untracked calculator/apps/scriptc-bench.ts",
+      "Git-ignored worktrees and build artifacts"
+    ],
+    "reactDoctor": {
+      "version": "0.9.12",
+      "score": 100,
+      "issues": 0,
+      "scannedFiles": 588
+    },
+    "nodeTests": {
+      "passed": 74,
+      "failed": 0,
+      "skipped": 1,
+      "skipReason": "optional napi .node artifact absent"
+    }
+  },
+  "onboarding": {
+    "helperTests": 25,
+    "pnpm": "rustra-20261013-pnpm-current.json",
+    "yarn": "rustra-20261013-yarn-final.json",
+    "gate": "rustra-20261013-gate-final.json",
+    "earlierSourceChangedReceipt": "rustra-20261013-pnpm-final.json",
+    "timingUse": "functional journey diagnostics; concurrent unrelated checks mean these are not a performance comparison"
+  },
+  "rn": {
+    "unitTests": 9,
+    "adapterChecks": 4,
+    "rustTests": 6,
+    "nativeTypecheck": true,
+    "nodeRustConsumer": true,
+    "nativePerformanceLaunches": 0,
+    "allocationCopyMeasurements": null
+  },
+  "files": [
+    {
+      "path": "rustra-20261013-candidate-lint.log",
+      "bytes": 1673,
+      "sha256": "56bb5c138f8436911d5fa32a34c26aa450702003d9d00a039f4a80cccbe4f4a9"
+    },
+    {
+      "path": "rustra-20261013-candidate-source-snapshot.json",
+      "bytes": 300521,
+      "sha256": "328f57fa894710a9c313ced704c72ff939c7c7fa9ddb61acaf248cb515353144"
+    },
+    {
+      "path": "rustra-20261013-candidate-ts-node-final.log",
+      "bytes": 15048,
+      "sha256": "1e0102b6658081588ad0fd04674cb8568e2fa48b7ef61cfd7dfdc3d44d2efb3a"
+    },
+    {
+      "path": "rustra-20261013-dx-format-final.log",
+      "bytes": 66,
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json",
+      "bytes": 3705,
+      "sha256": "9e8f26d7011869eea0f7661bea50649a87b8597e4f910b79c886dc993737397d"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/build.log",
+      "bytes": 1830,
+      "sha256": "c9466e2cf46f5d03ac9921eda007c931c289bf8533b921e2c4a1d7bee736a358"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/codegen-check.log",
+      "bytes": 1045,
+      "sha256": "2b329e70649935ac07d11be80301a7d90132ff1973166ac0b1e1e1ee65318cf7"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/codegen.log",
+      "bytes": 1286,
+      "sha256": "31cd4e3f93cb12fee7b43596fe693c17c5fa4b8588c24f05bce0dac611fcec30"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/demo.log",
+      "bytes": 173,
+      "sha256": "64fff2d402c7abf43337981a88a4f1d1409d9306fcc1ac0186121d1cd63b5ff4"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/doctor.log",
+      "bytes": 1716,
+      "sha256": "56076b48c14b2d7cdb615af02fcca5365d66e7e010630302abe6799b5b990d6f"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/init.log",
+      "bytes": 604,
+      "sha256": "37fca191756bad830405410138dead7db0ebf5ea1688635f32f49430b7526b5c"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/rebuild.log",
+      "bytes": 334,
+      "sha256": "c264c659a1522b663e79e0490888bf28ab15c23339da417c8d2242d6d5128ecd"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/regen.log",
+      "bytes": 1624,
+      "sha256": "5e1a5ed0c5ef25f2c5f825d77a208d76663399221f8210ed12a5633a260df03d"
+    },
+    {
+      "path": "rustra-20261013-gate-final.json.logs/verify.log",
+      "bytes": 175,
+      "sha256": "7d4d03af13b9c4c467a7de183b096406f6044d48c846ea013b2d62b5c80a188c"
+    },
+    {
+      "path": "rustra-20261013-gate-final.log",
+      "bytes": 9273,
+      "sha256": "3da3470e6f81ec8f8e50f192c37da8683d2e71de1dfbbbc325d1d826f9c33835"
+    },
+    {
+      "path": "rustra-20261013-onboarding-tests-final.log",
+      "bytes": 5568,
+      "sha256": "89afb53d4e3f3a7863a4fc280ea8734db98a5380e76776abb6d9cf5b3f8453b3"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json",
+      "bytes": 15509,
+      "sha256": "d2156e0171f9182d84b8fcaaea162bfb0d92afe54d3af086f6fb111ea4622fdd"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json.logs/first-call.log",
+      "bytes": 4894,
+      "sha256": "b0cf87a138c44f105bc24b794d6e1fd632f617efd148bf2c64429134402668db"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json.logs/implementation-verify.log",
+      "bytes": 2020,
+      "sha256": "5012830d20b32b53c84f1d698d0f7ba60899616b125ad5ed524022f719c558ac"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json.logs/init.log",
+      "bytes": 695,
+      "sha256": "a19afba79d805e2cc24abb0aa4abf65a83c66b2b7c70ee442a42c3ffb0928db4"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json.logs/javascript-verify.log",
+      "bytes": 168,
+      "sha256": "16fddf04c19f3050b69befd760d5cd0d3950f9a7b7d78822dc5eb697a9a7db4e"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json.logs/verify.log",
+      "bytes": 2181,
+      "sha256": "fafdf7726feebf677ef43fc3c22c49008a157b882bf80aa73b2f6e1ffb089081"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.json.logs/warm-start.log",
+      "bytes": 2262,
+      "sha256": "4677f43506e5df92f0ef1874ecff5035cef255c3eb97971837bef66dcb66cd3d"
+    },
+    {
+      "path": "rustra-20261013-pnpm-current.log",
+      "bytes": 10775,
+      "sha256": "f86197592e9ecbcaabba11ee70d802baa7db5a96e45999797cd08737d07c1fe6"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json",
+      "bytes": 15491,
+      "sha256": "81383a8456624837543a81eac39be068be01b4c3fe6e473f40631a66630287b7"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json.logs/first-call.log",
+      "bytes": 4894,
+      "sha256": "2b214c6a487e3ec323049e612f8dd0ea7e3cd5ec006557212219f3afd9a470af"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json.logs/implementation-verify.log",
+      "bytes": 2020,
+      "sha256": "f7b90a2b53b70807c6ad51a285085f283e4e04c8aac19ae667cea58e0e13cce6"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json.logs/init.log",
+      "bytes": 695,
+      "sha256": "726511cf3cc7c549a052366df412a9b8d1c6c355026b6b20457689d29d694aae"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json.logs/javascript-verify.log",
+      "bytes": 168,
+      "sha256": "5428398fd25f90b455c7861255d718d020071a0eafe253ac21c9e3eb951a9083"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json.logs/verify.log",
+      "bytes": 2316,
+      "sha256": "e77da0a492f4b5cda2074fbdafe4776886f972c45cb7bdbbb63135b0a50afbaf"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.json.logs/warm-start.log",
+      "bytes": 2262,
+      "sha256": "0306bb5a3fe1d2c9c9c520731bb87914228e16e62ad143fe8897a7ae03c77765"
+    },
+    {
+      "path": "rustra-20261013-pnpm-final.log",
+      "bytes": 10908,
+      "sha256": "3afcba6e115f77ad3ea443a79abb94b1aadd5aafe0f113d870c558ca4fd3193c"
+    },
+    {
+      "path": "rustra-20261013-react-doctor-source.log",
+      "bytes": 519,
+      "sha256": "dbc0d0a6fb0a92a7ce3b061161b39f57c5c1d97aa1ec4fdc011fd7626b889244"
+    },
+    {
+      "path": "rustra-20261013-rn-codegen-check.log",
+      "bytes": 799,
+      "sha256": "723ed370d6128363f97a2265f53c2bd26563984b720b2e7336646e0cb9ac8278"
+    },
+    {
+      "path": "rustra-20261013-rn-gate-final.log",
+      "bytes": 2003,
+      "sha256": "7e81f0634c34ec8903325e1a830a5f462e705cd0916a186c67aff9ae442a63cd"
+    },
+    {
+      "path": "rustra-20261013-rn-native-typecheck-final.log",
+      "bytes": 39,
+      "sha256": "23b52931443eac39f0cead1603eec174bb961659dec9740bd1a84eb24ae13f4a"
+    },
+    {
+      "path": "rustra-20261013-rn-rust.log",
+      "bytes": 1444,
+      "sha256": "49b33f2f5130a6371b75b2b353efb24433ed7c595289b08182344a97e200e075"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json",
+      "bytes": 14571,
+      "sha256": "279f9201d16d3f656e9d59dc9499add82be4854c745ca787ba874324b737be9a"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json.logs/first-call.log",
+      "bytes": 4309,
+      "sha256": "11b6a3bdc73ec25c8a5a0f6c36061e4eb70564b802c03f4ad8e7744a99e89595"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json.logs/implementation-verify.log",
+      "bytes": 2145,
+      "sha256": "5ee63bab3b1d3dba31f3d34fcab4f5200edbdcb85515c956fc631fd4c78c47ff"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json.logs/init.log",
+      "bytes": 695,
+      "sha256": "2caeb426bb23e48f955809a78bc09e3ef2dc1e40d312335147a5790168c00b14"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json.logs/javascript-verify.log",
+      "bytes": 293,
+      "sha256": "227e019f8689efcb35cae56a97f5bc76aae10fc2bedca09f367b2bd4b414734b"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json.logs/verify.log",
+      "bytes": 2306,
+      "sha256": "923559f90fe9742905966863ffb1e2d539c3bf25194501af467968e107270baa"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.json.logs/warm-start.log",
+      "bytes": 1956,
+      "sha256": "06ae90256041a2ea9e4879cfb19df4b80a685e9e58f29131e30219cb1141ec01"
+    },
+    {
+      "path": "rustra-20261013-yarn-final.log",
+      "bytes": 10257,
+      "sha256": "e5f1f982eda5fd44e1d93965ba201ed3a0cf4c15cf666e0278c816e9fe04da13"
+    }
+  ]
+}

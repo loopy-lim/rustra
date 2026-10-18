@@ -1,0 +1,124 @@
+[onboarding:init] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js init onboarding-probe (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT)
+Created rustra project in /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe:
+  Cargo.toml, src/lib.rs, src/main.rs, src/bin/generate.rs, src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json
+  Config host sections: node
+
+Next steps:
+  cd onboarding-probe
+  bun install
+  bun run start
+[onboarding:doctor] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js doctor --config rustra.json (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+PASS config.file Config file is readable: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json
+PASS rustc.present rustc is available
+PASS rustc.msrv Rust 1.98.0 satisfies MSRV 1.88
+PASS cargo.present cargo is available
+PASS registry.reachability crates.io registry is reachable
+PASS js.runtime Node.js 18+ is available
+PASS node.runtime Node.js 18+ is available for the Node adapter
+SKIP toolchain.cpp C/C++ compiler is not required by the configured hosts
+SKIP toolchain.cmake CMake is not required by the configured hosts
+PASS section.node.build node: binary rustra-app from package rustra-app
+PASS codegen.rust_manifest Cargo manifest: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml
+PASS codegen.rust_binary Rust generator: rustra-app / generate
+WARN codegen.schema_output Schema is not generated yet: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/generated/schema.json
+  fix: Run rustra codegen --config rustra.json
+WARN codegen.output_directory Generated output directory will be created: /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/src/generated
+  fix: Create the output directory or grant write permission
+SKIP codegen.generated_freshness Skipped freshness because schema.json is not generated yet
+[onboarding:build] cargo build (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+Locking 42 packages to latest compatible versions
+      Adding schemars v0.8.22 (available: v1.2.2)
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling version_check v0.9.5
+   Compiling serde_core v1.0.229
+   Compiling typenum v1.20.1
+   Compiling serde v1.0.229
+   Compiling thiserror v2.0.21
+   Compiling zmij v1.0.23
+   Compiling autocfg v1.5.1
+   Compiling libc v0.2.190
+   Compiling equivalent v1.0.2
+   Compiling serde_json v1.0.151
+   Compiling hashbrown v0.17.1
+   Compiling schemars v0.8.22
+   Compiling generic-array v0.14.7
+   Compiling memchr v2.8.3
+   Compiling hashbrown v0.12.3
+   Compiling indexmap v1.9.3
+   Compiling itoa v1.0.18
+   Compiling dyn-clone v1.0.20
+   Compiling cfg-if v1.0.5
+   Compiling rustra-naming v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra-naming)
+   Compiling hex v0.4.3
+   Compiling syn v3.0.7
+   Compiling syn v2.0.119
+   Compiling indexmap v2.14.2
+   Compiling cpufeatures v0.2.17
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling serde_derive_internals v0.29.1
+   Compiling schemars_derive v0.8.22
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling rustra-macros v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra-macros)
+   Compiling cobs v0.3.0
+   Compiling postcard v1.1.3
+   Compiling rustra v0.12.0 (/Users/loopy/dev/ll3/rustra-bridge/crates/rustra)
+   Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.67s
+[onboarding:codegen] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js codegen --config rustra.json (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json
+Generated TypeScript files in /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/src/generated:
+  types.ts
+  commands.ts
+  contract.ts
+  frame-codecs.ts
+  frame-registry.ts
+  node.ts
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/onboarding-shared/debug/generate`
+[onboarding:demo] bun run demo (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+hello from TypeScript
+$ bun run src/index.ts
+[onboarding:codegen-check] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js codegen --config rustra.json --check (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-codegen-check-jfHsst/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.1s
+[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json --check
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/onboarding-shared/debug/generate`
+[onboarding:regen] /Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node /Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js codegen --config rustra.json (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+[rustra] Rust schema: cargo run --manifest-path /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 0.6s
+[rustra] TypeScript/C++: generate --config /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/rustra.json
+Generated TypeScript files in /private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe/src/generated:
+  types.ts (updated)
+  commands.ts (updated)
+  contract.ts (updated)
+  frame-codecs.ts (updated)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[rustra] Note: generated code changed — rebuild the runtime binary before invoking (cargo build), or invokes may fail with contract.mismatch.
+   Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/onboarding-shared/debug/generate`
+[onboarding:rebuild] cargo build (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s
+[onboarding:verify] bun run demo (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+hello from TypeScript
+$ bun run src/index.ts
+[onboarding] receipt: /tmp/rustra-20261013-gate-final.json
+[onboarding] init → doctor → build → codegen → demo → codegen-check → mutate → regen → rebuild → verify: all green
+[onboarding] timings: init 92.18370800000002ms, doctor 207.04908400000002ms, build 7718.675625ms, codegen 304.17383399999926ms, demo 155.1051669999997ms, codegen-check 304.69120799999837ms, mutate 2.4610410000004777ms, regen 708.0337920000002ms, rebuild 294.7520830000012ms, verify 56.69670899999983ms

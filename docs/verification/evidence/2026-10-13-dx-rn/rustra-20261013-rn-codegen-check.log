@@ -1,0 +1,9 @@
+$ bun ../../packages/cli/src/index.ts codegen --config rustra.json --check
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/examples/rn-experiment/Cargo.toml --package rustra-rn-experiment --bin generate
+[rustra] ⠋ Rust schema generation (rustra-rn-experiment/generate)...
+    Blocking waiting for file lock on artifact directory
+[rustra] ⠋ Rust schema generation (rustra-rn-experiment/generate) still running (1s)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.98s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/debug/generate`
+[rustra] ✓ Rust schema generation (rustra-rn-experiment/generate) done in 1.0s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/examples/rn-experiment/rustra.json --check

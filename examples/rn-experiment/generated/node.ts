@@ -23,10 +23,10 @@ import { GENERATED_CONTRACT_HASH } from './contract.js';
 export * from './commands.js';
 
 const targetDirectory = new URL("../../../target/", import.meta.url);
-const executable = "generate" + (process.platform === 'win32' ? '.exe' : '');
+const executable = "rustra-rn-experiment" + (process.platform === 'win32' ? '.exe' : '');
 
 export const rustra = createNodeBootstrap({
-  binaryName: "generate",
+  binaryName: "rustra-rn-experiment",
   commandCandidates: [
     fileURLToPath(new URL(`release/${executable}`, targetDirectory)),
     fileURLToPath(new URL(`debug/${executable}`, targetDirectory)),

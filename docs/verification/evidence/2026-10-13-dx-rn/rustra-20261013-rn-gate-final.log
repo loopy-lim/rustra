@@ -1,0 +1,32 @@
+$ bun run --cwd examples/rn-experiment typecheck && bun run --cwd examples/rn-experiment test && bun run --cwd examples/rn-experiment test:adapter && bun run --cwd examples/rn-experiment test:node
+$ tsc --noEmit -p tsconfig.json
+$ bun test apps/benchmark.test.ts apps/native-benchmark.test.ts scripts/benchmark-receipts.test.ts
+bun test v1.4.3 (c6da4a4d3)
+
+apps/native-benchmark.test.ts:
+(pass) generated native installer fails clearly when autolinking or installation is missing [0.39ms]
+(pass) native collector uses both native routes and allows only one receipt per runtime [12.96ms]
+
+apps/benchmark.test.ts:
+(pass) same gzip operations and identical inputs cross both routes, with individual-call percentiles [5.46ms]
+(pass) wrong bytes, mutated input, or invalid hashes fail instead of producing a success receipt [1.93ms]
+(pass) crossover reverses route order and validates native measurement metadata [3.38ms]
+(pass) byte conversion rejects coercion and nearest-rank percentile retains raw sample meaning [0.18ms]
+
+scripts/benchmark-receipts.test.ts:
+(pass) five independent runtime receipts keep launch and order distributions separate [3.41ms]
+(pass) incomplete, reused-runtime, non-crossover and mixed-device receipts are not comparable [3.70ms]
+(pass) corrupted raw samples, payload hashes and missing routes fail closed [3.45ms]
+
+ 9 pass
+ 0 fail
+Ran 9 tests across 3 files. [58.00ms]
+$ bun apps/react-native-app.ts
+pass: gzipCompress — gzip member stream, 65536 B → 35476 B
+pass: gzipDecompress roundtrip — original 65536 bytes match
+pass: uuidV7 — valid UUID v7 (01a1336f-46ed-793d-89b4-b8d0d24195e9)
+pass: invalid gzip stream — command.invalid_args via the adapter
+react native injected module (rn-experiment): 4 checks passed
+$ cargo build -p rustra-rn-experiment --bin rustra-rn-experiment && bun apps/node-app.ts
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+rn-experiment generated Node consumer: Rust gzip round trip, UUID and invalid input passed

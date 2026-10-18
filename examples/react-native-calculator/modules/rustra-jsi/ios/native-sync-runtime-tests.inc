@@ -14,12 +14,15 @@ static jsi::Function codecLoopback(jsi::Runtime& rt) {
 
 // Separate runtimes may operate on separate threads. No test ABI state is used.
 static void runtimeIsolationTests() {
+  const char* configured = std::getenv("RUSTRA_NATIVE_RUNTIME_CYCLES");
+  const int cycles = configured ? std::stoi(configured) : 3;
+  if (cycles < 1 || cycles > 100000) throw std::runtime_error("runtime cycles must be 1..100000 per worker");
   std::array<std::string, 2> errors;
   std::array<std::thread, 2> workers;
   for (size_t worker = 0; worker < workers.size(); ++worker) {
-    workers[worker] = std::thread([worker, &errors] {
+    workers[worker] = std::thread([worker, &errors, cycles] {
       try {
-        for (int generation = 0; generation < 3; ++generation) {
+        for (int generation = 0; generation < cycles; ++generation) {
           auto runtime = facebook::hermes::makeHermesRuntime();
           auto& rt = *runtime;
           const std::string marker = "runtime-" + std::to_string(worker);
@@ -39,7 +42,7 @@ static void runtimeIsolationTests() {
     try { check(error.empty(), error); }
     catch (const std::exception& failure) { ++failures; std::cerr << "FAIL concurrent runtimes: " << failure.what() << '\n'; }
   }
-  std::cout << "CHECK concurrent runtime recreation completed\n";
+  std::cout << "CHECK concurrent runtime recreation completed cycles=" << cycles * workers.size() << "\n";
 }
 
 // A decorator's C++ address is not the identity/lifetime of its underlying VM.

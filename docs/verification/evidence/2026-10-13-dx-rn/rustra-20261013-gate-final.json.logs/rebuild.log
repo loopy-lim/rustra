@@ -1,0 +1,3 @@
+[onboarding:rebuild] cargo build (cwd /var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+   Compiling rustra-app v0.1.0 (/private/var/folders/z8/h16kj6d16t53dj0lfvlkxf0h0000gn/T/rustra-onboarding-4uTEuT/onboarding-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s

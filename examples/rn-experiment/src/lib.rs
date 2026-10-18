@@ -1,14 +1,15 @@
 //! rn-experiment 예제 — RN 번들링 실험용 네이티브 유닛.
 //!
-//! 대형 트리 echo 변환 비용과 버퍼 경로 우위를 실기기에서 재확인하기 위한
+//! 동일한 gzip 연산의 JSON/바이트 경로 비용을 실기기에서 비교하기 위한
 //! 최소 커맨드 세트를 노출한다(calculator 예제의 native_entry! 골격 재사용):
 //!
 //! - `gzipCompress` / `gzipDecompress` — 입력·출력이 정확히 하나의 `Vec<u8>`
 //!   필드인 bytes in/out 스키마. `buffer_command_fn` 으로 등록해 Tier buffer
 //!   fast path(`rustra_ffi_invoke_buffer`)가 광고되고, JSI/host 측에서
-//!   malloc→memcpy→free 사이클 없이 바이트 버퍼를 직접 주고받는다.
-//! - `uuidV7` — 문자열 스키마(입력 없음, `{ value: string }` 출력). JSON 경로
-//!   대조군으로 쓴다.
+//!   number 배열과 JSON 직렬화 없이 바이트 버퍼를 주고받는다. 실제 할당과
+//!   복사량은 별도 계측해야 한다.
+//! - `uuidV7` — 문자열 스키마(입력 없음, `{ value: string }` 출력) 기능 확인.
+//!   gzip과 다른 연산이므로 transport 성능 비교에는 사용하지 않는다.
 //!
 //! 와이어 구조:
 //!
@@ -61,15 +62,20 @@ pub fn gzip_compress(input: GzipPayload) -> Result<GzipPayload> {
     Ok(GzipPayload { data })
 }
 
-/// gzip 바이트를 원본 바이트로 복원한다. 잘못된 스트림은 `args.invalid` 로
-/// 거부된다(출력 크기는 디코더가 결정 — zip bomb 방호는 호스트 정책 몫).
+/// gzip 바이트를 원본 바이트로 복원한다. 잘못된 스트림은 `command.invalid_args`,
+/// 현재 FFI payload 한도를 넘는 압축 해제 결과는 `payload.too_large` 로 거부된다.
 #[command]
 pub fn gzip_decompress(input: GzipPayload) -> Result<GzipPayload> {
-    let mut decoder = flate2::read::GzDecoder::new(input.data.as_slice());
+    let limit = rustra::ffi::max_payload_bytes();
+    let mut decoder =
+        flate2::read::GzDecoder::new(input.data.as_slice()).take(limit.saturating_add(1) as u64);
     let mut data = Vec::new();
     decoder
         .read_to_end(&mut data)
         .map_err(|error| RustraError::invalid_args(format!("invalid gzip payload: {error}")))?;
+    if data.len() > limit {
+        return Err(RustraError::payload_too_large(data.len(), limit));
+    }
     Ok(GzipPayload { data })
 }
 
@@ -101,8 +107,7 @@ pub fn rn_experiment_package() -> Package {
         .get_or_init(|| {
             // 문자열 스키마 커맨드(uuidV7)는 build! 체인으로 등록하고, bytes
             // in/out 커맨드(gzip*)는 그 뒤에 buffer fast path 로 이어 붙인다.
-            // 등록 순서가 곧 command id 계약 — 이 크레이트는 신규라 시프트
-            // 제약은 없다(uuidV7=0, gzipCompress=1, gzipDecompress=2).
+            // 등록 순서가 command id 계약이므로 기존 순서를 유지한다.
             let builder = rustra::build!("examples.rnexperiment", uuid_v7)
                 .buffer_command_fn(gzip_compress)
                 .command_execution(

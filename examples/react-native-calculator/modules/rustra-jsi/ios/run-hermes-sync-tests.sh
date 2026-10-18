@@ -30,6 +30,15 @@ case "$PLATFORM" in
     ;;
   *) echo "Unsupported RUSTRA_NATIVE_TEST_PLATFORM: $PLATFORM" >&2; exit 2 ;;
 esac
+SANITIZER="${RUSTRA_NATIVE_TEST_SANITIZER:-none}"
+case "$SANITIZER" in
+  none) ;;
+  address)
+    ASAN_RUNTIME="$(xcrun clang++ -print-resource-dir)/lib/darwin"
+    EXTRA_FLAGS+=(-fsanitize=address -fno-omit-frame-pointer -Wl,-rpath,"$ASAN_RUNTIME")
+    ;;
+  *) echo "Unsupported RUSTRA_NATIVE_TEST_SANITIZER: $SANITIZER" >&2; exit 2 ;;
+esac
 if [[ "${RUSTRA_NATIVE_SYNC_PERF:-0}" == 1 ]]; then
   if [[ "$PLATFORM" != mac-catalyst ]]; then
     echo "RUSTRA_NATIVE_SYNC_PERF supports only the mac-catalyst host process." >&2
@@ -48,6 +57,35 @@ if [[ ! -f "$HSLICE/hermes.framework/hermes" ]]; then
   exit 2
 fi
 mkdir -p "$BUILD_DIR"
+# Prove the instrumented runtime actually starts and detects an error before
+# spending time on Hermes. A canary failure is a failed environment gate.
+run_native() {
+  local expect=()
+  if [[ "${1:-}" == --expect-asan ]]; then expect=("$1"); shift; fi
+  if [[ "$PLATFORM" == mac-catalyst ]]; then
+    node "$IOS_DIR/run-native-test.mjs" "${expect[@]}" "$@"
+  else
+    : "${RUSTRA_SIMULATOR_UDID:?Set the existing Simulator UDID; this script never boots or installs.}"
+    export SIMCTL_CHILD_RUSTRA_NATIVE_RUNTIME_CYCLES="${RUSTRA_NATIVE_RUNTIME_CYCLES:-3}"
+    node "$IOS_DIR/run-native-test.mjs" "${expect[@]}" xcrun simctl spawn "$RUSTRA_SIMULATOR_UDID" "$@"
+  fi
+}
+if [[ "$SANITIZER" == address && "${RUSTRA_NATIVE_TEST_BUILD_ONLY:-0}" != 1 ]]; then
+  cat > "$BUILD_DIR/asan-probe.cpp" <<'CPP'
+#include <cstdlib>
+__attribute__((noinline)) int read_freed(volatile int* p) { return *p; }
+int main(int argc, char**) {
+  if (argc == 1) return 0;
+  int* p = new int(1);
+  delete p;
+  return read_freed(p);
+}
+CPP
+  xcrun clang++ -O1 -g -target "$TARGET" -isysroot "$SDK" "${EXTRA_FLAGS[@]}" \
+    "$BUILD_DIR/asan-probe.cpp" -o "$BUILD_DIR/asan-probe"
+  run_native "$BUILD_DIR/asan-probe"
+  run_native --expect-asan "$BUILD_DIR/asan-probe" canary
+fi
 xcrun clang++ -std=c++20 -O1 -g -fexceptions -frtti \
   -target "$TARGET" -isysroot "$SDK" "${EXTRA_FLAGS[@]}" \
   -I"$RN/ReactCommon/jsi" -I"$RN/ReactCommon/callinvoker" \
@@ -66,16 +104,12 @@ shasum -a 256 "$BUILD_DIR/native-sync-test" \
   "$MODULE_DIR/generated/rustra-generated-codecs.hpp" \
   "$IOS_DIR/test-rustra-native-sync.cpp" "$IOS_DIR"/native-sync-*.inc \
   "$IOS_DIR/run-hermes-sync-tests.sh" \
+  "$IOS_DIR/run-native-test.mjs" \
   "$RN/ReactCommon/jsi/jsi/jsi.cpp" \
   "$WORKTREE/packages/react-native/native/cpp/rustra-sync-core.hpp" \
   "$WORKTREE/packages/react-native/native/cpp/rustra-sync-contract.hpp" \
   "$HSLICE/hermes.framework/hermes" \
   "$DSLICE/ReactNativeDependencies.framework/ReactNativeDependencies" > "$BUILD_DIR/identities.txt"
 if [[ "${RUSTRA_NATIVE_TEST_BUILD_ONLY:-0}" != 1 ]]; then
-  if [[ "$PLATFORM" == mac-catalyst ]]; then
-    "$BUILD_DIR/native-sync-test"
-  else
-    : "${RUSTRA_SIMULATOR_UDID:?Set the existing Simulator UDID; this script never boots or installs.}"
-    xcrun simctl spawn "$RUSTRA_SIMULATOR_UDID" "$BUILD_DIR/native-sync-test"
-  fi
+  run_native "$BUILD_DIR/native-sync-test"
 fi

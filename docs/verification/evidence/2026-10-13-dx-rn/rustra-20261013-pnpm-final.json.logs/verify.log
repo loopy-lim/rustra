@@ -1,0 +1,30 @@
+{"command":"/Users/loopy/.local/share/fnm/node-versions/v22.21.1/installation/bin/node","args":["/Users/loopy/dev/ll3/rustra-bridge/packages/cli/dist/index.js","setup","--config","/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app/rustra.json","--skip-install","--run"],"cwd":"/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app"}
+[rustra] Checking setup tools...
+[rustra] Generating the Rust contract and TypeScript calls...
+[rustra] Rust schema: cargo run --manifest-path /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app/Cargo.toml --package rustra-app --bin generate
+[rustra] ⠋ Rust schema generation (rustra-app/generate)...
+[rustra] ⠋ Rust schema generation (rustra-app/generate) still running (1s)
+/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app/generated/schema.json written
+[rustra] ✓ Rust schema generation (rustra-app/generate) done in 1.2s
+[rustra] TypeScript/C++: generate --config /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app/rustra.json
+Generated TypeScript files in /Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app/src/generated:
+  types.ts (updated)
+  commands.ts (updated)
+  contract.ts (updated)
+  frame-codecs.ts (updated)
+  frame-registry.ts (unchanged)
+  node.ts (unchanged)
+[rustra] Note: generated code changed — rebuild the runtime binary before invoking (cargo build), or invokes may fail with contract.mismatch.
+[rustra] ⠋ Rust runtime (rustra-app)...
+[rustra] ⠋ Rust runtime (rustra-app) still running (1s)
+[rustra] ✓ Rust runtime (rustra-app) done in 1.4s
+[rustra] ⠋ First Rust call...
+{"message":"hello from TypeScript","repeat":3}
+[rustra] ✓ First Rust call done in 0.2s
+[rustra] Setup complete — demo succeeded.
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running `/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/cargo-target/debug/generate`
+   Compiling rustra-app v0.1.0 (/Users/loopy/dev/ll3/rustra-bridge/target/quick-start-node-pnpm-t79Bx0/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.25s
+$ bun run src/index.ts
