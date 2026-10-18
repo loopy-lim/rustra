@@ -142,32 +142,68 @@ export function demultiplexBinaryFrame(options: {
 export function createBinaryFrameAccumulator(
   onFrame: (cmd: number, body: Uint8Array) => void,
 ): (chunk: Buffer) => void {
-  /** 수신 누적 버퍼 — 미처리 [len][frame] 바이트열. concat 결과와 청크 채택을
-   * 모두 담으므로 ArrayBufferLike 로 넓힌다. */
-  let binLenBuf: Buffer<ArrayBufferLike> = Buffer.allocUnsafe(0);
-  let binChunks: Buffer[] = [];
-  const drain = (): void => {
-    // 남은 청크를 단일 버퍼로 합친다. 통상 케이스(빈 prefix + 단일 청크)는
-    // concat 없이 청크를 그대로 채택해 복사를 건너뛴다.
-    if (binChunks.length === 1 && binLenBuf.length === 0) {
-      binLenBuf = binChunks[0]!;
-      binChunks = [];
-    } else if (binChunks.length > 0) {
-      binLenBuf = Buffer.concat([binLenBuf, ...binChunks]);
-      binChunks = [];
-    }
-    while (binLenBuf.length >= 4) {
-      const len = binLenBuf.readUInt32LE(0);
-      if (binLenBuf.length < 4 + len) break; // 프레임 불완전 — 다음 청크 대기.
-      const frame = binLenBuf.subarray(4, 4 + len);
-      binLenBuf = binLenBuf.subarray(4 + len);
+  // Keep received fragments until a frame is complete. Concatenating the
+  // accumulated prefix on every stdout chunk makes a fragmented N-byte frame
+  // quadratic. Do not reserve the advertised length: the peer controls it.
+  let header: Buffer | undefined;
+  let headerBytes = 0;
+  let length: number | undefined;
+  let received = 0;
+  let fragments: Buffer[] = [];
+  const consumeFragments = (chunk: Buffer): void => {
+    let offset = 0;
+    while (offset < chunk.length) {
+      if (length === undefined) {
+        if (headerBytes === 0 && chunk.length - offset >= 4) {
+          length = chunk.readUInt32LE(offset);
+          offset += 4;
+        } else {
+          header ??= Buffer.allocUnsafe(4);
+          const count = Math.min(4 - headerBytes, chunk.length - offset);
+          chunk.copy(header, headerBytes, offset, offset + count);
+          headerBytes += count;
+          offset += count;
+          if (headerBytes < 4) return;
+          length = header.readUInt32LE(0);
+          headerBytes = 0;
+        }
+      }
+      const count = Math.min(length - received, chunk.length - offset);
+      const part = chunk.subarray(offset, offset + count);
+      offset += count;
+      if (received + count < length) {
+        if (count > 0) fragments.push(part);
+        received += count;
+        return;
+      }
+      let frame = part;
+      if (received > 0) {
+        if (count > 0) fragments.push(part);
+        frame = Buffer.concat(fragments, length);
+      }
+      // Reset before delivery. Retained views own their backing storage and
+      // must not be overwritten when later frames arrive.
+      length = undefined;
+      received = 0;
+      fragments = [];
       const bytes = new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength);
       onFrame(frame.length >= 2 ? frame.readUInt16LE(0) : -1, bytes);
     }
   };
   return (chunk: Buffer): void => {
-    if (chunk.length > 0) binChunks.push(chunk);
-    drain();
+    // The common one-chunk frame needs neither fragment bookkeeping nor a
+    // temporary Buffer view. Keep this path cheap after fragmented traffic too.
+    if (length === undefined && headerBytes === 0 && chunk.length >= 4) {
+      const completeLength = chunk.readUInt32LE(0);
+      if (completeLength === chunk.length - 4) {
+        onFrame(
+          completeLength >= 2 ? chunk.readUInt16LE(4) : -1,
+          new Uint8Array(chunk.buffer, chunk.byteOffset + 4, completeLength),
+        );
+        return;
+      }
+    }
+    consumeFragments(chunk);
   };
 }
 
