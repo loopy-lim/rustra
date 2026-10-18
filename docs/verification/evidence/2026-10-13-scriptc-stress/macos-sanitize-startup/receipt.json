@@ -1,0 +1,96 @@
+{
+  "recordedAt": "2026-10-13T04:32:07.760Z",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v22.21.1",
+  "mode": "sanitize",
+  "runs": 5,
+  "status": "failed",
+  "sanitizerScope": "scriptc generated code/runtime ASan + RC audit; Rust staticlib release",
+  "commands": [
+    {
+      "command": "fnm",
+      "args": ["exec", "--using", "26", "--", "scriptc", "--version"],
+      "label": "compiler-version",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "git",
+      "args": ["rev-parse", "HEAD"],
+      "label": "head",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "rustc",
+      "args": ["-Vv"],
+      "label": "rustc",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "cargo",
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--manifest-path",
+        "examples/calculator/scriptc/stress-fixture/Cargo.toml",
+        "--target-dir",
+        "target/scriptc-stress"
+      ],
+      "label": "fixture-build",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "fnm",
+      "args": [
+        "exec",
+        "--using",
+        "26",
+        "--",
+        "scriptc",
+        "build",
+        "examples/calculator/apps/scriptc-stress.ts",
+        "--ffi",
+        "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/sanitize/stress-ffi.json",
+        "--sanitize",
+        "-o",
+        "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/sanitize/scriptc-stress"
+      ],
+      "label": "native-build",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/sanitize/scriptc-stress",
+      "args": [],
+      "label": "run-1",
+      "exitCode": null,
+      "signal": "SIGTERM",
+      "error": "spawnSync /Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/sanitize/scriptc-stress ETIMEDOUT"
+    }
+  ],
+  "sourceHashes": {
+    "examples/calculator/apps/scriptc-stress.ts": "c6354dd3e38df9b3dd6023472a6c37cd52ed398b0e2056694a65a430c1b9b4d7",
+    "examples/calculator/scriptc/stress-controls.ts": "7a4b3a339fdd7c0a2d32f72475da23edb6379b72903feabecaa1c7067a93d084",
+    "examples/calculator/scriptc/ffi.json": "2589a2824bb47e889bd4f8042da287ae58497e50636aba0aedf5d301024ab3d6",
+    "examples/calculator/scriptc/scriptc-ffi.ts": "abffd3d634eb3db0353df2497d1a84e291fa70aaf94d7ab44ddcb476ea427d24",
+    "examples/calculator/scriptc/stress-fixture/Cargo.toml": "13602e7add4470460fbc7c89e176aa07b9724f7689604ddff315ecb2d6bb17ef",
+    "examples/calculator/scriptc/stress-fixture/Cargo.lock": "cc41f5c920840f413ea23e9d1297f7a521412d91a3fbb2e1ce906ca32d6b1c38",
+    "examples/calculator/scriptc/stress-fixture/src/lib.rs": "881cc43fd79f1a8274e194586da3a44a210b79abc6be72558373d184360d2bbf",
+    "crates/rustra/src/ffi_scriptc.rs": "8d33817a70edd34730666d94b05ceb1f6f7d237542df009e40f60fbaaf9371a1",
+    "crates/rustra/src/ffi_event_core.rs": "1c63a7c174d887163fc3bb250574e15a6917a630d7b9230a40eba239e2eb300b",
+    "crates/rustra/src/ffi_channel.rs": "23715bf306f3148661ee69d3b0f8e63387a9efa84804f2a17b89e6dd4ae3656e",
+    "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+    "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7"
+  },
+  "scriptc": "0.2.1",
+  "head": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+  "archiveSha256": "7b6e1691e541e1bb810b48c63390d2e52b83f3401c521f88c1abc74b2efee6f1",
+  "binarySha256": "5becb982eab8a028c9ab325b5ce7618eaa86de0c4a7406a75b65114f4f5f9f89",
+  "error": "run-1 failed (spawnSync /Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/sanitize/scriptc-stress ETIMEDOUT); see /Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/sanitize/run-1.log"
+}

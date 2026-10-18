@@ -1,11 +1,11 @@
 /**
  * scriptc Native FFI 코드젠 — rustra 스키마에서 scriptc(0.2.x, ffi_format 7)가
- * 링크할 아티팩트 두 벌을 렌더한다:
+ * 링크할 매니페스트와 선언을 렌더한다:
  *
  *   1. ffi.json   — 심볼/타입 매니페스트. libraries 는 rustra staticlib
  *                   아카이브 경로(resolveScriptcArchivePath)를 가리키며,
  *                   scriptc 가 출력 파일 위치 기준 상대경로로 해석한다.
- *   2. scriptc-ffi.d.ts — 시그니처-only TS 선언. 구현은 아카이브가 링크 시
+ *   2. scriptc-ffi.ts / .d.ts — source import / legacy ambient 선언. 구현은 아카이브가 링크 시
  *                   제공하고, 런타임 symbol lookup 은 없다(정적 링크 계약).
  *
  * scriptc는 napi 애드온과 dlopen 을 지원하지 않으므로 Node/Bun 호스트 코드젠
@@ -28,8 +28,9 @@
  *     (invoke_json_into 의 out_len, get_schema/contract_hash 의 out_len,
  *     invoke_buffer/invoke_raw 의 이중 포인터)은 전부 제외 대상이고, 그 대체로
  *     코어가 `rustra_ffi_invoke_json_into_len`(길이를 반환값으로)을 제공한다.
- *   - 콜백 함수 포인터 인자(async*, event_sink_*, channel_create*)는 callback
- *     descriptor 계약(format 2+, 외부 스레드는 format 5)이라 제외다.
+ *   - 소유 응답/out 포인터 async와 C-unwind 이벤트는 직접 노출하지 않는다.
+ *     borrowed bytes channel과 plain C event sibling을 retained/foreign callback
+ *     descriptor로 제공하고 identity-paired release가 closure 수명을 닫는다.
  * 두 제외 목록 모두 scriptcExcludedSymbols 에 사유와 함께 기록된다.
  *
  * 함수 목록은 스키마 커맨드별이 아니라 rustra 의 고정 C ABI(envelope dispatch —
@@ -39,7 +40,18 @@
  */
 import { resolve } from 'node:path';
 import { generatedFileHeader } from './generated-header.js';
+import { RUSTRA_FFI_SYNC_SYMBOLS } from './scriptc-symbols.js';
+import type { ScriptcFfiType, ScriptcParameter } from './scriptc-symbols.js';
 import type { PackageSchema } from './schema.js';
+
+// 골드 데이터와 그 타입은 scriptc-symbols.ts 가 소유한다 — 여기선 렌더에 쓰고
+// 기존 import 경로를 위해 재수출한다.
+export type {
+  ScriptcCallback,
+  ScriptcExcludedSymbol,
+  ScriptcFfiType,
+  ScriptcParameter,
+} from './scriptc-symbols.js';
 
 /**
  * 매니페스트 포맷 버전 — 7 은 u64 클래스를 켜고(6+ 는 mutable-bytes), scriptc
@@ -52,21 +64,15 @@ export const SCRIPTC_MANIFEST_FILE = 'ffi.json';
 
 /** 생성되는 시그니처-only TS 선언의 커밋 파일명. */
 export const SCRIPTC_DECLARATIONS_FILE = 'scriptc-ffi.d.ts';
-
-/**
- * 매니페스트가 받아들이는 타입 클래스(scriptc.dev/docs/ffi 표) 중 현재 표면이
- * 쓰는 것. `bool` 은 C ABI uint8_t, `mutable-bytes` 는 정확한 뷰(len=capacity)의
- * 쓰기 가능한 borrow다. 새 심볼이 다른 클래스(u16/bytes 등)를 요구하면 여기서
- * 확장한다 — 선제적 나열 금지.
- */
-export type ScriptcFfiType = 'bool' | 'u32' | 'u64' | 'string' | 'mutable-bytes';
+/** Callback types must live in a source file: scriptc 0.2.1 cannot map them from .d.ts. */
+export const SCRIPTC_SOURCE_FILE = 'scriptc-ffi.ts';
 
 /** 함수 엔트리 — params 는 C 인자 순서의 (포인터, 길이) 쌍을 접은 플랫 배열이다. */
 export type ScriptcFunctionEntry = {
   /** 매니페스트와 TS 선언이 공유하는 함수 식별자 — rustra 는 심볼명과 동일하다. */
   name: string;
   symbol: string;
-  params: ScriptcFfiType[];
+  params: ScriptcParameter[];
   /** void 함수는 'void', 그 외는 ScriptcFfiType. */
   returns: ScriptcFfiType | 'void';
 };
@@ -80,168 +86,14 @@ export type ScriptcFfiManifest = {
   system_libraries: string[];
 };
 
-/** scriptc 형태 표면에서 제외된 심볼과 그 이유. */
-export type ScriptcExcludedSymbol = {
-  symbol: string;
-  reason: string;
-};
-
-/**
- * 매니페스트에 실리는 scriptc 형태 심볼 목록 — 골드 데이터다. 시그니처 출처:
- * crates/rustra/src/ffi_{sync,typed,lifecycle,schema}_entries.rs. 맨 앞의
- * rustra_mobile_init 은 `rustra::native_entry!` 가 모든 소비 크레이트에 노출하는
- * 균일 초기화 진입이고, rustra_ffi_invoke_json_into_len 은 caller-buffer envelope
- * 진입(ffi_sync_entries.rs — out 포인터 대신 길이를 반환)이다.
- */
-const RUSTRA_FFI_SYNC_SYMBOLS: readonly {
-  symbol: string;
-  params: readonly (readonly [ScriptcFfiType, string])[]; // [클래스, 파라미터명]
-  returns: ScriptcFfiType | 'void';
-}[] = [
-  { symbol: 'rustra_mobile_init', params: [], returns: 'void' },
-  {
-    symbol: 'rustra_ffi_invoke_json_into_len',
-    params: [
-      ['string', 'payload'],
-      ['mutable-bytes', 'buf'],
-    ],
-    returns: 'u64',
-  },
-  { symbol: 'rustra_ffi_schema_generation', params: [], returns: 'u64' },
-  { symbol: 'rustra_ffi_get_max_payload', params: [], returns: 'u64' },
-  { symbol: 'rustra_ffi_set_max_payload', params: [['u64', 'bytes']], returns: 'void' },
-  { symbol: 'rustra_ffi_invoke_cancel', params: [['u64', 'invocation_id']], returns: 'bool' },
-  { symbol: 'rustra_ffi_cancellation_status', params: [['u64', 'invocation_id']], returns: 'u32' },
-];
-
-/** out 포인터에 쓰는 심볼의 공통 사유 — scriptc 형태 대체재를 함께 명시한다. */
-const OUT_POINTER_REASON =
-  'writes through an out-pointer — scriptc direct-call supplies pointer args only as ' +
-  'bigint addresses with no caller-addressable scratch primitive; use ' +
-  'rustra_ffi_invoke_json_into_len for the caller-buffer contract';
-
-/**
- * scriptc 형태 표면에서 의도적으로 제외한 심볼들 — "지원되지 않음"의 기록이다.
- * 두 그룹: (1) 콜백 함수 포인터 인자 — callback descriptor 는 format 2+, 외부
- * 스레드는 format 5(foreign-thread + retained + context) 계약이라 Rust
- * `extern "C" fn` + `*mut c_void` 모델을 억지로 넣지 않는다. (2) out 포인터에
- * 쓰는 심볼 — 위 OUT_POINTER_REASON 참조.
- */
-export const scriptcExcludedSymbols: readonly ScriptcExcludedSymbol[] = [
-  {
-    symbol: 'rustra_ffi_invoke',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_json',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_frame',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_json_into',
-    reason: `${OUT_POINTER_REASON} (the _len variant is the scriptc-shaped form of this symbol)`,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_frame_into',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_frame_owned',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_buffer',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_raw',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_invoke_postcard',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_hot_reload',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_get_schema',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_contract_hash',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_capture_snapshot',
-    reason: OUT_POINTER_REASON,
-  },
-  {
-    symbol: 'rustra_ffi_free',
-    reason:
-      'pointer parameter — the only pointer producer (invoke* owned responses) is itself excluded',
-  },
-  {
-    symbol: 'rustra_ffi_free_owned_bytes',
-    reason:
-      'pointer parameter — the only pointer producer (invoke* owned responses) is itself excluded',
-  },
-  {
-    symbol: 'rustra_ffi_invoke_async',
-    reason: 'on_complete callback function pointer — needs the format 2+ callback descriptor',
-  },
-  {
-    symbol: 'rustra_ffi_invoke_json_async',
-    reason: 'on_complete callback function pointer — needs the format 2+ callback descriptor',
-  },
-  {
-    symbol: 'rustra_ffi_invoke_frame_async',
-    reason: 'on_complete callback function pointer — needs the format 2+ callback descriptor',
-  },
-  {
-    symbol: 'rustra_ffi_invoke_frame_async_into',
-    reason: 'on_complete callback function pointer — needs the format 2+ callback descriptor',
-  },
-  {
-    symbol: 'rustra_ffi_event_sink_register',
-    reason: 'callback function pointer parameter — needs the format 2+ callback descriptor',
-  },
-  {
-    symbol: 'rustra_ffi_event_sink_unregister',
-    reason: 'pairs with rustra_ffi_event_sink_register; registering is already excluded',
-  },
-  {
-    symbol: 'rustra_ffi_channel_create',
-    reason: 'callback function pointer parameter — needs the format 5 foreign-thread contract',
-  },
-  {
-    symbol: 'rustra_ffi_channel_create_bytes',
-    reason: 'callback function pointer parameter — needs the format 5 foreign-thread contract',
-  },
-  {
-    symbol: 'rustra_ffi_channel_send_bytes',
-    reason: 'pairs with rustra_ffi_channel_create (excluded callback contract)',
-  },
-  {
-    symbol: 'rustra_ffi_channel_send',
-    reason: 'pairs with rustra_ffi_channel_create (excluded callback contract)',
-  },
-  {
-    symbol: 'rustra_ffi_channel_drop',
-    reason: 'pairs with rustra_ffi_channel_create (excluded callback contract)',
-  },
-];
+export { scriptcExcludedSymbols } from './scriptc-symbols.js';
 
 /** rustra FFI 심볼 테이블 → ffi_format 7 functions 엔트리 목록. */
 export function generateScriptcFunctions(): ScriptcFunctionEntry[] {
   return RUSTRA_FFI_SYNC_SYMBOLS.map(({ symbol, params, returns }) => ({
     name: symbol,
     symbol,
-    params: params.map(([ffiType]) => ffiType),
+    params: params.map(([ffiType]) => structuredClone(ffiType)),
     returns,
   }));
 }
@@ -278,7 +130,7 @@ export type ScriptcArtifacts = {
   manifest: ScriptcFfiManifest;
   /** ffi.json 직렬화(bytes 안정 — JSON 에는 헤더를 각인하지 않는 관례). */
   ffiJson: string;
-  /** scriptc-ffi.d.ts 직렬화(generatedFileHeader 각인). */
+  /** scriptc-ffi.ts 원본 직렬화(generatedFileHeader 각인 — .d.ts 는 파일명·export 접두만 바꾼 ambient 변형). */
   declarations: string;
 };
 
@@ -320,11 +172,14 @@ export function toScriptcTsType(type: ScriptcFfiType | 'void'): string {
     case 'void':
       return 'void';
     case 'string':
+    case 'cstring':
       return 'string';
+    case 'bytes':
     case 'mutable-bytes':
       return 'Uint8Array';
     case 'bool':
       return 'boolean';
+    case 'i32':
     case 'u32':
       return 'number';
     case 'u64':
@@ -332,7 +187,7 @@ export function toScriptcTsType(type: ScriptcFfiType | 'void'): string {
   }
 }
 
-/** 시그니처-only TS 선언 직렬화 — declare function 만 있고 구현은 없다. */
+/** 시그니처-only TS 선언 직렬화 — export declare function 만 있고 구현은 없다. */
 export function renderScriptcDeclarations(
   manifest: ScriptcFfiManifest,
   packageId: string,
@@ -340,18 +195,19 @@ export function renderScriptcDeclarations(
 ): string {
   const body = [
     `// scriptc Native FFI 시그니처 선언 — 구현은 ffi.json 의 libraries 아카이브가`,
-    `// 링크 시 제공한다(정적 링크, 런타임 symbol lookup 없음). 이 파일을 직접`,
-    `// 구현 파일로 쓰지 않는다. 매핑 근거와 제외된 콜백/out 포인터 심볼 목록은`,
-    `// cli-generate-scriptc.ts 의 scriptcExcludedSymbols 주석을 참조한다.`,
+    `// 링크 시 제공한다(정적 링크, 런타임 symbol lookup 없음). source import(.ts)와`,
+    `// legacy ambient(.d.ts) 양쪽이 이 원본에서 파생된다. 매핑 근거와 제외된`,
+    `// 콜백/out 포인터 심볼 목록은 scriptc-symbols.ts 의 scriptcExcludedSymbols`,
+    `// 주석을 참조한다.`,
     `//`,
     `// 근거 스키마: ${packageId}${schemaVersion === undefined ? '' : ` (schemaVersion ${schemaVersion})`}`,
     ``,
-    ...manifest.functions.map((entry) => renderDeclaration(entry)),
+    ...manifest.functions.map((entry) => renderDeclaration(entry, manifest)),
   ].join('\n');
-  return `${generatedFileHeader(SCRIPTC_DECLARATIONS_FILE, 'schema → scriptc ffi declarations')}${body}\n`;
+  return `${generatedFileHeader(SCRIPTC_SOURCE_FILE, 'schema → scriptc ffi declarations')}${body}\n`;
 }
 
-function renderDeclaration(entry: ScriptcFunctionEntry): string {
+function renderDeclaration(entry: ScriptcFunctionEntry, manifest: ScriptcFfiManifest): string {
   // 매니페스트는 이름 없는 클래스 배열이지만 선언은 `name: type` 으로 렌더한다 —
   // 이름은 같은 심볼 테이블에서 병렬로 온다(무명 파라미터는 implicit any 로 읽힌다).
   const names = SCRIPTC_PARAM_NAMES.get(entry.symbol);
@@ -361,7 +217,36 @@ function renderDeclaration(entry: ScriptcFunctionEntry): string {
         `RUSTRA_FFI_SYNC_SYMBOLS is the single source for both manifest and declarations`,
     );
   const params = entry.params
-    .map((type, index) => `${names[index]}: ${toScriptcTsType(type)}`)
+    .flatMap((type, index) => {
+      if (typeof type === 'object' && 'context' in type) return [];
+      if (typeof type === 'string') return [`${names[index]}: ${toScriptcTsType(type)}`];
+      let callback = type.callback;
+      if ('release' in callback) {
+        const [binding, id] = callback.release.split(':');
+        const owner = manifest.functions.find((fn) => fn.name === binding);
+        const source = owner?.params.find(
+          (param) =>
+            typeof param === 'object' &&
+            'callback' in param &&
+            'id' in param.callback &&
+            param.callback.id === id,
+        );
+        if (
+          !source ||
+          typeof source === 'string' ||
+          !('callback' in source) ||
+          !('id' in source.callback)
+        )
+          throw new Error(`Unknown scriptc callback release ${callback.release}`);
+        callback = source.callback;
+      }
+      const values = callback.params.filter(
+        (param): param is ScriptcFfiType => typeof param === 'string',
+      );
+      return [
+        `${names[index]}: (${values.map((param, i) => `value${i}: ${toScriptcTsType(param)}`).join(', ')}) => ${toScriptcTsType(callback.returns)}`,
+      ];
+    })
     .join(', ');
-  return `declare function ${entry.name}(${params}): ${toScriptcTsType(entry.returns)};`;
+  return `export declare function ${entry.name}(${params}): ${toScriptcTsType(entry.returns)};`;
 }

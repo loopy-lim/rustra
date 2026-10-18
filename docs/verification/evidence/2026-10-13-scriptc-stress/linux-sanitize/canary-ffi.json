@@ -1,0 +1,13 @@
+{
+  "ffi_format": 7,
+  "functions": [
+    {
+      "name": "rustra_stress_asan_canary",
+      "symbol": "rustra_stress_asan_canary",
+      "params": [],
+      "returns": "u32"
+    }
+  ],
+  "libraries": ["/work/target/scriptc-stress/linux-arm64/sanitize/libasan-canary.a"],
+  "system_libraries": []
+}

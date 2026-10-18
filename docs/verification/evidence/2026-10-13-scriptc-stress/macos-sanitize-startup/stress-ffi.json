@@ -1,0 +1,161 @@
+{
+  "ffi_format": 7,
+  "functions": [
+    {
+      "name": "rustra_mobile_init",
+      "symbol": "rustra_mobile_init",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_invoke_json_into_len",
+      "symbol": "rustra_ffi_invoke_json_into_len",
+      "params": ["string", "mutable-bytes"],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_schema_generation",
+      "symbol": "rustra_ffi_schema_generation",
+      "params": [],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_get_max_payload",
+      "symbol": "rustra_ffi_get_max_payload",
+      "params": [],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_set_max_payload",
+      "symbol": "rustra_ffi_set_max_payload",
+      "params": ["u64"],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_invoke_cancel",
+      "symbol": "rustra_ffi_invoke_cancel",
+      "params": ["u64"],
+      "returns": "bool"
+    },
+    {
+      "name": "rustra_ffi_cancellation_status",
+      "symbol": "rustra_ffi_cancellation_status",
+      "params": ["u64"],
+      "returns": "u32"
+    },
+    {
+      "name": "rustra_ffi_channel_create_bytes",
+      "symbol": "rustra_ffi_channel_create_bytes",
+      "params": [
+        {
+          "callback": {
+            "id": "receive",
+            "params": [
+              {
+                "context": "receive"
+              },
+              "u32",
+              "bytes"
+            ],
+            "returns": "void",
+            "lifetime": "retained",
+            "invoke": "foreign"
+          }
+        },
+        {
+          "context": "receive"
+        }
+      ],
+      "returns": "u32"
+    },
+    {
+      "name": "rustra_ffi_channel_release_scriptc",
+      "symbol": "rustra_ffi_channel_release_scriptc",
+      "params": [
+        {
+          "callback": {
+            "release": "rustra_ffi_channel_create_bytes:receive"
+          }
+        },
+        {
+          "context": "rustra_ffi_channel_create_bytes:receive"
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_channel_send_bytes",
+      "symbol": "rustra_ffi_channel_send_bytes",
+      "params": ["u32", "bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "rustra_ffi_invoke_json_async_channel",
+      "symbol": "rustra_ffi_invoke_json_async_channel",
+      "params": ["string", "u32"],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_event_sink_register_scriptc",
+      "symbol": "rustra_ffi_event_sink_register_scriptc",
+      "params": [
+        {
+          "callback": {
+            "id": "event",
+            "params": [
+              {
+                "context": "event"
+              },
+              "cstring",
+              "cstring"
+            ],
+            "returns": "void",
+            "lifetime": "retained",
+            "invoke": "foreign"
+          }
+        },
+        {
+          "context": "event"
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_event_sink_release_scriptc",
+      "symbol": "rustra_ffi_event_sink_release_scriptc",
+      "params": [
+        {
+          "callback": {
+            "release": "rustra_ffi_event_sink_register_scriptc:event"
+          }
+        },
+        {
+          "context": "rustra_ffi_event_sink_register_scriptc:event"
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_stress_wait_workers",
+      "symbol": "rustra_stress_wait_workers",
+      "params": [],
+      "returns": "bool"
+    },
+    {
+      "name": "rustra_stress_release_workers",
+      "symbol": "rustra_stress_release_workers",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_stress_handler_calls",
+      "symbol": "rustra_stress_handler_calls",
+      "params": [],
+      "returns": "u32"
+    }
+  ],
+  "libraries": [
+    "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/release/librustra_scriptc_stress_fixture.a"
+  ],
+  "system_libraries": []
+}

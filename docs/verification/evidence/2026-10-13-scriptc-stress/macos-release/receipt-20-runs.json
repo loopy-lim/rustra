@@ -1,0 +1,255 @@
+{
+  "recordedAt": "2026-10-13T04:40:01.175Z",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v22.21.1",
+  "mode": "release",
+  "runs": 20,
+  "status": "passed",
+  "sanitizerScope": "none",
+  "commands": [
+    {
+      "command": "fnm",
+      "args": ["exec", "--using", "26", "--", "scriptc", "--version"],
+      "label": "compiler-version",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "git",
+      "args": ["rev-parse", "HEAD"],
+      "label": "head",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "rustc",
+      "args": ["-Vv"],
+      "label": "rustc",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "cargo",
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--manifest-path",
+        "examples/calculator/scriptc/stress-fixture/Cargo.toml",
+        "--target-dir",
+        "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64"
+      ],
+      "label": "fixture-build",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "fnm",
+      "args": [
+        "exec",
+        "--using",
+        "26",
+        "--",
+        "scriptc",
+        "build",
+        "examples/calculator/apps/scriptc-stress.ts",
+        "--ffi",
+        "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/stress-ffi.json",
+        "-o",
+        "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress"
+      ],
+      "label": "native-build",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-1",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-2",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-3",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-4",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-5",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-6",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-7",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-8",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-9",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-10",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-11",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-12",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-13",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-14",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-15",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-16",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-17",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-18",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-19",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/Users/loopy/dev/ll3/rustra-bridge/target/scriptc-stress/darwin-arm64/release/scriptc-stress",
+      "args": [],
+      "label": "run-20",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    }
+  ],
+  "sourceHashes": {
+    "examples/calculator/apps/scriptc-stress.ts": "8070411cd78c9eef9575a2cedb14e7f949335de5bbfd00b4026c81ab462d4723",
+    "examples/calculator/scriptc/stress-controls.ts": "7a4b3a339fdd7c0a2d32f72475da23edb6379b72903feabecaa1c7067a93d084",
+    "examples/calculator/scriptc/run-stress.mjs": "f09ebe0858292fc6f086e92e3ad95b7c09fdbe00b4284576b0c942a31332e249",
+    "examples/calculator/scriptc/ffi.json": "2589a2824bb47e889bd4f8042da287ae58497e50636aba0aedf5d301024ab3d6",
+    "examples/calculator/scriptc/scriptc-ffi.ts": "abffd3d634eb3db0353df2497d1a84e291fa70aaf94d7ab44ddcb476ea427d24",
+    "examples/calculator/scriptc/stress-fixture/Cargo.toml": "13602e7add4470460fbc7c89e176aa07b9724f7689604ddff315ecb2d6bb17ef",
+    "examples/calculator/scriptc/stress-fixture/Cargo.lock": "cc41f5c920840f413ea23e9d1297f7a521412d91a3fbb2e1ce906ca32d6b1c38",
+    "examples/calculator/scriptc/stress-fixture/src/lib.rs": "881cc43fd79f1a8274e194586da3a44a210b79abc6be72558373d184360d2bbf",
+    "examples/calculator/scriptc/stress-fixture/asan-canary.c": "228d3bf60fa6493f2e8e53069fa59ab45fd09edae4c8d1e80ae89de9ea503938",
+    "crates/rustra/src/ffi_scriptc.rs": "8d33817a70edd34730666d94b05ceb1f6f7d237542df009e40f60fbaaf9371a1",
+    "crates/rustra/src/ffi_event_core.rs": "1c63a7c174d887163fc3bb250574e15a6917a630d7b9230a40eba239e2eb300b",
+    "crates/rustra/src/ffi_channel.rs": "23715bf306f3148661ee69d3b0f8e63387a9efa84804f2a17b89e6dd4ae3656e",
+    "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+    "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7",
+    "crates/rustra/src/ffi_pool.rs": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47"
+  },
+  "scriptc": "0.2.1",
+  "head": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+  "archiveSha256": "7b6e1691e541e1bb810b48c63390d2e52b83f3401c521f88c1abc74b2efee6f1",
+  "binarySha256": "d6405d6f40a669ec2455a2c0ae3642c7d231d1909b765801163faa48f87873d3",
+  "changedInputs": []
+}

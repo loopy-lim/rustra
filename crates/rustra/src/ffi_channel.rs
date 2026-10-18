@@ -8,8 +8,9 @@
 ///
 /// `handle` 는 발급 시 부여된 채널 번호(호스트가 핸들별 JS 콜백을 찾는 키),
 /// `payload` 는 NUL 종결 C 문자열(JSON — 이벤트 싱크와 동일 인코딩).
-/// 채널은 C-unwind 가 아니라 C ABI 다: `channels::ChannelHost::send` 가
-/// 콜백 패닉을 잡아 무시하므로 호스트 콜백은 unwind 하지 않아도 된다.
+/// 채널은 C-unwind 가 아니라 C ABI 이므로 콜백은 unwind 하면 안 된다.
+/// 호스트 wrapper가 외래 예외를 내부에서 처리해야 하며, 바깥 Rust
+/// `catch_unwind`는 이 ABI를 넘는 패닉/예외의 복구를 보장하지 않는다.
 pub type FfiChannelCallback =
     unsafe extern "C" fn(user_data: *mut c_void, handle: u32, payload: *const c_char);
 

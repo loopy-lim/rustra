@@ -10,8 +10,8 @@ name: Sanitizer
 # 체크리스트 영역 — 안정화 통합 트랙 Task 15 가 작성할
 # docs/verification-checklist.md 참조.
 #
-# 현재 검사 범위는 --lib(코어/스키마/풀)이다. 전체 native FFI 통합 테스트나
-# RN 실기기 실행까지 검증했다는 의미는 아니다. 누수 검사는 비활성화하지 않는다.
+# lib와 명시한 FFI 통합 테스트의 debug/release를 검사한다. C++ callback
+# containment는 별도 프로세스 harness다. RN 실기기 검증은 아니며 누수 검사는 유지한다.
 #
 # nightly 필수: `-Zsanitizer=address` 는 nightly 전용 플래그. 도구체인 결정은
 # miri.yml 과 동일한 dtolnay/rust-toolchain@nightly 패턴을 따른다(별도
@@ -53,6 +53,23 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=${{ github.workspace }}/target/safety/asan/asan
           RUST_TEST_THREADS: '1'
         run: bash scripts/run-safety-check.sh lib cargo test -p rustra --lib --target x86_64-unknown-linux-gnu
+      - name: Run FFI integration tests under AddressSanitizer + LeakSanitizer
+        if: ${{ !cancelled() }}
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=${{ github.workspace }}/target/safety/asan/ffi
+          RUST_TEST_THREADS: '1'
+        run: bash scripts/run-safety-check.sh ffi-debug cargo test -p rustra --target x86_64-unknown-linux-gnu --test trust_baseline_ffi --test payload_robustness --test ffi_process_contract --test large_payload_boundary --test ffi_scriptc
+      - name: Run release FFI integration tests under AddressSanitizer + LeakSanitizer
+        if: ${{ !cancelled() }}
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=${{ github.workspace }}/target/safety/asan/ffi-release
+          RUST_TEST_THREADS: '1'
+        run: bash scripts/run-safety-check.sh ffi-release cargo test -p rustra --release --target x86_64-unknown-linux-gnu --test trust_baseline_ffi --test payload_robustness --test ffi_process_contract --test large_payload_boundary --test ffi_scriptc
+      - name: Verify C++ foreign exception containment in child processes
+        if: ${{ !cancelled() }}
+        run: bash scripts/run-safety-check.sh foreign-exception bash scripts/run-foreign-exception-check.sh
       - name: Upload sanitizer reports
         if: always()
         uses: actions/upload-artifact@v7

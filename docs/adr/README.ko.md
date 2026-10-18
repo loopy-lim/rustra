@@ -11,6 +11,7 @@ Status / Context / Decision / Consequences. 거부된 선택지도 기록할 가
 | [0001](0001-record-track-a-contract-mechanization.ko.md) | Track A: 계약의 기계화 (UniFFI 성숙도 관행 채택)           | Accepted | 2026-09-11 |
 | [0002](0002-uniffi-track-b1-carrier.ko.md)               | Track B1: UniFFI 를 Kotlin/Swift 언어 캐리어로             | Accepted | 2026-09-11 |
 | [0003](0003-s7-contract-verification-escape-hatch.ko.md) | S7 서술 정합: contractVerification 을 명시적 탈출구로 기록 | Accepted | 2026-09-12 |
+| [0004](0004-ffi-safety-preconditions.ko.md)              | FFI 포인터 전제와 외래 예외의 책임 경계                    | Accepted | 2026-10-13 |
 
 ## 규약
 

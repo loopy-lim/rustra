@@ -24,6 +24,16 @@ fi
 "${SCRIPTC[@]}" build examples/calculator/apps/scriptc-app.ts \
   --ffi examples/calculator/scriptc/ffi.json \
   -o examples/calculator/scriptc/build/calculator-scriptc
-output="$(examples/calculator/scriptc/build/calculator-scriptc)"
+output="$(node --input-type=module -e '
+import { spawnSync } from "node:child_process";
+const result = spawnSync("examples/calculator/scriptc/build/calculator-scriptc", [], { encoding: "utf8", timeout: 30000 });
+process.stdout.write(result.stdout ?? "");
+process.stderr.write(result.stderr ?? "");
+if (result.error) console.error(result.error.message);
+process.exit(result.status ?? 1);
+')"
 printf '%s\n' "$output"
 grep -F 'scriptc FFI zero-config result: 42' <<<"$output"
+grep -F 'scriptc FFI retained events: 2' <<<"$output"
+grep -F 'scriptc FFI async result: 42' <<<"$output"
+grep -F 'scriptc FFI bytes channel: 3' <<<"$output"

@@ -1,0 +1,61 @@
+=================================================================
+==787==ERROR: AddressSanitizer: heap-use-after-free on address 0x502000000010 at pc 0xaaaae2a03510 bp 0xffffdb981e40 sp 0xffffdb981e38
+READ of size 4 at 0x502000000010 thread T0
+==787==WARNING: invalid path to external symbolizer!
+==787==WARNING: Failed to use and restart external symbolizer!
+    #0 0xaaaae2a0350c  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x13350c) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #1 0xaaaae2a03328  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x133328) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #2 0xffff95c52258  (/lib/aarch64-linux-gnu/libc.so.6+0x22258) (BuildId: 4c1eca4527d1163b2dde55860b69f270158febb4)
+    #3 0xffff95c52338  (/lib/aarch64-linux-gnu/libc.so.6+0x22338) (BuildId: 4c1eca4527d1163b2dde55860b69f270158febb4)
+    #4 0xaaaae292bf6c  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x5bf6c) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+
+0x502000000010 is located 0 bytes inside of 4-byte region [0x502000000010,0x502000000014)
+freed by thread T0 here:
+    #0 0xaaaae29cdae4  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0xfdae4) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #1 0xaaaae2a034c0  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x1334c0) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #2 0xaaaae2a03328  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x133328) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #3 0xffff95c52258  (/lib/aarch64-linux-gnu/libc.so.6+0x22258) (BuildId: 4c1eca4527d1163b2dde55860b69f270158febb4)
+    #4 0xffff95c52338  (/lib/aarch64-linux-gnu/libc.so.6+0x22338) (BuildId: 4c1eca4527d1163b2dde55860b69f270158febb4)
+    #5 0xaaaae292bf6c  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x5bf6c) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+
+previously allocated by thread T0 here:
+    #0 0xaaaae29cdd74  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0xfdd74) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #1 0xaaaae2a0345c  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x13345c) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #2 0xaaaae2a03328  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x133328) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+    #3 0xffff95c52258  (/lib/aarch64-linux-gnu/libc.so.6+0x22258) (BuildId: 4c1eca4527d1163b2dde55860b69f270158febb4)
+    #4 0xffff95c52338  (/lib/aarch64-linux-gnu/libc.so.6+0x22338) (BuildId: 4c1eca4527d1163b2dde55860b69f270158febb4)
+    #5 0xaaaae292bf6c  (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x5bf6c) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694)
+
+SUMMARY: AddressSanitizer: heap-use-after-free (/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary+0x13350c) (BuildId: 44dbbe8e0b0239dbbeeda1d6253145482304c694) 
+Shadow bytes around the buggy address:
+  0x501ffffffd80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x501ffffffe00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x501ffffffe80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x501fffffff00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x501fffffff80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x502000000000: fa fa[fd]fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000100: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==787==ABORTING

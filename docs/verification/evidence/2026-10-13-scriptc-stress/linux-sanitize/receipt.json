@@ -1,0 +1,149 @@
+{
+  "recordedAt": "2026-10-13T04:41:05.339Z",
+  "platform": "linux",
+  "arch": "arm64",
+  "node": "v26.8.2",
+  "mode": "sanitize",
+  "runs": 5,
+  "status": "failed",
+  "sanitizerScope": "scriptc generated code/runtime ASan + RC audit; Rust staticlib release",
+  "commands": [
+    {
+      "command": "scriptc",
+      "args": ["--version"],
+      "label": "compiler-version",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "git",
+      "args": ["rev-parse", "HEAD"],
+      "label": "head",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "rustc",
+      "args": ["-Vv"],
+      "label": "rustc",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "scriptc",
+      "args": [
+        "build",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-hello.ts",
+        "--sanitize",
+        "-o",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-hello"
+      ],
+      "label": "hello-build",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-hello",
+      "args": [],
+      "label": "hello-run",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "clang",
+      "args": [
+        "-O0",
+        "-g",
+        "-fsanitize=address",
+        "-fno-omit-frame-pointer",
+        "-c",
+        "examples/calculator/scriptc/stress-fixture/asan-canary.c",
+        "-o",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/asan-canary.o"
+      ],
+      "label": "canary-c-build",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "ar",
+      "args": [
+        "rcs",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/libasan-canary.a",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/asan-canary.o"
+      ],
+      "label": "canary-archive",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "scriptc",
+      "args": [
+        "build",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary.ts",
+        "--ffi",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/canary-ffi.json",
+        "--sanitize",
+        "-o",
+        "/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary"
+      ],
+      "label": "canary-native-build",
+      "exitCode": 0,
+      "signal": null,
+      "expectAsan": false
+    },
+    {
+      "command": "/work/target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary",
+      "args": [],
+      "label": "canary-run",
+      "exitCode": 1,
+      "signal": null,
+      "expectAsan": true
+    },
+    {
+      "command": "cargo",
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--manifest-path",
+        "examples/calculator/scriptc/stress-fixture/Cargo.toml",
+        "--target-dir",
+        "/work/target/scriptc-stress/linux-arm64"
+      ],
+      "label": "fixture-build",
+      "exitCode": 101,
+      "signal": null,
+      "expectAsan": false
+    }
+  ],
+  "sourceHashes": {
+    "examples/calculator/apps/scriptc-stress.ts": "8070411cd78c9eef9575a2cedb14e7f949335de5bbfd00b4026c81ab462d4723",
+    "examples/calculator/scriptc/stress-controls.ts": "7a4b3a339fdd7c0a2d32f72475da23edb6379b72903feabecaa1c7067a93d084",
+    "examples/calculator/scriptc/run-stress.mjs": "f09ebe0858292fc6f086e92e3ad95b7c09fdbe00b4284576b0c942a31332e249",
+    "examples/calculator/scriptc/ffi.json": "2589a2824bb47e889bd4f8042da287ae58497e50636aba0aedf5d301024ab3d6",
+    "examples/calculator/scriptc/scriptc-ffi.ts": "abffd3d634eb3db0353df2497d1a84e291fa70aaf94d7ab44ddcb476ea427d24",
+    "examples/calculator/scriptc/stress-fixture/Cargo.toml": "13602e7add4470460fbc7c89e176aa07b9724f7689604ddff315ecb2d6bb17ef",
+    "examples/calculator/scriptc/stress-fixture/Cargo.lock": "cc41f5c920840f413ea23e9d1297f7a521412d91a3fbb2e1ce906ca32d6b1c38",
+    "examples/calculator/scriptc/stress-fixture/src/lib.rs": "881cc43fd79f1a8274e194586da3a44a210b79abc6be72558373d184360d2bbf",
+    "examples/calculator/scriptc/stress-fixture/asan-canary.c": "228d3bf60fa6493f2e8e53069fa59ab45fd09edae4c8d1e80ae89de9ea503938",
+    "crates/rustra/src/ffi_scriptc.rs": "8d33817a70edd34730666d94b05ceb1f6f7d237542df009e40f60fbaaf9371a1",
+    "crates/rustra/src/ffi_event_core.rs": "1c63a7c174d887163fc3bb250574e15a6917a630d7b9230a40eba239e2eb300b",
+    "crates/rustra/src/ffi_channel.rs": "23715bf306f3148661ee69d3b0f8e63387a9efa84804f2a17b89e6dd4ae3656e",
+    "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+    "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7",
+    "crates/rustra/src/ffi_pool.rs": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47"
+  },
+  "scriptc": "0.2.1",
+  "head": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-unknown-linux-gnu\nrelease: 1.95.0\nLLVM version: 22.1.2",
+  "canary": "heap-use-after-free detected",
+  "error": "fixture-build failed (101); see /work/target/scriptc-stress/linux-arm64/sanitize/fixture-build.log"
+}

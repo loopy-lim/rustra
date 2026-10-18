@@ -427,6 +427,9 @@
     "rustra::complex_codec::complex_schema_ir::use:super :: complex_codec_variants :: { explicit_variant_keys , variant_key }": [
       "# [path = \"complex_schema_ir.rs\"]    use super :: complex_codec_variants :: { explicit_variant_keys , variant_key } ;"
     ],
+    "rustra::complex_codec::complex_serde::const:INLINE_MAP_VALUE_BYTES": [
+      "# [path = \"complex_serde.rs\"]    const INLINE_MAP_VALUE_BYTES : usize = 48 ;"
+    ],
     "rustra::complex_codec::complex_serde::enum:MapBytes": [
       "# [path = \"complex_serde.rs\"]    enum MapBytes < const N : usize > { Inline { bytes : [u8 ; N] , len : usize } , Heap (Vec < u8 >) , }"
     ],
@@ -1223,7 +1226,7 @@
       "# [path = \"complex_serde.rs\"]    struct UnitVariant ; opaque_fields=false"
     ],
     "rustra::complex_codec::complex_serde::type:MapEntry": [
-      "# [path = \"complex_serde.rs\"]    type MapEntry = (MapBytes < 24 > , MapBytes < 48 >) ;"
+      "# [path = \"complex_serde.rs\"]    type MapEntry = (MapBytes < 24 > , MapBytes < INLINE_MAP_VALUE_BYTES >) ;"
     ],
     "rustra::complex_codec::complex_serde::type:Result": [
       "# [path = \"complex_serde.rs\"]  type Result < T > = crate :: Result < T > ;"
@@ -1486,6 +1489,9 @@
     "rustra::ffi::enum:AsyncTask": [
       "enum AsyncTask { Alloc (AsyncJob) , Into (AsyncIntoJob) , }"
     ],
+    "rustra::ffi::enum:FfiEventCallbackKind": [
+      "enum FfiEventCallbackKind { Unwind (FfiEventCallback) , Plain (FfiScriptcEventCallback) , }"
+    ],
     "rustra::ffi::enum:FfiFormat": [
       "# [derive (Clone , Copy , Debug , PartialEq , Eq)] pub enum FfiFormat { Json , Postcard , }"
     ],
@@ -1513,6 +1519,9 @@
     "rustra::ffi::fn:rustra_ffi_channel_drop": [
       "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_channel_drop (handle : u32) -> i32"
     ],
+    "rustra::ffi::fn:rustra_ffi_channel_release_scriptc": [
+      "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_channel_release_scriptc (callback : FfiChannelBytesCallback , user_data : * mut c_void ,)"
+    ],
     "rustra::ffi::fn:rustra_ffi_channel_send": [
       "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_channel_send (handle : u32 , payload : * const c_char) -> i32"
     ],
@@ -1524,6 +1533,12 @@
     ],
     "rustra::ffi::fn:rustra_ffi_event_sink_register": [
       "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_event_sink_register (callback : FfiEventCallback , user_data : * mut c_void ,)"
+    ],
+    "rustra::ffi::fn:rustra_ffi_event_sink_register_scriptc": [
+      "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_event_sink_register_scriptc (callback : FfiScriptcEventCallback , user_data : * mut c_void ,)"
+    ],
+    "rustra::ffi::fn:rustra_ffi_event_sink_release_scriptc": [
+      "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_event_sink_release_scriptc (callback : FfiScriptcEventCallback , user_data : * mut c_void ,)"
     ],
     "rustra::ffi::fn:rustra_ffi_event_sink_unregister": [
       "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_event_sink_unregister ()"
@@ -1581,6 +1596,9 @@
     ],
     "rustra::ffi::fn:rustra_ffi_invoke_json_async": [
       "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_invoke_json_async (payload : * const u8 , payload_len : usize , user_data : * mut c_void , on_complete : Option < unsafe extern \"C\" fn (* mut c_void , * mut u8 , usize) > , invocation_id : * mut u64 ,)"
+    ],
+    "rustra::ffi::fn:rustra_ffi_invoke_json_async_channel": [
+      "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_invoke_json_async_channel (payload : * const u8 , payload_len : usize , channel : u32 ,) -> u64"
     ],
     "rustra::ffi::fn:rustra_ffi_invoke_json_into": [
       "# [unsafe (no_mangle)] pub unsafe extern \"C\" fn rustra_ffi_invoke_json_into (payload : * const u8 , payload_len : usize , buf : * mut u8 , capacity : usize , out_len : * mut usize ,) -> usize"
@@ -1723,6 +1741,9 @@
     "rustra::ffi::struct:ProbeCacheEntry": [
       "struct ProbeCacheEntry { } opaque_fields=true"
     ],
+    "rustra::ffi::struct:ScriptcAsyncCompletion": [
+      "struct ScriptcAsyncCompletion (_) ; opaque_fields=true"
+    ],
     "rustra::ffi::struct:SnapshotCommand": [
       "# [derive (serde :: Serialize)] struct SnapshotCommand { } opaque_fields=true"
     ],
@@ -1737,6 +1758,9 @@
     ],
     "rustra::ffi::type:FfiEventCallback": [
       "pub type FfiEventCallback = unsafe extern \"C-unwind\" fn (user_data : * mut c_void , name : * const c_char , payload : * const c_char ,) ;"
+    ],
+    "rustra::ffi::type:FfiScriptcEventCallback": [
+      "pub type FfiScriptcEventCallback = unsafe extern \"C\" fn (user_data : * mut c_void , name : * const c_char , payload : * const c_char ,) ;"
     ],
     "rustra::ffi::type:UnsafeIntoComplete": [
       "type UnsafeIntoComplete = unsafe extern \"C\" fn (* mut c_void , * mut u8 , usize , u8) ;"

@@ -19,6 +19,7 @@ import {
   SCRIPTC_DECLARATIONS_FILE,
   SCRIPTC_FFI_FORMAT,
   SCRIPTC_MANIFEST_FILE,
+  SCRIPTC_SOURCE_FILE,
   generateScriptcArtifacts,
   generateScriptcFunctions,
   generateScriptcManifest,
@@ -91,6 +92,12 @@ test('ffi.json gold: ffi_format, function list, and library boundary', () => {
       'rustra_ffi_set_max_payload',
       'rustra_ffi_invoke_cancel',
       'rustra_ffi_cancellation_status',
+      'rustra_ffi_channel_create_bytes',
+      'rustra_ffi_channel_release_scriptc',
+      'rustra_ffi_channel_send_bytes',
+      'rustra_ffi_invoke_json_async_channel',
+      'rustra_ffi_event_sink_register_scriptc',
+      'rustra_ffi_event_sink_release_scriptc',
     ],
   );
   // name 과 symbol 은 rustra 에서 동일하다.
@@ -142,12 +149,14 @@ test('ffi.json excludes out-pointer and callback symbols with documented reasons
     'rustra_ffi_invoke_async',
     'rustra_ffi_event_sink_register',
     'rustra_ffi_channel_create',
-    'rustra_ffi_channel_create_bytes',
   ])
     assert.equal(included.has(name), false);
   // 사유는 그룹별로 명시한다(out 포인터 / 포인터 인자 / 콜백 / 짝 심볼).
   for (const { symbol, reason } of scriptcExcludedSymbols) {
-    assert.match(reason, /out-pointer|pointer parameter|callback descriptor|pairs with/);
+    assert.match(
+      reason,
+      /out-pointer|pointer parameter|callback descriptor|C-unwind callback|pairs with/,
+    );
     assert.ok(symbol.startsWith('rustra_ffi_'), symbol);
   }
   // caller-buffer 계약의 scriptc 형태 대체재가 존재해야 한다.
@@ -183,11 +192,11 @@ test('declarations gold: signature-only TS for calculator schema', () => {
   for (const line of gold) assert.ok(declarations.includes(line), line);
   // 시그니처-only — 함수 본문이 없어야 한다.
   for (const line of declarations.split('\n'))
-    if (line.startsWith('declare function ')) assert.ok(line.endsWith(';'), line);
+    if (line.startsWith('export declare function ')) assert.ok(line.endsWith(';'), line);
   // 근거 스키마 각인과 생성 헤더(첫 행은 'rustra generated' 대시 런).
   assert.ok(declarations.includes('근거 스키마: examples.calculator (schemaVersion 1)'));
   assert.ok(declarations.startsWith('// ── rustra generated ──'));
-  assert.ok(declarations.includes(`File:   ${SCRIPTC_DECLARATIONS_FILE}`));
+  assert.ok(declarations.includes(`File:   ${SCRIPTC_SOURCE_FILE}`));
   // ffi.json 은 calculator 아카이브를 가리킨다.
   assert.deepEqual(JSON.parse(ffiJson).libraries, [archive]);
 });
@@ -230,4 +239,41 @@ test('empty or package-less schemas fail closed', () => {
       }),
     /no commands/,
   );
+});
+
+test('retained foreign callbacks have identity-paired release and omit native context from TS', () => {
+  const manifest = generateScriptcManifest('/tmp/libx.a');
+  const source = renderScriptcDeclarations(manifest, 'app.x');
+  assert.ok(
+    source.includes(
+      'rustra_ffi_channel_create_bytes(receive: (value0: number, value1: Uint8Array) => void): number;',
+    ),
+  );
+  assert.ok(
+    source.includes(
+      'rustra_ffi_channel_release_scriptc(receive: (value0: number, value1: Uint8Array) => void): void;',
+    ),
+  );
+  assert.ok(
+    source.includes(
+      'rustra_ffi_event_sink_register_scriptc(onEvent: (value0: string, value1: string) => void): void;',
+    ),
+  );
+  assert.ok(
+    source.includes(
+      'rustra_ffi_event_sink_release_scriptc(onEvent: (value0: string, value1: string) => void): void;',
+    ),
+  );
+  assert.ok(
+    source.includes(
+      'rustra_ffi_invoke_json_async_channel(payload: string, channel: number): bigint;',
+    ),
+  );
+  assert.equal(source.includes('context:'), false);
+  const releases = manifest.functions.filter((entry) =>
+    entry.params.some(
+      (param) => typeof param === 'object' && 'callback' in param && 'release' in param.callback,
+    ),
+  );
+  assert.equal(releases.length, 2);
 });

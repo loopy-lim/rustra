@@ -36,3 +36,10 @@ path = "fuzz_targets/invoke_complex_serde.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "invoke_large_boundary"
+path = "fuzz_targets/invoke_large_boundary.rs"
+test = false
+doc = false
+bench = false

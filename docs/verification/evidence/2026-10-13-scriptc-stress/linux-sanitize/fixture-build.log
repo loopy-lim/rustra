@@ -1,0 +1,47 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling version_check v0.9.5
+   Compiling serde_core v1.0.229
+   Compiling serde v1.0.229
+   Compiling typenum v1.20.0
+   Compiling thiserror v2.0.18
+   Compiling libc v0.2.186
+   Compiling autocfg v1.5.0
+   Compiling zmij v1.0.21
+   Compiling generic-array v0.14.7
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling serde_json v1.0.151
+   Compiling hashbrown v0.12.3
+   Compiling indexmap v1.9.3
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.0
+   Compiling schemars v0.8.22
+   Compiling cfg-if v1.0.4
+   Compiling rustra-naming v0.12.0 (/work/crates/rustra-naming)
+   Compiling syn v2.0.117
+   Compiling syn v3.0.5
+   Compiling indexmap v2.14.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling dyn-clone v1.0.20
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling hex v0.4.3
+   Compiling sha2 v0.10.9
+   Compiling serde_derive_internals v0.29.1
+   Compiling thiserror-impl v2.0.18
+   Compiling schemars_derive v0.8.22
+   Compiling serde_derive v1.0.229
+   Compiling rustra-macros v0.12.0 (/work/crates/rustra-macros)
+   Compiling cobs v0.3.0
+   Compiling postcard v1.1.3
+   Compiling rustra v0.12.0 (/work/crates/rustra)
+error: failed to write /work/target/scriptc-stress/linux-arm64/release/deps/rustcZDBgns/lib.rmeta: No space left on device (os error 28)
+
+error: could not compile `schemars` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: failed to write to `/work/target/scriptc-stress/linux-arm64/release/deps/rmetaskIn7o/full.rmeta`: No space left on device (os error 28)
+
+error: could not compile `rustra` (lib) due to 1 previous error

@@ -6,21 +6,28 @@
 
 ## 1. 총괄 불변식
 
-호스트(외래 foreign) 코드가 rustra 의 Rust FFI 를 **악의적으로, 계약을 어겨서** 호출하더라도
-호스트 프로세스에 미정의 동작(UB)이 생겨서는 안 된다. rustra 는 이 총괄 불변식을 세 개의
-기계 장치로 방어한다: (a) Rust 패닉은 `catch_unwind` 로 가두어 언제나 정규화된 에러 프레임으로
-변환되고 절대 `extern "C"` 경계를 넘지 않는다, (b) 반대 방향 — 외래 예외가 Rust 프레임을
-통과하는 것은 잡을 수 없으므로 계약상 즉시 abort 로 정의한다, (c) 그 밖의 모든 비정상 입력
-(과대 페이로드, 잘린 프레임, 잘못된 해제 요청, 호스트 콜백 패닉)은 정의된 에러 봉투나
-loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실패는 항상 관찰 가능한 형태
-(에러 코드, stderr 진단, 게이트 거부)로 나타난다.
+호스트가 FFI의 unsafe 메모리·ABI 전제를 지키면 악의적이거나 비정상인 **페이로드
+바이트**가 미정의 동작(UB)을 일으켜서는 안 된다. 호출자는 유효하고 정렬이 맞는
+읽기·쓰기 범위, 빌린 버퍼와 콜백 상태의 수명, 충돌하지 않는 접근, 소유 응답의
+정확한 해제 함수·1회 해제를 보장한다. null은 각 엔트리가 허용한 경우에만 가능하다.
+프로세스 내부 unsafe API는 임의 포인터의 출처와 수명을 검증할 수 없으며, 이 전제를
+위반하면 UB가 생길 수 있다.
+
+이 경계 안에서 잘못되거나 과대한 입력은 핸들러 실행 전에 거부하고, 가드된 Rust
+unwind를 가두며, debug 소유권 검사에서 확인한 오용은 진단과 함께 abort한다.
+헤더 magic은 유효한 메모리의 일관성 검사이지 임의 주소의 읽기 가능성을 입증하지
+않는다. C++ 콜백은 Rust로 돌아오기 전에 호스트 wrapper 안에서 외래 예외를 처리해야
+한다(S2). 자원 고갈과 `panic=abort`는 복구 가능한 에러 프레임 보장 범위가 아니다.
+공개 ABI를 유지한 이 경계 정정은 [ADR 0004](adr/0004-ffi-safety-preconditions.ko.md)에 기록한다.
 
 ## 2. 항목별 계약
 
-### S1. 패닉은 FFI 경계를 넘지 않는다
+### S1. 보호된 Rust 패닉 경계
 
-- **불변식**: FFI 엔트리에서 실행되는 모든 Rust 코드(핸들러, 직렬화, 이벤트 전달, 스왑)가
-  패닉하면 그 unwind 는 `catch_unwind` 로 포착되어 `ok:false` 에러 프레임으로 정규화된다.
+- **불변식**: 가드된 명령·직렬화 경로의 Rust unwind는 `catch_unwind`로 포착되어
+  `ok:false` 에러 프레임으로 정규화된다. 이벤트 싱크 패닉은 로그를 남기고 이벤트를
+  버리며, 반환값 없는 등록 엔트리는 응답 프레임을 돌려줄 수 없다. `panic=unwind`에
+  대한 계약이며 `panic=abort`에는 적용되지 않는다.
   패닉 메시지는 단일 포맷 `internal: panic — <payload>` 으로 직렬화된다 — 호스트 파서가
   prefix 로 분류하므로 포맷이 경로별로 갈라지면 안 된다.
 - **근거 코드**: `crates/rustra/src/ffi_dispatch.rs:29-48` (`with_panic_guard` —
@@ -30,40 +37,46 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   `crates/rustra/src/ffi_typed_buffer.rs:67,103` (Frame 버퍼 경로 → `RustraError::internal`),
   `crates/rustra/src/ffi_event_entries.rs:44,77` (이벤트 싱크 등록/해제 경로).
 - **위반 시 동작**: 호스트는 정상 반환된 에러 프레임(`internal: panic — …`)을 받는다.
-  프로세스 상태는 보존된다 — 패닉 하나로 호스트가 죽지 않는다.
+  지원하는 가드 경로는 호출자에게 복귀한다. non-unwind 호스트 콜백에서 발생한
+  Rust 패닉이나 abort하는 패닉까지 복구한다는 뜻은 아니다.
 - **검증 위치**: `crates/rustra/tests/trust_baseline_ffi.rs:609,613` (panic 프레임 prefix 단언),
   `crates/rustra/tests/payload_robustness.rs` (비정상 페이로드가 abort/panic 없이 clean
   `RustraError` 로 수렴), `crates/rustra/src/events_tests.rs:88`
   (`panicking_sink_does_not_propagate`), `crates/rustra/src/ffi_tests.rs:374-385`
   (패닉하는 C 콜백 후 emit 정상 지속).
 
-### S2. 외래 예외는 Rust 프레임을 통과하지 않는다 (abort 계약)
+### S2. 외래 예외는 호스트 콜백 안에서 처리한다
 
-- **불변식**: 호스트 콜백(C/C++ 등)은 Rust 프레임을 거쳐 예외를 되감기(unwind)하지
-  않아야 한다. Rust 패닉은 `catch_unwind` 로 격리되지만, Rust 가 호출한 외래 콜백에서
-  던져진 **외래 예외**는 Rust 가 잡을 수 없다 — `extern "C"` 하에서는 UB, `"C-unwind"`
-  ABI 하에서는 정의된 즉시 abort 다. C++ 호스트 콜백은 `noexcept` 로 표시하거나 최상위
-  `catch (...)` 로 삼는 것이 호스트의 의무다.
-- **근거 코드**: `crates/rustra/src/ffi_event_entries.rs:20-24` (되감기 금지 계약 문서),
-  호스트가 패닉하는 콜백을 넘겨도 rustra 쪽은 `catch_unwind` 로 방어한다
-  (`crates/rustra/src/ffi_event_entries.rs:44`, `crates/rustra/src/events_state.rs` 의
-  `deliver_via_sink`).
-- **위반 시 동작**: 외래 예외가 Rust 프레임을 통과하면 프로세스 abort (정의된 동작 —
-  UB 아님). 데이터 손상은 없다.
-- **검증 위치**: doc 계약(코드 주석 고정) + `crates/rustra/src/ffi_tests.rs:374-385`
-  (`extern "C-unwind"` 패닉 콜백이 emit 을 깨지 않음). 외래 예외 주입 자체는 C++ 테스트
-  하니스가 필요해 자동 검증되지 않는다 — 알려진 한계.
+- **불변식**: C++ 콜백은 Rust로 돌아오기 전에 예외를 잡아야 한다. `noexcept`
+  wrapper에서 오류를 기록하고 정상 복귀하거나 복구 불가능하면 `std::abort`를 명시적으로
+  호출할 수 있다. 예외를 Rust로 unwind해서는 안 된다. `C-unwind`는 ABI 수준의 unwind를
+  허용할 뿐 Rust `catch_unwind`가 외래 예외를 복구하거나 반드시 abort함을 보장하지
+  않는다. non-unwind ABI로 들어오는 외래 예외는 UB다. 계약을 강제하는 위치는
+  C++ 예외를 Rust가 잡는다는 약속이 아니라 호스트 wrapper다.
+- **근거 코드**: `crates/rustra/src/ffi_event_entries.rs`의 콜백 의무,
+  [Rust FFI unwind 규칙](https://doc.rust-lang.org/nomicon/ffi.html#ffi-and-unwinding),
+  [`catch_unwind` 주의사항](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html#notes).
+  Rust 콜백 패닉 격리는 별도 검증이다.
+- **위반 시 동작**: 외래 예외가 탈출하면 복구나 정의된 abort를 보장하지 않는다.
+  C++ wrapper 안의 명시적 abort는 그 wrapper가 정의한 동작이다.
+- **검증 위치**: `bash scripts/run-foreign-exception-check.sh`는 실제 Rust 이벤트 싱크를
+  사용하는 C++ 호스트를 빌드한다. 실제 C++ throw를 Rust 복귀 전에 잡으며, 오류 기록 후
+  두 번째 이벤트를 받는 경우와 격리한 자식에서 명시 abort해 SIGABRT·진단을 확인하는
+  경우를 검사한다. 경계를 넘는 UB를 실행해서 안전하다고 인증하지 않는다.
+  macOS/Linux harness이며 모든 언어·ABI·플랫폼 검증을 뜻하지 않는다.
 
 ### S3. 버퍼 소유권: 8바이트 헤더, 해제 페어링, `usize::MAX` 센티넬
 
 - **불변식**:
-  1. `rustra_ffi_invoke*` 계열이 돌려주는 버퍼는 8바이트 헤더를 갖는다 — magic
+  1. 헤더가 있는 invoke 경로의 소유권 이전 응답은 8바이트 헤더를 갖는다 — magic
      `0x52555354` ("RUST") + `u32 LE` payload 길이. 반환 포인터는 헤더 **뒤** payload
      시작점이고, 소유권은 호스트로 이전된다 (boxed slice).
+     호출자 소유 출력 버퍼와 빌린 channel callback 데이터는 이 소유권을 이전하지
+     않는다. 호스트는 그 포인터를 소유 응답처럼 해제하면 안 된다.
   2. 해제는 반드시 짝이 맞는 함수로 정확히 1회: 헤더 달린 버퍼는 `rustra_ffi_free(ptr, len)`,
      `rustra_ffi_invoke_buffer` 의 헤더 없는 boxed slice 는 `rustra_ffi_free_owned_bytes(ptr, len)`.
-     두 함수는 호환되지 않는다. `rustra_ffi_free` 는 magic 을 검증해 외래 포인터·이중 해제를
-     거부하고, 해제 전 magic 을 0 으로 무효화한다. debug 빌드에서는 라이브 할당 추적기가
+     두 함수는 호환되지 않는다. `rustra_ffi_free`는 유효한 할당의 헤더 magic을
+     검사·무효화하고 해제한다. 헤더 읽기부터 유효한 할당 메모리가 전제다. debug 빌드에서는 라이브 할당 추적기가
      오남용(WrongAllocator/WrongLen/NotLive)을 감지하면 진단을 남기고 **abort** 한다
      (release 에서는 컴파일 아웃 — 호출자 계약에 의존).
   3. caller-buffer 2단계 프로토콜(probe → write)에서 대상 버퍼가 부족하면 쓰지 않고
@@ -75,12 +88,14 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   (`rustra_ffi_free_owned_bytes`), `crates/rustra/src/ffi_free_guard.rs` (debug Verdict 분류),
   `crates/rustra/src/ffi_sync_entries.rs:85-133` (`usize::MAX` 재-probe 센티넬),
   `crates/rustra/src/ffi_typed_buffer.rs:19-93` (동일 센티넬).
-- **위반 시 동작**: 잘못된 짝·이중 해제 — debug 에서 loud abort, release 에서 magic 불일치
-  거부(무해 no-op) 또는 호출자 계약 위반 UB (release guard 는 컴파일 아웃이다 — 문서로
-  고정된 호출자 의무).
+- **위반 시 동작**: 잘못된 짝·길이·비활성 포인터는 debug 추적기가 진단 후 abort한다.
+  release에서는 잘못된 포인터·이중 해제가 magic 검사 이전부터 UB일 수 있어 안전한
+  no-op을 보장하지 않는다. 유효하고 읽을 수 있는 할당의 magic 불일치는 거부하지만
+  출처·수명을 검증한 것은 아니다. 정확한 반환 포인터·길이를 쓰는 의무는 유지된다.
 - **검증 위치**: `crates/rustra/src/ffi_free_guard.rs:76-96` (Verdict 단위 테스트),
-  `crates/rustra/tests/trust_baseline_ffi.rs` (왕복 해제), debug 추적기 abort 경로는
-  `ffi_free_guard` 테스트가 Verdict 로 고정.
+  `crates/rustra/tests/trust_baseline_ffi.rs` (왕복 해제), `crates/rustra/tests/ffi_process_contract.rs`
+  (Unix debug 자식 프로세스에서 두 allocator의 잘못된 길이·짝·이중 해제·외래 포인터에
+  대한 실제 abort; 올바른 페어링은 release에서도 검사). release에서 오용은 실행하지 않는다.
 
 ### S4. 페이로드 한도: `max_payload` 게이트
 
@@ -136,7 +151,12 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   (`result_json`/`error` 는 JSON 문자열 임베드), Frame 은
   `[ok][pad][len u16][postcard {code, message}]` 프레이밍(에러는 `ok=0`, payload 필드 없음).
   JSON fallback 은 Rust `Display` 문자열을 첫 `": "` 기준으로 `{code, message}` 재분할한다.
-  직렬화조차 실패하면 하드코딩된 최소 에러 바이트로 수렴한다 — 응답 없음이 없다.
+  직렬화 실패에는 하드코딩된 최소 에러 바이트를 사용한다. 이는 총괄 전제 안에서의
+  응답 형식 보장이지 호스트 종료 이후 전달까지 보장하지 않는다. 유지한 async channel을
+  닫으면 이후 native 전달을 억제하고 Rust가 응답을 해제한다. 호스트는 channel을
+  폐기할 때 자신의 대기 작업을 종료해야 한다. scriptc 같은 외부 런타임은 release 전에
+  복사해 큐에 넣은 callback을 이후에도 배수할 수 있다. 폐기된 상태에 대한 효과는
+  native 등록 해제와 별도로 consumer가 방어해야 한다.
 - **근거 코드**: `crates/rustra/src/ffi_prelude.rs:60-81` (`FfiResponse`,
   `FfiPostcardResponse`), `crates/rustra/src/ffi_dispatch.rs:74-77` (JSON 인코딩 실패 fallback),
   `crates/rustra/src/hot_core_dylib.rs:223-228` (`split_error_wire` — Display 재분할), 프레이밍 계약은

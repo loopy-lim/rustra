@@ -9,6 +9,7 @@ worth recording too — write down why it was rejected.
 | [0001](0001-record-track-a-contract-mechanization.md) | Track A: contract mechanization (adopting UniFFI maturity practices)    | Accepted | 2026-09-11 |
 | [0002](0002-uniffi-track-b1-carrier.md)               | Track B1: UniFFI as the Kotlin/Swift language carrier                   | Accepted | 2026-09-11 |
 | [0003](0003-s7-contract-verification-escape-hatch.md) | S7 wording alignment: contractVerification as the explicit escape hatch | Accepted | 2026-09-12 |
+| [0004](0004-ffi-safety-preconditions.md)              | FFI pointer preconditions and foreign exception ownership               | Accepted | 2026-10-13 |
 
 ## Conventions
 

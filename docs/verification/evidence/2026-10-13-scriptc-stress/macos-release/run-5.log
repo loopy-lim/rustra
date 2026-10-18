@@ -1,0 +1,1 @@
+scriptc stress PASS cycles=64 copied=192 events=128 cancelled=64 late=0

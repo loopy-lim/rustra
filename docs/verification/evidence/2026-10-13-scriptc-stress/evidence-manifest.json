@@ -1,0 +1,275 @@
+{
+  "copiedAt": "2026-10-13T04:47:51.258773+00:00",
+  "scope": "Raw selected logs/receipts; binaries and static archives remain under target. See README.md for overwritten run-1..5 provenance.",
+  "files": {
+    "macos-release/compiler-version.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/compiler-version.log",
+      "sha256": "71015c979ccb0fc8a0be7ca0ae83046ab045cdc2c8faa09fb2f0f7e440f9b4a6",
+      "bytes": 6
+    },
+    "macos-release/fixture-build.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/fixture-build.log",
+      "sha256": "9576f1f7e73fc2bb1ec2336aae60cb485c591eadc60a1b998573411c34057e08",
+      "bytes": 62
+    },
+    "macos-release/head.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/head.log",
+      "sha256": "9e1c028f2d4d2749d6ba84a9608950a62b827f934dcad17699dcca79f7a3e0b4",
+      "bytes": 41
+    },
+    "macos-release/native-build.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/native-build.log",
+      "sha256": "89b322fc9bf365c51f772fa59a3db794a5581dce2eda3d0dfb5e39ba79844a7b",
+      "bytes": 93
+    },
+    "macos-release/receipt-20-runs.json": {
+      "source": "target/scriptc-stress/darwin-arm64/release/receipt-20-runs.json",
+      "sha256": "fe00a5d05b57d0c4bfd9f49a85b6a7dbe8445a61ff304af917a7f90d7953188f",
+      "bytes": 8839
+    },
+    "macos-release/receipt.json": {
+      "source": "target/scriptc-stress/darwin-arm64/release/receipt.json",
+      "sha256": "6a125b5af83ac13591c4c066c556c05e1a482a4ef3ae8eefcdce91b4d677a150",
+      "bytes": 5272
+    },
+    "macos-release/run-1.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-1.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-10.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-10.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-11.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-11.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-12.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-12.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-13.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-13.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-14.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-14.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-15.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-15.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-16.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-16.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-17.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-17.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-18.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-18.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-19.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-19.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-2.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-2.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-20.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-20.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-3.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-3.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-4.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-4.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-5.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-5.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-6.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-6.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-7.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-7.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-8.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-8.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/run-9.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/run-9.log",
+      "sha256": "ba994ec8ac7d260a28457123974c7932a0526cc2f2fcc2fcbc1e3448845ffb57",
+      "bytes": 72
+    },
+    "macos-release/rustc.log": {
+      "source": "target/scriptc-stress/darwin-arm64/release/rustc.log",
+      "sha256": "e61cba8ded8c60e985f759f74a221c4773649021477d00b44c7af411eb8c218c",
+      "bytes": 192
+    },
+    "macos-release/stress-ffi.json": {
+      "source": "target/scriptc-stress/darwin-arm64/release/stress-ffi.json",
+      "sha256": "672c57f3da6f7cd9719c6dd837aec65280338f201b359e1a5374ecfd738a4946",
+      "bytes": 4075
+    },
+    "linux-sanitize/canary-archive.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/canary-archive.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "linux-sanitize/canary-c-build.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/canary-c-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "linux-sanitize/canary-ffi.json": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/canary-ffi.json",
+      "sha256": "3b482869edcc6774a9cbb0eff47b6efaf133473a98386064f4774ecd27257f7d",
+      "bytes": 236
+    },
+    "linux-sanitize/canary-native-build.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/canary-native-build.log",
+      "sha256": "7f82b8f51ae45b5d2b70012e223f4c2dcd0b831bfeb16b2edc56bb45a2ed4edd",
+      "bytes": 66
+    },
+    "linux-sanitize/canary-run.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/canary-run.log",
+      "sha256": "019a499d8a4f3b8cc69b780459aa4b79339ec28362b710113eefab71e06dd311",
+      "bytes": 4475
+    },
+    "linux-sanitize/compiler-version.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/compiler-version.log",
+      "sha256": "71015c979ccb0fc8a0be7ca0ae83046ab045cdc2c8faa09fb2f0f7e440f9b4a6",
+      "bytes": 6
+    },
+    "linux-sanitize/fixture-build.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/fixture-build.log",
+      "sha256": "477fe38c0fb7f7864eb3936a4ce06f0a6f90a7aca12b976ab11a81b1c63ff47e",
+      "bytes": 1777
+    },
+    "linux-sanitize/head.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/head.log",
+      "sha256": "9e1c028f2d4d2749d6ba84a9608950a62b827f934dcad17699dcca79f7a3e0b4",
+      "bytes": 41
+    },
+    "linux-sanitize/hello-build.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/hello-build.log",
+      "sha256": "5069043c14a5b653e63143deb32c5e6b9b9c1dcec8808741f80710b55540d641",
+      "bytes": 65
+    },
+    "linux-sanitize/hello-run.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/hello-run.log",
+      "sha256": "73375d8e6842319c8d1b162492a8e309d4dcfd29ad7fa4d18d360914a6280257",
+      "bytes": 31
+    },
+    "linux-sanitize/receipt.json": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/receipt.json",
+      "sha256": "3a2b3f8df863ff88ef306ac020fa001a932dc155b1def91c22257fee5eb58865",
+      "bytes": 5489
+    },
+    "linux-sanitize/rustc.log": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/rustc.log",
+      "sha256": "9e52f76a6e81c8cce82c76c2ee87a3c9999e56d92106b19142416460b9d2c727",
+      "bytes": 197
+    },
+    "linux-sanitize/sanitizer-canary.ts": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/sanitizer-canary.ts",
+      "sha256": "df1d74293096d00bef30fdbeff43bfa6166d0a97d61ceffe5ef569495e150831",
+      "bytes": 103
+    },
+    "linux-sanitize/sanitizer-hello.ts": {
+      "source": "target/scriptc-stress/linux-arm64/sanitize/sanitizer-hello.ts",
+      "sha256": "0bedd18b469e61745a47c361bc5ce7c3a5c5c8a614fdda171c9d8f5f2ae7b9fb",
+      "bytes": 47
+    },
+    "macos-sanitize-startup/compiler-version.log": {
+      "source": "target/scriptc-stress/sanitize/compiler-version.log",
+      "sha256": "71015c979ccb0fc8a0be7ca0ae83046ab045cdc2c8faa09fb2f0f7e440f9b4a6",
+      "bytes": 6
+    },
+    "macos-sanitize-startup/fixture-build.log": {
+      "source": "target/scriptc-stress/sanitize/fixture-build.log",
+      "sha256": "765f1396d07f30f3a451cd3f9d9cad4e83c92c8e0aecf955ffc09061a6cf1e02",
+      "bytes": 62
+    },
+    "macos-sanitize-startup/head.log": {
+      "source": "target/scriptc-stress/sanitize/head.log",
+      "sha256": "9e1c028f2d4d2749d6ba84a9608950a62b827f934dcad17699dcca79f7a3e0b4",
+      "bytes": 41
+    },
+    "macos-sanitize-startup/hello-startup.log": {
+      "source": "target/scriptc-stress/sanitize/hello-startup.log",
+      "sha256": "b1eb9896e4f394e1a746b1a952970c4ddb4785b4a462ff72011ed28d6ed71a61",
+      "bytes": 57
+    },
+    "macos-sanitize-startup/hello.ts": {
+      "source": "target/scriptc-stress/sanitize/hello.ts",
+      "sha256": "95effba6ee7b5feb075d2cf5aefb77be04186c785949df97a9978ce9a8bc31c4",
+      "bytes": 47
+    },
+    "macos-sanitize-startup/native-build.log": {
+      "source": "target/scriptc-stress/sanitize/native-build.log",
+      "sha256": "d82d945d8652c7994dc3ef1ef77155466160428a474f4f79a347b78d145e8490",
+      "bytes": 81
+    },
+    "macos-sanitize-startup/receipt.json": {
+      "source": "target/scriptc-stress/sanitize/receipt.json",
+      "sha256": "4a7e3ad693450c0a39543f2ca18b4286cf0b0dd4b4bacb3fda90eeede3cb7bb7",
+      "bytes": 4127
+    },
+    "macos-sanitize-startup/run-1.log": {
+      "source": "target/scriptc-stress/sanitize/run-1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "macos-sanitize-startup/rustc.log": {
+      "source": "target/scriptc-stress/sanitize/rustc.log",
+      "sha256": "e61cba8ded8c60e985f759f74a221c4773649021477d00b44c7af411eb8c218c",
+      "bytes": 192
+    },
+    "macos-sanitize-startup/stress-ffi.json": {
+      "source": "target/scriptc-stress/sanitize/stress-ffi.json",
+      "sha256": "60bc4e96b00f2f7a60f38d25c1f39553aaa80b70c2d796164b4118b240232e94",
+      "bytes": 4062
+    },
+    "linux-setup.log": {
+      "source": "target/scriptc-stress/linux-setup.log",
+      "sha256": "791feb17a3317cf15a0fd336e04de75fe15f1741e46a9654c1a91b18eb4d1d3c",
+      "bytes": 25945
+    }
+  },
+  "selectedReleaseSourceCheck": {
+    "count": 15,
+    "changed": []
+  }
+}

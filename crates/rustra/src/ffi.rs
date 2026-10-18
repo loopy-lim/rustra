@@ -27,6 +27,7 @@ include!("ffi_snapshot.rs");
 include!("ffi_event_core.rs");
 include!("ffi_event_entries.rs");
 include!("ffi_channel.rs");
+include!("ffi_scriptc.rs");
 include!("ffi_hot_reload.rs");
 
 #[cfg(test)]

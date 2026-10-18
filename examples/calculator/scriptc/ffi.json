@@ -51,6 +51,104 @@
         "u64"
       ],
       "returns": "u32"
+    },
+    {
+      "name": "rustra_ffi_channel_create_bytes",
+      "symbol": "rustra_ffi_channel_create_bytes",
+      "params": [
+        {
+          "callback": {
+            "id": "receive",
+            "params": [
+              {
+                "context": "receive"
+              },
+              "u32",
+              "bytes"
+            ],
+            "returns": "void",
+            "lifetime": "retained",
+            "invoke": "foreign"
+          }
+        },
+        {
+          "context": "receive"
+        }
+      ],
+      "returns": "u32"
+    },
+    {
+      "name": "rustra_ffi_channel_release_scriptc",
+      "symbol": "rustra_ffi_channel_release_scriptc",
+      "params": [
+        {
+          "callback": {
+            "release": "rustra_ffi_channel_create_bytes:receive"
+          }
+        },
+        {
+          "context": "rustra_ffi_channel_create_bytes:receive"
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_channel_send_bytes",
+      "symbol": "rustra_ffi_channel_send_bytes",
+      "params": [
+        "u32",
+        "bytes"
+      ],
+      "returns": "i32"
+    },
+    {
+      "name": "rustra_ffi_invoke_json_async_channel",
+      "symbol": "rustra_ffi_invoke_json_async_channel",
+      "params": [
+        "string",
+        "u32"
+      ],
+      "returns": "u64"
+    },
+    {
+      "name": "rustra_ffi_event_sink_register_scriptc",
+      "symbol": "rustra_ffi_event_sink_register_scriptc",
+      "params": [
+        {
+          "callback": {
+            "id": "event",
+            "params": [
+              {
+                "context": "event"
+              },
+              "cstring",
+              "cstring"
+            ],
+            "returns": "void",
+            "lifetime": "retained",
+            "invoke": "foreign"
+          }
+        },
+        {
+          "context": "event"
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "rustra_ffi_event_sink_release_scriptc",
+      "symbol": "rustra_ffi_event_sink_release_scriptc",
+      "params": [
+        {
+          "callback": {
+            "release": "rustra_ffi_event_sink_register_scriptc:event"
+          }
+        },
+        {
+          "context": "rustra_ffi_event_sink_register_scriptc:event"
+        }
+      ],
+      "returns": "void"
     }
   ],
   "libraries": [

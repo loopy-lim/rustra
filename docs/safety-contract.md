@@ -7,24 +7,30 @@ Status: active · adopted 2026-09-11 · for the change rule see the final sectio
 
 ## 1. Umbrella Invariant
 
-Host (foreign) code must not be able to cause undefined behavior (UB) in the host
-process even when it calls rustra's Rust FFI **maliciously or out of contract**. rustra
-defends this umbrella invariant with three mechanisms: (a) Rust panics are caught with
-`catch_unwind` and always normalized into an error frame — a panic never crosses an
-`extern "C"` boundary; (b) the other direction — a foreign exception unwinding through a
-Rust frame cannot be caught, so it is defined by contract as an immediate abort; (c) every
-other hostile input (oversized payload, truncated frame, invalid free request, panicking
-host callback) converges **fail-closed** into a defined error envelope or a loud abort —
-there is no silent compromise. Failures are always observable: an error code, a stderr
-diagnostic, or a gate rejection.
+For a host that satisfies the FFI's unsafe memory and ABI preconditions, malformed
+or adversarial **payload bytes** must not cause undefined behavior. Callers must
+supply valid, suitably aligned readable/writable ranges, keep borrowed buffers and
+callback state alive for the required lifetime, avoid conflicting access, and free
+an owned result through its matching allocator exactly once. Null is allowed only
+where the entry point documents it. An in-process unsafe API cannot validate an
+arbitrary pointer's provenance or lifetime; violating these preconditions can be UB.
+
+Within this boundary, payload validation rejects malformed/oversized input before
+handler execution, guarded Rust unwinds are contained, and debug ownership checks
+abort on detected misuse. A header magic value is a consistency check on valid
+memory, not proof that an arbitrary address is readable. C++ callbacks must contain
+foreign exceptions in the host wrapper before returning to Rust (S2). Resource
+exhaustion and `panic=abort` are not recoverable error-frame guarantees. These
+boundaries, with the unchanged public ABI, are recorded in [ADR 0004](adr/0004-ffi-safety-preconditions.md).
 
 ## 2. Per-Item Contracts
 
-### S1. Panics never cross the FFI boundary
+### S1. Guarded Rust panic containment
 
-- **Invariant**: if any Rust code executed from an FFI entry panics (handler,
-  serialization, event delivery, swap), the unwind is caught by `catch_unwind` and
-  normalized into an `ok:false` error frame. The panic message is serialized in a single
+- **Invariant**: guarded command/serialization paths catch unwinding Rust panics with
+  `catch_unwind` and normalize them into an `ok:false` error frame. Event sink
+  panics are logged and the event is dropped; void registration entries cannot
+  return a response frame. This applies to `panic=unwind`, not `panic=abort`. The panic message is serialized in a single
   format, `internal: panic — <payload>` — host parsers classify on the prefix, so the
   format must not diverge per path.
 - **Evidence**: `crates/rustra/src/ffi_dispatch.rs:29-48` (`with_panic_guard` —
@@ -35,41 +41,49 @@ diagnostic, or a gate rejection.
   `RustraError::internal`), `crates/rustra/src/ffi_event_entries.rs:44,77`
   (event sink register/unregister paths).
 - **On violation**: the host receives a normally returned error frame
-  (`internal: panic — …`). Process state is preserved — one panic never kills the host.
+  (`internal: panic — …`). The supported guarded path returns to its caller. A Rust panic from a
+  non-unwinding host callback or an aborting panic is not catchable recovery.
 - **Verified by**: `crates/rustra/tests/trust_baseline_ffi.rs:609,613` (panic frame prefix
   assertion), `crates/rustra/tests/payload_robustness.rs` (hostile payloads converge into a
   clean `RustraError` without abort/panic), `crates/rustra/src/events_tests.rs:88`
   (`panicking_sink_does_not_propagate`), `crates/rustra/src/ffi_tests.rs:374-385`
   (emit keeps working after a panicking C callback).
 
-### S2. Foreign exceptions do not unwind through Rust frames (abort contract)
+### S2. Foreign exceptions stay inside the host callback
 
-- **Invariant**: host callbacks (C/C++ etc.) must not unwind exceptions through a Rust
-  frame. Rust panics are isolated by `catch_unwind`, but a **foreign exception** thrown
-  from a host callback invoked by Rust cannot be caught by Rust — under `extern "C"` it is
-  UB; under the `"C-unwind"` ABI it is a defined immediate abort. It is the host's duty to
-  mark C++ callbacks `noexcept` or swallow at a top-level `catch (...)`.
-- **Evidence**: `crates/rustra/src/ffi_event_entries.rs:20-24` (the unwind ban contract,
-  documented in code), and rustra defends against host callbacks that panic via
-  `catch_unwind` (`crates/rustra/src/ffi_event_entries.rs:44`,
-  `deliver_via_sink` in `crates/rustra/src/events_state.rs`).
-- **On violation**: a foreign exception passing through a Rust frame aborts the process
-  (defined behavior — not UB). No data corruption.
-- **Verified by**: doc contract (pinned in code comments) + `crates/rustra/src/ffi_tests.rs:374-385`
-  (an `extern "C-unwind"` panicking callback does not break emit). Injecting a real foreign
-  exception needs a C++ test harness and is not automated — a known limitation.
+- **Invariant**: C++ callbacks must catch exceptions before returning to Rust. A
+  `noexcept` wrapper can record an error and return normally, or deliberately call
+  `std::abort` for an unrecoverable condition. It must not let an exception unwind
+  into Rust. `C-unwind` permits unwinding at the ABI level; it does not guarantee
+  foreign-exception recovery or a specific abort outcome in Rust `catch_unwind`.
+  A foreign exception entering a non-unwinding ABI is UB. The host-side wrapper,
+  not a promise about Rust catching C++ exceptions, enforces this contract.
+- **Evidence**: `crates/rustra/src/ffi_event_entries.rs` documents the callback
+  obligation. [Rust's FFI and unwinding rules](https://doc.rust-lang.org/nomicon/ffi.html#ffi-and-unwinding)
+  and [`catch_unwind` notes](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html#notes)
+  define the language boundary. Rust callback-panic containment is a separate test.
+- **On violation**: no recovery or defined-abort guarantee is made for an escaping
+  foreign exception. A deliberate abort in the C++ wrapper is defined by that wrapper.
+- **Verified by**: `bash scripts/run-foreign-exception-check.sh` builds a C++ host
+  against the production Rust event sink. An actual C++ throw is caught before
+  returning to Rust: one case records it and receives a second event; another
+  explicitly aborts in an isolated child and requires SIGABRT plus the diagnostic.
+  It does not execute cross-boundary UB to claim that UB is safe. This harness
+  covers macOS/Linux, not every foreign language, ABI, or platform.
 
 ### S3. Buffer ownership: 8-byte header, paired free, `usize::MAX` sentinel
 
 - **Invariant**:
-  1. Buffers returned by the `rustra_ffi_invoke*` family carry an 8-byte header — magic
+  1. Owned responses on the headered invoke paths carry an 8-byte header — magic
      `0x52555354` ("RUST") + `u32 LE` payload length. The returned pointer points at the
      payload **after** the header, and ownership is transferred to the host (boxed slice).
+     Caller-owned output buffers and borrowed channel callbacks do not transfer
+     such ownership; hosts must not free their pointers as owned responses.
   2. Freeing must use the matching function exactly once: headered buffers go through
      `rustra_ffi_free(ptr, len)`; the headerless boxed slice from `rustra_ffi_invoke_buffer`
      goes through `rustra_ffi_free_owned_bytes(ptr, len)`. The two are not interchangeable.
-     `rustra_ffi_free` validates the magic and rejects foreign pointers and double frees,
-     and zeroes the magic before releasing. In debug builds a live-allocation tracker
+     `rustra_ffi_free` checks and invalidates the header magic before releasing a
+     valid allocation; reading that header already requires valid allocation memory. In debug builds a live-allocation tracker
      aborts loudly with a diagnostic on misuse (WrongAllocator/WrongLen/NotLive); in
      release the guard compiles out — the caller contract is documented instead.
   3. In the caller-buffer two-step protocol (probe → write), an insufficient target buffer
@@ -82,12 +96,15 @@ diagnostic, or a gate rejection.
   (`rustra_ffi_free_owned_bytes`), `crates/rustra/src/ffi_free_guard.rs` (debug Verdict
   classification), `crates/rustra/src/ffi_sync_entries.rs:85-133` (`usize::MAX` re-probe
   sentinel), `crates/rustra/src/ffi_typed_buffer.rs:19-93` (same sentinel).
-- **On violation**: wrong pairing or double free — loud abort in debug; in release a magic
-  mismatch is rejected harmlessly (no-op), and UB beyond that is the documented caller's
-  duty (the release guard compiles out).
+- **On violation**: wrong pairing, wrong length, or a non-live pointer is diagnosed
+  and aborted by the debug tracker. In release, invalid pointers and double frees
+  can be UB before the magic is inspected; no safe no-op is promised. A valid
+  readable allocation with unexpected magic is rejected, but this does not validate
+  provenance or lifetime. The exact returned pointer/length remains the caller contract.
 - **Verified by**: `crates/rustra/src/ffi_free_guard.rs:76-96` (Verdict unit tests),
-  `crates/rustra/tests/trust_baseline_ffi.rs` (round-trip frees), the debug tracker abort
-  path is pinned as Verdicts by the `ffi_free_guard` tests.
+  `crates/rustra/tests/trust_baseline_ffi.rs` (round-trip frees), `crates/rustra/tests/ffi_process_contract.rs` (actual Unix debug child-process
+  aborts for both allocators, wrong lengths, double free, and a foreign pointer;
+  correct allocator pairing also runs in release). Misuse is not executed in release.
 
 ### S4. Payload limits: the `max_payload` gate
 
@@ -150,8 +167,13 @@ diagnostic, or a gate rejection.
   (`result_json`/`error` embed JSON strings), and Frame uses the
   `[ok][pad][len u16][postcard {code, message}]` framing (errors are `ok=0`, no payload
   field). The JSON fallback re-splits a Rust `Display` string into `{code, message}` at the
-  first `": "`. Even serialization itself failing converges into hardcoded minimal error
-  bytes — there is no "no response" outcome.
+  first `": "`. Serialization failure uses hardcoded minimal error bytes. This is a
+  response-format guarantee within the umbrella preconditions, not a guarantee of
+  delivery after host teardown. Closing a retained async channel suppresses later
+  native delivery while Rust still frees the response; the host must settle its own
+  pending work when disposing the channel. A foreign runtime such as scriptc may
+  still drain callbacks copied into its queue before release. Consumers must guard
+  effects on disposed state separately from native registration teardown.
 - **Evidence**: `crates/rustra/src/ffi_prelude.rs:60-81` (`FfiResponse`,
   `FfiPostcardResponse`), `crates/rustra/src/ffi_dispatch.rs:74-77` (JSON encode failure
   fallback), `crates/rustra/src/hot_core_dylib.rs:223-228` (`split_error_wire` — Display

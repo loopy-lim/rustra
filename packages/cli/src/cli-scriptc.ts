@@ -1,6 +1,6 @@
 /**
  * scriptc 코드젠 오케스트레이션 — scriptc Native FFI 단계(ffi.json +
- * scriptc-ffi.d.ts 쓰기/검증)를 cli-codegen.ts 에서 분리한 모듈이다. 렌더링은
+ * scriptc-ffi.d.ts + scriptc-ffi.ts 쓰기/검증)를 cli-codegen.ts 에서 분리한 모듈이다. 렌더링은
  * cli-generate-scriptc.ts(문자열만, scriptc 바이너리 없이 검증 가능)가 담당하고
  * 이 모듈은 경로 해상도·쓰기·check 모드 바이트 비교만 한다. uniffi 단계
  * (cli-uniffi.ts)와 같은 계약: 스폰/파일 실패는 원인을 보존한 문맥 에러로 감싸고,
@@ -24,6 +24,7 @@ import type { RustraScriptcConfig } from './config.js';
 import {
   SCRIPTC_DECLARATIONS_FILE,
   SCRIPTC_MANIFEST_FILE,
+  SCRIPTC_SOURCE_FILE,
   generateScriptcArtifacts,
   resolveScriptcArchivePath,
 } from './cli-generate-scriptc.js';
@@ -106,6 +107,17 @@ type RenderedScriptc = {
   declarations: string;
 };
 
+/**
+ * 렌더 원본 → ambient 선언 변형 — 헤더의 파일명과 export 접두사만 바꾼다. `File:`
+ * 행은 generatedFileHeader 가 SCRIPTC_SOURCE_FILE 로 각인한 것이므로 상수끼리
+ * 대조한다 — 파일명이 바뀌어도 무음 no-op 되지 않는다.
+ */
+function toAmbientDeclarations(source: string): string {
+  return source
+    .replace(`File:   ${SCRIPTC_SOURCE_FILE}`, `File:   ${SCRIPTC_DECLARATIONS_FILE}`)
+    .replaceAll('export declare ', 'declare ');
+}
+
 /** 공통 전처리 — 출력 디렉터리 해상도 + 신선한 스키마 로드 + 아티팩트 렌더. */
 function renderScriptcPair(input: ScriptcStageInput): RenderedScriptc {
   const outDir = resolveScriptcOutDir(resolve(input.configPath, '..'), input.scriptc);
@@ -128,8 +140,8 @@ function renderScriptcPair(input: ScriptcStageInput): RenderedScriptc {
 }
 
 /**
- * write 모드 — 아카이브 존재 fail-closed 검사 후 ffi.json·scriptc-ffi.d.ts 를
- * 커밋 위치에 쓴다. 반환값은 쓴 파일 경로 목록(codegen JSON 계약의 written 와 같은
+ * write 모드 — 아카이브 존재 fail-closed 검사 후 ffi.json·scriptc-ffi.d.ts·
+ * scriptc-ffi.ts 를 커밋 위치에 쓴다. 반환값은 쓴 파일 경로 목록(codegen JSON 계약의 written 와 같은
  * 절대 경로 관례).
  */
 export function runScriptcStage(input: ScriptcStageInput): string[] {
@@ -148,10 +160,13 @@ export function runScriptcStage(input: ScriptcStageInput): string[] {
   const manifestPath = resolve(rendered.outDir, SCRIPTC_MANIFEST_FILE);
   const declarationsPath = resolve(rendered.outDir, SCRIPTC_DECLARATIONS_FILE);
   writeFileSync(manifestPath, rendered.ffiJson);
-  writeFileSync(declarationsPath, rendered.declarations);
+  const sourcePath = resolve(rendered.outDir, SCRIPTC_SOURCE_FILE);
+  writeFileSync(declarationsPath, toAmbientDeclarations(rendered.declarations));
+  writeFileSync(sourcePath, rendered.declarations);
   input.progress(`wrote ${manifestPath}`);
   input.progress(`wrote ${declarationsPath}`);
-  return [manifestPath, declarationsPath];
+  input.progress(`wrote ${sourcePath}`);
+  return [manifestPath, declarationsPath, sourcePath];
 }
 
 /**
@@ -163,7 +178,8 @@ export function checkScriptcStage(input: ScriptcStageInput): void {
   const rendered = renderScriptcPair(input);
   const expected: ReadonlyArray<readonly [string, string]> = [
     [SCRIPTC_MANIFEST_FILE, rendered.ffiJson],
-    [SCRIPTC_DECLARATIONS_FILE, rendered.declarations],
+    [SCRIPTC_DECLARATIONS_FILE, toAmbientDeclarations(rendered.declarations)],
+    [SCRIPTC_SOURCE_FILE, rendered.declarations],
   ];
   for (const [fileName, generated] of expected) {
     const committedPath = resolve(rendered.outDir, fileName);

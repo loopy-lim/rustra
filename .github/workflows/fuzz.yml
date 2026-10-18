@@ -64,3 +64,40 @@ jobs:
           name: fuzz-crash-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: fuzz/artifacts/
           if-no-files-found: ignore
+
+  large-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RUSTUP_TOOLCHAIN: nightly
+      SAFETY_LOG_DIR: ${{ github.workspace }}/target/safety/fuzz-large
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --locked
+      - name: Record large campaign environment and prepare boundary seeds
+        run: |
+          mkdir -p "$SAFETY_LOG_DIR"
+          { git rev-parse HEAD; rustc -Vv; cargo fuzz --version; } > "$SAFETY_LOG_DIR/environment.txt"
+          python3 scripts/safety/generate-large-fuzz-seeds.py fuzz/corpus/invoke_large_boundary
+      - name: Replay large valid payload and depth boundary corpus
+        working-directory: fuzz
+        run: bash ../scripts/run-safety-check.sh seeds cargo fuzz run invoke_large_boundary corpus/invoke_large_boundary -- -runs=0 -max_len=1048577 -rss_limit_mb=2048 -timeout=10
+      - name: Fuzz large payload boundaries (10min, 2GiB RSS budget)
+        working-directory: fuzz
+        run: bash ../scripts/run-safety-check.sh campaign cargo fuzz run invoke_large_boundary corpus/invoke_large_boundary -- -max_total_time=600 -max_len=1048577 -rss_limit_mb=2048 -timeout=10
+      - name: Upload large campaign logs, corpus and crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-large-boundary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/safety/fuzz-large/
+            fuzz/corpus/invoke_large_boundary/
+            fuzz/artifacts/invoke_large_boundary/
+          if-no-files-found: error

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+  "dirtySource": true,
+  "platform": "arm64 iOS 26.2 Simulator",
+  "instrumentation": "clang AddressSanitizer; -O1 -g",
+  "command": "RUSTRA_NATIVE_RUNTIME_CYCLES=50 RUSTRA_NATIVE_TEST_SANITIZER=address RUSTRA_NATIVE_TEST_TIMEOUT_MS=60000 RUSTRA_NATIVE_DEPS_ROOT=<extracted RN 0.81.5 dependencies> RUSTRA_SIMULATOR_UDID=<owned simulator> bun run test:native:hermes",
+  "asanCleanStartup": "pass",
+  "asanIntentionalUseAfterFree": "detected as expected",
+  "assertions": 1412,
+  "failures": 0,
+  "runtimeRecreationCycles": 100,
+  "exitCode": 0,
+  "scope": [
+    "production C++ binder",
+    "generated codecs",
+    "JSI source",
+    "async lifecycle",
+    "owned response free",
+    "two concurrent Hermes runtimes"
+  ],
+  "notProven": [
+    "physical iPhone or Android",
+    "Rust C ABI peer is controlled in this harness",
+    "prebuilt Hermes and RN dependencies are not rebuilt with ASan",
+    "2-hour app lifecycle soak",
+    "LeakSanitizer on iOS"
+  ],
+  "identities": [
+    {
+      "sha256": "02ac8a9e99ce8fc0879fcd45197a0a0c7b10397e3b44bb7b1b3effc689eafbfc",
+      "path": "/tmp/rustra-20261013-native-asan100/native-sync-test"
+    },
+    {
+      "sha256": "8206a89d25dd2df3b2d89de41435302b1576880f3dcf5f0316fac935db53d12a",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.cpp"
+    },
+    {
+      "sha256": "c3ebd6de40b1512cf42f747bdbe68c9ff26bb638b1c3b7baa4d37a612d3e9b7e",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraJSIBridge.hpp"
+    },
+    {
+      "sha256": "8f860c7571012cee50703cff1d0128bd1850a6edb5a203a3fc9ac13863a93012",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/RustraSyncBinding.inc"
+    },
+    {
+      "sha256": "b25b98046764e60bb30aebe776487a14b007a48ca37cb2433603839a83079f87",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp"
+    },
+    {
+      "sha256": "50b5a8ffdb0751a5a0b8c5151ffcb9c5bed293075a21cea3d4dfa686a242819d",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp"
+    },
+    {
+      "sha256": "048b5a89e4c6ec46698262e60eced861ce29a21c232800297c581e943342298f",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-native-sync.cpp"
+    },
+    {
+      "sha256": "bed9769392c37d79e1edc2d070f614cde98eb0d5d6bca78ee7d19d6bd3e584fb",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-codec-tests.inc"
+    },
+    {
+      "sha256": "ad6900f15b7ecdffc057a802d04a804cce415b45cb0564d000b2bd14e0c417fe",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-ffi-stubs.inc"
+    },
+    {
+      "sha256": "3ce3761edacb8693f763a25326fbdd678f5689836b0c9318aca3e6ba50fe4d45",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-lifecycle-tests.inc"
+    },
+    {
+      "sha256": "7d2fa2de5070f9be68a7fc420d6f4133d8ddecd8139eeef2c460180ff49fa742",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-peers.inc"
+    },
+    {
+      "sha256": "2fc764cbedcaaddbc946fce079926c693504ea0f6cab7aed4da01d54d0029e19",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-perf.inc"
+    },
+    {
+      "sha256": "47ab2973498ccacad171ee4ac57119231678e10c29e5de7d59f7a85a9c47a47a",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/native-sync-runtime-tests.inc"
+    },
+    {
+      "sha256": "09cb48c42d0799a05426de29738f8ae2bed76d56fd34bbed27ae1b7df55f4973",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh"
+    },
+    {
+      "sha256": "f9e3d0ba5ce297efe90556c2250dc36a0b6fe76ebe0b3640d5425bf1575f67fc",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/modules/rustra-jsi/ios/run-native-test.mjs"
+    },
+    {
+      "sha256": "03234845ab9657805097c6617613ec85f89816d0343fc190e0c76be97289aa35",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/node_modules/react-native/ReactCommon/jsi/jsi/jsi.cpp"
+    },
+    {
+      "sha256": "91470e07fbf481ebf34f7da1ca1cb43a7644b6f6418ef549c07108b95a4e3248",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/rustra-sync-core.hpp"
+    },
+    {
+      "sha256": "7d3f799d1f9cc323daf0423b102164e972d0b2c2420abf868e8e72ee9d207da1",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/packages/react-native/native/cpp/rustra-sync-contract.hpp"
+    },
+    {
+      "sha256": "3b56fdbd5ad62d1b75f039f8ae357052fd6e2a61da574e334d5cbdbeb4ca40ec",
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/examples/react-native-calculator/ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-simulator/hermes.framework/hermes"
+    },
+    {
+      "sha256": "ef9ca64acedca101c987878e139e590b3c93e4b086629ce89a622d99351de7ef",
+      "path": "/tmp/rustra-20261013-native-deps/packages/react-native/third-party/ReactNativeDependencies.xcframework/ios-arm64_x86_64-simulator/ReactNativeDependencies.framework/ReactNativeDependencies"
+    }
+  ],
+  "logSha256": "d8560f135ddcd0c9cd47ed1792c8aeaae49ca13f6c6a3dc8222540f3189ee858",
+  "logPath": "/tmp/rustra-20261013-native-asan100.log"
+}

@@ -10,7 +10,11 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RustraScriptcConfig } from './config.js';
-import { SCRIPTC_DECLARATIONS_FILE, SCRIPTC_MANIFEST_FILE } from './cli-generate-scriptc.js';
+import {
+  SCRIPTC_DECLARATIONS_FILE,
+  SCRIPTC_MANIFEST_FILE,
+  SCRIPTC_SOURCE_FILE,
+} from './cli-generate-scriptc.js';
 import {
   checkScriptcStage,
   resolveScriptcArchive,
@@ -60,7 +64,7 @@ test('resolveScriptcArchive override yields a manifest-relative forward-slash li
   }
 });
 
-test('runScriptcStage writes both artifacts; checkScriptcStage accepts them', () => {
+test('runScriptcStage writes manifest, source declarations and legacy declarations; checkScriptcStage accepts them', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-scriptc-roundtrip-'));
   try {
     const input = makeInput(root);
@@ -68,8 +72,14 @@ test('runScriptcStage writes both artifacts; checkScriptcStage accepts them', ()
     assert.deepEqual(written, [
       join(root, 'out', SCRIPTC_MANIFEST_FILE),
       join(root, 'out', SCRIPTC_DECLARATIONS_FILE),
+      join(root, 'out', SCRIPTC_SOURCE_FILE),
     ]);
-    assert.ok(existsSync(written[0]!) && existsSync(written[1]!));
+    assert.ok(written.every((path) => existsSync(path)));
+    assert.match(
+      readFileSync(written[2]!, 'utf8'),
+      /export declare function rustra_ffi_channel_create_bytes/,
+    );
+    assert.doesNotMatch(readFileSync(written[1]!, 'utf8'), /export declare/);
     // 매니페스트의 libraries 는 out 디렉터리 기준 상대경로로 커밋된다.
     const manifest = JSON.parse(readFileSync(written[0]!, 'utf8')) as {
       libraries: string[];
