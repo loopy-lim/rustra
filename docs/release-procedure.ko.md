@@ -16,14 +16,22 @@
    (`workflow_dispatch`, main 한정) 모두 후보 SHA를 고정하고 Miri·Sanitizer·Fuzz를
    재사용 workflow로 새로 실행한다. 세 결과가 모두 성공해야 발행 job을 시작한다.
    누락·실패·취소·skip은 차단하며, 발행 직전 CI 상태도 다시 확인한다.
-3. 검사 범위: Miri의 lib/frame_wire/field_order_drift, Linux x86_64 ASan+LSan lib,
+3. 검사 범위: Miri의 lib/frame_wire/field_order_drift, Linux x86_64 ASan+LSan lib 및
+   `trust_baseline_ffi`/`payload_robustness`/`ffi_process_contract`/`large_payload_boundary`/
+   `ffi_scriptc`의 debug·release,
    Fuzz의 invoke_frame/invoke_complex_value/invoke_complex_serde 각각 seed 재생 및
    600초. 주간 안전성 실행은 별도로 유지하며 PR required check와 구분한다.
 4. `bun run test:api-surface` — 공개 TS/Rust export 표면을
    `api-surface/snapshot.json` 과 비교한다. 드리프트는 게이트 실패이며, 의도적
    변경은 `--update` 로 갱신한 새 스냅샷을 PR 에 포함해야 한다.
 
-Linux x86_64 sanitizer job은 교차 플랫폼 메모리 안전성 게이트다. 호환성
+추가 `invoke_large_boundary` 캠페인은 1MiB+1 입력·재귀 깊이·큰 유효 입력을
+600초, 2GiB RSS와 입력당 10초 예산으로 검사한다. 작은 입력 3개 캠페인은 유지한다.
+C++ 예외 검사는 `bash scripts/run-foreign-exception-check.sh`의 별도 host containment
+검사다. debug free 오용은 자식 프로세스의 SIGABRT·진단을 요구하고 release에서는
+정상 소유권만 검사한다. 이 범위는 RN native sanitizer와 구분한다.
+
+Linux x86_64 sanitizer job은 해당 플랫폼과 대상의 메모리 안전성 게이트다. 호환성
 매트릭스의 실제 Tauri WebView·수명주기·패키지 설치 수용 기록을 확보하기 전까지
 Linux 지원 수준은 **Alpha**로 유지한다.
 

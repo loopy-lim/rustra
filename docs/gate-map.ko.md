@@ -160,19 +160,24 @@
 
 ### 기타 워크플로
 
-| 워크플로                              | 트리거                                     | 지키는 것                                                                     | 필수 체크 | 로컬 등가물                                                                         |
-| ------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------- |
-| `release.yml`                         | main에서 CI 성공(`workflow_run`) 또는 수동 | 발행은 언제나 green CI SHA에서만: 후보 고정, 발행 전 게이트 재확인            | 아니오    | `bun run verify:release-gates` (같은 검사기)                                        |
-| `miri.yml` (release 경유 + 주간)      | workflow_call, 주간 일요일 cron, 수동      | `rustra`의 unsafe/순수 로직 경로 UB(lib, frame_wire, field_order_drift)       | 아니오    | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)    |
-| `sanitizer.yml` (release 경유 + 주간) | workflow_call, 주간 일요일 cron, 수동      | 메모리 오염/누수: `cargo test -p rustra --lib`에 ASan+LSan                    | 아니오    | nightly `-Zsanitizer=address`로 같은 명령                                           |
-| `fuzz.yml` (release 경유 + 주간)      | workflow_call, 주간 토요일 cron, 수동      | 프레임 디코드 경로가 무작위 입력에 버티는지(3 타깃 × 10분 + 시드 corpus 재생) | 아니오    | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` 크레이트)                       |
-| `coverage.yml`                        | main push, 수동                            | 참고용 — 명시적으로 게이트 아님("가시화"): Rust llvm-cov + TS c8 요약         | 아니오    | `bun run coverage:rust` / `bun run coverage:ts`                                     |
-| `bench.yml`                           | main push(경로 필터), 수동                 | 성능 회귀 예산: criterion vs 이전 베이스라인, 10% 임계                        | 아니오    | `cargo bench` 후 `bun scripts/check-criterion-regression.mjs --max-regression 0.10` |
-| `registry-consumer.yml`               | 수동 전용                                  | 정확한 발행 버전이 macOS에서 설치·동작, 영수증 아티팩트                       | 아니오    | `bun run verify:consumer:registry`                                                  |
+| 워크플로                              | 트리거                                     | 지키는 것                                                                | 필수 체크 | 로컬 등가물                                                                            |
+| ------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ | --------- | -------------------------------------------------------------------------------------- |
+| `release.yml`                         | main에서 CI 성공(`workflow_run`) 또는 수동 | 발행은 언제나 green CI SHA에서만: 후보 고정, 발행 전 게이트 재확인       | 아니오    | `bun run verify:release-gates` (같은 검사기)                                           |
+| `miri.yml` (release 경유 + 주간)      | workflow_call, 주간 일요일 cron, 수동      | `rustra`의 unsafe/순수 로직 경로 UB(lib, frame_wire, field_order_drift)  | 아니오    | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)       |
+| `sanitizer.yml` (release 경유 + 주간) | workflow_call, 주간 일요일 cron, 수동      | lib 및 명시한 FFI 통합의 debug/release ASan+LSan, C++ 예외 containment   | 아니오    | `bash scripts/safety/run-linux-validation.sh` (Linux nightly, C++, Python, cargo-fuzz) |
+| `fuzz.yml` (release 경유 + 주간)      | workflow_call, 주간 토요일 cron, 수동      | 기존 3 타깃 × 10분/1KiB + large-boundary 10분/1MiB+1/2GiB RSS, 시드 재생 | 아니오    | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` 크레이트)                          |
+| `coverage.yml`                        | main push, 수동                            | 참고용 — 명시적으로 게이트 아님("가시화"): Rust llvm-cov + TS c8 요약    | 아니오    | `bun run coverage:rust` / `bun run coverage:ts`                                        |
+| `bench.yml`                           | main push(경로 필터), 수동                 | 성능 회귀 예산: criterion vs 이전 베이스라인, 10% 임계                   | 아니오    | `cargo bench` 후 `bun scripts/check-criterion-regression.mjs --max-regression 0.10`    |
+| `registry-consumer.yml`               | 수동 전용                                  | 정확한 발행 버전이 macOS에서 설치·동작, 영수증 아티팩트                  | 아니오    | `bun run verify:consumer:registry`                                                     |
 
 `miri.yml`, `sanitizer.yml`, `fuzz.yml`는 재사용 워크플로다: 주간 스케줄로도
 도리고, 모든 `release.yml` 발행의 필수 의존으로도 도린다
 ([릴리스 절차](./release-procedure.ko.md) 전제 조건 참고).
+
+ASan/LSan 통합 대상은 `trust_baseline_ffi`, `payload_robustness`,
+`ffi_process_contract`, `large_payload_boundary`, `ffi_scriptc`다. 오용 자식 프로세스는
+debug에서만 실행하고 release는 올바른 소유권 경로를 검사한다. C++ harness는 호스트
+wrapper가 실제 예외를 처리하는지 검증하며, RN native sanitizer나 실기기 증거를 대신하지 않는다.
 
 ## 언제 어떤 게이트를
 

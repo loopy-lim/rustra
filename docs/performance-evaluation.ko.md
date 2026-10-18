@@ -7,10 +7,16 @@
 한국어 요약 문서입니다. 영어 수치 원문은 [benchmarks.md](benchmarks.md)와
 [benchmark-receipts/](benchmark-receipts/)를 참고하세요.
 
-- 측정일: 2026-09-24 (KST), 저장소 HEAD `58e1835e` (2026-09-24)
+- 최초 측정일: 2026-09-24 (KST), 저장소 HEAD `58e1835e` (2026-09-24)
 - 방법: 전체 테스트 스위트 실행 + 벤치마크 전체 재실측(코덱·트랙B·함수 디스패치·트리·티어)
 - 본 문서의 모든 명령은 `env -u RUSTRA_BUN_LIBRARY`로 감싸 실행했다(워커 프로세스의
   loop 데몬 dylib 오염 제거 — 미제거 시 bun 어댑터가 무관한 dylib을 로드한다).
+
+2026-10-13 상태 정정: 아래 9월 수치는 역사적 측정이다. 현재 로컬 구현·검증은
+[성능 구현 기록](dev/research/2026-10-13-performance-implementation.md),
+[현재 작업표](dev/research/2026-10-13-dx-safety-performance-next.md)를 따른다.
+원격 Benchmark의 비교 불가 원인은 분류했지만 동일 러너 재측정·원격 판정 회복과
+실기기 E1/A2/gzip A/B는 아직 완료하지 않았다.
 
 ---
 
@@ -160,10 +166,12 @@ C++ 직접 마샬링이 대체하는 JS 측 비용만 측정한다(네이티브 
    아키텍처의 하한이며, 지원 형태는 이미 postcard fast-path(코어 56ns급)가 우회한다.
    criterion `change` +5.5%는 계보 불명 기준선과의 상대값으로 귀속 불가 — §9-1
    provenance 게이트가 이런 비교를 이제 "측정 불가"로 거부한다.
-2. **대형 컬렉션 직렬화가 절대 병목.** map_keys_64·map_seq_1024(≈14.4~14.8µs)와
-   optional_chunks_near_1m(78.5µs)이 전체 상위. 0.10.2까지 개선된 재귀(≈0.79µs@
-   depth8)와 대비되며, 맵 키 재할당·요소 복사가 지배적일 것으로 추정(할당 계측은 본
-   실측 범위 밖 — `codec_allocations` 예제로 별도 확인 필요).
+2. **대형 컬렉션의 계측된 비용을 구분한다.** 9월 측정의 map_keys_64·map_seq_1024와
+   optional_chunks_near_1m은 상위 지연 항목이었다. 10월 10일 계측은 맵 디코드의
+   키 임시 벡터 재할당 가설을 기각했고 소비자의 소유 키·값·트리 노드와 중복 검사
+   할당을 확인했다(§9-3). 10월 13일에는 맵 값 정수 시퀀스의 scratch 성장을 줄여
+   map_seq_1024 할당을 호출당 12→7회로 줄였다. string64k/chunks의 할당 수는
+   그대로이며, 시간 효과는 별도 A/B 판정으로 기록한다(§10).
 3. **레거시 JSON 와이어 잔존 비용.** legacy/json 272.9ns는 frame 37.4ns의 7.3배.
    디스패치 자체는 싸지만 와이어 선택만으로 7배 차이 — 프레임 패스트패스 미사용
    컨슈머가 있다면 즉시 이득이 큰 구간.
@@ -190,21 +198,17 @@ C++ 직접 마샬링이 대체하는 JS 측 비용만 측정한다(네이티브 
    기록(function_dispatch receipt의 pre-perf 기록 방식을 전 벤치로 확장)하고,
    `check-criterion-regression.mjs`가 baseline provenance 불일치 시 "측정 불가"로
    판정하게 한다. 회귀 게이트의 귀속 불확실성을 제거하는 최우선 조치.
-   **→ 구현됨(2026-10-10, §9-1).**
+   **→ 기록 존재 검사는 2026-10-10, 환경 비교 거부는 2026-10-13 구현(§10).**
 2. **oneOf untagged 경로 최적화 재시도** — 이넘 변종 태그 힌트 캐시 또는 코드젠 단계의
    discriminated encoding으로 3항 순차 시도를 축소. 회귀 예산 10% 경계의 마지막
    열화 구간을 해소한다. **→ 취소(2026-10-10 계측, §4-1):** 순차 시도는 존재하지
    않고(인덱스 직접 선택) 할당도 이미 1회 — 최적화 대상이 없다. 지원 형태는 postcard
    fast-path가 이미 우회하며, 이는 사용자 가이드로 귀결된다(§5-4, 가이드 §12).
-3. **대형 맵/시퀀스 코덱 개선** — map_keys_64·map_seq_1024에서 키 임시 벡터 재할당
-   제거(0.11.0의 "4개 이하 고정 저장소" 아이디어를 초과 맵으로 확장) 및
-   optional_chunks 청크 복사 축소. 현재 상위 3개 병목을 직격. **→ 부분 구현·부분
-   기각(2026-10-10 계측, §9-3):** 인코더 spill 재할당은 제거(64키에서 5회→1회)했지만,
-   디코드는 이미 소비자 타입 몫이 지배(코덱 호출당 고정 비용 0) — "키 임시 벡터
-   재할당" 가설은 실재하지 않았다. **→ 부분 구현·부분
-   기각(2026-10-10 계측, §9-3):** 인코더 spill 재할당은 제거(64키에서 5회→1회)했지만,
-   디코드는 이미 소비자 타입 몫이 지배(코덱 호출당 고정 비용 0) — "키 임시 벡터
-   재할당" 가설은 실재하지 않았다.
+3. **대형 맵/시퀀스의 계측 기반 개선** — 10월 10일 인코더 spill 예약으로
+   64키 저장소 할당 5→1회(§9-3), 10월 13일 정수 시퀀스 scratch 예약으로
+   map_seq_1024 전체 할당 12→7회(§10)를 확인했다. 거대한 사용자 길이 힌트는
+   제한한다. 기각된 디코더 키 임시 벡터 가설을 후속 작업으로 반복하지 않는다.
+   string64k/chunks 복사 축소는 와이어·소유권을 지키는 후보가 검증될 때까지 미완료다.
 4. **resident/인덱스 라우트 가이드·코드젠 힌트** — 대형 트리·컬렉션 커맨드에 대해
    전체 왕복 대신 resident 참조 전송을 유도하는 문서와 코드젠 힌트 제공(측정상 최대
    341개 차이). 문서 변경만으로도 사용자 체감 개선폭이 가장 크다.
@@ -349,12 +353,11 @@ C++ 직접 마샬링이 대체하는 JS 측 비용만 측정한다(네이티브 
    **호출 수 불변**을 검증(기각된 closure 결합 선례와의 구분 근거). 감소가
    확인되면 코드젠 emit을 `createGeneratedFields1`로 전환한 뒤 E1과 동일한
    기기 절차(iOS 5쌍 + Android v2 5회)로 indexed 8건·string 2건 레인 확인.
-3. **rn-experiment(버퍼 우위 재확인)** — `gzipCompress`/`gzipDecompress`
-   (32–64KiB 반복+노이즈 페이로드, LCG 결정적 생성) 버퍼 경로 대 `uuidV7`
-   문자열(JSON) 대조군: iOS/Android 각 5회, gzip 왕복 p50과 대형 버퍼
-   (64KiB/1MiB) 순서 효과 관찰을 병행한다. 이 크레이트의 스키마가
-   `benchEchoBytes`(변환만)와 달리 **실연산 포함** 버퍼 우위를 같은 단일
-   `data` 필드 모양으로 재측정할 수 있다.
+3. **rn-experiment(동일 연산의 경로 비교)** — 동일 gzip 압축·복원과 동일 입력을
+   JSON/bytes 양쪽에 보내고 플랫폼별 독립 5회 실행, 순서 교대를 기록한다.
+   기본 입력은 1/64/256KiB이며 출력 일치·payload SHA·p50/p95를 검증한다.
+   gzip과 uuidV7의 지연 차이는 서로 다른 연산의 차이여서 bytes 경로 우위를
+   판정할 수 없다. 신규 수집기와 남은 기기 절차는 [런북 §3](measurement-runbook.md#3-rn-experiment--same-gzip-operation-over-json-and-bytes)에 정리했다.
 
 ### 7.4 실험 크레이트 사용법 요약 (`examples/rn-experiment`)
 
@@ -376,12 +379,12 @@ C++ 직접 마샬링이 대체하는 JS 측 비용만 측정한다(네이티브 
    동시 빌드를 가정하고, 옵셔널 의미는 코어 테이블 null 검사(정적)와 핫코어
    dlsym(동적)에 존재한다. 구형 코어 폴백 검증은 Hermes fake 피어(테이블 null)로
    대체 수행했다.
-2. **A2 emit 전환은 완료됐으나 Hermes 재확인 미수행** — 팩토리 추가 단계(7.1)에
-   이어 마이크로벤치 근거로 emit 전환·생성물 재생성까지 완료했다(7.6). 단,
-   [결정 문서](dev/research/2026-09-24-emit-switch-decision.md) §3의 검증 방법 중
-   Hermes 스위트·호출 수 불변 단언 재확인은 이번 구현 태스크 범위 밖이었고 본
-   검증 태스크의 완료검증 두 게이트에도 포함되지 않는다 — 상위 플로우에서 별도
-   게이트로 실행해야 한다.
+2. **A2 호스트 선행 게이트는 재확인, 기기 효과는 미측정** —
+   [10월 10일 receipt](benchmark-receipts/2026-10-10-host-gates-reverify.md)의
+   `4578c851`에서 Hermes 1,412/0, 호출 수 660,004=660,004·폴백 0을 확인했다.
+   [10월 13일 로컬 ASan 시뮬레이터 검증](verification/evidence/2026-10-13-native-asan.json)도 1,412/0과 teardown/reinstall 100회를
+   통과했다. 이는 E1/A2 실기기 설치 교체 A/B와 별개이며, 최신 소스에서의
+   실행 근거는 [현재 작업표](dev/research/2026-10-13-dx-safety-performance-next.md)를 따른다.
 3. **E1 호스트 효과는 추정치**(~1–2%, 전송·할당 몫) — 판정은 7.3의 실기기
    플랜 실행으로만 확정한다.
 4. 루트 `package.json` 의 `test` 스크립트 env 정화(`env -u RUSTRA_BUN_LIBRARY
@@ -390,7 +393,7 @@ bun run test:all` 위임)는 이번 루프의 환경 선행 변경으로 그대�
 ### 7.6 후속 루프(2) 완결 — A2 마이크로벤치·emit 전환·rn-experiment 어댑터 플로우 (2026-09-24)
 
 7.1~7.5의 1차 후보 반영 후, 같은 날 이어진 후속 루프(마이크로벤치 → 결정 →
-emit 전환 → RN 어댑터 플로우 → 전체 회귀)의 결과다. 근거: [A2 마이크로벤치](research/2026-09-24-a2-microbench.md), [emit 전환 결정](dev/research/2026-09-24-emit-switch-decision.md).
+emit 전환 → RN 어댑터 플로우 → 전체 회귀)의 결과다. 근거: [A2 마이크로벤치](dev/research/2026-09-24-a2-microbench.md), [emit 전환 결정](dev/research/2026-09-24-emit-switch-decision.md).
 
 #### A2 마이크로벤치 수치와 결정
 
@@ -476,12 +479,10 @@ import 줄(신규 `createGeneratedFields1` 정렬)과 어긋남(impl-emit 범위
 1. **E1(owned 핸드오프)** — iOS AB, BA 교대 5쌍 + Android v2 5회(대형 트리 echo
    레인).
 2. **A2(emit 전환 후)** — iOS 5쌍 + Android 5회, indexed 8건·string 2건 레인.
-   마이크로벤치가 Bun/JSC 호스트 수치인 만큼 Hermes 절대값은 이 측정으로 확정.
-   더불어 결정 문서 §3의 Hermes 스위트·호출 수 불변 재확인을 선행 게이트로
-   실행한다(7.5 리스크 2).
-3. **rn-experiment(버퍼 우위 재확인)** — `gzipCompress`/`gzipDecompress`
-   (32–64KiB 반복+노이즈, LCG 결정적) 버퍼 경로 대 `uuidV7` 문자열(JSON) 대조군,
-   iOS/Android 각 5회 + 64KiB/1MiB 대형 버퍼 순서 효과 관찰.
+   호스트 선행 검사는 재확인됐다(7.5 리스크 2). 실기기 시간 효과는 아직 측정하지 않았다.
+3. **rn-experiment(동일 연산 비교)** — gzip 압축·복원 각각 같은 payload의
+   JSON/bytes 경로를 플랫폼별 5회 대조한다. 수집기는 구현됐고 실기기 실행·
+   설치/추출 드라이버·할당/복사량 계측·채택 판정은 남아 있다(런북 §3).
 4. **docs 게이트 수습(문서)** — `docs/rust-api-guide.{md,ko.md}` 의 `docs:sync`
    임베드 import 줄을 emit 전환 후 생성물로 갱신하고,
    `docs/performance-evaluation.ko.md` 미러(en/ko 쌍 관례)와 `docs/README`
@@ -551,9 +552,9 @@ rustra-rn-experiment --target aarch64-apple-ios-sim --release` 성공(8.01s, 에
 
 ### 8.4 판정 규정과 후속
 
-- 위 세 항목으로 §7.5 리스크 상태 갱신: 리스크 2(A2 Hermes 재확인 미수행)는 여전히 **미수행**이며
-  measurement-runbook §2.1의 선행 게이트로 이동했다. 리스크 3(E1 호스트 효과 추정)은 시뮬레이터
-  참고 수치로 보강됐을 뿐 해소되지 않았다.
+- 2026-10-13 정정: §7.5 리스크 2의 Hermes 호스트 선행 검사는 10월 10일과
+  10월 13일에 재확인됐다. E1/A2의 실기기 효과는 미측정이며, 리스크 3의 호스트
+  추정치를 실기기 채택 근거로 바꾸지 않는다.
 - §7.3/§7.6의 실기기 A/B 플랜은 [measurement-runbook](measurement-runbook.ko.md) 로
   실행 절차·수화물 경로·채택/기각/롤백 기준까지 고정됐다. 실행 결과는 각 항목의 receipt
   (`docs/benchmark-receipts/<date>-<item>-ab.json`)와 이 점에 대한 §8 추기로 귀결된다.
@@ -575,9 +576,11 @@ rustra-rn-experiment --target aarch64-apple-ios-sim --release` 성공(8.01s, 에
   (기준선 시대 기록)과 `runner-environment.json`(현재 시대 기록)을 요구한다. 하나라도 없거나
   깨진 경우 **exit 2 "측정 불가"** — 판정 보류, baseline 미채택. §4-5의 "벤치 기준선 계보
   불명확" 리스크를 제도적으로 닫는다.
-- 안정 섹션(host/tools/configurationDigests)이 어긋나면 WARN 자문으로 보고한다. runner 이미지
-  패치(ImageVersion)만으로 흔들리는 필드까지 hard-fail 하면 인프라 이유로 게이트가 상시 거부되므로
-  자문으로 남기고, 거친 시대 대혼입의 방어는 기존 mixed-changes 판정(exit 3)이 담당한다.
+- 당시에는 host/tools/configurationDigests 차이가 WARN뿐이었다. 10월 13일
+  실제 Xeon→EPYC 불일치 artifact가 59건을 코드 회귀로 오판한 사실을 확인해,
+  비교에 필요한 환경 필드가 다르면 exit 2로 거부하도록 보완했다(§10).
+  runner 이미지 patch 차이는 자문으로 유지한다. mixed-changes(exit 3)만으로
+  서로 다른 CPU의 비교 가능성을 보장할 수 없다.
 - 운용 규약은 런북 §0-7로 고정: 측정 세션마다
   `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-environment.mjs target/criterion` — 2회째
   호출부터 직전 기록이 restored 쌍이 된다. CI(`bench.yml`)는 이미 매 실행 앞에 기록하며,
@@ -607,9 +610,11 @@ rustra-rn-experiment --target aarch64-apple-ios-sim --release` 성공(8.01s, 에
 - **구현(인코더).** `serialize_map`이 serde 길이 힌트(`Some(len)` — BTreeMap/HashMap
   은 항상 준다)를 무시하고 spill 때 `reserve(4)` + 배증을 반복했다. 64키에서
   reserve 1회 + 배증 4회 = 할당 5회·복사 ≈4.8KB. 이제 힌트를 `MapEntries`에
-  전달해 첫 spill이 `reserve_exact(len)` 한 번으로 끝난다(inline 항목도 heap 으로
+  전달해 첫 spill이 `reserve_exact(len)` 한 번으로 끝났다(inline 항목도 heap 으로
   옮겨지므로 heap 은 `len` 개 전부를 담는다). 힌트가 없거나 거짓이면 종전 배증으로
-  돌아간다. `map_entries_spill_honors_the_declared_length_hint` 게이트: 힌트 64
+  돌아갔다. 10월 13일에는 초기 예약 힌트를 최대 64로 제한해 사용자 정의
+  Serialize의 `usize::MAX`가 capacity overflow를 일으키지 않게 했다(§10).
+  `map_entries_spill_honors_the_declared_length_hint` 게이트: 힌트 64
   푸시→할당 1회, 힌트 없음→5회, 2항목→0회. 와이어 바이트는 정렬·기록 경로가 그대로라
   불변(기존 바이트 동일 게이트 통과).
 - **측정(명시적 baseline A/B, 프로비넌스 쌍 기록).** map_keys_64: 14.800→14.469µs,
@@ -622,3 +627,19 @@ rustra-rn-experiment --target aarch64-apple-ios-sim --release` 성공(8.01s, 에
   안 쓰는 경로에서 +57% 유사 회귀를 만들었다. 측정 중에는 기계를 비우고, 대조
   케이스(변경과 무관한 케이스)를 함께 재서 노이즈 바닥을 먼저 확인한다 — 이번
   대조군이 없었다면 +6%를 코드 탓으로 읽을 뻔했다.
+
+## 10. 2026-10-13 현재 구현과 남은 측정
+
+[상세 기록](dev/research/2026-10-13-performance-implementation.md)에 RED/GREEN 검사,
+실제 원격 artifact의 환경 비교, 동일 소스 격리·빌드·할당 계량과 시간 A/B를 모았다.
+
+- 환경 필드가 불완전하거나 CPU·툴체인·핵심 OS/설정이 다르면 타이밍 판정 전에
+  exit 2로 멈춘다. 이미지 patch와 미세 메모리 차이의 자문 경계는 그대로다.
+  기존 기준선을 유지하며 같은 러너의 `comparison_ref` 재측정이 남아 있다.
+- 정수 시퀀스 scratch의 payload 한도 내 예약으로 map_seq_1024 전체 할당은
+  12→7회, 누적 요청 bytes는 16,973→13,828로 줄었다. 이는 RSS/최대 메모리나
+  지연 개선율이 아니다. 나머지 13개 계량 fixture의 할당은 같다.
+  최종 5쌍에서 map_seq_1024 지연은 +1.58%(명목 95% ratio CI [1.0129, 1.0187])여서
+  시간 개선 채택은 보류했다. 할당 감소와 이 작은 지연 비용을 함께 기록한다.
+- E1/A2 실기기 A/B와 rn-experiment의 동일 gzip JSON/bytes 독립 5회는 아직
+  실행하지 않았다. 새 collector의 호스트 검사를 실기기 성능 증거로 취급하지 않는다.

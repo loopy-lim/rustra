@@ -18,7 +18,9 @@ proceeds only after separate approval.
    fresh Miri, Sanitizer and Fuzz reusable workflows. Publishing depends on all
    three succeeding. Missing, failed, cancelled or skipped checks block it; CI is
    checked again immediately before publishing.
-3. Scope: Miri lib/frame_wire/field_order_drift; Linux x86_64 ASan+LSan lib;
+3. Scope: Miri lib/frame_wire/field_order_drift; Linux x86_64 ASan+LSan lib plus debug/release
+   `trust_baseline_ffi`/`payload_robustness`/`ffi_process_contract`/`large_payload_boundary`/
+   `ffi_scriptc`;
    seed replay and 600 seconds for each Fuzz target invoke_frame,
    invoke_complex_value and invoke_complex_serde. Weekly checks remain separate
    from PR required checks.
@@ -27,7 +29,14 @@ proceeds only after separate approval.
    intentional changes require `--update` (the new snapshot is accepted into
    the PR).
 
-The Linux x86_64 sanitizer job is a cross-platform memory-safety gate. Linux
+The additional `invoke_large_boundary` campaign checks 1MiB+1 input, recursive
+depth and large valid inputs for 600 seconds, with a 2GiB RSS and 10-second per-input
+budget. The three small-input campaigns remain. The C++ check is the separate host
+containment harness `bash scripts/run-foreign-exception-check.sh`. Debug free misuse
+requires child SIGABRT and diagnostics; release tests correct ownership only. This
+scope is separate from RN native sanitizer coverage.
+
+The Linux x86_64 sanitizer job checks memory safety for that platform and its selected targets. Linux
 remains **Alpha** until the separate real Tauri WebView, lifecycle, and packaged
 installation acceptance in the compatibility matrix is recorded.
 

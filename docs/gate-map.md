@@ -211,19 +211,24 @@ Notes:
 
 ### Other workflows
 
-| Workflow                               | Trigger                                       | Protects                                                                                             | Required check | Local equivalent                                                                      |
-| -------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
-| `release.yml`                          | CI success on main (`workflow_run`) or manual | Publish only ever happens from a green CI SHA: pins the candidate, re-checks gates before publishing | no             | `bun run verify:release-gates` (same checker)                                         |
-| `miri.yml` (via release + weekly)      | workflow_call, weekly Sunday cron, manual     | UB in `rustra` unsafe/pure-logic paths (lib, frame_wire, field_order_drift)                          | no             | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)      |
-| `sanitizer.yml` (via release + weekly) | workflow_call, weekly Sunday cron, manual     | Memory errors/leaks: ASan+LSan over `cargo test -p rustra --lib`                                     | no             | Same command with nightly `-Zsanitizer=address`                                       |
-| `fuzz.yml` (via release + weekly)      | workflow_call, weekly Saturday cron, manual   | Frame decode path survives random input (3 targets × 10 min + seed corpus replay)                    | no             | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` crate)                            |
-| `coverage.yml`                         | push to main, manual                          | Advisory only — explicitly not a gate ("가시화"): Rust llvm-cov + TS c8 summaries                    | no             | `bun run coverage:rust` / `bun run coverage:ts`                                       |
-| `bench.yml`                            | push to main (path-filtered), manual          | Performance regression budget: criterion vs previous baseline, 10% threshold                         | no             | `cargo bench` then `bun scripts/check-criterion-regression.mjs --max-regression 0.10` |
-| `registry-consumer.yml`                | manual only                                   | Exact published versions install and behave on macOS; receipt artifact                               | no             | `bun run verify:consumer:registry`                                                    |
+| Workflow                               | Trigger                                       | Protects                                                                                             | Required check | Local equivalent                                                                       |
+| -------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `release.yml`                          | CI success on main (`workflow_run`) or manual | Publish only ever happens from a green CI SHA: pins the candidate, re-checks gates before publishing | no             | `bun run verify:release-gates` (same checker)                                          |
+| `miri.yml` (via release + weekly)      | workflow_call, weekly Sunday cron, manual     | UB in `rustra` unsafe/pure-logic paths (lib, frame_wire, field_order_drift)                          | no             | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)       |
+| `sanitizer.yml` (via release + weekly) | workflow_call, weekly Sunday cron, manual     | ASan+LSan over lib and selected debug/release FFI integrations; C++ exception containment            | no             | `bash scripts/safety/run-linux-validation.sh` (Linux nightly, C++, Python, cargo-fuzz) |
+| `fuzz.yml` (via release + weekly)      | workflow_call, weekly Saturday cron, manual   | Existing 3 targets × 10 min/1KiB plus large-boundary 10 min/1MiB+1/2GiB RSS; seed replay             | no             | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` crate)                             |
+| `coverage.yml`                         | push to main, manual                          | Advisory only — explicitly not a gate ("가시화"): Rust llvm-cov + TS c8 summaries                    | no             | `bun run coverage:rust` / `bun run coverage:ts`                                        |
+| `bench.yml`                            | push to main (path-filtered), manual          | Performance regression budget: criterion vs previous baseline, 10% threshold                         | no             | `cargo bench` then `bun scripts/check-criterion-regression.mjs --max-regression 0.10`  |
+| `registry-consumer.yml`                | manual only                                   | Exact published versions install and behave on macOS; receipt artifact                               | no             | `bun run verify:consumer:registry`                                                     |
 
 `miri.yml`, `sanitizer.yml`, and `fuzz.yml` are reusable workflows: they run on
 their weekly schedules **and** as mandatory dependencies of every `release.yml`
 publish (see [release procedure](./release-procedure.md) prerequisites).
+
+The ASan/LSan integration targets are `trust_baseline_ffi`, `payload_robustness`,
+`ffi_process_contract`, `large_payload_boundary` and `ffi_scriptc`. Misuse children run
+only in debug; release checks correct ownership. The C++ harness verifies a host
+wrapper containing actual exceptions, not RN native sanitizer or device safety.
 
 ## Which gate when
 

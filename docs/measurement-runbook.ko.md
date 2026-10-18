@@ -1,10 +1,11 @@
 # 실기기 A/B 측정 런북 — E1 owned 핸드오프 · A2 emit 전환 · rn-experiment 버퍼
 
-채택 판정을 위해 남은 세 항목의 실기기 측정을 실행 가능한 런북으로 고정한 문서다. 이름 재사용
+남은 세 항목의 기기 측정 절차다. E1/A2는 행렬 프로토콜, gzip은 §3의 동일 연산 수집기를
+사용한다. 이름 재사용
 채택 선례([프로토콜](dev/research/2026-09-16-nitro-call-profile.md),
 [수화물](benchmark-receipts/2026-09-18-nitro-name-reuse-ab.json), 계약
 `rustra-name-reuse-ab/v1` 형식)와 [performance-evaluation.md §7.3/§7.6](performance-evaluation.md)의
-플랜을 그대로 따른다.
+플랜의 현재 정정을 반영한다.
 
 - **채택 판정은 이 런북의 실행으로만 내린다.** 시뮬레이터 수치
   ([sim-hotswap](benchmark-receipts/2026-09-24-sim-hotswap.md),
@@ -22,30 +23,32 @@
    빌드한다. 후보 arm과 기존 arm은 해당 항목의 diff만 다르다(§1.1, §2.2, §3.2).
 2. **계측 없는 Release 빌드.** 프로파일러 부착 없음, GC 강제 없음, 느린 표본 제외 없음.
    실패·중단된 실행은 통째로 버리거나 설치부터 재실행한다.
-3. **독립 실행, 실행마다 설치 교체.** 한 번에 정확히 하나의 arm만 설치한다. 전용 앱 id
+3. **E1/A2 독립 실행, 실행마다 설치 교체.** 한 번에 정확히 하나의 arm만 설치한다. 전용 앱 id
    `com.rustra.nitroparity` 는
    `examples/react-native-calculator/scripts/parity-app-policy.ts`(`requireDedicatedApp`)가
    강제한다.
-4. **실행마다 receipt 검증.** 모든 런치는 v2 전체 행렬 receipt 검증(90개 항목 = 30 id × 3
+4. **E1/A2 실행마다 receipt 검증.** 모든 행렬 런치는 v2 전체 행렬 receipt 검증(90개 항목 = 30 id × 3
    레인, 케이스당 31라운드)을 호스트 매니페스트 대상으로 통과해야 하고, 실행 후 바이너리
    SHA-256을 재확인한다. `run-nitro-parity-once.ts` 가 둘 다 수행하며 위반 시 프로토콜을
    중단한다.
 5. **통계.** 런치 쌍의 로그비율, t(4) 명목 95% 구간, 다중 비교 보정 없음. 후보/기존 비율의
    레인별·전체 지오메단. CI가 1을 포함하는 watch 항목은 유의하지 않음으로 보고하지,
    승리로 계산하지 않는다.
-6. **receipt 수화물.** 실행된 각 항목은 `rustra-name-reuse-ab/v1` 형태의
+6. **E1/A2 receipt.** 실행된 각 행렬 항목은 `rustra-name-reuse-ab/v1` 형태의
    `docs/benchmark-receipts/<date>-<item>-ab.json` 을 남긴다: `contract`, `status`
    (adopted/rejected), `date`, `sourceCommit`, `candidateBaseline`, `decision`,
    `environment`(device, runtime, udid, jsEngine), `methodology`(protocol, runs,
    launchesPerArm, suite, validation, statistics), `arms`(arm별 description, runs,
    `binarySha256`, `bundleSha256`, `fingerprint`, launches), analysis. 원시 로그는
    `target/<item>-ab/` 에 보존한다.
-7. **호스트 criterion 벤치는 provenance 를 싣는다.** 측정 세션마다
-   `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-environment.mjs target/criterion` 를
-   실행한다 — 2회째 호출부터 직전 기록이 기준선 시대 기록(restored 쌍)이 된다. 회귀 게이트
-   (`check-criterion-regression.mjs`)는 기준선 시대 기록 없는 비교를 "측정 불가"(exit 2 —
-   판정 보류, baseline 미채택)로 판정하고, 시대 간 host/tools/flags 드리프트는 자문으로만
-   보고한다.
+7. **호스트 Criterion은 비교 가능한 환경만 판정한다.** 측정 세션마다
+   `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-environment.mjs target/criterion`을
+   실행한다. 두 번째 호출부터 직전 환경이 기준선 기록으로 짝지어진다. 기록이 없거나
+   불완전하면 exit 2다. CPU 모델·아키텍처·CPU 수·가용 병렬성·메모리 GiB 등급·
+   커널 major/minor·OS 이미지 종류·툴체인·컴파일 플래그가 달라도 타이밍 판정을
+   중단한다. 이미지/커널 patch와 같은 GiB 등급의 세부 메모리 차이는 자문이다.
+   기준선을 유지하고 같은 러너의 `comparison_ref`로 재측정한다. 로컬 판정 수정은
+   원격 Benchmark 판정 회복이나 새 원격 측정 성공을 뜻하지 않는다.
 
 ### 0.1 수집기·집계기 재사용 (이미 저장소에 있다)
 
@@ -73,11 +76,33 @@ arm별 빌드 지문을 재현하는 부분이다. `aggregate()` 는 receipt를 
 
 ### 0.2 기기
 
-| 레인                    | 기기                                                                                             | 비고                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| iOS 실행                | iPhone 17 시뮬레이터, iOS 26.2 (2026-09-24 리시트의 UDID `99B087B5-DEF6-4CF1-9177-81A5DE564CFC`) | 9/18 이름 재사용 채택이 iOS 행렬을 이 시뮬레이터에서 돌렸다 — 비교 가능성을 위해 재사용                                                          |
-| iOS 실행 (선택: 실기기) | 실물 iPhone, `aarch64-apple-ios`                                                                 | `RUSTRA_IOS_TARGET=aarch64-apple-ios` 로 빌드, 설치·실행·인출은 `xcrun devicectl` — 저장소에서 아직 검증된 적 없는 경로라 미검증 플럼빙으로 취급 |
-| Android 실행            | 실기기                                                                                           | v2 선례; 고정 후보 5회 실행이며 보존된 구집단과의 차이를 인과 A/B로 표현하지 **않는다**                                                          |
+| 레인                   | 기기                                                                                             | 비고                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| iOS 참고 실행          | iPhone 17 시뮬레이터, iOS 26.2 (2026-09-24 리시트의 UDID `99B087B5-DEF6-4CF1-9177-81A5DE564CFC`) | 역사적 시뮬레이터 비교용이며 실기기 효과를 입증하지 않음                                                                                         |
+| iOS 채택 실행 (실기기) | 실물 iPhone, `aarch64-apple-ios`                                                                 | `RUSTRA_IOS_TARGET=aarch64-apple-ios` 로 빌드, 설치·실행·인출은 `xcrun devicectl` — 저장소에서 아직 검증된 적 없는 경로라 미검증 플럼빙으로 취급 |
+| Android 실행           | 실기기                                                                                           | v2 선례; 고정 후보 5회 실행이며 보존된 구집단과의 차이를 인과 A/B로 표현하지 **않는다**                                                          |
+
+### 0.3 호스트 A/B 영수증 생산자 (CI 게이트 아님)
+
+2026-10-13 호스트 성능 영수증은 일회성 하네스 3개와 호스트 마이크로벤치 앱 2개가 만들었다.
+이들은 예제가 아니라 측정 생산자다 — 커밋된 영수증이 문서화된 대로 재현 가능하려면 실행
+가능 상태를 유지한다. 각 영수증은 정확한 `command` 호출과 소스·아티팩트 해시를 기록하므로
+`bun run build:cli` 뒤에 보존된 베이스라인 트리로 재실행하면 비교 형태가 재현된다:
+
+- `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-bun-owned.mjs <bun-ffi.ts> <dylib> <receipt.json> <label>`
+  — Bun FFI owned 응답 A/B
+  ([영수증](benchmark-receipts/2026-10-13-bun-owned-ab.json),
+  [여정](dev/research/2026-10-13-bun-owned-response.md)).
+- `node scripts/node-framing-bench.mjs <built-module> <receipt.json>` — 바이너리 프레임
+  파편화 복사 횟수 A/B
+  ([영수증](benchmark-receipts/2026-10-13-node-framing-ab.json), 대체된 `-initial`·
+  `-fastpath` 후보도 증거로 보존).
+- `node scripts/node-native-echo-bench.mjs <adapter-entry> <frame-registry> <runtime-binary> <receipt.json>`
+  — 같은 런타임 바이너리로 파편화 프레임 end-to-end echo.
+- `env -u RUSTRA_BUN_LIBRARY bun examples/calculator/apps/bun-ffi-bench.ts` 와
+  `env -u RUSTRA_BUN_LIBRARY bun examples/calculator/apps/scriptc-bench.ts` — Bun FFI와
+  scriptc 표면의 warm 호스트 디스패치 마이크로벤치(3형상 arm 보고; arm 구성은 2026-10-13
+  리서치 로그 참조).
 
 ## 1. E1 — 큰 응답 owned 핸드오프 (probe 캐시 2-FFI 왕복 제거)
 
@@ -97,7 +122,7 @@ arm별 빌드 지문을 재현하는 부분이다. `aggregate()` 는 receipt를 
     하나의 트리로 빌드한다. "신형 셸 + 구형 정적 코어" 링크 조합은 지원되지 않는다(Apple
     링커가 unresolved weak 참조를 거부 — performance-evaluation.md §7.5 리스크 1). probe
     경로 arm은 E1 이전의 일관된 소스 상태에서 나와야 한다.
-- 빌드: `sh modules/rustra-jsi/ios/build-rust-ios.sh`(fat release 코어) → sim-e1 리시트의
+- 빌드: `bash modules/rustra-jsi/ios/build-rust-ios.sh`(fat release 코어) → sim-e1 리시트의
   재현 런북과 동일한 `xcodebuild -configuration Release -sdk iphonesimulator`
   (`env -u EXPO_PUBLIC_RUSTRA_DEMO` 포함) → `xcrun simctl install $UDID <앱>`. arm별
   `binarySha256`/`bundleSha256` 를 기록한다(수집기가 모든 실행 래퍼에 기록한다).
@@ -145,21 +170,25 @@ E1은 Rust 코어 + C++ 브리지 + 스냅샷/CHANGELOG에 걸쳐 있다. 롤백
 
 ## 2. A2 — 1-필드 명령 emit의 `createGeneratedFields1` 전환
 
-### 2.1 전제
+### 2.1 전제와 선행 기록
 
-- 순수 JS + 코드젠 변경(ABI·네이티브·capability 마커 없음). 호스트 마이크로벤치 근거는
-  있다(warm 20.81%, 4회 재현, 호출 수 불변 660,004 = 660,004 —
-  [결정 문서](dev/research/2026-09-24-emit-switch-decision.md)).
-- **기기 행렬 전 선행 게이트**(performance-evaluation.md §7.5 리스크 2 — 미재확인 항목을
-  여기서 닫는다):
-  1. 전환 트리에서 Hermes 단언 스위트 재실행:
-     `sh examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh` —
-     실패 0 필수.
-  2. 호출 수 불변 재단언:
-     `env -u RUSTRA_BUN_LIBRARY bun scripts/a2-fields-microbench.mjs` — 네이티브 라우트 호출
-     수 = JS 호출 수, 이름 폴백 0회.
-  3. `env -u RUSTRA_BUN_LIBRARY bun run test:types` +
-     `env -u RUSTRA_BUN_LIBRARY bun run test:codegen-fresh:check`.
+순수 JS/codegen 변경이며 ABI 변경은 없다. 9월 호스트 마이크로벤치 warm 개선 20.81%와
+호출 수 불변은 [결정 문서](dev/research/2026-09-24-emit-switch-decision.md)에 있다.
+[10월 10일 receipt](benchmark-receipts/2026-10-10-host-gates-reverify.md)의 `4578c851`에서
+Hermes 1,412/0, 호출 수 660,004=660,004·폴백 0을 재확인했다.
+[10월 13일 native ASan 기록](verification/evidence/2026-10-13-native-asan.json)도
+시뮬레이터 1,412/0과 teardown/reinstall 100회를 통과했다. C++ binder/generated
+codecs/JSI가 계측 대상이고 fake Rust ABI peer를 사용한다. 사전 빌드된 Hermes/RN
+의존성과 실기기 시간 효과는 이 증거에 포함되지 않는다.
+
+새 기기 행렬의 소스를 고정한 뒤 다음을 재확인한다:
+
+1. `bash examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh`
+   — 실패 0. 스크립트의 bash shebang을 따른다.
+2. `env -u RUSTRA_BUN_LIBRARY bun scripts/a2-fields-microbench.mjs`
+   — JS 호출 수=네이티브 경로 호출 수, name fallback 0.
+3. `env -u RUSTRA_BUN_LIBRARY bun run test:types`와
+   `env -u RUSTRA_BUN_LIBRARY bun run test:codegen-fresh:check`.
 
 ### 2.2 arm과 토글
 
@@ -188,60 +217,77 @@ E1은 Rust 코어 + C++ 브리지 + 스냅샷/CHANGELOG에 걸쳐 있다. 롤백
   `test:codegen-fresh:check` 로 확인
   ([결정 문서 롤백 전략](dev/research/2026-09-24-emit-switch-decision.md)).
 
-## 3. rn-experiment — 버퍼 경로 우위 재측정 (실연산 워크로드)
+## 3. rn-experiment — 동일 gzip 연산의 JSON/bytes 비교
 
-### 3.1 전제
+### 3.1 비교군과 범위
 
-- `examples/rn-experiment` 는 `aarch64-apple-ios-sim` Release로 크로스컴파일되며 생성 모듈
-  스크립트·podspec과 불일치 0이다
-  ([빌드 증거](dev/research/2026-09-24-rn-experiment-ios.md)). 실기기 iOS는
-  `RUSTRA_IOS_TARGET=aarch64-apple-ios`, Android는
-  `modules/rustra-bridge/android/build-rust-android.sh`.
-- 이 항목은 **설치 교체 A/B가 아니다**: 하나의 앱 안에서 레인끼리 대조한다 —
-  `gzipCompress`/`gzipDecompress`(단일 `data` 필드 bytes 스키마 → Tier buffer fast path,
-  `rustra_ffi_has_buffer` 광고) vs `uuidV7`(문자열 스키마 → JSON 경로 대조군).
-- 페이로드: LCG 결정적 생성의 반복+노이즈 버퍼, 32–64KiB(네이티브/어댑터 테스트와 같은
-  알파벳), 순서 효과 watch용 1MiB 추가.
+같은 Release Hermes 앱에서 `gzipCompress`와 `gzipDecompress`를 각각 동일 입력으로
+JSON과 `invokeTypedBuffer`에 호출한다. uuidV7은 정확성 예제이며 gzip의 transport
+대조군이 아니다. 기본 입력은 결정적 LCG의 1/64/256KiB다. JSON 배열 확장 후에도
+네이티브 1MiB 한도 안에 들어가도록 최대 256KiB로 제한한다. 여기서 1MiB bytes와
+JSON을 비교하면 동일한 입력 조건이 성립하지 않는다.
 
-### 3.2 하네스 (실행 시점에 추가 — 스키마는 여기서 고정)
+`examples/rn-experiment`에서 iOS는 `bash modules/rustra-bridge/ios/build-rust-ios.sh`,
+Android는 `bash modules/rustra-bridge/android/build-rust-android.sh`로 빌드한다.
+실기기 iOS는 `RUSTRA_IOS_TARGET=aarch64-apple-ios`를 지정한다. 과거
+[시뮬레이터 크로스컴파일](dev/research/2026-09-24-rn-experiment-ios.md)은 현재
+수집기의 앱 설치·측정 증거를 대신하지 않는다.
 
-`BenchmarkApp`의 receipt 패턴을 따르는 RN 앱 측 수집기가 아직 없다. 실행 시 rn-experiment 앱에
-추가하고 receipt 계약을 다음으로 고정한다:
+### 3.2 구현된 수집기와 남은 기기 연결
 
-```json
-{ "contract": "rustra-rn-experiment-buffer/v1", "launch": 1, "platform": "ios|android",
-  "order": ["gzipCompress","uuidV7"] | ["uuidV7","gzipCompress"],
-  "payloads": { "bytesKiB": 32, "sha256": "…" },
-  "samples": { "gzipCompress": {"p50ns": 0, "p95ns": 0, "roundTripOk": true},
-               "gzipDecompress": {"p50ns": 0, "equalityOk": true},
-               "uuidV7": {"p50ns": 0, "formatOk": true} } }
+- `examples/rn-experiment/apps/native-benchmark.ts`의 `runNativeBenchmark(options)`를
+  생성 네이티브 모듈이 링크된 설치 앱에서 호출한다. Release Hermes, 설치/생성 계약
+  해시 일치와 bytes capability를 확인한다. JS runtime당 한 번만 허용하지만 실제
+  프로세스 재시작 여부는 플랫폼 드라이버 로그로 입증해야 한다.
+- `apps/benchmark.ts`는 기본 5회 warmup, 100회 개별 호출을 순차 측정한다. JS 어댑터
+  비용도 포함한다. gzip magic, 매 응답 byte 일치, 입력 불변과 SHA-256을 검사한다.
+  `sha256` 함수, 고유 `launchId`, 교대 `order: 'json-bytes' | 'bytes-json'`, 실제
+  source/bundle/native SHA 및 기기/OS/Hermes/RN 메타데이터를 전달한다.
+  `target`은 실제 실행에 맞춰 `physical-device` 또는 `simulator`로 기록한다.
+- 반환된 `BenchmarkReceipt`를 앱 파일/export 연동으로 런치별 JSON에 보존한다.
+  설치·재시작·추출 드라이버와 실기기 실행은 아직 완료하지 않았다. 호스트 mock 검사를
+  native 실행 증거로 사용하지 않는다.
+- receipt는 `schemaVersion: 1`, `evidence: 'react-native-runtime'`, 개별 `samplesUs`,
+  p50/p95, payload SHA와 runtime ID를 담는다. 할당/복사량은 명시적으로
+  `null`/`not-instrumented`이며 입력·출력 크기로 대체하지 않는다.
+
+실제 독립 런치 5회 후 저장소 루트에서 실행한다:
+
+```bash
+env -u RUSTRA_BUN_LIBRARY bun examples/rn-experiment/scripts/benchmark-receipts.ts \
+  target/rn-experiment/summary.json \
+  target/rn-experiment/launch-1.json target/rn-experiment/launch-2.json \
+  target/rn-experiment/launch-3.json target/rn-experiment/launch-4.json \
+  target/rn-experiment/launch-5.json
 ```
 
-런치당 receipt 1개를 앱 `Documents/` 에 기록하고
-`xcrun simctl get_app_container … data` + 복사로 인출한다(실기기:
-`devicectl device copy from`).
+집계기는 runtime/launch ID 중복, 다른 소스/기기/빌드 환경, 교대하지 않은 순서,
+누락 레인·변조 fixture·응답 불일치를 거부한다. 런치별 p50/p95 비율과 순서별 결과를
+보존하며 판정은 `measurement-only`다.
 
-### 3.3 표본 설계·기준·롤백
+### 3.3 표본과 해석
 
-- **iOS와 Android 각 5회 독립 실행.** 런치마다 출력 순서를 교대한다(`gzip 먼저` /
-  `uuid 먼저`) — Android 버퍼 진단(2026-09-16)에서 알려진 64KiB/1MiB 순서 민감성을
-  관찰하기 위해서다. 순서 효과는 보고하되 평균으로 지워버리지 않는다.
-- **채택(문서화된 버퍼 우위가 실연산 워크로드에서 재확인)** 조건: gzip 왕복 p50이 플랫폼별
-  5회 중 ≥ 4회에서 `uuidV7` JSON 경로 대조군을 이기고 쌍별 로그비율 t(4) CI가 1을 제외하며,
-  모든 런치에서 정확성 게이트(gzip 매직, decompress 일치, uuid 형식) 유지.
-- **재현되지 않으면:** rn-experiment는 제품 표면이 없는 예제 크레이트라 롤백 없음.
-  receipt를 기록하고(`status: "rejected"`), 버퍼 fast-path 우위 주장이 실연산 포함이 아니라
-  변환만 해당(`benchEchoBytes`)임을
-  `docs/rn-rust-native-bridge-comparison.ko.md` 와 성능 문서에 주석으로 남긴다.
-- receipt: `docs/benchmark-receipts/<date>-rn-experiment-buffer-ab.json`.
+플랫폼별 독립 실기기 앱 런치 5회, JSON/bytes → bytes/JSON → JSON/bytes → bytes/JSON
+→ JSON/bytes 순서로 실행한다. 개별 표본 전체, 원본 receipt, 설치/재시작 로그와
+바이너리·번들 해시를 보존한다. 시뮬레이터는 별도 집단으로 기록하고 iOS/Android 또는
+서로 다른 소스/빌드의 결과를 합치지 않는다.
+
+집계 비율은 JSON/bytes(1보다 크면 bytes가 빠름)다. 인과적 성능 판정에는 동일 연산·
+동일 입력, 모든 실행의 정확성, 런치별 쌍 로그비율의 명목 t(4) 95% CI가 1을 제외하는지와
+순서 효과 분석이 필요하다. 현재 집계기에 CI/채택 분석은 없으므로 `measurement-only`를
+자동 채택으로 승격하지 않는다. 할당/복사량 주장도 별도 계측이 필요하다. 효과가
+확정되지 않으면 해당 workload의 미확정 결과로 남긴다.
+
+원본과 집계는 `target/rn-experiment/`에 보존하고 실제 실행 후 환경·한계·분석을
+`docs/benchmark-receipts/<date>-rn-experiment-buffer-ab.json`에 기록한다.
+2026-10-13에는 실기기 receipt나 채택 판정을 만들지 않았다.
 
 ## 4. 실행 순서와 보고
 
-1. A2 선행 게이트(§2.1) — 저비용, §7.5 리스크 2를 먼저 닫는다.
+1. arm 소스를 고정하고 A2 선행 게이트(§2.1)를 갱신한다. 역사적/현재 로컬 통과는 해당 절에 구분했다.
 2. E1 행렬(§1) — 기대 효과 최대, 빌드 비용 최대(arm 빌드 2회).
 3. A2 행렬(§2.3) — E1의 설치 앱 플럼빙을 재사용.
-4. rn-experiment 하네스(§3) — 독립 예제 앱으로, 2–3과 두 번째 머신에서 병렬 가능. 단
-   시뮬레이터 하나에서 교차 실행은 하지 않는다.
-5. 각 항목은 판정을 `performance-evaluation.md` §8에 추가하고 §0 형식으로 receipt를
+4. rn-experiment 수집기에 설치/재시작/export 드라이버를 연결한 뒤 별도 유휴 기기에서 측정한다(§3).
+5. 실제 증거를 `performance-evaluation.md`에 추가하고 E1/A2는 §0, gzip은 §3 형식으로 receipt를
    남긴다. 이 런북 자체도 버전 관리하며, 프로토콜 이탈(기기 대체, 실행 유실)은 조용히
    흡수하지 말고 receipt의 `methodology` 블록에 기록한다.

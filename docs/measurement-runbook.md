@@ -1,6 +1,6 @@
 # On-Device A/B Measurement Runbook — E1 Owned Handoff · A2 Emit Switch · rn-experiment Buffer
 
-Executable runbook for the three pending adoption-grade device measurements. It follows the
+Runbook for three pending device measurements. E1/A2 use the matrix protocol; §3 uses its own same-operation collector. It follows the
 name-reuse adoption precedent ([protocol](dev/research/2026-09-16-nitro-call-profile.md),
 [receipt](benchmark-receipts/2026-09-18-nitro-name-reuse-ab.json), contract
 `rustra-name-reuse-ab/v1` format) and the plan fixed in
@@ -23,17 +23,17 @@ Fixed rules carried over from the name-reuse precedent — do not renegotiate th
    item's own diff (§1.1, §2.2, §3.2).
 2. **Instrumentation-free Release builds.** No profiler attached, no GC forcing, no slow-sample
    exclusion. A failed or interrupted run is either kept whole or rerun from install.
-3. **Independent launches, install swapped per run.** Exactly one arm is installed at a time;
+3. **E1/A2 independent launches, install swapped per run.** Exactly one arm is installed at a time;
    the dedicated app id `com.rustra.nitroparity` is enforced by
    `examples/react-native-calculator/scripts/parity-app-policy.ts` (`requireDedicatedApp`).
-4. **Per-run receipt validation.** Every launch must pass the full v2 matrix receipt
+4. **E1/A2 per-run receipt validation.** Every matrix launch must pass the full v2 matrix receipt
    validation (90 cases = 30 ids × 3 lanes, 31 rounds per case) against the host manifest, and
    the binary SHA-256 is re-checked after the run. `run-nitro-parity-once.ts` does both and
    aborts the protocol otherwise.
 5. **Statistics.** Paired per-launch log-ratio, nominal t(4) 95% intervals, no multiplicity
    correction; per-lane and overall geomeans of candidate/legacy ratios. A watch case whose CI
    contains 1 is reported as not significant, never as a win.
-6. **Receipt artifact.** Each executed item writes
+6. **E1/A2 receipt artifact.** Each executed matrix item writes
    `docs/benchmark-receipts/<date>-<item>-ab.json` in the `rustra-name-reuse-ab/v1` shape:
    `contract`, `status` (adopted/rejected), `date`, `sourceCommit`, `candidateBaseline`,
    `decision`, `environment` (device, runtime, udid, jsEngine), `methodology` (protocol, runs,
@@ -45,8 +45,12 @@ Fixed rules carried over from the name-reuse precedent — do not renegotiate th
    every measuring session — from the second call onward the previous record is paired as the
    baseline-era record. The regression gate
    (`check-criterion-regression.mjs`) treats a comparison whose baseline-era record is
-   missing as unmeasurable (exit 2 — verdict withheld, baseline not adopted), and reports
-   host/tools/flags drift across eras as advisory only.
+   missing or incomplete as unmeasurable (exit 2 — verdict withheld, baseline not adopted).
+   CPU model, architecture, CPU counts, memory GiB class, kernel major/minor, OS image,
+   toolchain and build-flag mismatches also stop comparison before timing verdicts.
+   Runner-image/kernel patch and small memory differences within the same GiB class are
+   advisory. Preserve the baseline and rerun both revisions with `comparison_ref` on one
+   runner. The local policy fix has not yet restored the remote Benchmark verdict.
 
 ### 0.1 Collector/aggregator reuse (already in-tree)
 
@@ -77,9 +81,32 @@ A2: generated `commands.ts` variant, §2.2) — everything else stays as-is.
 
 | Lane                         | Device                                                                                                 | Note                                                                                                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iOS runs                     | iPhone 17 Simulator, iOS 26.2 (UDID `99B087B5-DEF6-4CF1-9177-81A5DE564CFC` in the 2026-09-24 receipts) | the 9/18 name-reuse adoption ran its iOS matrix on this simulator; reuse it for comparability                                                         |
-| iOS runs (optional physical) | physical iPhone, `aarch64-apple-ios`                                                                   | build with `RUSTRA_IOS_TARGET=aarch64-apple-ios`; install/launch/pull via `xcrun devicectl` — not yet exercised in-repo, treat as unverified plumbing |
+| iOS reference runs           | iPhone 17 Simulator, iOS 26.2 (UDID `99B087B5-DEF6-4CF1-9177-81A5DE564CFC` in the 2026-09-24 receipts) | historical simulator comparison only; this does not establish a physical-device effect                                                                |
+| iOS adoption runs (physical) | physical iPhone, `aarch64-apple-ios`                                                                   | build with `RUSTRA_IOS_TARGET=aarch64-apple-ios`; install/launch/pull via `xcrun devicectl` — not yet exercised in-repo, treat as unverified plumbing |
 | Android runs                 | physical device                                                                                        | v2 precedent; fixed-candidate 5 runs, **never** described as a causal A/B against a preserved older cohort                                            |
+
+### 0.3 Host A/B receipt producers (not CI gates)
+
+The 2026-10-13 host perf receipts were produced by three one-shot harnesses plus two host
+microbench apps. They are measurement producers, not examples — keep them runnable so the
+committed receipts stay reproducible-as-documented. Each receipt records its exact
+`command` invocation and the source/artifact hashes, so rerunning after `bun run build:cli`
+reproduces the comparison shape against a preserved baseline tree:
+
+- `env -u RUSTRA_BUN_LIBRARY bun scripts/benchmark-bun-owned.mjs <bun-ffi.ts> <dylib> <receipt.json> <label>`
+  — Bun FFI owned-response A/B
+  ([receipt](benchmark-receipts/2026-10-13-bun-owned-ab.json),
+  [journey](dev/research/2026-10-13-bun-owned-response.md)).
+- `node scripts/node-framing-bench.mjs <built-module> <receipt.json>` — binary frame
+  fragmentation copy-count A/B
+  ([receipts](benchmark-receipts/2026-10-13-node-framing-ab.json), incl. the superseded
+  `-initial` and `-fastpath` candidates preserved as evidence).
+- `node scripts/node-native-echo-bench.mjs <adapter-entry> <frame-registry> <runtime-binary> <receipt.json>`
+  — fragmented-frame end-to-end echo against the same runtime binary.
+- `env -u RUSTRA_BUN_LIBRARY bun examples/calculator/apps/bun-ffi-bench.ts` and
+  `env -u RUSTRA_BUN_LIBRARY bun examples/calculator/apps/scriptc-bench.ts` — warm host
+  dispatch microbenches for the Bun FFI and scriptc surfaces (3-shape arm reporting; see the
+  2026-10-13 research logs for arm construction).
 
 ## 1. E1 — large-response owned handoff (probe-cache 2-FFI round trip removed)
 
@@ -99,7 +126,7 @@ A2: generated `commands.ts` variant, §2.2) — everything else stays as-is.
     together, built as one tree. The "new shell + old static core" link combination is
     unsupported (Apple linker rejects unresolved weak refs — performance-evaluation.md §7.5
     risk 1); the probe path arms must come from a coherent pre-E1 source state.
-- Build: `sh modules/rustra-jsi/ios/build-rust-ios.sh` (fat release core) → `xcodebuild
+- Build: `bash modules/rustra-jsi/ios/build-rust-ios.sh` (fat release core) → `xcodebuild
 -configuration Release -sdk iphonesimulator` exactly as in the sim-e1 receipt's
   reproduction runbook, with `env -u EXPO_PUBLIC_RUSTRA_DEMO`, then
   `xcrun simctl install $UDID <app>`. Record `binarySha256`/`bundleSha256` per arm (the
@@ -156,10 +183,15 @@ rollback verification build.
 - Pure JS + codegen change (no ABI, no native, no capability marker). Host microbench evidence
   exists (warm 20.81%, reproduced 4×, call-count invariant 660,004 = 660,004 —
   [decision doc](dev/research/2026-09-24-emit-switch-decision.md)).
-- **Leading gates before the device matrix** (performance-evaluation.md §7.5 risk 2 — these
-  close the not-yet-re-confirmed items):
+- **Leading gates before a new device matrix.** Historical re-verification on `4578c851`
+  passed Hermes 1,412/0 and call counts 660,004=660,004 with no fallback
+  ([2026-10-10 receipt](benchmark-receipts/2026-10-10-host-gates-reverify.md)).
+  [2026-10-13 native ASan evidence](verification/evidence/2026-10-13-native-asan.json)
+  adds 1,412/0 plus 100 teardown/reinstall cycles on a simulator. It instruments the C++
+  binder/generated codecs/JSI with a fake Rust ABI peer; prebuilt Hermes/RN dependencies
+  and physical-device timing are outside that claim. Refresh these gates for the frozen arms:
   1. Hermes assertion suite re-run on the switched tree:
-     `sh examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh` —
+     `bash examples/react-native-calculator/modules/rustra-jsi/ios/run-hermes-sync-tests.sh` —
      0 failures required.
   2. Call-count invariance re-assertion:
      `env -u RUSTRA_BUN_LIBRARY bun scripts/a2-fields-microbench.mjs` — native route calls
@@ -194,62 +226,80 @@ Both arms share the **same native binary**; only the JS bundle differs:
   `generated/` with the same CLI; verify with `test:codegen-fresh:check`
   ([decision doc rollback strategy](dev/research/2026-09-24-emit-switch-decision.md)).
 
-## 3. rn-experiment — buffer-path superiority re-measurement (real workloads)
+## 3. rn-experiment — same gzip operation over JSON and bytes
 
-### 3.1 Premises
+### 3.1 Arms and scope
 
-- `examples/rn-experiment` cross-compiles for `aarch64-apple-ios-sim` Release with 0
-  mismatches against its generated module scripts/podspec
-  ([build evidence](dev/research/2026-09-24-rn-experiment-ios.md)). Physical iOS uses
-  `RUSTRA_IOS_TARGET=aarch64-apple-ios`; Android uses
-  `modules/rustra-bridge/android/build-rust-android.sh`.
-- This item is **not an install-swap A/B**: the contrast is between lanes inside one app —
-  `gzipCompress`/`gzipDecompress` (single-`data`-field bytes schema → Tier buffer fast path,
-  `rustra_ffi_has_buffer` advertised) vs `uuidV7` (string schema → JSON path control).
-- Payloads: deterministic LCG-generated repeat+noise buffers, 32–64 KiB (same alphabet as the
-  native/adapter tests), plus 1 MiB for the order-effect watch.
+Compare `gzipCompress` and `gzipDecompress` separately: each operation receives identical
+input through JSON and `invokeTypedBuffer` in one release Hermes app. `uuidV7` remains a
+correctness example; its latency cannot control for gzip transport cost. Default inputs are
+1, 64 and 256 KiB deterministic LCG bytes. The 256 KiB cap keeps the expanded JSON request
+inside the native 1 MiB payload limit; a 1 MiB bytes-versus-JSON lane is not valid here.
 
-### 3.2 Harness (to be added at execution time — schema fixed here)
+Native build recipes remain `bash modules/rustra-bridge/ios/build-rust-ios.sh` and
+`bash modules/rustra-bridge/android/build-rust-android.sh` from `examples/rn-experiment`.
+Physical iOS needs `RUSTRA_IOS_TARGET=aarch64-apple-ios`. The historical simulator
+cross-compile [receipt](dev/research/2026-09-24-rn-experiment-ios.md) is not installation or
+measurement evidence for the current collector.
 
-The RN app-side collector following `BenchmarkApp`'s receipt pattern does not exist yet; when
-executing, add it to the rn-experiment app and fix the receipt contract to:
+### 3.2 Implemented collector; remaining device integration
 
-```json
-{ "contract": "rustra-rn-experiment-buffer/v1", "launch": 1, "platform": "ios|android",
-  "order": ["gzipCompress","uuidV7"] | ["uuidV7","gzipCompress"],
-  "payloads": { "bytesKiB": 32, "sha256": "…" },
-  "samples": { "gzipCompress": {"p50ns": 0, "p95ns": 0, "roundTripOk": true},
-               "gzipDecompress": {"p50ns": 0, "equalityOk": true},
-               "uuidV7": {"p50ns": 0, "formatOk": true} } }
+- `examples/rn-experiment/apps/native-benchmark.ts` exports `runNativeBenchmark(options)`.
+  Import it from an installed app that links the generated module. It checks release Hermes,
+  installed/generated contract identity, and native bytes capability. It accepts only one
+  collection per JS runtime; the platform driver must still prove distinct process restarts.
+- `apps/benchmark.ts` serially warms each lane and records individual calls, including JS
+  adapter work. Defaults: 5 warmups, 100 samples. It verifies gzip magic, every output byte,
+  input immutability and SHA-256 provenance. Supply `sha256`, distinct `launchId`, alternating
+  `order: 'json-bytes' | 'bytes-json'`, and observed source/bundle/native hashes and
+  device/OS/Hermes/RN metadata. Mark `target` as `physical-device` or `simulator` truthfully.
+- Save the returned `BenchmarkReceipt` as one JSON per launch through the app's file/export
+  integration. The collector does not install, restart or pull the app. Those platform
+  drivers and physical executions remain incomplete. Do not label host transport mocks as
+  native evidence.
+- Receipts use `schemaVersion: 1`, `evidence: 'react-native-runtime'`, raw `samplesUs`,
+  p50/p95, per-lane payload hashes and a runtime ID. Allocation/copy metrics are explicitly
+  `null`/`not-instrumented`; request/output sizes are not substitutes for them.
+
+After five real launches, from the repo root:
+
+```bash
+env -u RUSTRA_BUN_LIBRARY bun examples/rn-experiment/scripts/benchmark-receipts.ts \
+  target/rn-experiment/summary.json \
+  target/rn-experiment/launch-1.json target/rn-experiment/launch-2.json \
+  target/rn-experiment/launch-3.json target/rn-experiment/launch-4.json \
+  target/rn-experiment/launch-5.json
 ```
 
-One receipt per launch, written to app `Documents/` and pulled with
-`xcrun simctl get_app_container … data` + copy (device: `devicectl device copy from`).
+The summarizer rejects duplicate runtime/launch IDs, mixed source/device/build metadata,
+nonalternating order, incomplete lanes, altered fixtures and unequal outputs. It keeps
+per-launch p50/p95 ratios and order groups; its decision remains `measurement-only`.
 
-### 3.3 Sample design, criteria, rollback
+### 3.3 Sample design and interpretation
 
-- **iOS and Android: 5 independent launches each.** Alternate the emission order across
-  launches (`gzip-first` / `uuid-first`) to observe the 64 KiB/1 MiB order sensitivity known
-  from the Android buffer diagnostic (2026-09-16) — report order effects, never average them
-  away.
-- **Adopt (i.e., confirm the documented buffer advantage on real workloads)** iff: gzip
-  round-trip p50 beats the `uuidV7` JSON-path control in ≥ 4/5 launches per platform with
-  paired log-ratio t(4) CI excluding 1, and correctness gates hold in every launch (gzip
-  magic, decompress equality, uuid format).
-- **If not reproduced:** rn-experiment is an example crate with no product surface — no
-  rollback. Record the receipt (`status: "rejected"`), and annotate
-  `docs/rn-rust-native-bridge-comparison.ko.md` / performance docs that the buffer fast-path
-  advantage claim is scoped to conversion-only workloads (`benchEchoBytes`), not
-  compute-inclusive ones.
-- Receipt: `docs/benchmark-receipts/<date>-rn-experiment-buffer-ab.json`.
+Use five independent physical app launches per platform with orders JSON/bytes,
+bytes/JSON, JSON/bytes, bytes/JSON, JSON/bytes. Keep all per-call samples, raw receipts,
+installation/restart logs and observed binary/bundle hashes. Report simulator cohorts
+separately. Do not pool iOS and Android or mix source/build cohorts.
+
+The implemented summary reports JSON/bytes ratios (>1 favors bytes). A causal claim needs
+the same operation/input, correctness in every launch and paired per-launch log-ratio
+analysis with nominal t(4) 95% intervals excluding 1, plus order-sensitive results. This
+confidence interval/adoption analysis is not implemented in the current summarizer; do
+not promote `measurement-only` to adoption without completing it. Allocation/copy claims
+also require separate instrumentation. If no effect is established, keep the result
+inconclusive for that workload rather than generalizing to all buffer routes.
+
+Store raw receipts and the summary under `target/rn-experiment/`; after actual execution,
+record the environment, limitations and analysis in
+`docs/benchmark-receipts/<date>-rn-experiment-buffer-ab.json`. No physical receipt or
+adoption verdict was produced on 2026-10-13.
 
 ## 4. Execution order and reporting
 
-1. A2 leading gates (§2.1) — cheap, closes §7.5 risk 2 first.
+1. Freeze the arms and refresh A2 leading gates (§2.1); historical and local passes are recorded there.
 2. E1 matrix (§1) — largest expected effect, largest build cost (two full arm builds).
 3. A2 matrix (§2.3) — reuses the same installed-app plumbing as E1.
-4. rn-experiment harness (§3) — independent example app, can run in parallel with 2–3 on a
-   second machine but not interleaved on one simulator.
-5. Each item appends its verdict to `performance-evaluation.md` §8 and files its receipt per
-   §0. The runbook itself is versioned; protocol deviations (device substitution, run loss)
+4. Integrate the implemented rn-experiment collector with install/restart/export drivers (§3), then measure on a separate idle device.
+5. Append actual evidence to `performance-evaluation.md`; use §0 for E1/A2 and §3 for gzip receipts. The runbook itself is versioned; protocol deviations (device substitution, run loss)
    must be recorded in the receipt's `methodology` block, not silently absorbed.
