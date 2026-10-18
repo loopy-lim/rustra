@@ -1,0 +1,1483 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "f1a96b941ed709038b6e4fe8ae3753e895ffa8a6",
+  "candidatePatchSha256": "419ceebac60c3656748be44a7b7a6eab1b9a853bed71cab4b726dbb9c2ba916a",
+  "measurement": "Package::invoke_frame, Criterion process median, 14 complex-route fixtures",
+  "protocol": {
+    "launches": 10,
+    "pairsBaselineCandidate": [
+      [1, 2],
+      [4, 3],
+      [5, 6],
+      [8, 7],
+      [9, 10]
+    ],
+    "samplesPerCase": 500,
+    "warmupSeconds": 0.2,
+    "measurementSeconds": 0.5,
+    "statistics": "paired log ratios of per-launch Criterion medians; t(4) nominal 95% CI; no multiple-comparison correction"
+  },
+  "environment": {
+    "schemaVersion": 1,
+    "capturedAt": "2026-10-13T03:47:32.612Z",
+    "restoredEnvironmentAvailable": true,
+    "workflow": {
+      "GITHUB_SHA": null,
+      "GITHUB_RUN_ID": null,
+      "GITHUB_RUN_ATTEMPT": null,
+      "RUNNER_OS": null,
+      "RUNNER_ARCH": null,
+      "RUNNER_ENVIRONMENT": null,
+      "ImageOS": null,
+      "ImageVersion": null
+    },
+    "host": {
+      "platform": "darwin",
+      "architecture": "arm64",
+      "kernelRelease": "25.6.0",
+      "cpuModels": ["Apple M1 Max"],
+      "logicalCpuCount": 10,
+      "availableParallelism": 10,
+      "totalMemoryBytes": 68719476736
+    },
+    "tools": {
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "bun": "1.4.3"
+    },
+    "configurationDigests": {
+      "RUSTFLAGS": null,
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "RUSTC_WRAPPER": null,
+      "CARGO_BUILD_TARGET": null
+    }
+  },
+  "launches": [
+    {
+      "run": 1,
+      "arm": "baseline",
+      "binarySha256": "aecf5e8ddd52285b62b02e8593137daefa05eb939e1d5f9fd52b7318025f1475",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/baseline-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791863999.815457,
+      "elapsedSeconds": 11.845629930496216,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-01-baseline"
+    },
+    {
+      "run": 2,
+      "arm": "candidate",
+      "binarySha256": "700cb18febffc1537d3b1f0ae445d207f454d7fe7ab0969e21ef88f8581e2f45",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/candidate-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864011.661716,
+      "elapsedSeconds": 11.811857223510742,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-02-candidate"
+    },
+    {
+      "run": 3,
+      "arm": "candidate",
+      "binarySha256": "700cb18febffc1537d3b1f0ae445d207f454d7fe7ab0969e21ef88f8581e2f45",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/candidate-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864023.4742248,
+      "elapsedSeconds": 11.633742094039917,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-03-candidate"
+    },
+    {
+      "run": 4,
+      "arm": "baseline",
+      "binarySha256": "aecf5e8ddd52285b62b02e8593137daefa05eb939e1d5f9fd52b7318025f1475",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/baseline-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864035.1085591,
+      "elapsedSeconds": 11.507230997085571,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-04-baseline"
+    },
+    {
+      "run": 5,
+      "arm": "baseline",
+      "binarySha256": "aecf5e8ddd52285b62b02e8593137daefa05eb939e1d5f9fd52b7318025f1475",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/baseline-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864046.616333,
+      "elapsedSeconds": 11.834311962127686,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-05-baseline"
+    },
+    {
+      "run": 6,
+      "arm": "candidate",
+      "binarySha256": "700cb18febffc1537d3b1f0ae445d207f454d7fe7ab0969e21ef88f8581e2f45",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/candidate-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864058.451381,
+      "elapsedSeconds": 12.010491847991943,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-06-candidate"
+    },
+    {
+      "run": 7,
+      "arm": "candidate",
+      "binarySha256": "700cb18febffc1537d3b1f0ae445d207f454d7fe7ab0969e21ef88f8581e2f45",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/candidate-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864070.462403,
+      "elapsedSeconds": 11.877129077911377,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-07-candidate"
+    },
+    {
+      "run": 8,
+      "arm": "baseline",
+      "binarySha256": "aecf5e8ddd52285b62b02e8593137daefa05eb939e1d5f9fd52b7318025f1475",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/baseline-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864082.340093,
+      "elapsedSeconds": 11.816174030303955,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-08-baseline"
+    },
+    {
+      "run": 9,
+      "arm": "baseline",
+      "binarySha256": "aecf5e8ddd52285b62b02e8593137daefa05eb939e1d5f9fd52b7318025f1475",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/baseline-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864094.1568289,
+      "elapsedSeconds": 11.896108150482178,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-09-baseline"
+    },
+    {
+      "run": 10,
+      "arm": "candidate",
+      "binarySha256": "700cb18febffc1537d3b1f0ae445d207f454d7fe7ab0969e21ef88f8581e2f45",
+      "command": [
+        "/tmp/rustra-20261013-perf-final-evidence/candidate-bench",
+        "--bench",
+        "--noplot",
+        "--warm-up-time",
+        "0.2",
+        "--measurement-time",
+        "0.5",
+        "--nresamples",
+        "1000"
+      ],
+      "startedAtUnix": 1791864106.053531,
+      "elapsedSeconds": 11.552626132965088,
+      "exitCode": 0,
+      "outputDirectory": "/tmp/rustra-20261013-perf-final-evidence/measurements/run-10-candidate"
+    }
+  ],
+  "analysis": [
+    {
+      "case": "map_keys_2",
+      "baselineMedianNs": 549.6464177978884,
+      "candidateMedianNs": 539.5297080592105,
+      "pairedGeometricMeanRatio": 0.9852977931530068,
+      "paired95Ci": [0.9690802092716218, 1.001786778745451],
+      "changePercent": -1.4702206846993193,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 549.6464177978884,
+          "meanNs": 556.0237786967399,
+          "estimatesSha256": "3b0fa851f4b57de9aa7ef9cafe80021c85175c2cf588ae137bd561fd109d28bc"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 539.5297080592105,
+          "meanNs": 548.2472027492195,
+          "estimatesSha256": "be2952dc7dcc3c749f92578c88bb6ac45d026440bb4fb14f69697c481253307e"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 559.2108477011494,
+          "meanNs": 563.9627919981554,
+          "estimatesSha256": "ca522b9aa1c5e4834f38d5a4e4f2f014c909f19494f2c0814b606eb2235353af"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 556.0975441293607,
+          "meanNs": 562.2854206865132,
+          "estimatesSha256": "2a50c804904c13cb9761321982ab45a1fb62b4de6428a88242a4a36b2fbef699"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 551.5328770453327,
+          "meanNs": 558.9111380115995,
+          "estimatesSha256": "db1cd6010f60abee99ffb9accfbdf27002310d4b92667cd485b10543c0218554"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 534.3688279652351,
+          "meanNs": 542.71119167331,
+          "estimatesSha256": "7c418ff5a6f5ce37d458f2dc6715f2dbb3b4f9bdc7500b8addb5ee4e87f163d8"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 539.9488798590057,
+          "meanNs": 550.8249901268348,
+          "estimatesSha256": "73d1638c5f01f011fcda4d834190852e146c41969a4d159b0295adda5e20d984"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 547.3899795563336,
+          "meanNs": 556.1571314193897,
+          "estimatesSha256": "8c47b2a67ab4039532b9f156acf51a852a6b9c4db93255b2389b836395f08cff"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 547.44291451158,
+          "meanNs": 553.9739919528059,
+          "estimatesSha256": "902ccedec4cfc8383193972d2d198cdbc9a0b05b62bf248e99b2367488683ab9"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 538.8827806122449,
+          "meanNs": 549.7173291464283,
+          "estimatesSha256": "b49a76edbc4b79f2192628ef57f376df3ceb9cd1f283334e71354ad011814fad"
+        }
+      }
+    },
+    {
+      "case": "map_keys_64",
+      "baselineMedianNs": 15107.318181818182,
+      "candidateMedianNs": 15164.772727272728,
+      "pairedGeometricMeanRatio": 1.0045397657456119,
+      "paired95Ci": [0.9884138175068365, 1.020928808451496],
+      "changePercent": 0.4539765745611879,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 15114.901515151516,
+          "meanNs": 15194.522848484849,
+          "estimatesSha256": "f708f07cd25129343542d8fe6b17abc4d4d0b089212b0420c673f1328ecb64b1"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 15176.44696969697,
+          "meanNs": 15321.998787878789,
+          "estimatesSha256": "9111fc57a0df1772207d9fb059da83c82916c4e3b00f9258d66dcd21c25ad2fc"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 15003.723880597016,
+          "meanNs": 15134.098358208958,
+          "estimatesSha256": "dcac6fd3fa6ce7b5dae41d0c4ba2f3dbf2b0bd4971a1d317560c545223edea3d"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 15142.05303030303,
+          "meanNs": 15269.295242424227,
+          "estimatesSha256": "82adafb24d6220abe759e7f38f5b08300eade32181a81e24c4ca89ea4733b14e"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 15068.810606060606,
+          "meanNs": 15205.105757575751,
+          "estimatesSha256": "3f35bd648f5f2d9ea6c79a76898c4646f3d9788e9429751ba49874be5ca2a424"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 15164.772727272728,
+          "meanNs": 15300.122060606067,
+          "estimatesSha256": "4858d81818e99244671d72b1b2f8548164c62f33f15631277a857630f7ed315e"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 15263.886363636364,
+          "meanNs": 16227.035454545457,
+          "estimatesSha256": "3dfa3b3b7e871fb08be3d386bbec7a0be4e6208db6bfa11d32dd5ebb55d589bb"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 14886.194029850747,
+          "meanNs": 15052.393074626878,
+          "estimatesSha256": "340055a6511c35a9bcb45e2ac7b5164173116d3cf68f9f1d849f8b46fa2ca95a"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 15107.318181818182,
+          "meanNs": 15234.86442424242,
+          "estimatesSha256": "15491df4158aff6eb69a7f4be2532f0e13770e7ea3f296060d4bbbdfcbe546a2"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 15052.39393939394,
+          "meanNs": 15179.086636363636,
+          "estimatesSha256": "ea01789c4aaaf97f4133e5d046ff24478e042d947143f9376d9395e4fedc7617"
+        }
+      }
+    },
+    {
+      "case": "map_of_seqs",
+      "baselineMedianNs": 341.9626660678664,
+      "candidateMedianNs": 337.8344639373118,
+      "pairedGeometricMeanRatio": 0.9918536990280593,
+      "paired95Ci": [0.9743259891823226, 1.0096967249136506],
+      "changePercent": -0.814630097194069,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 336.21657678615486,
+          "meanNs": 343.75172197386746,
+          "estimatesSha256": "129826cbc85c317b61c8b0713768cfb90adecff6d758be7e18baf5ff22e13c17"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 334.90835705249845,
+          "meanNs": 343.5330061102879,
+          "estimatesSha256": "e122de36f9ef8bde8fd241a8976bd3695ba6f542036761b0ce2a35aee623461d"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 338.18798063206765,
+          "meanNs": 344.86727751248793,
+          "estimatesSha256": "95c273ad59610e40131b69e8eb68c434af3e170de6712983e0d800a172b071e0"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 343.12726823065265,
+          "meanNs": 349.9813558466874,
+          "estimatesSha256": "5536bddbd20496947ca268630c8435a6c73e216bc364dfda2e9c950218a13210"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 341.9626660678664,
+          "meanNs": 349.0138210740766,
+          "estimatesSha256": "4e49afffd0504d5e5b55bc89d0afd2f34fd1a75620dbef019264d5f464056fce"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 337.8344639373118,
+          "meanNs": 350.9388164067105,
+          "estimatesSha256": "51d17a10f02099855fae762523050976929f76990551fe15e30dc5488a3925dd"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 336.46847143954915,
+          "meanNs": 344.869522915955,
+          "estimatesSha256": "8fdedb5e37bb8f8f990eb3572811b7fedb4dedc4d1f7bb2dcf726ca7a103c557"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 344.7511280721966,
+          "meanNs": 355.302319679843,
+          "estimatesSha256": "e65ff43ce4ba9c5055d10965266a84f8c48275b4f26a3024ad0a376de35e802e"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 335.7414907135875,
+          "meanNs": 344.4903666546707,
+          "estimatesSha256": "6b662f19a2b417a1bcf14c434d35f60b13ffe80ae85d19ebda1608607d115af1"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 340.46256431687766,
+          "meanNs": 348.1986306737025,
+          "estimatesSha256": "e3a4b2baea2620312b4d1cf4a95f25a1b272453053931e1fd6f09a3998d5406b"
+        }
+      }
+    },
+    {
+      "case": "map_seq_1024",
+      "baselineMedianNs": 15096.59090909091,
+      "candidateMedianNs": 15319.23076923077,
+      "pairedGeometricMeanRatio": 1.0157831380773312,
+      "paired95Ci": [1.0128571878748898, 1.0187175407888625],
+      "changePercent": 1.5783138077331227,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 15100.378787878788,
+          "meanNs": 15191.719636363645,
+          "estimatesSha256": "129d19698a1b0be8c9608e2504f345102abea898e2b611c0daca952f9e48d1c7"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 15316.023076923077,
+          "meanNs": 15438.536984615364,
+          "estimatesSha256": "b9d6242475caf849d7d02002061911786452944055a35eaa1f52b1d17c38f2ea"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 15319.23076923077,
+          "meanNs": 15441.630553846166,
+          "estimatesSha256": "200f931d3d7050ce4f52586a804c517ad7a3a690b67d6052ae5f6b804d300a88"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 15114.901515151516,
+          "meanNs": 15244.963090909087,
+          "estimatesSha256": "b8c27daa48ea877f15f549ccd65d5aa01929f97fd11ac7d4355c96ceac951f72"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 15096.59090909091,
+          "meanNs": 15240.292606060613,
+          "estimatesSha256": "6fd6fb0dd7a7617b2b18ee701d8e3b9df29dc71c179649dadd483cb670d0ecea"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 15319.23076923077,
+          "meanNs": 15485.299753846166,
+          "estimatesSha256": "50cbbe9a7a00701e16ac5ebf0abb13193df42a781046eba0bd0b9ccd5a8f3bfe"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 15369.553846153845,
+          "meanNs": 15491.787200000002,
+          "estimatesSha256": "983d3d7f7ddff15f0894d533a30e281faa8a236ccb1192cdc851803ed3bb44ba"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 15079.234848484848,
+          "meanNs": 15233.661545454543,
+          "estimatesSha256": "774dcf47295ca69ff0a3c8456ccca6d2d79a698e1b528ed86486af908b03e8c2"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 15085.85606060606,
+          "meanNs": 15212.999000000009,
+          "estimatesSha256": "0605d94f5bd7560e4ecff0194b8d44d43c552185267f55ad5b65b76c023201d0"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 15344.23076923077,
+          "meanNs": 15459.043261538465,
+          "estimatesSha256": "af0f10fce81dcc282614ac0d30c1af9e98253ba77d7898916a5ba449689c55cf"
+        }
+      }
+    },
+    {
+      "case": "oneof_data_enum",
+      "baselineMedianNs": 174.50060379447217,
+      "candidateMedianNs": 172.75743798720717,
+      "pairedGeometricMeanRatio": 0.9949646717833582,
+      "paired95Ci": [0.9753731768254368, 1.0149496845084338],
+      "changePercent": -0.5035328216641766,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 174.34617431459205,
+          "meanNs": 179.88600181093935,
+          "estimatesSha256": "0871ec5d9e1b9bf8a9ac996472f86002e10a734e41e8d8dc77374472895ccccd"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 173.11928302394404,
+          "meanNs": 179.91024321723413,
+          "estimatesSha256": "3b56893656ce784c170e57df710738483d7cc647c74fd919a289d7ec2c9a6b40"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 172.56671043724614,
+          "meanNs": 179.3468397322213,
+          "estimatesSha256": "1d2b97b64221336d0b6cd056fa3878f6a43338c6756edc0b0d0eaae6d64e9396"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 175.22116971041703,
+          "meanNs": 180.8993792184906,
+          "estimatesSha256": "d0a2bf25de1e816ce846aef2a316ee2efe7c3a58892033f2424c44569ba52037"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 174.886412879335,
+          "meanNs": 180.6472573776527,
+          "estimatesSha256": "5bb5888f46bda9dfb3204c65f2d1b2cd3c211dc793fc0a82240e802183fb559e"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 172.15701727214483,
+          "meanNs": 179.6670017893703,
+          "estimatesSha256": "df58c39b755a065f6b5f89cc2eea04813f229fefbe43e761e99872a8b0898230"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 172.75743798720717,
+          "meanNs": 180.0056590934044,
+          "estimatesSha256": "0a5f4aca73520b417cfa09730e6337a5c31c64388d5f3411e938600da1f6aace"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 174.50060379447217,
+          "meanNs": 180.4764048708519,
+          "estimatesSha256": "c1f063755a3c2f090c532104a836b37bc1f134129c6950e78c4b9530e106663f"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 173.96062245248584,
+          "meanNs": 180.28075798305377,
+          "estimatesSha256": "a4dc26c5f5dd646aed24652a712dae9426491a3f3214782de46c77e3821a90bd"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 177.98250183230022,
+          "meanNs": 183.832400273115,
+          "estimatesSha256": "dfa70796cd2efa38e4250f4403306611313d841dcf6c0e0a2f15b8ccc24d4acb"
+        }
+      }
+    },
+    {
+      "case": "optional_chunks_near_1m",
+      "baselineMedianNs": 79479.15384615384,
+      "candidateMedianNs": 79619.03571428571,
+      "pairedGeometricMeanRatio": 1.0166206377286762,
+      "paired95Ci": [0.9940481451661031, 1.0397056984429685],
+      "changePercent": 1.6620637728676169,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 79479.15384615384,
+          "meanNs": 80228.30723076931,
+          "estimatesSha256": "8f377df00efcf67d5e161b2674279544be874ae5211a457c4d3b8f2b511ef6f5"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 79540.03846153847,
+          "meanNs": 80167.41753846148,
+          "estimatesSha256": "e0563cb4ce48f2d9c602ab1252fa155a6b7e8d72424d770c0d1997423c2c9a13"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 79619.03571428571,
+          "meanNs": 80499.1895714286,
+          "estimatesSha256": "9e815d963b03e9c314e75ff13d06665300b20a54e53dbdb243c5986d5e51d87e"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 76290.07692307692,
+          "meanNs": 76877.70507692311,
+          "estimatesSha256": "6758d4af7c34faf4de496ed312ef86f1d34d58b4193d605123f7f85592ee8344"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 77476.17857142858,
+          "meanNs": 76617.97614285724,
+          "estimatesSha256": "6411bc5e22d06f1bc1f98920a67493bb8d8a21c02cd298f2aceff604ee04c79e"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 77573.69230769231,
+          "meanNs": 78290.46692307692,
+          "estimatesSha256": "8eab91f2b0516a1297c14b56b296cc0fca31741a998db2f7e076dee951586cd5"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 81052.88461538461,
+          "meanNs": 81783.83769230766,
+          "estimatesSha256": "0054a31043e48000520729508676c420b54631766b06f1a0909a7b5a3b0c4e57"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 80184.26923076923,
+          "meanNs": 81050.42384615383,
+          "estimatesSha256": "b9ef8f49c4f0d152b5d60b5d764b76639a90c898227221da37b596d272219ce7"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 79634.61538461538,
+          "meanNs": 81047.5264615385,
+          "estimatesSha256": "bef76c6b431fd64e857bcbd934f797749bed7f52090b9f2aa3d3783340debf59"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 81806.81818181818,
+          "meanNs": 85861.14963636363,
+          "estimatesSha256": "50fcd5839068b487bdac2c8711be81f15987eb8a69789a48327aefea16eb6007"
+        }
+      }
+    },
+    {
+      "case": "optional_none",
+      "baselineMedianNs": 138.69393312738816,
+      "candidateMedianNs": 138.73703107237588,
+      "pairedGeometricMeanRatio": 1.0090155049182383,
+      "paired95Ci": [0.9838002232783551, 1.034877066578327],
+      "changePercent": 0.9015504918238326,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 139.08647305075874,
+          "meanNs": 145.224631255912,
+          "estimatesSha256": "e0d06bfd61b3e191db4793da2dca2d258ada5285c9e738ddc7dad586457e76c0"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 139.07701373129544,
+          "meanNs": 149.47396234489707,
+          "estimatesSha256": "5096e14ddaada95e60cbeaff5563829c96a6cc8891cdf152fd16879083b25c57"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 138.73703107237588,
+          "meanNs": 144.18105497829765,
+          "estimatesSha256": "e7ed9356112f17b37e7707865881c363ffa86f8d30a164e4a022da6bd3c1b213"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 138.69393312738816,
+          "meanNs": 145.0388092245746,
+          "estimatesSha256": "b3e5776e0af90ccd47159e84d3b599d1e93a222199df578d9c5b178e466a8dbe"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 137.80070679431827,
+          "meanNs": 144.60386371516165,
+          "estimatesSha256": "15e38618374dff9188a6ccf107cf9c9484f58ec0f5fd78d3daabbc3012693cd0"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 138.4573724109195,
+          "meanNs": 144.59581562981094,
+          "estimatesSha256": "563b7f34262c1b6af56e969a84452ff711e45fb860148534dcc2d5cb560c9c13"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 137.97587299211813,
+          "meanNs": 144.13401264213647,
+          "estimatesSha256": "349572cb881b266254d4da53bf7b070edc60d975cc258b02adf959f7c6c7138d"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 138.67115577367386,
+          "meanNs": 145.01984418892334,
+          "estimatesSha256": "56dc466b86e7f2172ce07c71a565882ae822ead2f20cf0e3d78fbf9960388dcc"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 141.00888732316534,
+          "meanNs": 148.4738923481487,
+          "estimatesSha256": "3ad522b46ffb994403ef0ff6afb75d81bbfe2a829547932d62d781d666586585"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 147.48526548672567,
+          "meanNs": 164.23658821264053,
+          "estimatesSha256": "46580e4a097af9f4e05fb6a545506c059f77203f05add2a30a3d7cf5514f959e"
+        }
+      }
+    },
+    {
+      "case": "optional_string_64",
+      "baselineMedianNs": 236.8585677466863,
+      "candidateMedianNs": 240.83887179528648,
+      "pairedGeometricMeanRatio": 1.0212616411419848,
+      "paired95Ci": [0.9796183492391176, 1.0646751773056442],
+      "changePercent": 2.126164114198481,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 246.76543300653594,
+          "meanNs": 254.36849174400598,
+          "estimatesSha256": "0d0c62c9feba9ff85c378be47562b2008ccd323fee73ed9e772c99dd624c581b"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 239.84392421602786,
+          "meanNs": 246.14186604148117,
+          "estimatesSha256": "30669297e677e3c0f74327111742441609b9f496491b3249bd7e76001bbd813a"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 240.83887179528648,
+          "meanNs": 247.99120021589528,
+          "estimatesSha256": "7b7de820cfcd6e523a43b0dda9dd78d7f17c411b63588457727071eac9c6bb2f"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 233.90034795630726,
+          "meanNs": 240.27057345130223,
+          "estimatesSha256": "9b47b7ad403b46764bde6ebeadc076e3b29af59d82aa40cb11b4901774c924b8"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 234.0044992997199,
+          "meanNs": 239.49680760392425,
+          "estimatesSha256": "8d5bde16d121a3b03b530255ed054858df6afe40ca779f9fcf91ea532c501eee"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 240.9507095781534,
+          "meanNs": 247.18833030682484,
+          "estimatesSha256": "39f286947f0796dcd65a58c9b376af52444a1cdd304d4efc0884737472d8e603"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 239.58567073170732,
+          "meanNs": 247.1693701266521,
+          "estimatesSha256": "4e06e3867b7fa01e3e6dde681971b72354a181c801306c8f550377e6214ff556"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 236.8585677466863,
+          "meanNs": 242.28037896715102,
+          "estimatesSha256": "e19a56938e7e881e0fcebf810ebeabf4a270ec0e3c434f55986e91323378fd82"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 238.68115012682307,
+          "meanNs": 244.8704344577519,
+          "estimatesSha256": "f34ab7a902dd033b51532f03337db41d7b030e2a1ea8865176599b3012d85f77"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 254.38257839721254,
+          "meanNs": 262.4739970599299,
+          "estimatesSha256": "7e4bbe5fc23134b0aa6bc6ddeb28ea2f93a7cedfd6d258863043dad312144576"
+        }
+      }
+    },
+    {
+      "case": "optional_string_64k",
+      "baselineMedianNs": 4954.481543066178,
+      "candidateMedianNs": 4955.764185393258,
+      "pairedGeometricMeanRatio": 1.001784902631451,
+      "paired95Ci": [0.9906687388618625, 1.013025799414311],
+      "changePercent": 0.17849026314509242,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 4965.904471137805,
+          "meanNs": 4974.890288742817,
+          "estimatesSha256": "f2f832ea8415edb9c2f540982919427f262432db49f0fb001ddf1c6da10f977f"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 5034.64125491297,
+          "meanNs": 5096.489939580541,
+          "estimatesSha256": "0d3bb1a8095ab72f44bf496f41ba09f204aebec6c204831f0c8fef6b3d9d66e3"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 4948.982065947298,
+          "meanNs": 4988.113628852485,
+          "estimatesSha256": "e388559cabc81b46a3985988e4ab2bc7c64cc77cb0d4ab98dfae07516a087c41"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 4954.481543066178,
+          "meanNs": 5089.800026059521,
+          "estimatesSha256": "f04ab09adda214af75cd11415fbcef5449309cf7a695df40508cd8318e0aec0e"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 4947.358805668016,
+          "meanNs": 4990.820958158523,
+          "estimatesSha256": "0c5bed3a59ad34b893afb92f6c3e73d932d096c8e1062fab6dc7eb23e694a452"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 4955.764185393258,
+          "meanNs": 6134.852720283258,
+          "estimatesSha256": "21930c048e0ee5805adb26fd72f4f10b99f76b3699f5e100f1f124c06a98d957"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 4922.581440948472,
+          "meanNs": 4983.148314483587,
+          "estimatesSha256": "5d742ffc725cd4be293c8f96dd524efcfea548d07681611b4fbe79f0c8b02dcf"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 4976.069464899361,
+          "meanNs": 5007.887195233056,
+          "estimatesSha256": "1a553f6f881f3167143872fbd27dbd5746220861ac209643e16f7e16a45b1ff2"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 4936.236853832442,
+          "meanNs": 4969.678820647396,
+          "estimatesSha256": "c4ff7e9aee7564b627fcfe686c2e54b07c52b525bcc6788ec45e1d3e38404ae6"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 4962.915349849347,
+          "meanNs": 5050.6479323648955,
+          "estimatesSha256": "e362d322c7611444613e5b3d23cb0a01e0afef94755d2c2b922792264b117109"
+        }
+      }
+    },
+    {
+      "case": "recursive_depth_1",
+      "baselineMedianNs": 162.19488253386558,
+      "candidateMedianNs": 161.87061523705125,
+      "pairedGeometricMeanRatio": 1.0048768358925477,
+      "paired95Ci": [0.9844115718481726, 1.0257675592106485],
+      "changePercent": 0.4876835892547726,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 161.57331533789647,
+          "meanNs": 169.48315672479785,
+          "estimatesSha256": "915b2c66e5682927eaae40ca032c5913a458df2d555bcdc9a054630b928d7c6f"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 161.87061523705125,
+          "meanNs": 168.9805928466029,
+          "estimatesSha256": "33e5b1ec971a2839567852f4c9b5a5d287d643a8da1419ca08d9dc492e4cba69"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 161.11051273152304,
+          "meanNs": 168.869433862459,
+          "estimatesSha256": "3146eb8fe04dbcb3cd836c7f6377cf2d0d7be9964def8827d0821a47f0d10aac"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 162.42455297838072,
+          "meanNs": 170.04136148844125,
+          "estimatesSha256": "b3f994ce61d0cada112cdc92108b6b467f2f7a5001fa683b0a6aa3a0fe8d9bd6"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 162.03093024352583,
+          "meanNs": 170.42835917554677,
+          "estimatesSha256": "85c2a3b60c5fc6d0635fc8889c2f69b43c08a52e8a1f1cd36c0bab459389f499"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 162.33846368311447,
+          "meanNs": 170.36566153880548,
+          "estimatesSha256": "6ee56944ef0f2f25028a8af3111ef3bd4d6a85561fe6205a066fef6ce920cad9"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 161.42317997043608,
+          "meanNs": 168.55840325669388,
+          "estimatesSha256": "efb8d65cd3f67c9d4f0cb701ac402b69a6847e4367513d0cf00c5d07d79f106a"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 162.19488253386558,
+          "meanNs": 170.09709243378538,
+          "estimatesSha256": "95930990373e1d0f753ef4fb05fd9f600a2c41a1913f4a24bb4282f06e9cb0a0"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 162.29446003497293,
+          "meanNs": 170.23128306258758,
+          "estimatesSha256": "f66e99c1fa8223160ef13fa3b023481f2e46f8ada8654116a7054e3f7f96f76f"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 167.82050865800866,
+          "meanNs": 174.2178457191387,
+          "estimatesSha256": "be880dd02d7fa2dfafc06d0cd6cf37aaca28c2e74ae79e4a786f0b93aeafbaeb"
+        }
+      }
+    },
+    {
+      "case": "recursive_depth_16",
+      "baselineMedianNs": 1893.8312056737589,
+      "candidateMedianNs": 1875.8764184654015,
+      "pairedGeometricMeanRatio": 0.9887894674327288,
+      "paired95Ci": [0.9724733264101886, 1.0053793603933814],
+      "changePercent": -1.1210532567271225,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 1893.8312056737589,
+          "meanNs": 1916.1430049801484,
+          "estimatesSha256": "064fa3f3ad9b15c18604a29c029020d80e772e18cdb2f3db19a43c2459487c3a"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 1875.8764184654015,
+          "meanNs": 1901.5258776335038,
+          "estimatesSha256": "de751d271fc9ee6bea1d7073b9bca940c50e24307cf83c5838da888601b5da5f"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 1865.9451636691383,
+          "meanNs": 1896.2898549866677,
+          "estimatesSha256": "20fb8af686623a052b991aefc98b4a9d87e72dafe09912b3bc51d1935926cfb7"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 1877.5512860564406,
+          "meanNs": 1901.0386812692534,
+          "estimatesSha256": "a47c93cc5081baebf93708178c1eb2396a0238a88ec07198b9f529b7f4f47477"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 1878.726742058981,
+          "meanNs": 1912.1062261482664,
+          "estimatesSha256": "5eeb35cfec981522dd1d445d1969638cdded0ded4ae847506b22cc61ddda478e"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 1879.1233531690189,
+          "meanNs": 1900.0252843994147,
+          "estimatesSha256": "56d2434b464d358c7b2470f96c28c43094c42aaf5d8c91970c7ce726a8ba6978"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 1891.3140173666488,
+          "meanNs": 1912.7534928559953,
+          "estimatesSha256": "dd92ec2050e924eedfe740cc54e266bf15dc7fb8af6f2c77f6c17e63cb3fc854"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 1903.57534915338,
+          "meanNs": 1927.5725609501696,
+          "estimatesSha256": "a55a42953bdc5fdc9b4f82232ba8fd6d1bdf290b1250f9dc1e27c3b3d0d82b7b"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 1937.6792771023684,
+          "meanNs": 1961.3734877544223,
+          "estimatesSha256": "3c373b5b21024eff0181ec7219011e21e3595ef6bca4162148ce5f907ef1d50a"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 1872.1721816328263,
+          "meanNs": 1898.1269723030962,
+          "estimatesSha256": "29e79a667f5ab2aa316ed40e77f17764c0cab196343fd3ceceff223eaf2cb11e"
+        }
+      }
+    },
+    {
+      "case": "recursive_depth_8",
+      "baselineMedianNs": 866.9793834489951,
+      "candidateMedianNs": 858.8985255059988,
+      "pairedGeometricMeanRatio": 0.9888679668227344,
+      "paired95Ci": [0.979755263969887, 0.998065426916842],
+      "changePercent": -1.1132033177265632,
+      "significantlyFaster": true,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 879.1287764602547,
+          "meanNs": 895.6787200889952,
+          "estimatesSha256": "f4f028dd30dc0634d78b758bde88f15d9c6182f99aa2d2d14181e40693d4935b"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 858.2537582729278,
+          "meanNs": 878.7643849192787,
+          "estimatesSha256": "8e8a8fd7606c5aa7db91ea5c1cf980b92f9943bd38db535e9c27782b7fe7e8bf"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 860.4482824584499,
+          "meanNs": 878.2651484738108,
+          "estimatesSha256": "c95c0ad2a5d9a1ff0eed4629ffb334fb758fdc0bbdd798418fd999c839c6ef9a"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 866.9793834489951,
+          "meanNs": 885.8745064847858,
+          "estimatesSha256": "a5858f0ee494df2a2cb197c47f636d832ecfd9f70712b6417b4d501132936433"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 864.5277678994785,
+          "meanNs": 884.6391958851203,
+          "estimatesSha256": "5ca030df1de768b0ff5fe2ebf62be2a9416d708104378cbb1b62045e703513cd"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 855.5310817425354,
+          "meanNs": 878.7809890656837,
+          "estimatesSha256": "a352e8927e421459632fd79003f17870798f1aa0b951537f70133ed438da186c"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 858.8985255059988,
+          "meanNs": 877.0206489375283,
+          "estimatesSha256": "fbec62a728e860d19d554a04db75762907fb37871e41b92de63125f79cd75aa5"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 866.6248333333333,
+          "meanNs": 888.3795062057818,
+          "estimatesSha256": "a02a0172dc6c094f5ad24853ed42e9dc3f23be6ef3b705a92287748235ccc5ea"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 869.2018928363425,
+          "meanNs": 887.5266770152062,
+          "estimatesSha256": "76bcd12ec144396df2fe77148c73256657b712463e16f7b7a50d5ed80e10fdfb"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 864.8990386280964,
+          "meanNs": 886.0401786217045,
+          "estimatesSha256": "4f17c862ef0c44ec3f341abb0ba8376440c531ada2fd293d89bea02729c7a814"
+        }
+      }
+    },
+    {
+      "case": "scalar_control",
+      "baselineMedianNs": 54.01960931498516,
+      "candidateMedianNs": 53.67398260329295,
+      "pairedGeometricMeanRatio": 0.9938246518390811,
+      "paired95Ci": [0.9911060101224055, 0.9965507508940313],
+      "changePercent": -0.6175348160918914,
+      "significantlyFaster": true,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 54.01960931498516,
+          "meanNs": 54.421642598211456,
+          "estimatesSha256": "7c202c71ca60901e0eac4efff701a626643f4d5e1342bf4cc7dc4f93ee3a75ce"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 53.72828047828048,
+          "meanNs": 54.336560315829075,
+          "estimatesSha256": "1015aac08f4ba67273f68e5a534158053db1a0c93dfe12527cc1e05a3906d3f4"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 53.67398260329295,
+          "meanNs": 54.10879543568673,
+          "estimatesSha256": "55a6941776ebdc5309e6748fec249acf5f55f13e1e157f390e84db9f3b2474eb"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 53.95547937643526,
+          "meanNs": 54.355416241663264,
+          "estimatesSha256": "afd77ca0f50c85a97709a118a3a581bff99ead355cd603ccd4a37c253deac8db"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 53.98277990105635,
+          "meanNs": 54.49334477161814,
+          "estimatesSha256": "83e0c448e30999ec345ba655047c56810cb15a42bdbb2eeb81caf16ed3f5d32b"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 53.52369097946519,
+          "meanNs": 54.10433627449504,
+          "estimatesSha256": "e5d5b10986384196eac693b11d6c3b33332c61fe04008e3aeba795cc10d4fb6e"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 53.625952564431884,
+          "meanNs": 54.19172727399726,
+          "estimatesSha256": "ca3ff2f11a96920b09e00edeb8bead2de8cb1d2837fc0ccb8a91bf6702b45630"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 54.076702421846306,
+          "meanNs": 54.663743159872844,
+          "estimatesSha256": "245e7ab9d8bf98685a27554b4819c82ae096ae19648fdd55554013f9de9ae339"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 54.270628993526444,
+          "meanNs": 54.67085498268263,
+          "estimatesSha256": "69c29d9e48ced025f8a12131f673f9d4df5d2fa2bf8e36a5d00a5f878c285ab7"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 54.08518062397373,
+          "meanNs": 56.12028701775026,
+          "estimatesSha256": "817e79df9b30f6f6bcb6c9aa1decefe241cdcb4505d5750ce662897127d3fd99"
+        }
+      }
+    },
+    {
+      "case": "wide_struct_32",
+      "baselineMedianNs": 1455.359260224771,
+      "candidateMedianNs": 1479.8593445022016,
+      "pairedGeometricMeanRatio": 1.0164363999009758,
+      "paired95Ci": [1.0106212258232004, 1.0222850348330168],
+      "changePercent": 1.6436399900975784,
+      "significantlyFaster": false,
+      "regressionBeyond10Percent": false,
+      "launchEstimates": {
+        "1": {
+          "arm": "baseline",
+          "medianNs": 1465.1789657874224,
+          "meanNs": 1476.423467913024,
+          "estimatesSha256": "cd0ee1483a942cd9a97fc94f6bd9c3e98a55d645f840a21f477c4981f1af232f"
+        },
+        "2": {
+          "arm": "candidate",
+          "medianNs": 1489.119492430557,
+          "meanNs": 1501.9094878504802,
+          "estimatesSha256": "5d5bce0b3830bd671b27135822e590ce3b6996bf9763ad140b8b64167c46c25f"
+        },
+        "3": {
+          "arm": "candidate",
+          "medianNs": 1471.3253968253966,
+          "meanNs": 1484.732425722543,
+          "estimatesSha256": "d98895d4da2cf837477670208e21bb80e15ba72369626fbdbb5ba1a69bf14a7f"
+        },
+        "4": {
+          "arm": "baseline",
+          "medianNs": 1452.931712962963,
+          "meanNs": 1464.1269497389978,
+          "estimatesSha256": "9c56255604e9cd5cbc7628a47450167b8dd3a3f91eebaea9c4f294e00ffebc02"
+        },
+        "5": {
+          "arm": "baseline",
+          "medianNs": 1455.359260224771,
+          "meanNs": 1464.703102205553,
+          "estimatesSha256": "4a7ded6e5a8eb1996985cba54e7b20f949deaf54e32352b880f4851e6f9cdf0b"
+        },
+        "6": {
+          "arm": "candidate",
+          "medianNs": 1477.7888888888888,
+          "meanNs": 1490.2393674418602,
+          "estimatesSha256": "11c0162358c39dfd28f425cc21381ab414bfe4c1a8e9e11c2c542a6febde6b81"
+        },
+        "7": {
+          "arm": "candidate",
+          "medianNs": 1479.8593445022016,
+          "meanNs": 1490.3172619901998,
+          "estimatesSha256": "26be3da5c8b303260ede749b6eb7f347d2901394ad5a4b9254d3c950f22214dc"
+        },
+        "8": {
+          "arm": "baseline",
+          "medianNs": 1444.5607059645854,
+          "meanNs": 1459.270977139598,
+          "estimatesSha256": "91154caec6e28e4672d49f9e0abf6efd722b52facf552928725d8f47d47486ad"
+        },
+        "9": {
+          "arm": "baseline",
+          "medianNs": 1471.726630801259,
+          "meanNs": 1482.913201026388,
+          "estimatesSha256": "4cb0d4474a8d776897dfe86315c214cb773ee842567cb4426624b3175fdc5292"
+        },
+        "10": {
+          "arm": "candidate",
+          "medianNs": 1491.416584833606,
+          "meanNs": 1538.5017482786495,
+          "estimatesSha256": "8cde38c9e904628c6a6ef623f883aeeeacf246ac9fee0748234705eb092d5c20"
+        }
+      }
+    }
+  ],
+  "allocationBaseline": [
+    {
+      "case": "oneof_data_enum",
+      "requestBytes": 4,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 16000
+    },
+    {
+      "case": "map_of_seqs",
+      "requestBytes": 8,
+      "iterations": 1000,
+      "allocationCalls": 4000,
+      "requestedBytes": 577000
+    },
+    {
+      "case": "map_seq_1024",
+      "requestBytes": 1991,
+      "iterations": 1000,
+      "allocationCalls": 12000,
+      "requestedBytes": 16973000
+    },
+    {
+      "case": "map_keys_2",
+      "requestBytes": 15,
+      "iterations": 1000,
+      "allocationCalls": 7000,
+      "requestedBytes": 614000
+    },
+    {
+      "case": "map_keys_64",
+      "requestBytes": 387,
+      "iterations": 1000,
+      "allocationCalls": 147000,
+      "requestedBytes": 22744000
+    },
+    {
+      "case": "recursive_depth_1",
+      "requestBytes": 5,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 16000
+    },
+    {
+      "case": "recursive_depth_8",
+      "requestBytes": 26,
+      "iterations": 1000,
+      "allocationCalls": 9000,
+      "requestedBytes": 160000
+    },
+    {
+      "case": "recursive_depth_16",
+      "requestBytes": 50,
+      "iterations": 1000,
+      "allocationCalls": 18000,
+      "requestedBytes": 352000
+    },
+    {
+      "case": "optional_string_64",
+      "requestBytes": 70,
+      "iterations": 1000,
+      "allocationCalls": 3000,
+      "requestedBytes": 156000
+    },
+    {
+      "case": "optional_string_64k",
+      "requestBytes": 65544,
+      "iterations": 1000,
+      "allocationCalls": 3000,
+      "requestedBytes": 131102000
+    },
+    {
+      "case": "optional_chunks_near_1m",
+      "requestBytes": 1048502,
+      "iterations": 1000,
+      "allocationCalls": 23000,
+      "requestedBytes": 3080681000
+    },
+    {
+      "case": "optional_none",
+      "requestBytes": 5,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 16000
+    },
+    {
+      "case": "wide_struct_32",
+      "requestBytes": 35,
+      "iterations": 1000,
+      "allocationCalls": 3000,
+      "requestedBytes": 112000
+    },
+    {
+      "case": "scalar_control",
+      "requestBytes": 4,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 9000
+    }
+  ],
+  "allocationCandidate": [
+    {
+      "case": "oneof_data_enum",
+      "requestBytes": 4,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 16000
+    },
+    {
+      "case": "map_of_seqs",
+      "requestBytes": 8,
+      "iterations": 1000,
+      "allocationCalls": 4000,
+      "requestedBytes": 577000
+    },
+    {
+      "case": "map_seq_1024",
+      "requestBytes": 1991,
+      "iterations": 1000,
+      "allocationCalls": 7000,
+      "requestedBytes": 13828000
+    },
+    {
+      "case": "map_keys_2",
+      "requestBytes": 15,
+      "iterations": 1000,
+      "allocationCalls": 7000,
+      "requestedBytes": 614000
+    },
+    {
+      "case": "map_keys_64",
+      "requestBytes": 387,
+      "iterations": 1000,
+      "allocationCalls": 147000,
+      "requestedBytes": 22744000
+    },
+    {
+      "case": "recursive_depth_1",
+      "requestBytes": 5,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 16000
+    },
+    {
+      "case": "recursive_depth_8",
+      "requestBytes": 26,
+      "iterations": 1000,
+      "allocationCalls": 9000,
+      "requestedBytes": 160000
+    },
+    {
+      "case": "recursive_depth_16",
+      "requestBytes": 50,
+      "iterations": 1000,
+      "allocationCalls": 18000,
+      "requestedBytes": 352000
+    },
+    {
+      "case": "optional_string_64",
+      "requestBytes": 70,
+      "iterations": 1000,
+      "allocationCalls": 3000,
+      "requestedBytes": 156000
+    },
+    {
+      "case": "optional_string_64k",
+      "requestBytes": 65544,
+      "iterations": 1000,
+      "allocationCalls": 3000,
+      "requestedBytes": 131102000
+    },
+    {
+      "case": "optional_chunks_near_1m",
+      "requestBytes": 1048502,
+      "iterations": 1000,
+      "allocationCalls": 23000,
+      "requestedBytes": 3080681000
+    },
+    {
+      "case": "optional_none",
+      "requestBytes": 5,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 16000
+    },
+    {
+      "case": "wide_struct_32",
+      "requestBytes": 35,
+      "iterations": 1000,
+      "allocationCalls": 3000,
+      "requestedBytes": 112000
+    },
+    {
+      "case": "scalar_control",
+      "requestBytes": 4,
+      "iterations": 1000,
+      "allocationCalls": 1000,
+      "requestedBytes": 9000
+    }
+  ],
+  "status": "allocation-reduction-confirmed-timing-adoption-withheld",
+  "limitations": [
+    "Local Apple Silicon host microbenchmark; not RN device or remote CI evidence.",
+    "Five process pairs with short Criterion windows and nominal unadjusted intervals across 14 fixtures.",
+    "map_seq_1024 used fewer allocations but had a +1.58% paired timing delta; no latency improvement claimed.",
+    "Unchanged control fixtures also moved; this does not invalidate or hide the observed target slowdown.",
+    "Allocation bytes are cumulative requested bytes, not RSS or peak live memory.",
+    "Full Criterion raw outputs and executables remain in the local /tmp evidence directory."
+  ],
+  "candidateSourceSha256": {
+    "crates/rustra/src/complex_codec_wire.rs": "fec7e7ed11e266101f4773da87395c2c68179b6ca0f38441d6924e4b10f64088",
+    "crates/rustra/src/complex_serde_ser_core.rs": "f9e316cdf0261df089df3efbccfcd8793748952763df7c2ca81b91ada6654eac",
+    "crates/rustra/src/complex_serde_map_scratch.rs": "ec71e61c003c5f61f529f051c7d8b052a865261c5dcd375daa5df557a0764c22",
+    "crates/rustra/src/complex_serde_scratch_tests.rs": "b0f2ab6f402e4cb97630caff6820f56ebc7cba5b4f886bb1b3267d354c305fbf"
+  },
+  "sourceIsolation": "git archive of sourceCommit, then only the four listed codec files copied; baseline and candidate built in the same snapshot path and CARGO_TARGET_DIR"
+}

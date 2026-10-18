@@ -54,26 +54,80 @@ export async function prepareCriterionRun(criterionRoot) {
 const RUNNER_ENVIRONMENT = 'runner-environment.json';
 const RESTORED_RUNNER_ENVIRONMENT = 'restored-runner-environment.json';
 
-// 기준선 시대와 현재 실행을 비교할 수 있는 "안정 필드"만 추린다. workflow 섹션
-// (GITHUB_SHA, GITHUB_RUN_ID …)은 매 실행마다 변하고 capturedAt 은 시점 값이라
-// 비교 대상이 아니다. host/tools/configurationDigests 가 어긋나면 두 시대의
-// 상대 백분율 자체가 다른 실험이 된다.
-const PROVENANCE_SECTIONS = ['host', 'tools', 'configurationDigests'];
+const CONFIGURATION_KEYS = [
+  'RUSTFLAGS',
+  'CARGO_ENCODED_RUSTFLAGS',
+  'RUSTC_WRAPPER',
+  'CARGO_BUILD_TARGET',
+];
+const nonemptyString = (value) => typeof value === 'string' && value.length > 0;
+const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
 
-/** 두 환경 기록의 안정 섹션을 비교해 어긋난 섹션 이름을 돌려준다(빈 배열 = 동일 시대). */
+function validEnvironment(record) {
+  const host = record?.host;
+  return (
+    record?.schemaVersion === 1 &&
+    ['platform', 'architecture', 'kernelRelease'].every((key) => nonemptyString(host?.[key])) &&
+    Array.isArray(host.cpuModels) &&
+    host.cpuModels.length > 0 &&
+    host.cpuModels.every(nonemptyString) &&
+    ['logicalCpuCount', 'availableParallelism', 'totalMemoryBytes'].every((key) =>
+      positiveInteger(host[key]),
+    ) &&
+    ['rustc', 'cargo', 'bun'].every((key) => nonemptyString(record.tools?.[key])) &&
+    CONFIGURATION_KEYS.every(
+      (key) =>
+        record.configurationDigests?.[key] === null ||
+        (typeof record.configurationDigests?.[key] === 'string' &&
+          /^[a-f0-9]{64}$/.test(record.configurationDigests[key])),
+    ) &&
+    (record.workflow?.ImageOS === null || nonemptyString(record.workflow?.ImageOS))
+  );
+}
+
+function comparableEnvironment(record) {
+  const host = record.host;
+  return {
+    'host.platform': host.platform,
+    'host.architecture': host.architecture,
+    'host.cpuModels': [...new Set(host.cpuModels)].sort(),
+    'host.logicalCpuCount': host.logicalCpuCount,
+    'host.availableParallelism': host.availableParallelism,
+    // Kernel patches can reserve a few more pages. Compare the memory class,
+    // and retain exact bytes below as an advisory diagnostic.
+    'host.memoryGiB': Math.round(host.totalMemoryBytes / 1024 ** 3),
+    'host.kernelSeries': host.kernelRelease.split('.').slice(0, 2).join('.'),
+    'workflow.ImageOS': record.workflow.ImageOS,
+    ...Object.fromEntries(
+      ['rustc', 'cargo', 'bun'].map((key) => [`tools.${key}`, record.tools[key]]),
+    ),
+    ...Object.fromEntries(
+      CONFIGURATION_KEYS.map((key) => [
+        `configurationDigests.${key}`,
+        record.configurationDigests[key],
+      ]),
+    ),
+  };
+}
+
+/** Return incompatible measurement inputs; timestamps and runner image patches are not inputs. */
 export function provenanceDrifts(current, restored) {
-  const drifts = [];
-  for (const section of PROVENANCE_SECTIONS) {
-    if (JSON.stringify(current?.[section] ?? null) !== JSON.stringify(restored?.[section] ?? null)) {
-      drifts.push(section);
-    }
-  }
-  return drifts;
+  const now = comparableEnvironment(current);
+  const before = comparableEnvironment(restored);
+  return Object.keys(now).filter((key) => JSON.stringify(now[key]) !== JSON.stringify(before[key]));
+}
+
+function provenanceWarnings(current, restored) {
+  return ['host.kernelRelease', 'host.totalMemoryBytes', 'workflow.ImageVersion'].filter((path) => {
+    const [section, key] = path.split('.');
+    return current[section]?.[key] !== restored[section]?.[key];
+  });
 }
 
 async function readEnvironmentRecord(criterionRoot, name) {
   try {
-    return await Bun.file(join(criterionRoot, name)).json();
+    const record = await Bun.file(join(criterionRoot, name)).json();
+    return validEnvironment(record) ? record : null;
   } catch {
     return null; // 없거나 깨진 기록은 모두 "출처 불명"으로 취급한다.
   }
@@ -128,7 +182,10 @@ export async function checkCriterionRegression({
   // 기록한다. 기록 없는 기준선(구식 아티팩트, 수제 baseline)과의 상대 비교는
   // 숫자가 나와도 회귀/통과 판정의 근거가 없으므로 비교 자체를 거부한다
   // (exit 2 — 판정 보류, baseline 미채택).
-  const restoredEnvironment = await readEnvironmentRecord(criterionRoot, RESTORED_RUNNER_ENVIRONMENT);
+  const restoredEnvironment = await readEnvironmentRecord(
+    criterionRoot,
+    RESTORED_RUNNER_ENVIRONMENT,
+  );
   const currentEnvironment = await readEnvironmentRecord(criterionRoot, RUNNER_ENVIRONMENT);
   const unrecorded = [
     [RESTORED_RUNNER_ENVIRONMENT, restoredEnvironment],
@@ -138,20 +195,25 @@ export async function checkCriterionRegression({
     .map(([name]) => name);
   if (unrecorded.length > 0) {
     logger.error(
-      `Benchmark provenance is incomplete: ${unrecorded.join(', ')} unreadable under ${criterionRoot}. ` +
+      `Benchmark provenance is incomplete: ${unrecorded.join(', ')} missing or invalid under ${criterionRoot}. ` +
         'A relative comparison without the baseline-era environment record is unmeasurable, not a pass or a regression. ' +
         'Run scripts/benchmark-environment.mjs before each measuring session, and re-bootstrap baselines that predate provenance records.',
     );
     return { exitCode: 2, rows: [] };
   }
-  // 어긋난 안정 필드는 자문(WARN)으로 남긴다 — runner 이미지 패치(ImageVersion)
-  // 만으로도 흔들리는 필드까지 hard-fail 하면 인프라 이유로 게이트가 상시 거부
-  // 된다. 시대 대혼입의 거친 방어는 아래 mixed-changes 판정(exit 3)이 담당한다.
   const provenanceDriftsFound = provenanceDrifts(currentEnvironment, restoredEnvironment);
-  for (const section of provenanceDriftsFound) {
+  if (provenanceDriftsFound.length > 0) {
+    logger.error(
+      `Benchmark environments are incompatible: ${provenanceDriftsFound.join(', ')}. ` +
+        'Timing changes cannot classify a code regression or improvement across these inputs. ' +
+        'Compare both revisions on the same runner using comparison_ref; preserve the accepted baseline.',
+    );
+    return { exitCode: 2, rows: [], provenanceDrifts: provenanceDriftsFound };
+  }
+  const warnings = provenanceWarnings(currentEnvironment, restoredEnvironment);
+  for (const field of warnings) {
     logger.log(
-      `WARN provenance drift in "${section}" — the restored baseline records a different environment ` +
-        'than this run (advisory; the mixed-change defense still applies).',
+      `WARN provenance detail changed: ${field} (advisory; comparable hardware, toolchain and configuration match).`,
     );
   }
 
@@ -196,18 +258,18 @@ export async function checkCriterionRegression({
         `Timing changes alone cannot identify the cause. Compare both revisions in the same environment; ` +
         `preserve the accepted baseline until the cause is resolved.`,
     );
-    return { exitCode: 3, rows, provenanceDrifts: provenanceDriftsFound };
+    return { exitCode: 3, rows, provenanceWarnings: warnings };
   }
 
   if (regressions.length > 0) {
     logger.error(
       `Performance regression gate failed: ${regressions.length} benchmark(s) exceed ${(maxRegression * 100).toFixed(1)}%.`,
     );
-    return { exitCode: 1, rows, provenanceDrifts: provenanceDriftsFound };
+    return { exitCode: 1, rows, provenanceWarnings: warnings };
   }
 
   logger.log(`Performance regression gate passed (${rows.length} benchmark estimates).`);
-  return { exitCode: 0, rows, provenanceDrifts: provenanceDriftsFound };
+  return { exitCode: 0, rows, provenanceWarnings: warnings };
 }
 
 // GitHub 자동 댓글용 마크다운 리포트 — 게이트가 이미 계산한 rows 를
@@ -241,7 +303,13 @@ export function renderRegressionReport(result, { thresholdPercent, maxRegression
   if (result.provenanceDrifts?.length > 0) {
     lines.push(
       '',
-      `> ⚠️ provenance drift: ${result.provenanceDrifts.join(', ')} — 기준선 시대와 실행 환경이 다르다(자문).`,
+      `> ⚠️ provenance drift: ${result.provenanceDrifts.join(', ')} — 비교 조건 불일치. 회귀·개선 판정 보류, 기존 기준선 유지.`,
+    );
+  }
+  if (result.provenanceWarnings?.length > 0) {
+    lines.push(
+      '',
+      `> ⚠️ provenance advisory: ${result.provenanceWarnings.join(', ')} — 패치·메모리 세부값 변경. 비교 조건은 일치.`,
     );
   }
   if (result.error) lines.push('', `Error: ${result.error}`);

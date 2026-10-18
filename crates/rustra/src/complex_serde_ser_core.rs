@@ -194,6 +194,17 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
             )));
         }
         self.writer.varint(len as u128)?;
+        // Every integer uses at least one byte. Reserve that bounded lower
+        // bound once instead of repeatedly growing a map value's scratch.
+        // Do not resolve refs or inspect elements: Serialize still runs once.
+        // Small map values already fit their inline scratch. Keep those on the
+        // existing path instead of checking reservation state on every value.
+        if len > INLINE_MAP_VALUE_BYTES
+            && tuple.is_none()
+            && matches!(items.as_deref(), Some(IrNode::Int { .. }))
+        {
+            self.writer.reserve_minimum(len);
+        }
         Ok(SerSeq {
             writer: self.writer,
             targets: self.targets,

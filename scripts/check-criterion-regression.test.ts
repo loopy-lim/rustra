@@ -38,10 +38,23 @@ function environmentRecord(overrides: Record<string, unknown> = {}) {
     schemaVersion: 1,
     capturedAt: '2026-10-10T00:00:00.000Z',
     restoredEnvironmentAvailable: true,
-    workflow: { GITHUB_SHA: 'deadbeef' },
-    host: { platform: 'linux', architecture: 'x64', logicalCpuCount: 4 },
+    workflow: { GITHUB_SHA: 'deadbeef', ImageOS: 'ubuntu24', ImageVersion: '20261004.1' },
+    host: {
+      platform: 'linux',
+      architecture: 'x64',
+      logicalCpuCount: 4,
+      availableParallelism: 4,
+      cpuModels: ['AMD EPYC 7763 64-Core Processor'],
+      kernelRelease: '6.17.0-1022-azure',
+      totalMemoryBytes: 16766402560,
+    },
     tools: { rustc: 'rustc 1.95.0', cargo: 'cargo 1.95.0', bun: '1.4.1' },
-    configurationDigests: { RUSTFLAGS: null },
+    configurationDigests: {
+      RUSTFLAGS: null,
+      CARGO_ENCODED_RUSTFLAGS: null,
+      RUSTC_WRAPPER: null,
+      CARGO_BUILD_TARGET: null,
+    },
     ...overrides,
   };
 }
@@ -162,6 +175,32 @@ test('a statistically significant slowdown over budget fails', async () => {
   }
 });
 
+test('a CPU mismatch cannot classify an apparent slowdown as a code regression', async () => {
+  const root = await fixture(10.4894, 10.3973, 10.5784);
+  try {
+    await writeProvenance(root, {
+      restored: environmentRecord({
+        host: { ...environmentRecord().host, cpuModels: ['Intel(R) Xeon(R) 6973P-C'] },
+      }),
+      current: environmentRecord({
+        host: { ...environmentRecord().host, cpuModels: ['AMD EPYC 7763 64-Core Processor'] },
+      }),
+    });
+    const output = logger();
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: output,
+    });
+    assert.equal(result.exitCode, 2);
+    assert.deepEqual(result.rows, []);
+    assert.match(output.errors[0], /incompatible.*host\.cpuModels/);
+    assert.doesNotMatch(output.errors.join('\n'), /regression gate failed/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('a comparison without baseline-era provenance is unmeasurable, not a pass', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
@@ -217,7 +256,7 @@ test('a corrupted provenance record is treated as unknown provenance', async () 
   }
 });
 
-test('a toolchain drift between eras is advisory and reported, not a refusal', async () => {
+test('a toolchain drift between eras refuses the comparison', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     await writeProvenance(root, {
@@ -231,26 +270,125 @@ test('a toolchain drift between eras is advisory and reported, not a refusal', a
       maxRegression: 0.1,
       logger: output,
     });
-    // 자문 판정 — ImageVersion 패치 같은 흔한 드리프트까지 거부하면 게이트가
-    // 인프라 이유로 상시 실패한다. 드리프트 사실만 리포트에 남긴다.
-    assert.equal(result.exitCode, 0);
-    assert.deepEqual(result.provenanceDrifts, ['tools']);
-    assert.match(output.logs[0], /WARN provenance drift in "tools"/);
+    assert.equal(result.exitCode, 2);
+    assert.deepEqual(result.provenanceDrifts, ['tools.rustc', 'tools.cargo']);
+    assert.match(output.errors[0], /incompatible.*tools\.rustc/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test('provenanceDrifts compares only the stable sections', () => {
-  const current = environmentRecord({ workflow: { GITHUB_SHA: 'aaa' }, capturedAt: 'a' });
-  const restored = environmentRecord({ workflow: { GITHUB_SHA: 'bbb' }, capturedAt: 'b' });
+test('provenanceDrifts compares measurement inputs without workflow identity', () => {
+  const current = environmentRecord({
+    workflow: { ...environmentRecord().workflow, GITHUB_SHA: 'aaa' },
+    capturedAt: 'a',
+  });
+  const restored = environmentRecord({
+    workflow: { ...environmentRecord().workflow, GITHUB_SHA: 'bbb' },
+    capturedAt: 'b',
+  });
   // workflow/capturedAt 은 매 실행 변하는 값 — 어긋나도 드리프트가 아니다.
   assert.deepEqual(provenanceDrifts(current, restored), []);
-  assert.deepEqual(provenanceDrifts(current, environmentRecord({ host: {} })), ['host']);
   assert.deepEqual(
-    provenanceDrifts(current, environmentRecord({ configurationDigests: { RUSTFLAGS: 'x' } })),
-    ['configurationDigests'],
+    provenanceDrifts(
+      current,
+      environmentRecord({
+        configurationDigests: { ...current.configurationDigests, RUSTFLAGS: 'a'.repeat(64) },
+      }),
+    ),
+    ['configurationDigests.RUSTFLAGS'],
   );
+});
+
+test('image and kernel patches and small reserved-memory changes remain advisory', async () => {
+  const root = await fixture(0.05, 0.02, 0.08);
+  try {
+    const baseline = environmentRecord();
+    await writeProvenance(root, {
+      restored: environmentRecord({
+        workflow: { ...baseline.workflow, ImageVersion: '20260927.1' },
+        host: {
+          ...baseline.host,
+          kernelRelease: '6.17.0-1021-azure',
+          totalMemoryBytes: 16765370368,
+        },
+      }),
+    });
+    const output = logger();
+    const result = await checkCriterionRegression({
+      criterionRoot: root,
+      maxRegression: 0.1,
+      logger: output,
+    });
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.provenanceWarnings, [
+      'host.kernelRelease',
+      'host.totalMemoryBytes',
+      'workflow.ImageVersion',
+    ]);
+    assert.match(renderRegressionReport(result), /provenance advisory/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('hardware, OS series and compiler flags mismatches cannot pass even with a speedup', async () => {
+  const root = await fixture(-0.4, -0.45, -0.35);
+  try {
+    const baseline = environmentRecord();
+    const candidates = [
+      environmentRecord({ host: { ...baseline.host, architecture: 'arm64' } }),
+      environmentRecord({ host: { ...baseline.host, logicalCpuCount: 8 } }),
+      environmentRecord({ host: { ...baseline.host, availableParallelism: 2 } }),
+      environmentRecord({ host: { ...baseline.host, totalMemoryBytes: 32 * 1024 ** 3 } }),
+      environmentRecord({ host: { ...baseline.host, kernelRelease: '6.18.0' } }),
+      environmentRecord({ workflow: { ...baseline.workflow, ImageOS: 'ubuntu26' } }),
+      environmentRecord({
+        configurationDigests: { ...baseline.configurationDigests, RUSTFLAGS: 'a'.repeat(64) },
+      }),
+    ];
+    for (const current of candidates) {
+      await writeProvenance(root, { current });
+      const result = await checkCriterionRegression({
+        criterionRoot: root,
+        maxRegression: 0.1,
+        logger: logger(),
+      });
+      assert.equal(result.exitCode, 2);
+      assert.deepEqual(result.rows, []);
+      assert.ok(result.provenanceDrifts.length > 0);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('JSON-shaped but incomplete provenance cannot certify a comparison', async () => {
+  const root = await fixture(0.05, 0.02, 0.08);
+  try {
+    const baseline = environmentRecord();
+    for (const incomplete of [
+      {},
+      [],
+      { ...baseline, schemaVersion: 2 },
+      { ...baseline, host: {} },
+      { ...baseline, tools: {} },
+      { ...baseline, configurationDigests: {} },
+      { ...baseline, host: { ...baseline.host, cpuModels: [] } },
+    ]) {
+      await Bun.write(join(root, 'restored-runner-environment.json'), JSON.stringify(incomplete));
+      const output = logger();
+      const result = await checkCriterionRegression({
+        criterionRoot: root,
+        maxRegression: 0.1,
+        logger: output,
+      });
+      assert.equal(result.exitCode, 2);
+      assert.match(output.errors[0], /provenance is incomplete/);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('regression amid widespread implausible improvement flags baseline mismatch', async () => {
@@ -375,10 +513,12 @@ test('renderRegressionReport renders verdict badges per exit code', () => {
   assert.doesNotMatch(report, /provenance drift/u);
 
   const drifted = renderRegressionReport(
-    { exitCode: 0, rows: [], provenanceDrifts: ['host', 'tools'] },
+    { exitCode: 2, rows: [], provenanceDrifts: ['host.cpuModels', 'tools.rustc'] },
     { thresholdPercent: 10 },
   );
-  assert.match(drifted, /provenance drift: host, tools/u);
+  assert.match(drifted, /provenance drift: host\.cpuModels, tools\.rustc/u);
+  assert.match(drifted, /비교 조건 불일치/u);
+  assert.doesNotMatch(drifted, /자문/u);
 });
 
 test('an inconclusive comparison never claims a new baseline was accepted', () => {

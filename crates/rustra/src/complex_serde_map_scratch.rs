@@ -37,7 +37,8 @@ impl<const N: usize> MapBytes<N> {
     }
 }
 
-type MapEntry = (MapBytes<24>, MapBytes<48>);
+const INLINE_MAP_VALUE_BYTES: usize = 48;
+type MapEntry = (MapBytes<24>, MapBytes<INLINE_MAP_VALUE_BYTES>);
 
 #[derive(Default)]
 struct MapEntries {
@@ -53,11 +54,12 @@ impl MapEntries {
     /// 쓴다 — BTreeMap/HashMap 은 항상 `Some(len)` 을 준다. spill 때 inline 의
     /// 항목도 heap 으로 옮겨지므로 heap 은 결국 `len` 개를 모두 담는다.
     /// `reserve(4)` + 배증은 큰 맵에서 재할당·복사가 반복되므로, 힌트가 있으면
-    /// `reserve_exact` 로 spill 이 한 번의 할당으로 끝나게 한다. 힌트가 없거나
-    /// 거짓이면 평소처럼 배증 성장으로 돌아간다.
+    /// `reserve_exact` 로 spill 이 한 번의 할당으로 끝나게 한다. 길이는 사용자
+    /// Serialize 구현이 주는 힌트라 64 항목까지만 신뢰한다. 그보다 큰 맵이나
+    /// 거짓 힌트는 실제 항목 수에 따라 배증 성장한다.
     fn with_length_hint(hint: Option<usize>) -> Self {
         Self {
-            heap_hint: hint.unwrap_or(0),
+            heap_hint: hint.unwrap_or(0).min(64),
             ..Default::default()
         }
     }

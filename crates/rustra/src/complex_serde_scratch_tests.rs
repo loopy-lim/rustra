@@ -285,6 +285,49 @@ fn map_entries_spill_honors_the_declared_length_hint() {
 }
 
 #[test]
+fn oversized_map_hint_is_bounded_and_sparse_custom_maps_keep_their_wire() {
+    struct SparseMap;
+    impl ser::Serialize for SparseMap {
+        fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+            let mut map = serializer.serialize_map(Some(usize::MAX))?;
+            map.serialize_entry("c", &[3i64])?;
+            map.serialize_entry("a", &[1i64])?;
+            map.serialize_entry("b", &[2i64])?;
+            map.end()
+        }
+    }
+    let mut entries = MapEntries::with_length_hint(Some(usize::MAX));
+    for _ in 0..3 {
+        entries.push((MapBytes::default(), MapBytes::default()));
+    }
+    assert_eq!(
+        entries.heap.capacity(),
+        64,
+        "untrusted hints must not reserve unbounded capacity"
+    );
+
+    let ir = map_ir();
+    let limits = ComplexCodecLimits::DEFAULT;
+    let expected = to_bytes(
+        &Entries(vec![
+            ("c".into(), vec![3]),
+            ("a".into(), vec![1]),
+            ("b".into(), vec![2]),
+        ]),
+        &ir,
+        limits,
+    )
+    .unwrap();
+    assert_eq!(to_bytes(&SparseMap, &ir, limits).unwrap(), expected);
+    let limited = ComplexCodecLimits {
+        max_collection_length: 2,
+        ..limits
+    };
+    let error = to_bytes(&SparseMap, &ir, limited).unwrap_err();
+    assert!(error.to_string().contains("collection length exceeds 2"));
+}
+
+#[test]
 fn map_decode_allocations_belong_to_the_consumer_type() {
     // 디코드는 키를 와이어에서 빌려와 검사한다(SeenKeys — 2키까지 무할당, 그 위는
     // 상한 64 용량 HashSet 1 회). 남는 할당은 소비자 타입이 지불하는 것뿐이다:
@@ -313,4 +356,72 @@ fn map_decode_allocations_belong_to_the_consumer_type() {
         count, 139,
         "codec must add no allocations beyond the consumer's own type"
     );
+}
+
+#[test]
+fn integer_sequence_scratch_reserves_a_bounded_lower_size_once() {
+    let ir = crate::complex_codec::complex_schema_ir::compile(
+        &serde_json::json!({"type":"array", "items":{"type":"integer"}}),
+        &serde_json::json!({}),
+    )
+    .unwrap();
+    let targets = RecursiveTargets::new(&ir);
+    let values = (0..1024i64).collect::<Vec<_>>();
+    let expected = postcard::to_allocvec(&values).unwrap();
+    let limits = ComplexCodecLimits::DEFAULT;
+    let (encoded, count) = allocations(|| {
+        MapBytes::<48>::serialize(limits, |writer| {
+            to_writer_direct(&values, writer, &ir, &targets, limits, 0)
+        })
+    });
+    assert_eq!(encoded.unwrap().as_slice(), expected);
+    assert_eq!(
+        count, 2,
+        "one lower-bound allocation and one growth for two-byte integers"
+    );
+
+    let mut target = [0u8; 4096];
+    let mut writer = Writer::into_slice(&mut target, limits);
+    let (result, count) =
+        allocations(|| to_writer_direct(&values, &mut writer, &ir, &targets, limits, 0));
+    result.unwrap();
+    let written = writer.written;
+    assert_eq!(
+        count, 0,
+        "caller-buffer encoding must remain allocation-free"
+    );
+    assert_eq!(&target[..written], expected);
+}
+
+#[test]
+fn reservation_preserves_payload_limits_and_fixed_buffer_overflow() {
+    let limits = ComplexCodecLimits {
+        max_payload_bytes: 5,
+        ..ComplexCodecLimits::DEFAULT
+    };
+    let mut scratch = [0u8; 2];
+    let mut writer = Writer::with_scratch(&mut scratch, limits);
+    writer.push(b"ab").unwrap();
+    writer.reserve_minimum(usize::MAX);
+    assert_eq!(
+        writer.written, 2,
+        "a capacity hint cannot advance the cursor"
+    );
+    writer.push(b"cde").unwrap();
+    assert!(writer.byte(b'f').is_err());
+    let result = writer.finish_scratch().unwrap();
+    assert!(
+        result.capacity() <= 8,
+        "hint must be bounded by the payload budget"
+    );
+    assert_eq!(result, b"abcde");
+
+    let mut fixed = [0u8; 2];
+    let mut writer = Writer::into_slice(&mut fixed, limits);
+    let (_, count) = allocations(|| writer.reserve_minimum(usize::MAX));
+    assert_eq!(count, 0);
+    writer.push(b"ab").unwrap();
+    assert!(writer.byte(b'c').is_err());
+    assert_eq!(writer.written, 2);
+    assert_eq!(fixed, *b"ab");
 }

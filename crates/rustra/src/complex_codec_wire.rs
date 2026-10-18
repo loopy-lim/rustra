@@ -53,6 +53,21 @@ impl<'s> Writer<'s> {
         debug_assert!(self.into.is_none());
         self.heap
     }
+    /// Reserve a schema-derived lower bound without changing the wire cursor.
+    /// Limit the hint to the remaining payload budget, and never grow a caller
+    /// buffer. Scratch spill copies only bytes that have already been written.
+    pub(crate) fn reserve_minimum(&mut self, additional: usize) {
+        let additional = additional.min(self.limits.max_payload_bytes.saturating_sub(self.written));
+        match self.into.as_ref() {
+            Some(target) if self.spill && self.written + additional > target.len() => {
+                let target = self.into.take().unwrap();
+                self.heap.reserve(self.written + additional);
+                self.heap.extend_from_slice(&target[..self.written]);
+            }
+            None => self.heap.reserve(additional),
+            _ => {}
+        }
+    }
     pub(crate) fn push(&mut self, bytes: &[u8]) -> Result<()> {
         let next_len = self.written.saturating_add(bytes.len());
         if next_len > self.limits.max_payload_bytes {
@@ -61,16 +76,9 @@ impl<'s> Writer<'s> {
                 self.limits.max_payload_bytes
             )));
         }
-        if self.spill
-            && self
-                .into
-                .as_ref()
-                .is_some_and(|target| next_len > target.len())
-        {
-            let target = self.into.take().unwrap();
-            self.heap.reserve(next_len);
-            self.heap.extend_from_slice(&target[..self.written]);
-        }
+        // Spill은 reserve_minimum 의 몫 — 예산 검사가 이미 통과했으므로 clamp 는
+        // no-op이고, written+additional > target.len() 트리거가 그대로 걸린다.
+        self.reserve_minimum(bytes.len());
         match &mut self.into {
             Some(target) => {
                 if next_len > target.len() {
