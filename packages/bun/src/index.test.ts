@@ -310,13 +310,13 @@ test('rustra_ffi_invoke_frame_into honors the caller-buffer status contract', as
   assert.equal(buffer[8], 84);
 });
 
-test('createBunFfiEngine dispatches Frame through the caller-buffer into binding', async () => {
+test('createBunFfiEngine dispatches Frame through caller-buffer and large-response paths', async () => {
   const runtime = await createBunFfiEngine({
     libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
     frameCodecs: testRegistry,
   });
   try {
-    // 어댑터가 malloc 변형이 아닌 _into 바인딩을 사용해야 한다.
+    // 작은 응답은 재사용 caller buffer 전략을 유지한다.
     assert.equal(runtime.usesCallerBufferInto, true);
     const engine = runtime.engine;
 
@@ -324,7 +324,7 @@ test('createBunFfiEngine dispatches Frame through the caller-buffer into binding
     const small = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
     assert.equal(small.value, 42);
 
-    // 2) 큰 응답(610B > 512B) — overflow 상태 → 정확한 크기 heap 재시도.
+    // 2) 큰 응답(610B > 512B) — owned handoff 또는 구형 코어의 probe 재시도.
     const payload = benchEchoBytes(600);
     const big = await engine.invoke<Uint8Array>('benchEchoBytes', payload);
     assert.deepEqual(big, payload);

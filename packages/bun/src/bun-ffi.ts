@@ -68,7 +68,30 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     // (T0-3) 스키마 세대 — u64 반환, 인자 없음.
     rustra_ffi_schema_generation: { args: [], returns: 'u64' as const },
   } as const;
-  const open = (library: string) => dlopen(library, definitions);
+  const ownedDefinitions = {
+    rustra_ffi_invoke_frame_owned: {
+      args: [FFIType.ptr, 'usize' as const, FFIType.ptr, 'usize' as const, FFIType.ptr],
+      returns: FFIType.ptr,
+    },
+    rustra_ffi_free_owned_bytes: {
+      args: [FFIType.ptr, 'usize' as const],
+      returns: FFIType.void,
+    },
+  } as const;
+  const open = (library: string) => {
+    try {
+      const handle = dlopen(library, { ...definitions, ...ownedDefinitions });
+      return {
+        handle,
+        invokeOwned: handle.symbols.rustra_ffi_invoke_frame_owned,
+        freeOwned: handle.symbols.rustra_ffi_free_owned_bytes,
+      };
+    } catch {
+      // Older cores lack the optional pair. Reopen the complete legacy surface;
+      // failures there still participate in the usual candidate diagnostics.
+      return { handle: dlopen(library, definitions), invokeOwned: undefined, freeOwned: undefined };
+    }
+  };
   const {
     frameCodecs,
     library: _library,
@@ -82,7 +105,8 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   /** 후보별 런타임 조립 — 계약 기각된 후보의 바인딩·버퍼는 핸들과 함께 폐기된다.
    * dlopen 성공만으로 후보를 확정하지 않고 엔진 생성의 계약 handshake 까지
    * 검증한다(감사 A1). */
-  const buildRuntime = (handle: ReturnType<typeof open>, library: string): BunFfiRuntime => {
+  const buildRuntime = (binding: ReturnType<typeof open>, library: string): BunFfiRuntime => {
+    const { handle } = binding;
     let closed = false;
     const assertOpen = () => {
       if (closed) throw disposedBootstrapError('Bun FFI');
@@ -114,6 +138,42 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       assertOpen();
       const request = new Uint8Array(payload);
       outLength[0] = 0n;
+      if (binding.invokeOwned && binding.freeOwned) {
+        const pointer = binding.invokeOwned(
+          request,
+          request.byteLength,
+          callerBuffer,
+          callerBufferCapacity,
+          outLength,
+        );
+        const length = outLength[0];
+        const size = Number(length);
+        if (pointer !== null && Number(pointer) !== 0) {
+          try {
+            if (!Number.isSafeInteger(size) || size <= callerBufferCapacity) {
+              throw new RustraCommandError(
+                'invoke.failed',
+                `Bun FFI owned response reported an invalid size: ${length}`,
+              );
+            }
+            // FrameNative decodes after return. Copy before freeing the Rust
+            // allocation; neither a retained result nor a decode error may
+            // reference memory whose owning library has already released it.
+            const owned = new ArrayBuffer(size);
+            new Uint8Array(owned).set(new Uint8Array(toArrayBuffer(pointer, 0, size)));
+            return owned;
+          } finally {
+            binding.freeOwned(pointer, length);
+          }
+        }
+        if (size > callerBufferCapacity) {
+          throw new RustraCommandError(
+            'invoke.failed',
+            `Bun FFI caller-buffer status exceeds capacity: ${length}`,
+          );
+        }
+        return size === 0 ? new ArrayBuffer(0) : callerBuffer.buffer;
+      }
       const status = handle.symbols.rustra_ffi_invoke_frame_into(
         request,
         BigInt(request.byteLength),
@@ -211,10 +271,10 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   const selection = await selectVerifiedLibrary(bunLibraryCandidates(options), (candidate) => {
     const loaded = open(candidate);
     try {
-      loaded.symbols.rustra_mobile_init();
+      loaded.handle.symbols.rustra_mobile_init();
       return buildRuntime(loaded, candidate);
     } catch (error) {
-      loaded.close();
+      loaded.handle.close();
       throw error;
     }
   });

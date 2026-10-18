@@ -17,6 +17,7 @@ export type BunFfiEngineOptions = Omit<FrameEngineOptions, 'frameCodecs'> & {
 export type BunFfiRuntime = {
   engine: import('@rustra/types').FrameEngine;
   library: string;
+  /** 작은 응답을 재사용 512B caller buffer로 전달하는지 — owned 심볼이 있어도 소형 경로는 이 버퍼로 쓰인다. */
   usesCallerBufferInto: boolean;
   close(): void;
 };
