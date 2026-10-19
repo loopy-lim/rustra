@@ -1,6 +1,6 @@
 {
   "name": "@rustra/cli",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "rustra CLI — generate type-safe TypeScript clients for Node, Bun, Tauri, and React Native from one Rust core, with schema diff gates that block breaking changes in CI.",
   "license": "MIT",
   "type": "module",

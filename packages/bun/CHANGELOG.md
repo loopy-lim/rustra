@@ -1,5 +1,11 @@
 # @rustra/bun
 
+## 0.11.1
+
+### Patch Changes
+
+- bf1e0f5: Use the optional owned Frame response and matching free symbols for large Bun FFI responses, avoiding the probe cache request copy and retry. Keep the reusable caller buffer for small responses and fall back to the legacy path when either optional symbol is unavailable. Copy owned response bytes before freeing them so decoded values retain their lifetime safely.
+
 ## 0.11.0
 
 ### Minor Changes

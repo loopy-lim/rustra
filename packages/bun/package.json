@@ -1,6 +1,6 @@
 {
   "name": "@rustra/bun",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Type-safe Bun client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
