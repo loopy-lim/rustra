@@ -284,7 +284,14 @@ jobs:
         # 오탐으로 게이트가 폭발한다(297dfde1 실측). 패키지 dist 는 exports
         # 진입으로 도달 가능해 이론이 없다.
         shell: bash
-        run: set -o pipefail && bunx --bun react-doctor@0.9.12 . --yes --scope full --verbose --blocking warning 2>&1 | tee "$RUNNER_TEMP/rustra-react-doctor.log"
+        run: set -o pipefail && bunx --bun react-doctor@0.9.12 . --yes --scope full --verbose --blocking warning --output-dir "$RUNNER_TEMP/react-doctor-diagnostics" 2>&1 | tee "$RUNNER_TEMP/rustra-react-doctor.log"
+      - name: Upload react-doctor diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: react-doctor-diagnostics
+          path: ${{ runner.temp }}/react-doctor-diagnostics
+          if-no-files-found: ignore
       - name: Umbrella smoke (test:fast)
         # 첫 신호 우산(test:fast)이 어느 CI 잡에서도 실행되지 않아 스크립트
         # 자체가 드리프트할 수 있었다(M10) — 이하 모든 정적 검증에 앞서 실제로

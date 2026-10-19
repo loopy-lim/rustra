@@ -53,7 +53,3 @@ docs/api/
 
 # Local git-history tooling workspace (untracked scratch)
 .history-rewrite/
-
-# react-doctor 스캔 제외 — 증거 번들은 매니페스트가 sha256 으로 pin 한 보존 아티팩트라
-# 앱 소스가 아니고, 파일 수정은 무결성을 깬다. 파일은 추적 유지(스캐너만 건너뛴다).
-docs/verification/evidence/**
