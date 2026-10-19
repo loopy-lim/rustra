@@ -22,7 +22,7 @@
     },
     "packages/bun": {
       "name": "@rustra/bun",
-      "version": "0.11.0",
+      "version": "0.11.1",
       "dependencies": {
         "@rustra/types": "^0.12.1",
       },
@@ -33,7 +33,7 @@
     },
     "packages/cli": {
       "name": "@rustra/cli",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "bin": {
         "rustra": "./dist/index.js",
       },
@@ -60,7 +60,7 @@
     },
     "packages/node": {
       "name": "@rustra/node",
-      "version": "0.11.0",
+      "version": "0.11.1",
       "dependencies": {
         "@rustra/types": "^0.12.1",
       },

@@ -1,5 +1,13 @@
 # @rustra/node
 
+## 0.11.1
+
+### Patch Changes
+
+- cb252c9: Avoid repeatedly copying the accumulated response when a binary frame arrives in
+  multiple stdout chunks. Fragmented frames are joined once after the complete
+  body arrives; complete frames keep their existing zero-copy view path.
+
 ## 0.11.0
 
 ### Minor Changes

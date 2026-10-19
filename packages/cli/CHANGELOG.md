@@ -1,5 +1,50 @@
 # @rustra/cli
 
+## 0.13.0
+
+### Minor Changes
+
+- b9a7946: 1-필드 struct 명령의 TypeScript emit을 함수형(`invokeGeneratedFields1` 직접
+  호출)에서 팩토리형(`createGeneratedFields1`)으로 전환한다. 2-필드
+  명령의 `createGeneratedFields2` 선례와 동일한 형태로, 라우트 해결 결과를
+  엔진 세대(generation)별로 캐시해 warm 디스패치 비용을 줄인다. 호스트
+  마이크로벤치(Bun/JSC)에서 warm 호출당 0.0196→0.0156µs(20.8% 개선,
+  4회 재현 20.8–24.4% 일관), 엔진 재설정 직후 경로 22.7–33.0% 개선,
+  라우트 호출 수·폴백 수 불변(660,004 = 660,004)을 확인했다
+  (docs/dev/research/2026-09-24-emit-switch-decision.md).
+
+  재생성된 `commands.ts`는 `createGeneratedFields1`을 import하므로 이 헬퍼를
+  포함한 `@rustra/types`와 함께 배포돼야 한다(헬퍼는 `@internal` codegen import
+  contract). 호출 표면은 소스 호환이다 — 생성된 `const` 커맨드도 동일한
+  `(input, options)` 시그니처와 `commandId` 프로퍼티를 노출한다. 2·3-필드
+  경로와 bytes·옵션 폴백 emit은 변함없다. 생성물을 체크인한 저장소는 CLI
+  업그레이드 후 `rustra codegen`으로 갱신한다.
+
+- 403b6a4: `rustra.json`에 `scriptc` 섹션을 추가해 `rustra codegen`의 scriptc 스테이지를 켠다.
+  스테이지는 정적 링크 계약의 아티팩트 두 벌을 렌더한다: `scriptc/ffi.json`
+  (ffi_format 7 매니페스트 — rustra staticlib 아카이브를 libraries로)와
+  `scriptc/scriptc-ffi.d.ts`(시그니처-only 선언). scriptc는 napi 애드온과 dlopen을
+  지원하지 않아 기존 Node/Bun 호스트 코드젠을 재사용할 수 없으므로 별도 경로다.
+
+  매니페스트는 scriptc 직접 호출 세계가 실제로 공급할 수 있는 인자만 싣는다(scriptc
+  형태 표면): out 포인터에 쓰는 심볼과 콜백 함수 포인터(async·이벤트·채널) 심볼은
+  사유와 함께 제외되고, 그 대체로 코어의 `rustra_ffi_invoke_json_into_len`(길이를
+  out 포인터 대신 반환)이 caller-buffer envelope 진입으로 포함된다. 설정은 필수인
+  `output` 외에 `profile`(기본 release)과 `archive`(명시적 경로 재정의)를 받는다.
+  아카이브가 없는 쓰기 모드는 `cargo build --release` 힌트와 함께 fail-closed 하고,
+  check 모드는 커밋된 아티팩트와의 바이트 비교로 드리프트를 잡는다. 실증 게이트:
+  `test:runtime:scriptc`(examples/calculator — 정적 링크 바이너리가 응답 42).
+
+- 01218a6: Generate scriptc retained foreign callbacks for asynchronous JSON completion,
+  events and bytes channels, paired with identity-based native release functions.
+  Import the generated `scriptc-ffi.ts` source entry for callback signatures;
+  legacy ambient declarations remain available for synchronous consumers.
+  The linked Rust static library must include the new scriptc ABI entry points.
+
+### Patch Changes
+
+- 5eb1110: Rebuild configured Node and Bun runtime producers before reporting a successful dev reload. Watch separate host crates as well as the schema crate, and suppress reload when the runtime build fails so implementation-only edits cannot silently invoke an older binary. Invalidate the successful-input cache before regenerating so restoring earlier source after a failed build or parity rejection repairs partially updated generated artifacts.
+
 ## 0.12.0
 
 ### Minor Changes
