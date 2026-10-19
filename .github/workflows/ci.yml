@@ -505,6 +505,11 @@ jobs:
         # typescript 잡과 동일 순서 계약). @tauri-apps/cli 는 test:runtime:tauri
         # 의 `tauri build` 에 필요하다.
         run: bun install --cwd examples/tauri-calculator --frozen-lockfile
+      - name: Install rn-experiment dependencies (own lockfile)
+        # 예제는 루트 워크스페이스 밖 자체 bun.lock 이라 별도 설치가 필요하다 —
+        # typecheck:native 가 workspace 링크(@rustra/generated-react-native)와
+        # react-native 타입을 node_modules 에서 읽는다.
+        run: bun install --cwd examples/rn-experiment --frozen-lockfile
       - name: RN experiment adapter and actual Rust consumer
         run: bun run test:app:rn-experiment
       - name: Resident tree generated client and lifecycle
