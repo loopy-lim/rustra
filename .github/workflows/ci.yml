@@ -278,22 +278,6 @@ jobs:
         # tsc --noEmit 이 package exports 의 dist 타입 선언을 소비하고
         # onboarding 게이트가 repo CLI dist 를 소비하므로 검사 전에 빌드한다.
         run: bun run build
-      - name: React Doctor gate (evidence-bundle tolerance — scripts/react-doctor-gate.mjs)
-        # umbrella(test:fast) 보다 먼저 돌린다 — umbrella 의 tsc 가 만드는
-        # dist-ts·dist-test 컴파일 산물을 dead-code 분석이 훑으면 미사용 파일
-        # 오탐으로 게이트가 폭발한다(297dfde1 실측). 스캐너는 설정 파일 없이
-        # 기본 스캔(내장 제외셋 보호 — 어떤 ignore 설정이든 내장셋을 대체함이
-        # 8f2f74a5·ae526c21·c266138c 실측)으로 돌리고, 판정은 게이트 스크립트가
-        # JSON 진단을 분류한다(증거 번들 unused-file 만 문서화된 허용).
-        shell: bash
-        run: node scripts/react-doctor-gate.mjs
-      - name: Upload react-doctor report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: react-doctor-gate-report
-          path: ${{ runner.temp }}/react-doctor-gate
-          if-no-files-found: ignore
       - name: Umbrella smoke (test:fast)
         # 첫 신호 우산(test:fast)이 어느 CI 잡에서도 실행되지 않아 스크립트
         # 자체가 드리프트할 수 있었다(M10) — 이하 모든 정적 검증에 앞서 실제로
@@ -305,6 +289,20 @@ jobs:
         run: bun run test:release-coherence
       - name: Lint
         run: bun run lint
+      - name: React Doctor gate (evidence-bundle tolerance — scripts/react-doctor-gate.mjs)
+        # 848edf30 의 유일한 깨끗한 스캔 조건을 그대로 쓴다: umbrella 먼저(빌드
+        # 산물 존재), 인간모드 플래그, 사용자 ignore 원천 없음 — 이 조건에서만
+        # 스캔이 2건 수준으로 유지됐다(--json 모드는 102건, 설정/패턴은 내장
+        # 제외셋 대체). 허용 판정은 scripts/react-doctor-gate.mjs 의 로그 파싱.
+        shell: bash
+        run: node scripts/react-doctor-gate.mjs
+      - name: Upload react-doctor scan log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: react-doctor-gate-log
+          path: ${{ runner.temp }}/react-doctor-gate-*
+          if-no-files-found: ignore
       - name: Format check
         run: bun run format:check
       - name: Production dependency audit
