@@ -397,6 +397,20 @@ test('cli-uniffi helpers: dylib naming, output completeness, and drift compariso
   }
 });
 
+/** dispose 뒤에도 느린 러너에서 마지막 틱의 쓰기가 도착할 수 있다 — rimraf 와의
+ * 경합(ENOTEMPTY)을 유한 재시도로 흡수한다(CI에서만 재현되는 정리 경합). */
+async function rmWatchTreeRetry(root: string): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt >= 4 || (error as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+}
+
 test('config dev reloads paths from atomically replaced rustra.json and watches new sources', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-dev-refresh-'));
   const env = withFakeCargo(root);
@@ -424,7 +438,7 @@ test('config dev reloads paths from atomically replaced rustra.json and watches 
   } finally {
     await handle?.dispose();
     env.restore();
-    rmSync(root, { recursive: true, force: true });
+    await rmWatchTreeRetry(root);
   }
 });
 
@@ -488,7 +502,7 @@ test('config dev does not treat its generated UniFFI Rust mirror as a new source
   } finally {
     await handle?.dispose();
     env.restore();
-    rmSync(root, { recursive: true, force: true });
+    await rmWatchTreeRetry(root);
   }
 });
 
@@ -540,6 +554,6 @@ test('bindings inside src do not trigger their own dev rebuild loop', async () =
   } finally {
     await handle?.dispose();
     env.restore();
-    rmSync(root, { recursive: true, force: true });
+    await rmWatchTreeRetry(root);
   }
 });
