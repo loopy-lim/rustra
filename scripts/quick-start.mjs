@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -65,6 +66,10 @@ export function runQuickStart(
   const root = mkdtempSync(join(repo, 'target', `quick-start-${options.host}-${options.manager}-`));
   const app = join(root, 'app');
   const cli = join(repo, 'packages/cli/dist/index.js');
+  // file: 로 주입된 @rustra/cli 의 .bin/rustra 심링크는 이 파일을 가리킨다 —
+  // tsc 출력은 644 라 Linux 에서 exec 하면 126 이 된다. shebang 이 있으므로
+  // 실행 비트만 부여하면 모든 매니저 경로가 해소된다.
+  if (existsSync(cli)) chmodSync(cli, 0o755);
   const targetDir = options.cold
     ? join(root, 'cargo-target')
     : join(repo, 'target/quick-start-shared');

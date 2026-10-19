@@ -342,6 +342,13 @@ jobs:
         run: |
           bun run test:onboarding:watch --host node
           bun run test:onboarding:watch --host bun
+      - name: Upload onboarding watch receipts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: onboarding-watch-receipts
+          path: target/onboarding-receipts/
+          if-no-files-found: ignore
       - name: Docs sync gate (docs:sync 마커 ↔ 생성물)
         # 문서에 붙여 넣은 생성 코드 샘플이 현실과 갈라지는 반복 패턴을
         # 게이트로 종결한다. 마커 영역을 참조 파일과 byte-for-byte 대조한다.
