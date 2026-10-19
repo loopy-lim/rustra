@@ -278,6 +278,13 @@ jobs:
         # tsc --noEmit 이 package exports 의 dist 타입 선언을 소비하고
         # onboarding 게이트가 repo CLI dist 를 소비하므로 검사 전에 빌드한다.
         run: bun run build
+      - name: React Doctor (100/100, warnings block)
+        # umbrella(test:fast) 보다 먼저 돌린다 — umbrella 의 tsc 가 만드는
+        # dist-ts·dist-test 컴파일 산물을 dead-code 분석이 훑으면 미사용 파일
+        # 오탐으로 게이트가 폭발한다(297dfde1 실측). 패키지 dist 는 exports
+        # 진입으로 도달 가능해 이론이 없다.
+        shell: bash
+        run: set -o pipefail && bunx --bun react-doctor@0.9.12 . --yes --scope full --verbose --blocking warning 2>&1 | tee "$RUNNER_TEMP/rustra-react-doctor.log"
       - name: Umbrella smoke (test:fast)
         # 첫 신호 우산(test:fast)이 어느 CI 잡에서도 실행되지 않아 스크립트
         # 자체가 드리프트할 수 있었다(M10) — 이하 모든 정적 검증에 앞서 실제로
@@ -289,9 +296,6 @@ jobs:
         run: bun run test:release-coherence
       - name: Lint
         run: bun run lint
-      - name: React Doctor (100/100, warnings block)
-        shell: bash
-        run: set -o pipefail && bunx --bun react-doctor@0.9.12 . --yes --scope full --verbose --blocking warning 2>&1 | tee "$RUNNER_TEMP/rustra-react-doctor.log"
       - name: Format check
         run: bun run format:check
       - name: Production dependency audit
