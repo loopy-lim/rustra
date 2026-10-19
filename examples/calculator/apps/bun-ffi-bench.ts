@@ -66,6 +66,8 @@ async function typedRun(iters: number): Promise<number> {
   const start = performance.now();
   let last: number | bigint = 0; // fast-path가 i32/i64를 number|bigint로 노출한다
   for (let i = 0; i < iters; i++) {
+    // 지연 벤치는 순차 대기 자체가 측정 대상 — Promise.all 은 동시성을 추가해 수치를 바꾼다.
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     const result = await addNumbers({ a: 20, b: 22 });
     last = result.value;
   }

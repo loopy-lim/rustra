@@ -1760,7 +1760,7 @@
       "pub type FfiEventCallback = unsafe extern \"C-unwind\" fn (user_data : * mut c_void , name : * const c_char , payload : * const c_char ,) ;"
     ],
     "rustra::ffi::type:FfiScriptcEventCallback": [
-      "pub type FfiScriptcEventCallback = unsafe extern \"C\" fn (user_data : * mut c_void , name : * const c_char , payload : * const c_char ,) ;"
+      "pub type FfiScriptcEventCallback = unsafe extern \"C\" fn (user_data : * mut c_void , name : * const c_char , payload : * const c_char) ;"
     ],
     "rustra::ffi::type:UnsafeIntoComplete": [
       "type UnsafeIntoComplete = unsafe extern \"C\" fn (* mut c_void , * mut u8 , usize , u8) ;"
