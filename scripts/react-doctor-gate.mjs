@@ -21,13 +21,25 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const TOLERATED = {
-  rule: 'deslop/unused-file',
+  // JSON 리포트는 plugin 접두사 없는 rule id('unused-file')를 쓴다.
+  rules: new Set(['unused-file', 'deslop/unused-file']),
   pathPrefix: 'docs/verification/evidence/',
 };
 
 const result = spawnSync(
   'bunx',
-  ['--bun', 'react-doctor@0.9.12', '.', '--json', '--blocking', 'warning'],
+  [
+    '--bun',
+    'react-doctor@0.9.12',
+    '.',
+    '--yes',
+    '--scope',
+    'full',
+    '--verbose',
+    '--blocking',
+    'warning',
+    '--json',
+  ],
   { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
 );
 const outputDir = process.env.RUNNER_TEMP
@@ -67,7 +79,7 @@ const walk = (node) => {
     const rule = node.rule ?? node.id;
     const file = node.filePath ?? node.path;
     if (typeof rule === 'string' && typeof file === 'string') {
-      if (rule === TOLERATED.rule && file.replaceAll('\\', '/').startsWith(TOLERATED.pathPrefix)) {
+      if (TOLERATED.rules.has(rule) && file.replaceAll('\\', '/').startsWith(TOLERATED.pathPrefix)) {
         tolerated.push(`${rule}: ${file}`);
       } else {
         violations.push(`${node.severity ?? 'finding'} ${rule}: ${file}`);
