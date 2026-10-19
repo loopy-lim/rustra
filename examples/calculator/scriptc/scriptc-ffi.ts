@@ -21,20 +21,9 @@ export declare function rustra_ffi_get_max_payload(): bigint;
 export declare function rustra_ffi_set_max_payload(bytes: bigint): void;
 export declare function rustra_ffi_invoke_cancel(invocation_id: bigint): boolean;
 export declare function rustra_ffi_cancellation_status(invocation_id: bigint): number;
-export declare function rustra_ffi_channel_create_bytes(
-  receive: (value0: number, value1: Uint8Array) => void,
-): number;
-export declare function rustra_ffi_channel_release_scriptc(
-  receive: (value0: number, value1: Uint8Array) => void,
-): void;
+export declare function rustra_ffi_channel_create_bytes(receive: (value0: number, value1: Uint8Array) => void): number;
+export declare function rustra_ffi_channel_release_scriptc(receive: (value0: number, value1: Uint8Array) => void): void;
 export declare function rustra_ffi_channel_send_bytes(handle: number, payload: Uint8Array): number;
-export declare function rustra_ffi_invoke_json_async_channel(
-  payload: string,
-  channel: number,
-): bigint;
-export declare function rustra_ffi_event_sink_register_scriptc(
-  onEvent: (value0: string, value1: string) => void,
-): void;
-export declare function rustra_ffi_event_sink_release_scriptc(
-  onEvent: (value0: string, value1: string) => void,
-): void;
+export declare function rustra_ffi_invoke_json_async_channel(payload: string, channel: number): bigint;
+export declare function rustra_ffi_event_sink_register_scriptc(onEvent: (value0: string, value1: string) => void): void;
+export declare function rustra_ffi_event_sink_release_scriptc(onEvent: (value0: string, value1: string) => void): void;

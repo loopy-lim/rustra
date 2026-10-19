@@ -11,5 +11,9 @@ package-lock.json
 # it; prettier re-formatting shows up as codegen drift)
 **/scriptc/ffi.json
 
+# scriptc source-import declarations — same generator-canonical contract as ffi.json
+# (.d.ts 는 위 *.d.ts 전역 제외로 이미 커버된다)
+**/scriptc-ffi.ts
+
 # script-generated snapshot — formatting owned by scripts/api-surface.mjs (--update)
 api-surface/
