@@ -15,14 +15,16 @@ proceeds only after separate approval.
    Scheduled CI runs execute only a subset of jobs and cannot authorize release.
 2. Both npm automation (`workflow_run: CI success`) and manual crates publishing
    (`workflow_dispatch`, main only) in `release.yml` pin the candidate SHA and run
-   fresh Miri, Sanitizer and Fuzz reusable workflows. Publishing depends on all
-   three succeeding. Missing, failed, cancelled or skipped checks block it; CI is
+   fresh Miri, Sanitizer, Fuzz and TSan reusable workflows. Publishing depends on all
+   four succeeding. Missing, failed, cancelled or skipped checks block it; CI is
    checked again immediately before publishing.
 3. Scope: Miri lib/frame_wire/field_order_drift; Linux x86_64 ASan+LSan lib plus debug/release
    `trust_baseline_ffi`/`payload_robustness`/`ffi_process_contract`/`large_payload_boundary`/
    `ffi_scriptc`;
    seed replay and 600 seconds for each Fuzz target invoke_frame,
-   invoke_complex_value and invoke_complex_serde. Weekly checks remain separate
+   invoke_complex_value and invoke_complex_serde; TSan — nightly
+   `-Zsanitizer=thread` with `-Z build-std` over `-p rustra --lib`
+   (Linux x86_64, `halt_on_error=1`). Weekly checks remain separate
    from PR required checks.
 4. `bun run test:api-surface` — the public TS/Rust export surface is diffed
    against `api-surface/snapshot.json`; any drift fails the gate, and
@@ -34,7 +36,12 @@ depth and large valid inputs for 600 seconds, with a 2GiB RSS and 10-second per-
 budget. The three small-input campaigns remain. The C++ check is the separate host
 containment harness `bash scripts/run-foreign-exception-check.sh`. Debug free misuse
 requires child SIGABRT and diagnostics; release tests correct ownership only. This
-scope is separate from RN native sanitizer coverage.
+scope is separate from RN native sanitizer coverage. The sanitizer workflow also
+runs its `cpp-codec` job at release: the generated C++ codec tests, the low-level
+codec tests and the sync-core tests under ASan+LSan+UBSan
+(`RUSTRA_CPP_SANITIZERS=address,undefined`). TSan artifacts land in
+`target/safety/tsan/`; TSan needs `-Z build-std` because an uninstrumented std
+hides the mutex happens-before edges data-race detection depends on.
 
 The Linux x86_64 sanitizer job checks memory safety for that platform and its selected targets. Linux
 remains **Alpha** until the separate real Tauri WebView, lifecycle, and packaged
@@ -49,7 +56,7 @@ node scripts/check-release-gates.mjs --repository loopy-lim/rustra --sha "$(git 
 ```
 
 Release uses `--ci-only` only because its `needs` dependencies require fresh safety
-jobs. It is not a standalone safety bypass for publishing. Miri/ASan artifacts
+jobs. It is not a standalone safety bypass for publishing. Miri/ASan/TSan/cpp-codec artifacts
 `*-report-<run_id>-<attempt>` include SHA, toolchain, stdout/stderr, exit codes and
 raw ASan reports. The absolute `$GITHUB_WORKSPACE/target/safety/` path is uploaded
 regardless of test outcome. A failed Miri suite does not skip the other suites;
@@ -129,7 +136,7 @@ stable only.
 
 1. Merge the Version Packages PR → release.yml runs automatically (9 npm packages)
 2. crates manual job: Actions → Release → Run workflow re-verifies CI success for
-   the same SHA on `main`, requires fresh Miri/Sanitizer/Fuzz success, then publishes in the order rustra-naming → rustra-macros →
+   the same SHA on `main`, requires fresh Miri/Sanitizer/Fuzz/TSan success, then publishes in the order rustra-naming → rustra-macros →
    rustra, waiting for the index after each dependency.
 
 Use the manual workflow above so the safety dependencies run. Local `cargo publish`
@@ -199,6 +206,24 @@ as the publication evidence.
   }
   EOF
   ```
+
+## npm publish authentication (token today — OIDC trusted publishing recorded as follow-up)
+
+The npm path in `release.yml` is **token-based** today: the `release` job holds
+`id-token: write` and `changesets/action` publishes with `NODE_AUTH_TOKEN`/`NPM_TOKEN`
+from the `NPM_TOKEN` repository secret, while `NPM_CONFIG_PROVENANCE: true` attaches
+a Sigstore provenance attestation to each published tarball. This still depends on a
+long-lived automation token with rights over the published packages — and 2FA /
+granular automation-token guidance for the npm account is otherwise undocumented in
+this repository.
+
+The recommended upgrade is **npm OIDC trusted publishing**: register the packages
+mapped to `release.yml` as trusted publishers on npmjs.com (package settings →
+trusted publisher pointing at this repository and the Release workflow), after which
+GitHub Actions signs each publish with the workflow's OIDC identity and the long-lived
+`NPM_TOKEN` secret can be dropped (nitro's release runs this way). That switch lives
+in npm registry settings — a **user-side action outside this repository** — so it is
+recorded here as the follow-up only; no workflow change in this repo enables it.
 
 ## Step 4 — rollback
 

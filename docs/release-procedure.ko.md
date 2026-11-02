@@ -13,14 +13,16 @@
 1. 발행 후보의 **정확한 SHA**에 대해 실제 push/PR CI의 최신 실행이 성공해야 한다.
    schedule CI는 일부 job만 실행하므로 발행 근거로 인정하지 않는다.
 2. `release.yml`은 npm 자동 경로(`workflow_run: CI success`)와 crates 수동 경로
-   (`workflow_dispatch`, main 한정) 모두 후보 SHA를 고정하고 Miri·Sanitizer·Fuzz를
-   재사용 workflow로 새로 실행한다. 세 결과가 모두 성공해야 발행 job을 시작한다.
+   (`workflow_dispatch`, main 한정) 모두 후보 SHA를 고정하고 Miri·Sanitizer·Fuzz·TSan을
+   재사용 workflow로 새로 실행한다. 네 결과가 모두 성공해야 발행 job을 시작한다.
    누락·실패·취소·skip은 차단하며, 발행 직전 CI 상태도 다시 확인한다.
 3. 검사 범위: Miri의 lib/frame_wire/field_order_drift, Linux x86_64 ASan+LSan lib 및
    `trust_baseline_ffi`/`payload_robustness`/`ffi_process_contract`/`large_payload_boundary`/
    `ffi_scriptc`의 debug·release,
    Fuzz의 invoke_frame/invoke_complex_value/invoke_complex_serde 각각 seed 재생 및
-   600초. 주간 안전성 실행은 별도로 유지하며 PR required check와 구분한다.
+   600초, TSan — nightly `-Zsanitizer=thread`를 `-Z build-std`와 함께
+   `-p rustra --lib`에 실행(Linux x86_64, `halt_on_error=1`).
+   주간 안전성 실행은 별도로 유지하며 PR required check와 구분한다.
 4. `bun run test:api-surface` — 공개 TS/Rust export 표면을
    `api-surface/snapshot.json` 과 비교한다. 드리프트는 게이트 실패이며, 의도적
    변경은 `--update` 로 갱신한 새 스냅샷을 PR 에 포함해야 한다.
@@ -29,7 +31,12 @@
 600초, 2GiB RSS와 입력당 10초 예산으로 검사한다. 작은 입력 3개 캠페인은 유지한다.
 C++ 예외 검사는 `bash scripts/run-foreign-exception-check.sh`의 별도 host containment
 검사다. debug free 오용은 자식 프로세스의 SIGABRT·진단을 요구하고 release에서는
-정상 소유권만 검사한다. 이 범위는 RN native sanitizer와 구분한다.
+정상 소유권만 검사한다. 이 범위는 RN native sanitizer와 구분한다. sanitizer
+워크플로는 발행 시 `cpp-codec` 잡도 실행한다 — 생성 C++ 코덱 테스트·저수준 코덱
+테스트·sync-core 테스트를 ASan+LSan+UBSan
+(`RUSTRA_CPP_SANITIZERS=address,undefined`) 아래에. TSan artifact는
+`target/safety/tsan/`에 쌓인다. TSan에 `-Z build-std`가 필요한 이유는 미계측
+std가 데이터 경합 탐지가 의존하는 뮤텍스 happens-before 엣지를 가리기 때문이다.
 
 Linux x86_64 sanitizer job은 해당 플랫폼과 대상의 메모리 안전성 게이트다. 호환성
 매트릭스의 실제 Tauri WebView·수명주기·패키지 설치 수용 기록을 확보하기 전까지
@@ -45,7 +52,7 @@ node scripts/check-release-gates.mjs --repository loopy-lim/rustra --sha "$(git 
 
 Release 내부는 새 안전성 job의 `needs`로 검사 성공을 강제하므로 CI 조회에만
 `--ci-only`를 사용한다. 이를 독립 발행용 안전성 우회 옵션으로 사용하지 않는다.
-Miri/ASan artifact는 `*-report-<run_id>-<attempt>`에 SHA·도구 버전·stdout/stderr·
+Miri/ASan/TSan/cpp-codec artifact는 `*-report-<run_id>-<attempt>`에 SHA·도구 버전·stdout/stderr·
 종료 코드와 ASan 원본 보고서를 포함한다. 저장 경로는 절대 경로
 `$GITHUB_WORKSPACE/target/safety/`이며 결과와 무관하게 업로드한다. Miri의 한 suite가
 실패해도 다른 suite는 계속 실행하고 전체 job은 실패한다. 실패를 수정한 새 SHA의
@@ -119,7 +126,7 @@ crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 
 
 1. Version Packages PR 머지 → release.yml 자동 실행 (npm 9종)
 2. crates 수동 잡: Actions → Release → Run workflow는 `main`의 동일 SHA에 대해
-   실제 CI와 새 Miri·Sanitizer·Fuzz 성공을 확인한 뒤 rustra-naming → rustra-macros → rustra 순서로
+   실제 CI와 새 Miri·Sanitizer·Fuzz·TSan 성공을 확인한 뒤 rustra-naming → rustra-macros → rustra 순서로
    각 의존성의 인덱스 반영을 기다리며 발행
 
 안전성 게이트를 거치는 위 수동 workflow를 사용한다. 로컬 `cargo publish`나
@@ -185,6 +192,23 @@ stable 발행 경로가 아니다. 원본 결과는 Release run과 각 artifact�
   }
   EOF
   ```
+
+## npm 발행 인증 자세 (현재는 토큰 — OIDC 신뢰 퍼블리싱이 후속으로 기록됨)
+
+`release.yml`의 npm 경로는 현재 **토큰 기반**이다. `release` 잡은
+`id-token: write`를 갖고 `changesets/action`은 `NPM_TOKEN` 저장소 시크릿의
+`NODE_AUTH_TOKEN`/`NPM_TOKEN`으로 발행하며, `NPM_CONFIG_PROVENANCE: true`가 각
+발행 tarball에 Sigstore 출처 증명을 첨부한다. 그래도 발행 패키지에 권한을 가진
+장기 자동화 토큰에 의존한다 — 그리고 npm 계정의 2FA·세분화된 automation 토큰
+가이드는 이 저장소에 어디에도 문서화돼 있지 않다.
+
+권장 업그레이드는 **npm OIDC 신뢰 퍼블리싱**이다. `release.yml`이 발행하는
+패키지를 npmjs.com에서 trusted publisher로 등록하면(패키지 설정 → 이 저장소와
+Release 워크플로를 가리키는 trusted publisher) GitHub Actions가 워크플로의 OIDC
+신원으로 각 발행에 서명하고 장기 `NPM_TOKEN` 시크릿을 없앨 수 있다(nitro의
+릴리스가 이 방식으로 돈다). 이 전환은 npm 레지스트리 설정에 속한다 — 이
+저장소 밖의 **사용자 작업**이다. 그래서 여기에는 후속으로만 기록하고, 이 저장소의
+워크플로 변경만으로는 활성화되지 않는다.
 
 ## 4단계 — rollback
 
