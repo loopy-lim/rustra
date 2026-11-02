@@ -333,6 +333,14 @@ jobs:
       - name: Architecture boundaries gate
         # 모듈 경계/파일 라인 상한 위반을 게이트한다.
         run: bun run test:architecture
+      - name: Silent test-omission gate (test-list parity)
+        # 러너 커맨드(test:ts:node·cli test·coverage:ts)가 이밋 테스트 파일을
+        # 빠뜨리는 "침묵 속 누락"을 red 로 만든다(DX 감사 #2 계약). dist-ts/examples
+        # 이밋과 cli dist-test 가 필요해 Build/codegen 뒤에 둔다.
+        run: |
+          bun x tsc -p examples/calculator/tsconfig.json
+          bun x tsc -p examples/crud/tsconfig.json
+          node scripts/check-test-list-parity.mjs
       - name: Onboarding gate (init → doctor → codegen → demo)
         # 신규 사용자 여정을 임시 디렉토리에서 실동행 검증 — 산문이 아니라
         # 게이트로 계약한다. init 스캐폴드가 repo CLI의 dist를 소비하므로
@@ -1000,6 +1008,33 @@ jobs:
   # 대부분이 skip 되는 스케줄 실행에서 gate 가 red 가 되면 주간 red 노이즈와
   # "전부 skip 인데 conclusion=success" 문서 전제가 함께 깨진다. 발행은
   # release.yml 의 event != 'schedule' 가드로 별도 차단된다.
+  # nitro 파리티 안전성 강화(2026-11-01) — 주간 스케줄 전용이던 안전망 3종을
+  # 코드 경계 변경 PR 의 gate 필수 집계 대상으로 격상한다. reusable workflow
+  # 호출이라 각 워크플로 파일의 workflow_call 계약(candidate_sha 고정 체크아웃,
+  # 로그 artifact, continue-on-error 없음)을 그대로 재사용한다. docs 전용 PR
+  # (경로 필터 code=false)에서는 skip — gate 는 이 skip 이 경로 필터 기인일
+  # 때만 통과로 인정한다(모바일 4잡과 동일 계약, ci-gate.sh filter_skippable).
+  miri:
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true')
+    needs: [changes]
+    uses: ./.github/workflows/miri.yml
+    with:
+      candidate_sha: ${{ github.sha }}
+
+  sanitizer:
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true')
+    needs: [changes]
+    uses: ./.github/workflows/sanitizer.yml
+    with:
+      candidate_sha: ${{ github.sha }}
+
+  fuzz:
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true')
+    needs: [changes]
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      candidate_sha: ${{ github.sha }}
+
   gate:
     needs:
       [
@@ -1018,6 +1053,9 @@ jobs:
         uniffi-android,
         uniffi-ios,
         consumer-smoke,
+        miri,
+        sanitizer,
+        fuzz,
       ]
     if: always() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
@@ -1028,6 +1066,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      # 워크플로 정의 자체의 문법 오류는 집계 이전에 여기서 잡는다(nitro
+      # check-release.yml 의 actionlint 파리티). 핀 버전은 로컬 검증(1.7.12)과
+      # 동일하게 고정 — 최신 태그 추종이 만드는 소리 없는 red 를 막는다.
+      - name: Lint workflow definitions (actionlint)
+        run: |
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            | tar xz actionlint
+          ./actionlint -color
       - name: Aggregate mandatory results
         env:
           GATE_CHANGES: ${{ needs.changes.result }}
@@ -1047,6 +1094,9 @@ jobs:
           GATE_UNIFFI_ANDROID: ${{ needs.uniffi-android.result }}
           GATE_UNIFFI_IOS: ${{ needs.uniffi-ios.result }}
           GATE_CONSUMER_SMOKE: ${{ needs.consumer-smoke.result }}
+          GATE_MIRI: ${{ needs.miri.result }}
+          GATE_SANITIZER: ${{ needs.sanitizer.result }}
+          GATE_FUZZ: ${{ needs.fuzz.result }}
         # 주의: run 에 | 리터럴 블록을 쓴다. 폴딩 스칼라(기본)는 줄바꿈을 공백으로
         # 접어 `\<space>` 가 이스케이프 공백이 돼 인자가 " rust=..." 로 합쳐지고
         # ci-gate.sh 가 unknown job 으로 죽는다(2026-09-06 실측, 라운드 4).
@@ -1066,4 +1116,7 @@ jobs:
             "rn-ios=$GATE_RN_IOS" \
             "uniffi-android=$GATE_UNIFFI_ANDROID" \
             "uniffi-ios=$GATE_UNIFFI_IOS" \
-            "consumer-smoke=$GATE_CONSUMER_SMOKE"
+            "consumer-smoke=$GATE_CONSUMER_SMOKE" \
+            "miri=$GATE_MIRI" \
+            "sanitizer=$GATE_SANITIZER" \
+            "fuzz=$GATE_FUZZ"

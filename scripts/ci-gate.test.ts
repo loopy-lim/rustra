@@ -30,11 +30,22 @@ const MANDATORY_JOBS = [
   'uniffi-android',
   'uniffi-ios',
   'consumer-smoke',
+  'miri',
+  'sanitizer',
+  'fuzz',
 ] as const;
 
 // 경로 필터 skip 이 허용되는 모바일 잡 — ci.yml 의 if 조건이 붙은 잡과 정확히
 // 일치해야 한다(ci-gate.sh 의 filter_skippable_jobs 도 동일 목록).
-const FILTER_SKIPPABLE_JOBS = ['rn-android', 'rn-ios', 'uniffi-android', 'uniffi-ios'] as const;
+const FILTER_SKIPPABLE_JOBS = [
+  'rn-android',
+  'rn-ios',
+  'uniffi-android',
+  'uniffi-ios',
+  'miri',
+  'sanitizer',
+  'fuzz',
+] as const;
 
 interface GateContext {
   /** github.event_name — 미설정 시 env 에서도 제거한다(fail-safe 경로 검증용). */
@@ -65,24 +76,24 @@ const success: Record<string, string> = Object.fromEntries(
   MANDATORY_JOBS.map((job) => [job, 'success']),
 );
 
-test('all fifteen jobs success exits 0 with a green summary', () => {
+void test('all eighteen jobs success exits 0 with a green summary', () => {
   const r = runGate(success);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /gate: PASS/);
-  // 통과 요약은 15개 잡을 전부 나열한다 — 사람이 매트릭스를 눈으로 대조하지 않게.
+  // 통과 요약은 18개 잡을 전부 나열한다 — 사람이 매트릭스를 눈으로 대조하지 않게.
   for (const job of MANDATORY_JOBS) {
     assert.ok(r.stdout.includes(job), `summary must list ${job}`);
   }
 });
 
-test('a single failure exits nonzero and names the offending job', () => {
+void test('a single failure exits nonzero and names the offending job', () => {
   const r = runGate({ ...success, 'ts-tests': 'failure' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /ts-tests/);
   assert.match(r.stderr, /failure/);
 });
 
-test('skipped is treated as failure (consumer-smoke skip chain preserved)', () => {
+void test('skipped is treated as failure (consumer-smoke skip chain preserved)', () => {
   // ts-tests 실패 → consumer-smoke 스킵 체인을 게이트가 놓치면 안 된다.
   const r = runGate({ ...success, 'consumer-smoke': 'skipped' });
   assert.notEqual(r.status, 0);
@@ -90,7 +101,7 @@ test('skipped is treated as failure (consumer-smoke skip chain preserved)', () =
   assert.match(r.stderr, /skipped/);
 });
 
-test('docs-only PR: filter-skipped mobile jobs pass the gate', () => {
+void test('docs-only PR: filter-skipped mobile jobs pass the gate', () => {
   // pull_request + changes.code=false — 경로 필터가 건너뛴 설계된 skip 이다.
   // GitHub 은 필수 체크의 skipped 를 merge 요건 충족으로 보므로 gate 도 인정한다.
   const results: Partial<Record<(typeof MANDATORY_JOBS)[number], string>> = { ...success };
@@ -103,7 +114,7 @@ test('docs-only PR: filter-skipped mobile jobs pass the gate', () => {
   }
 });
 
-test('genuine skip fails even under the filter allowance (chain skip is not covered)', () => {
+void test('genuine skip fails even under the filter allowance (chain skip is not covered)', () => {
   // 모바일 잡은 필터 skip 이 인정돼도 consumer-smoke 의 체인 skip 은 여전히 red.
   const results: Partial<Record<(typeof MANDATORY_JOBS)[number], string>> = {
     ...success,
@@ -117,7 +128,7 @@ test('genuine skip fails even under the filter allowance (chain skip is not cove
   assert.ok(!r.stderr.includes('rn-android'), 'allowed filter skip must not be reported');
 });
 
-test('mobile skip fails on non-pull_request events (filter never skips push)', () => {
+void test('mobile skip fails on non-pull_request events (filter never skips push)', () => {
   const r = runGate(
     { ...success, 'rn-ios': 'skipped' },
     { eventName: 'push', changesCode: 'true' },
@@ -126,7 +137,7 @@ test('mobile skip fails on non-pull_request events (filter never skips push)', (
   assert.match(r.stderr, /rn-ios/);
 });
 
-test('mobile skip fails when the path filter says code changed', () => {
+void test('mobile skip fails when the path filter says code changed', () => {
   // code=true 면 모바일 잡이 실행됐어야 한다 — skip 은 조용한 green 위험이다.
   const r = runGate(
     { ...success, 'uniffi-android': 'skipped' },
@@ -136,28 +147,28 @@ test('mobile skip fails when the path filter says code changed', () => {
   assert.match(r.stderr, /uniffi-android/);
 });
 
-test('missing gate context env is fail-safe: skips are never allowed', () => {
+void test('missing gate context env is fail-safe: skips are never allowed', () => {
   // 구식 호출자(env 미전달)는 모든 skip 을 실패로 본다.
   const r = runGate({ ...success, 'rn-ios': 'skipped' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /rn-ios/);
 });
 
-test('changes job failure fails the gate', () => {
+void test('changes job failure fails the gate', () => {
   // 경로 필터 잡 자체의 실패(예: API 오류)는 조용히 흡수되면 안 된다.
   const r = runGate({ ...success, changes: 'failure' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /changes/);
 });
 
-test('cancelled is treated as failure', () => {
+void test('cancelled is treated as failure', () => {
   const r = runGate({ ...success, 'rn-ios': 'cancelled' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /rn-ios/);
   assert.match(r.stderr, /cancelled/);
 });
 
-test('mixed failure/skipped names every offending job', () => {
+void test('mixed failure/skipped names every offending job', () => {
   const r = runGate({
     ...success,
     rust: 'failure',
@@ -172,7 +183,7 @@ test('mixed failure/skipped names every offending job', () => {
   assert.ok(!r.stderr.includes('rust-msrv'), 'healthy jobs must not be reported');
 });
 
-test('multiple failures each appear once in the report', () => {
+void test('multiple failures each appear once in the report', () => {
   const r = runGate({ ...success, 'rn-android': 'failure', 'rn-ios': 'failure' });
   assert.notEqual(r.status, 0);
   const rnAndroidCount = r.stderr.split('rn-android').length - 1;
@@ -181,20 +192,20 @@ test('multiple failures each appear once in the report', () => {
   assert.equal(rnIosCount, 1, 'rn-ios must appear exactly once');
 });
 
-test('an unknown result value fails loudly instead of passing silently', () => {
+void test('an unknown result value fails loudly instead of passing silently', () => {
   const r = runGate({ ...success, napi: 'weird' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /napi/);
   assert.match(r.stderr, /weird/);
 });
 
-test('wrong argument count is a hard error, not a pass', () => {
+void test('wrong argument count is a hard error, not a pass', () => {
   const r = spawnSync('bash', [gatePath, 'rust=success'], { encoding: 'utf8' });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /exactly 15/);
+  assert.match(r.stderr, /exactly 18/);
 });
 
-test('malformed argument (no = separator) is a hard error', () => {
+void test('malformed argument (no = separator) is a hard error', () => {
   const r = spawnSync('bash', [gatePath, ...MANDATORY_JOBS.map((j) => `${j}success`)], {
     encoding: 'utf8',
   });
@@ -202,14 +213,14 @@ test('malformed argument (no = separator) is a hard error', () => {
   assert.match(r.stderr, /rust=success/); // 올바른 형태 예시를 보여준다
 });
 
-test('unknown job name is a hard error, not a silent pass', () => {
+void test('unknown job name is a hard error, not a silent pass', () => {
   // 워크플로와 스크립트의 잡 목록이 갈라지면(잡 개명 등) 조용한 green 이 아니라
   // 즉시 드러나야 한다.
   const r = spawnSync(
     'bash',
     [
       gatePath,
-      ...MANDATORY_JOBS.slice(0, 14).map((j) => `${j}=success`),
+      ...MANDATORY_JOBS.filter((j) => j !== 'consumer-smoke').map((j) => `${j}=success`),
       'nonexistent-job=success',
     ],
     { encoding: 'utf8' },
@@ -218,14 +229,14 @@ test('unknown job name is a hard error, not a silent pass', () => {
   assert.match(r.stderr, /nonexistent-job/);
 });
 
-test('duplicate job argument is a hard error even when all results are success', () => {
-  // 15개 인자가 중복을 포함하면(consumer-smoke 대신 rust 2회) 한 잡이 검사되지
+void test('duplicate job argument is a hard error even when all results are success', () => {
+  // 18개 인자가 중복을 포함하면(consumer-smoke 대신 rust 2회) 한 잡이 검사되지
   // 않은 채 PASS 로 빠진다 — 전부 success 여도 계약 위반이다.
   const r = spawnSync(
     'bash',
     [
       gatePath,
-      ...MANDATORY_JOBS.slice(0, 14).map((j) => `${j}=success`), // consumer-smoke 누락
+      ...MANDATORY_JOBS.filter((j) => j !== 'consumer-smoke').map((j) => `${j}=success`), // consumer-smoke 누락
       'rust=success', // rust 중복
     ],
     { encoding: 'utf8' },
@@ -234,23 +245,30 @@ test('duplicate job argument is a hard error even when all results are success',
   assert.match(r.stderr, /duplicate/);
 });
 
-test('workflow gate needs list matches MANDATORY_JOBS in name and order', () => {
+void test('workflow gate needs list matches MANDATORY_JOBS in name and order', () => {
   // 조용한 커버리지 갈라짐 차단 — gate needs 에 새 잡이 추가돼도 스크립트 인자가
   // 없으면 그 잡은 검사 없이 통과한다(반대 방향도 마찬가지). 이 테스트가 갈라짐을
   // 즉시 loud failure 로 만든다.
-  const doc = parse(readFileSync(ciYmlPath, 'utf8'));
+  // YAML 파서 반환을 gate 계약 구조로 고정한다(파서가 any 를 돌려준다).
+  const doc = parse(readFileSync(ciYmlPath, 'utf8')) as {
+    jobs: Record<string, { needs?: string[]; if?: string }>;
+  };
   const needs = doc.jobs.gate.needs;
   assert.deepEqual(needs, [...MANDATORY_JOBS]);
 });
 
-test('path-filtered mobile jobs in ci.yml match FILTER_SKIPPABLE_JOBS', () => {
-  // ci.yml 의 모바일 4잡이 changes 에 의존하고 경로 필터 if 조건을 갖는지 —
-  // 스크립트의 skip 허용 목록과 워크플로가 갈라지면 즉시 드러낸다.
-  const doc = parse(readFileSync(ciYmlPath, 'utf8'));
-  const mobileJobs = Object.keys(doc.jobs).filter(
+void test('path-filtered mobile and safety jobs in ci.yml match FILTER_SKIPPABLE_JOBS', () => {
+  // ci.yml 의 모바일 4잡 + 안전망 3잡(reusable workflow 호출)이 changes 에 의존하고
+  // 경로 필터 if 조건을 갖는지 — 스크립트의 skip 허용 목록과 워크플로가 갈라지면
+  // 즉시 드러낸다.
+  // YAML 파서 반환을 gate 계약 구조로 고정한다(파서가 any 를 돌려준다).
+  const doc = parse(readFileSync(ciYmlPath, 'utf8')) as {
+    jobs: Record<string, { needs?: string[]; if?: string }>;
+  };
+  const filterGatedJobs = Object.keys(doc.jobs).filter(
     (name) => !['changes', 'gate'].includes(name) && doc.jobs[name].needs?.includes('changes'),
   );
-  assert.deepEqual(mobileJobs.sort(), [...FILTER_SKIPPABLE_JOBS].sort());
+  assert.deepEqual(filterGatedJobs.sort(), [...FILTER_SKIPPABLE_JOBS].sort());
   for (const job of FILTER_SKIPPABLE_JOBS) {
     const cond: string = doc.jobs[job].if;
     assert.match(
