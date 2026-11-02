@@ -9,6 +9,11 @@ the `main` branch protection actually requires.
 
 - Verified against the working tree and live branch protection on
   **2026-09-20**.
+- Updated **2026-11-01** (nitro-parity safety hardening): `ci.yml`'s `gate`
+  aggregate grew to 18 jobs — the safety reusable calls `miri`/`sanitizer`/`fuzz`
+  joined as PR-time jobs and `gate` gained an actionlint v1.7.12 step — and the
+  new `tsan.yml` (release + weekly) is added below. Branch-protection facts still
+  date to 2026-09-20 (`gate` as the single required context).
 - Costs are qualitative (Fast / Medium / Slow) except where measured:
   warm-cache `cargo check --workspace` ≈ 8.4 s and `bun run test:fast` ≈ 15 s
   were measured on 2026-09-20.
@@ -169,31 +174,34 @@ chained into any umbrella.
 
 ## Layer 3 — GitHub Actions
 
-### `ci.yml` — 16 jobs
+### `ci.yml` — 19 jobs
 
 Triggers: push and PRs to `main`, plus a weekly Monday cron that runs only
 `rust-audit` (every other job skips via `github.event_name != 'schedule'`,
 including the `gate` aggregate). PR runs cancel in-progress runs of the same
 ref; main pushes never cancel.
 
-| Job              | Protects                                                                                                                                                                           | Required check (2026-09-20)                                                              | Local equivalent                                                                                    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `changes`        | Path filter (dorny/paths-filter): outputs `code=false` only for docs-only PRs; forced `code=true` on every other event                                                             | not required (feeds the mobile jobs' `if` and `gate`)                                    | —                                                                                                   |
-| `rust-audit`     | No actionable RUSTSEC advisories (`scripts/audit-rust.sh`; only the documented Tauri 2/GTK3 exceptions pass)                                                                       | **required** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (needs `cargo-audit`)                                                  |
-| `rust-deny`      | License/ban/source policy (`deny.toml` via cargo-deny)                                                                                                                             | not required                                                                             | `cargo deny check`                                                                                  |
-| `rust` (matrix)  | rustfmt + clippy + `cargo test --workspace` (+ `--release`, hot-core) on Linux; core crates on macOS/Windows; release cdylib builds                                                | **required ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
-| `rust-msrv`      | MSRV 1.88 contract: core crates check + lib tests on Rust 1.88                                                                                                                     | not required                                                                             | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
-| `rust-wasm32`    | `rustra` compiles for `wasm32-unknown-unknown`                                                                                                                                     | not required                                                                             | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
-| `napi`           | napi debug addon builds and the Node napi app runs (previously untested transport path)                                                                                            | not required                                                                             | `bun run test:runtime:node-napi`                                                                    |
-| `ts-checks`      | Static TS gates: umbrella smoke (`test:fast`) + build, lint, format, react-doctor, `audit:prod`, tsc, api-surface/codegen/bindings freshness, architecture, docs, onboarding gates | via `gate` (ex-`typescript`)                                                             | `bun run test:local` (checks subset)                                                                |
-| `ts-tests`       | Build-consuming tests: ts:node + ts:bun + adapters + CLI, package units, bench-gate/release-tools/registry-consumer unit gates, C++ codec tests, bare RN fixture                   | via `gate` (ex-`typescript`)                                                             | `bun run test:local` (tests subset)                                                                 |
-| `ts-runtime`     | Real Rust↔TS execution: node + bun + tauri example apps on release builds (the `test:runtime` legs of the old `test:compat` chain)                                                 | via `gate` (ex-`typescript`)                                                             | `bun run test:runtime`                                                                              |
-| `rn-android`     | RN Android Release APK builds and the emulator smoke asserts the engine marker; skips on docs-only PRs                                                                             | **required** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (needs NDK + emulator)                                |
-| `rn-ios`         | RN iOS Release build and the simulator smoke asserts the engine marker; skips on docs-only PRs                                                                                     | **required** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, simulator)                                           |
-| `uniffi-android` | UniFFI Kotlin bindings load and run on an emulator (happy + divide-by-zero error paths); skips on docs-only PRs                                                                    | not required                                                                             | `examples/uniffi-android-smoke` flow (no one-command equivalent)                                    |
-| `uniffi-ios`     | UniFFI Swift bindings run on an iOS simulator (same marker contract); skips on docs-only PRs                                                                                       | not required                                                                             | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
-| `consumer-smoke` | Packed tarballs install into a clean consumer, load (ESM), and the CLI `init`→codegen→run flow works                                                                               | **required** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (subset)              |
-| `gate`           | Aggregate: all 14 jobs above must be exactly `success`; `skipped` fails (anti silent-green) **except** the four mobile jobs' skips when path-filter-originated (docs-only PR)      | **not required** (verified 2026-09-20)                                                   | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
+| Job              | Protects                                                                                                                                                                                                                                         | Required check (2026-09-20)                                                              | Local equivalent                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `changes`        | Path filter (dorny/paths-filter): outputs `code=false` only for docs-only PRs; forced `code=true` on every other event                                                                                                                           | not required (feeds the mobile jobs' `if` and `gate`)                                    | —                                                                                                   |
+| `rust-audit`     | No actionable RUSTSEC advisories (`scripts/audit-rust.sh`; only the documented Tauri 2/GTK3 exceptions pass)                                                                                                                                     | **required** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (needs `cargo-audit`)                                                  |
+| `rust-deny`      | License/ban/source policy (`deny.toml` via cargo-deny)                                                                                                                                                                                           | not required                                                                             | `cargo deny check`                                                                                  |
+| `rust` (matrix)  | rustfmt + clippy + `cargo test --workspace` (+ `--release`, hot-core) on Linux; core crates on macOS/Windows; release cdylib builds                                                                                                              | **required ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
+| `rust-msrv`      | MSRV 1.88 contract: core crates check + lib tests on Rust 1.88                                                                                                                                                                                   | not required                                                                             | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
+| `rust-wasm32`    | `rustra` compiles for `wasm32-unknown-unknown`                                                                                                                                                                                                   | not required                                                                             | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
+| `napi`           | napi debug addon builds and the Node napi app runs (previously untested transport path)                                                                                                                                                          | not required                                                                             | `bun run test:runtime:node-napi`                                                                    |
+| `ts-checks`      | Static TS gates: umbrella smoke (`test:fast`) + build, lint, format, react-doctor, `audit:prod`, tsc, api-surface/codegen/bindings freshness, architecture, docs, onboarding gates                                                               | via `gate` (ex-`typescript`)                                                             | `bun run test:local` (checks subset)                                                                |
+| `ts-tests`       | Build-consuming tests: ts:node + ts:bun + adapters + CLI, package units, bench-gate/release-tools/registry-consumer unit gates, C++ codec tests, bare RN fixture                                                                                 | via `gate` (ex-`typescript`)                                                             | `bun run test:local` (tests subset)                                                                 |
+| `ts-runtime`     | Real Rust↔TS execution: node + bun + tauri example apps on release builds (the `test:runtime` legs of the old `test:compat` chain)                                                                                                               | via `gate` (ex-`typescript`)                                                             | `bun run test:runtime`                                                                              |
+| `rn-android`     | RN Android Release APK builds and the emulator smoke asserts the engine marker; skips on docs-only PRs                                                                                                                                           | **required** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (needs NDK + emulator)                                |
+| `rn-ios`         | RN iOS Release build and the simulator smoke asserts the engine marker; skips on docs-only PRs                                                                                                                                                   | **required** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, simulator)                                           |
+| `uniffi-android` | UniFFI Kotlin bindings load and run on an emulator (happy + divide-by-zero error paths); skips on docs-only PRs                                                                                                                                  | not required                                                                             | `examples/uniffi-android-smoke` flow (no one-command equivalent)                                    |
+| `uniffi-ios`     | UniFFI Swift bindings run on an iOS simulator (same marker contract); skips on docs-only PRs                                                                                                                                                     | not required                                                                             | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
+| `consumer-smoke` | Packed tarballs install into a clean consumer, load (ESM), and the CLI `init`→codegen→run flow works                                                                                                                                             | **required** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (subset)              |
+| `miri`           | Reusable call of `miri.yml` at PR time: UB in unsafe/pure-logic paths (lib, frame_wire, field_order_drift); skips on docs-only PRs                                                                                                               | via `gate` (2026-11-01)                                                                  | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)                    |
+| `sanitizer`      | Reusable call of `sanitizer.yml` at PR time: ASan+LSan Rust legs plus the `cpp-codec` job; skips on docs-only PRs                                                                                                                                | via `gate` (2026-11-01)                                                                  | see the [`sanitizer.yml` row](#other-workflows) below                                               |
+| `fuzz`           | Reusable call of `fuzz.yml` at PR time: the four libFuzzer campaigns + seed replay; skips on docs-only PRs                                                                                                                                       | via `gate` (2026-11-01)                                                                  | see the [`fuzz.yml` row](#other-workflows) below                                                    |
+| `gate`           | Aggregate: all 17 jobs above must be exactly `success` (and it actionlints every workflow first); `skipped` fails (anti silent-green) **except** the seven path-filter-skippable jobs (four mobile + `miri`/`sanitizer`/`fuzz`) on docs-only PRs | **not required** (verified 2026-09-20)                                                   | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
 
 Notes:
 
@@ -208,27 +216,51 @@ Notes:
   skipped required check as satisfied, so the docs-only skip does not block
   merges. Since 2026-09-20 the live protection requires exactly `gate` — see
   [Currently required checks](#currently-required-checks).
+- **2026-11-01:** `gate`'s `needs` grew from 14 to 17 jobs — the safety reusable
+  workflow calls `miri`, `sanitizer` and `fuzz` joined as PR-time mandatory jobs
+  (`scripts/ci-gate.sh` accordingly takes 18 `job=result` arguments). Their skips
+  join the mobile four as path-filter-tolerated: on docs-only PRs **seven** gate
+  members skip, and `gate` accepts exactly those skips
+  (`filter_skippable_jobs`). The `gate` job's first step pins **actionlint
+  v1.7.12** and lints every workflow definition before the aggregation, so a
+  workflow syntax error fails the merge contract itself (nitro
+  `check-release.yml` parity; the pin avoids silent reds from tag drift).
+  `tsan.yml` is deliberately **not** part of the PR aggregation — it is release
+  - weekly only (nightly `-Z build-std` cost).
 
 ### Other workflows
 
-| Workflow                               | Trigger                                       | Protects                                                                                             | Required check | Local equivalent                                                                       |
-| -------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
-| `release.yml`                          | CI success on main (`workflow_run`) or manual | Publish only ever happens from a green CI SHA: pins the candidate, re-checks gates before publishing | no             | `bun run verify:release-gates` (same checker)                                          |
-| `miri.yml` (via release + weekly)      | workflow_call, weekly Sunday cron, manual     | UB in `rustra` unsafe/pure-logic paths (lib, frame_wire, field_order_drift)                          | no             | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)       |
-| `sanitizer.yml` (via release + weekly) | workflow_call, weekly Sunday cron, manual     | ASan+LSan over lib and selected debug/release FFI integrations; C++ exception containment            | no             | `bash scripts/safety/run-linux-validation.sh` (Linux nightly, C++, Python, cargo-fuzz) |
-| `fuzz.yml` (via release + weekly)      | workflow_call, weekly Saturday cron, manual   | Existing 3 targets × 10 min/1KiB plus large-boundary 10 min/1MiB+1/2GiB RSS; seed replay             | no             | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` crate)                             |
-| `coverage.yml`                         | push to main, manual                          | Advisory only — explicitly not a gate ("가시화"): Rust llvm-cov + TS c8 summaries                    | no             | `bun run coverage:rust` / `bun run coverage:ts`                                        |
-| `bench.yml`                            | push to main (path-filtered), manual          | Performance regression budget: criterion vs previous baseline, 10% threshold                         | no             | `cargo bench` then `bun scripts/check-criterion-regression.mjs --max-regression 0.10`  |
-| `registry-consumer.yml`                | manual only                                   | Exact published versions install and behave on macOS; receipt artifact                               | no             | `bun run verify:consumer:registry`                                                     |
+| Workflow                                         | Trigger                                                                       | Protects                                                                                                                                                       | Required check | Local equivalent                                                                                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `release.yml`                                    | CI success on main (`workflow_run`) or manual                                 | Publish only ever happens from a green CI SHA: pins the candidate, re-checks gates before publishing                                                           | no             | `bun run verify:release-gates` (same checker)                                                                                                         |
+| `miri.yml` (via release + weekly + PR gate)      | workflow_call, weekly Sunday cron, manual, `ci.yml` PR gate (path-filtered)   | UB in `rustra` unsafe/pure-logic paths (lib, frame_wire, field_order_drift)                                                                                    | no             | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)                                                                      |
+| `sanitizer.yml` (via release + weekly + PR gate) | workflow_call, weekly Sunday cron, manual, `ci.yml` PR gate (path-filtered)   | ASan+LSan over lib and selected debug/release FFI integrations; C++ exception containment; `cpp-codec` job under ASan+LSan+UBSan                               | no             | `bash scripts/safety/run-linux-validation.sh` (Linux nightly, C++, Python, cargo-fuzz)                                                                |
+| `fuzz.yml` (via release + weekly + PR gate)      | workflow_call, weekly Saturday cron, manual, `ci.yml` PR gate (path-filtered) | Existing 3 targets × 10 min/1KiB plus large-boundary 10 min/1MiB+1/2GiB RSS; seed replay                                                                       | no             | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` crate)                                                                                            |
+| `tsan.yml` (via release + weekly)                | workflow_call, weekly Wednesday cron, manual                                  | Data races on the `ffi_pool`/events thread paths: nightly `-Zsanitizer=thread` with `-Z build-std` over `-p rustra --lib` (`halt_on_error=1:abort_on_error=1`) | no             | `bash scripts/run-safety-check.sh tsan-lib cargo test -Z build-std -p rustra --lib --target x86_64-unknown-linux-gnu` (nightly, dedicated target dir) |
+| `coverage.yml`                                   | push to main, manual                                                          | Advisory only — explicitly not a gate ("가시화"): Rust llvm-cov + TS c8 summaries                                                                              | no             | `bun run coverage:rust` / `bun run coverage:ts`                                                                                                       |
+| `bench.yml`                                      | push to main (path-filtered), manual                                          | Performance regression budget: criterion vs previous baseline, 10% threshold                                                                                   | no             | `cargo bench` then `bun scripts/check-criterion-regression.mjs --max-regression 0.10`                                                                 |
+| `registry-consumer.yml`                          | manual only                                                                   | Exact published versions install and behave on macOS; receipt artifact                                                                                         | no             | `bun run verify:consumer:registry`                                                                                                                    |
 
-`miri.yml`, `sanitizer.yml`, and `fuzz.yml` are reusable workflows: they run on
-their weekly schedules **and** as mandatory dependencies of every `release.yml`
-publish (see [release procedure](./release-procedure.md) prerequisites).
+`miri.yml`, `sanitizer.yml`, `fuzz.yml`, and `tsan.yml` are reusable workflows:
+they run on their weekly schedules **and** as mandatory dependencies of every
+`release.yml` publish (see [release procedure](./release-procedure.md)
+prerequisites). Since 2026-11-01 `miri.yml`, `sanitizer.yml`, and `fuzz.yml`
+additionally run at PR time as `gate` jobs in `ci.yml` (skipped on docs-only
+PRs); `tsan.yml` is release + weekly only and is not wired into the PR gate.
 
 The ASan/LSan integration targets are `trust_baseline_ffi`, `payload_robustness`,
 `ffi_process_contract`, `large_payload_boundary` and `ffi_scriptc`. Misuse children run
 only in debug; release checks correct ownership. The C++ harness verifies a host
 wrapper containing actual exceptions, not RN native sanitizer or device safety.
+The sanitizer.yml Rust legs pin `-Cunsafe-allow-abi-mismatch=sanitizer` —
+required since nightly 1.101.0, where precompiled (uninstrumented) std vs
+`-Zsanitizer` became a hard error instead of a warning. The separate `cpp-codec`
+job runs the generated C++ codec cross-tests (`test-rustra-generated-codecs.cpp`),
+the low-level Writer/Reader tests (`test-rustra-codec.cpp`) and the sync-core
+tests (`test-rustra-sync-core.cpp`) under ASan+LSan+UBSan
+(`RUSTRA_CPP_SANITIZERS=address,undefined`) through a JSI-shim build;
+`RustraJSIBridge.cpp` itself needs real folly/JSI headers and remains in the
+device/Xcode manual-checklist area.
 
 ## Which gate when
 
@@ -239,9 +271,9 @@ wrapper containing actual exceptions, not RN native sanitizer or device safety.
 | Local edit loop                      | `bun run test:fast` (≈15 s warm)                                                                                                                                                                                                                                          |
 | Targeted (docs, codegen, surface...) | CONTRIBUTING's [Which Gate When](../CONTRIBUTING.md) table (`test:docs`, `test:codegen-fresh`, `test:api-surface`, `test:architecture`, `test:release-coherence`, ...)                                                                                                    |
 | Before opening a PR                  | `bun run test:compat` minimum — the Linux-safe integration chain (no Tauri system deps); add the targeted gates above for what you touched. `test:runtime:tauri` runs in CI on every PR; run it locally only if you touched Tauri paths and have the system prerequisites |
-| Docs-only change                     | `bun run test:docs` (docs:sync regions + en/ko mirror — this file is in scope); the four mobile emulator CI jobs skip automatically on docs-only PRs                                                                                                                      |
+| Docs-only change                     | `bun run test:docs` (docs:sync regions + en/ko mirror — this file is in scope); the four mobile emulator jobs plus the three safety PR jobs (`miri`, `sanitizer`, `fuzz`) skip automatically on docs-only PRs                                                             |
 | On main only (never a PR gate)       | `bench.yml` (path-filtered), `coverage.yml`                                                                                                                                                                                                                               |
-| Release only                         | `miri` + `sanitizer` + `fuzz` via `release.yml`, registry-consumer (manual), `audit:registry` post-publish — see [release procedure](./release-procedure.md)                                                                                                              |
+| Release only                         | `miri` + `sanitizer` + `fuzz` + `tsan` via `release.yml`, registry-consumer (manual), `audit:registry` post-publish — see [release procedure](./release-procedure.md)                                                                                                     |
 
 The mobile/emulator suites (`rn-android`, `rn-ios`, `uniffi-*`) have no
 comfortable local equivalent; rely on CI for them.
@@ -269,6 +301,13 @@ recorded the previous state, so both states are documented here:
   change freely as long as `gate`'s `needs` and `scripts/ci-gate.sh` move in
   lockstep (enforced loudly by `scripts/ci-gate.test.ts`). The TS jobs also
   keep the old contract of never skipping on docs-only PRs.
+- **2026-11-01:** `gate`'s `needs` grew again — the safety reusable calls
+  `miri`, `sanitizer`, and `fuzz` joined (14 → 17 aggregated jobs;
+  `scripts/ci-gate.sh`: 15 → 18 `job=result` arguments, 19 `ci.yml` jobs
+  total), making the safety nets PR-time merge blockers on any code-path change
+  (the `ci.yml` changes filter: crates, packages, examples, scripts, workflows,
+  lockfiles), and `gate` gained an actionlint v1.7.12 step.
+  The required context itself is unchanged — still exactly `gate`.
 
 Re-verify in one step:
 
@@ -281,9 +320,9 @@ Facts future audits should know:
 - Rollback to the 8 individual contexts and the change procedure are documented
   in [release procedure](./release-procedure.md) Step 3.5.
 - On docs-only PRs the mobile emulator jobs (`rn-android`, `rn-ios`,
-  `uniffi-android`, `uniffi-ios`) end in the `skipped` state (the `changes`
-  path filter); `gate` accepts exactly those skips, stays green, and the merge
-  requirement is satisfied. Docs-only PRs still merge — by design, not a
-  protection regression.
+  `uniffi-android`, `uniffi-ios`) and the safety PR jobs (`miri`, `sanitizer`,
+  `fuzz`) end in the `skipped` state (the `changes` path filter); `gate` accepts
+  exactly those skips, stays green, and the merge requirement is satisfied.
+  Docs-only PRs still merge — by design, not a protection regression.
 - When a CI job is added or removed, update this map **and** `gate`'s `needs`
   (plus `scripts/ci-gate.sh`) together — the aggregate is the merge contract.

@@ -7,6 +7,11 @@
 로컬 실행 대략 비용, 그리고 `main` 브랜치 보호가 실제로 요구하는 필수 체크.
 
 - **2026-09-20** 기준, 작업 트리와 라이브 브랜치 보호 설정에서 검증했다.
+- **2026-11-01** 갱신(nitro 파리티 안전성 강화): `ci.yml`의 `gate` 집합이 18잡으로
+  늘었다 — 안전망 재사용 호출 `miri`/`sanitizer`/`fuzz`가 PR 시점 잡으로 합류했고
+  `gate`에 actionlint v1.7.12 스텝이 생겼으며, 신설 `tsan.yml`(릴리스 + 주간)을
+  아래에 추가했다. 브랜치 보호 관련 사실은 여전히 2026-09-20 기준(`gate` 단일
+  필수 컨텍스트)이다.
 - 비용은 정성 등급(빠름/중간/느림)이며, 실측값이 있는 곳만 수치를 표기한다:
   웜 캐시 `cargo check --workspace` ≈ 8.4초, `bun run test:fast` ≈ 15초
   (2026-09-20 실측).
@@ -118,31 +123,34 @@
 
 ## 계층 3 — GitHub Actions
 
-### `ci.yml` — 16개 잡
+### `ci.yml` — 19개 잡
 
 트리거: `main`으로의 push와 PR, 그리고 주간 월요일 cron(이때 `rust-audit`만
 실행 — 다른 잡은 전부 `github.event_name != 'schedule'`으로 스킵, `gate`
 집계 잡 포함). PR 실행은 같은 ref의 진행 중 실행을 취소한다; main push는
 절대 취소하지 않는다.
 
-| 잡                | 지키는 것                                                                                                                                                            | 필수 체크 (2026-09-20)                                                               | 로컬 등가물                                                                                         |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `changes`         | 경로 필터(dorny/paths-filter): docs 전용 PR에서만 `code=false` 출력, 그 외 이벤트는 `code=true` 강제                                                                 | 필수 아님(모바일 잡 `if`와 `gate`에 전달)                                            | —                                                                                                   |
-| `rust-audit`      | 실행 가능한 RUSTSEC 권고 없음(`scripts/audit-rust.sh`; 문서화된 Tauri 2/GTK3 예외만 허용)                                                                            | **필수** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (`cargo-audit` 필요)                                                   |
-| `rust-deny`       | 라이선스/밴/출처 정책(`deny.toml`, cargo-deny)                                                                                                                       | 필수 아님                                                                            | `cargo deny check`                                                                                  |
-| `rust` (매트릭스) | rustfmt + clippy + `cargo test --workspace`(+ `--release`, hot-core)는 Linux, 코어 크레이트는 macOS/Windows, 릴리스 cdylib 빌드                                      | **필수 ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
-| `rust-msrv`       | MSRV 1.88 계약: 코어 크레이트를 Rust 1.88에서 check + lib 테스트                                                                                                     | 필수 아님                                                                            | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
-| `rust-wasm32`     | `rustra`가 `wasm32-unknown-unknown`으로 컴파일됨                                                                                                                     | 필수 아님                                                                            | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
-| `napi`            | napi 디버그 애드온 빌드 + Node napi 앱 실행(무검증이던 transport 경로)                                                                                               | 필수 아님                                                                            | `bun run test:runtime:node-napi`                                                                    |
-| `ts-checks`       | 정적 TS 게이트: 빌드, 린트, 포맷, react-doctor(100/100), `audit:prod`, tsc, api-surface + codegen-fresh + bindings-fresh + architecture + docs + onboarding 게이트   | `gate` 경유 (구 `typescript`)                                                        | `bun run test:local` (검사 부분)                                                                    |
-| `ts-tests`        | 빌드 산출을 소비하는 테스트: ts:node + ts:bun + adapters + CLI, 패키지 단위, bench-gate/release-tools/registry-consumer 게이트 유닛, C++ 코덱 테스트, bare RN 픽스처 | `gate` 경유 (구 `typescript`)                                                        | `bun run test:local` (테스트 부분)                                                                  |
-| `ts-runtime`      | 실제 Rust↔TS 실행: 릴리스 빌드 기반 node + bun + tauri 예제 앱(구 `test:compat` 체인의 `test:runtime` 구간)                                                          | `gate` 경유 (구 `typescript`)                                                        | `bun run test:runtime`                                                                              |
-| `rn-android`      | RN Android Release APK 빌드 + 에뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                            | **필수** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (NDK + 에뮬레이터 필요)                               |
-| `rn-ios`          | RN iOS Release 빌드 + 시뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                    | **필수** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, 시뮬레이터)                                          |
-| `uniffi-android`  | UniFFI Kotlin 바인딩이 에뮬레이터에서 로드·실행(행복 + divide-by-zero 에러 경로); docs 전용 PR에서는 스킵                                                            | 필수 아님                                                                            | `examples/uniffi-android-smoke` 흐름(단일 명령 등가물 없음)                                         |
-| `uniffi-ios`      | UniFFI Swift 바인딩이 iOS 시뮬레이터에서 실행(동일 마커 계약); docs 전용 PR에서는 스킵                                                                               | 필수 아님                                                                            | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
-| `consumer-smoke`  | packed tarball이 클린 컨슈머에 설치·로드(ESM)되고 CLI `init`→codegen→run 흐름 동작                                                                                   | **필수** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (일부)                |
-| `gate`            | 집계: 위 14개 잡이 전부 정확히 `success`여야 함; `skipped`는 실패(무음 green 방지) — 단, 네 모바일 잡의 스킵이 경로 필터 기인(docs 전용 PR)일 때만 예외              | **필수 아님** (2026-09-20 검증)                                                      | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
+| 잡                | 지키는 것                                                                                                                                                                                                             | 필수 체크 (2026-09-20)                                                               | 로컬 등가물                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `changes`         | 경로 필터(dorny/paths-filter): docs 전용 PR에서만 `code=false` 출력, 그 외 이벤트는 `code=true` 강제                                                                                                                  | 필수 아님(모바일 잡 `if`와 `gate`에 전달)                                            | —                                                                                                   |
+| `rust-audit`      | 실행 가능한 RUSTSEC 권고 없음(`scripts/audit-rust.sh`; 문서화된 Tauri 2/GTK3 예외만 허용)                                                                                                                             | **필수** (`rust-audit`)                                                              | `bash scripts/audit-rust.sh` (`cargo-audit` 필요)                                                   |
+| `rust-deny`       | 라이선스/밴/출처 정책(`deny.toml`, cargo-deny)                                                                                                                                                                        | 필수 아님                                                                            | `cargo deny check`                                                                                  |
+| `rust` (매트릭스) | rustfmt + clippy + `cargo test --workspace`(+ `--release`, hot-core)는 Linux, 코어 크레이트는 macOS/Windows, 릴리스 cdylib 빌드                                                                                       | **필수 ×3** (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`) | `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace` |
+| `rust-msrv`       | MSRV 1.88 계약: 코어 크레이트를 Rust 1.88에서 check + lib 테스트                                                                                                                                                      | 필수 아님                                                                            | `rustup run 1.88 cargo check -p rustra -p rustra-macros`                                            |
+| `rust-wasm32`     | `rustra`가 `wasm32-unknown-unknown`으로 컴파일됨                                                                                                                                                                      | 필수 아님                                                                            | `cargo check -p rustra --target wasm32-unknown-unknown`                                             |
+| `napi`            | napi 디버그 애드온 빌드 + Node napi 앱 실행(무검증이던 transport 경로)                                                                                                                                                | 필수 아님                                                                            | `bun run test:runtime:node-napi`                                                                    |
+| `ts-checks`       | 정적 TS 게이트: 빌드, 린트, 포맷, react-doctor(100/100), `audit:prod`, tsc, api-surface + codegen-fresh + bindings-fresh + architecture + docs + onboarding 게이트                                                    | `gate` 경유 (구 `typescript`)                                                        | `bun run test:local` (검사 부분)                                                                    |
+| `ts-tests`        | 빌드 산출을 소비하는 테스트: ts:node + ts:bun + adapters + CLI, 패키지 단위, bench-gate/release-tools/registry-consumer 게이트 유닛, C++ 코덱 테스트, bare RN 픽스처                                                  | `gate` 경유 (구 `typescript`)                                                        | `bun run test:local` (테스트 부분)                                                                  |
+| `ts-runtime`      | 실제 Rust↔TS 실행: 릴리스 빌드 기반 node + bun + tauri 예제 앱(구 `test:compat` 체인의 `test:runtime` 구간)                                                                                                           | `gate` 경유 (구 `typescript`)                                                        | `bun run test:runtime`                                                                              |
+| `rn-android`      | RN Android Release APK 빌드 + 에뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                                                             | **필수** (`rn-android`)                                                              | `bash scripts/ci-android-runtime-smoke.sh rn` (NDK + 에뮬레이터 필요)                               |
+| `rn-ios`          | RN iOS Release 빌드 + 시뮬레이터 스모크가 엔진 마커 단언; docs 전용 PR에서는 스킵                                                                                                                                     | **필수** (`rn-ios`)                                                                  | `bash scripts/ci-ios-runtime-smoke.sh` (macOS, 시뮬레이터)                                          |
+| `uniffi-android`  | UniFFI Kotlin 바인딩이 에뮬레이터에서 로드·실행(행복 + divide-by-zero 에러 경로); docs 전용 PR에서는 스킵                                                                                                             | 필수 아님                                                                            | `examples/uniffi-android-smoke` 흐름(단일 명령 등가물 없음)                                         |
+| `uniffi-ios`      | UniFFI Swift 바인딩이 iOS 시뮬레이터에서 실행(동일 마커 계약); docs 전용 PR에서는 스킵                                                                                                                                | 필수 아님                                                                            | `bash examples/uniffi-ios-smoke/build-and-run.sh`                                                   |
+| `consumer-smoke`  | packed tarball이 클린 컨슈머에 설치·로드(ESM)되고 CLI `init`→codegen→run 흐름 동작                                                                                                                                    | **필수** (`consumer-smoke`)                                                          | `bun run verify:package:react-native && bun run verify:consumer:react-native` (일부)                |
+| `miri`            | PR 시점 `miri.yml` 재사용 호출: unsafe/순수 로직 경로 UB(lib, frame_wire, field_order_drift); docs 전용 PR에서는 스킵                                                                                                 | `gate` 경유 (2026-11-01)                                                             | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)                    |
+| `sanitizer`       | PR 시점 `sanitizer.yml` 재사용 호출: ASan+LSan Rust 구간 + `cpp-codec` 잡; docs 전용 PR에서는 스킵                                                                                                                    | `gate` 경유 (2026-11-01)                                                             | 아래 [기타 워크플로](#기타-워크플로)의 `sanitizer.yml` 행 참고                                      |
+| `fuzz`            | PR 시점 `fuzz.yml` 재사용 호출: libFuzzer 4개 캠페인 + seed 재생; docs 전용 PR에서는 스킵                                                                                                                             | `gate` 경유 (2026-11-01)                                                             | 아래 [기타 워크플로](#기타-워크플로)의 `fuzz.yml` 행 참고                                           |
+| `gate`            | 집계: 위 17개 잡이 전부 정확히 `success`여야 하고(집계 전 워크플로 전수 actionlint), `skipped`는 실패(무음 green 방지) — 단, 경로 필터 스킵 허용 7잡(모바일 4 + `miri`/`sanitizer`/`fuzz`)의 docs 전용 PR 스킵만 예외 | **필수 아님** (2026-09-20 검증)                                                      | `node --experimental-strip-types --test scripts/ci-gate.test.ts`                                    |
 
 참고:
 
@@ -157,40 +165,62 @@
   필수 체크를 요건 충족으로 보므로 docs 전용 스킵이 머지를 막지 않는다. 라이브
   보호는 2026-09-20 부터 정확히 `gate` 하나를 요구한다 —
   [현재 필수 체크](#현재-필수-체크) 참고.
+- **2026-11-01:** `gate`의 `needs`가 14개에서 17개 잡으로 늘었다 — 안전망 재사용
+  워크플로 호출 `miri`, `sanitizer`, `fuzz`가 PR 시점 필수 잡으로 합류했다
+  (`scripts/ci-gate.sh`는 이에 맞춰 `job=result` 인자 18개를 받는다). 이들의
+  스킵은 모바일 4잡과 함께 경로 필터 허용 대상이 됐다 — docs 전용 PR에서는
+  **일곱** gate 구성 잡이 스킵되고 `gate`는 정확히 이 스킵만 통과로 인정한다
+  (`filter_skippable_jobs`). `gate` 잡의 첫 스텝은 **actionlint v1.7.12**를 고정
+  사용해 집계 전에 모든 워크플로 정의를 검사한다 — 워크플로 문법 오류가 곧 머지
+  계약 실패가 된다(nitro `check-release.yml` 파리티; 핀 고정은 태그 추종이 만드는
+  소리 없는 red를 막는다). `tsan.yml`은 PR 집합에 **의도적으로** 포함되지
+  않는다 — 릴리스 + 주간 전용이다(nightly `-Z build-std` 비용).
 
 ### 기타 워크플로
 
-| 워크플로                              | 트리거                                     | 지키는 것                                                                | 필수 체크 | 로컬 등가물                                                                            |
-| ------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ | --------- | -------------------------------------------------------------------------------------- |
-| `release.yml`                         | main에서 CI 성공(`workflow_run`) 또는 수동 | 발행은 언제나 green CI SHA에서만: 후보 고정, 발행 전 게이트 재확인       | 아니오    | `bun run verify:release-gates` (같은 검사기)                                           |
-| `miri.yml` (release 경유 + 주간)      | workflow_call, 주간 일요일 cron, 수동      | `rustra`의 unsafe/순수 로직 경로 UB(lib, frame_wire, field_order_drift)  | 아니오    | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)       |
-| `sanitizer.yml` (release 경유 + 주간) | workflow_call, 주간 일요일 cron, 수동      | lib 및 명시한 FFI 통합의 debug/release ASan+LSan, C++ 예외 containment   | 아니오    | `bash scripts/safety/run-linux-validation.sh` (Linux nightly, C++, Python, cargo-fuzz) |
-| `fuzz.yml` (release 경유 + 주간)      | workflow_call, 주간 토요일 cron, 수동      | 기존 3 타깃 × 10분/1KiB + large-boundary 10분/1MiB+1/2GiB RSS, 시드 재생 | 아니오    | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` 크레이트)                          |
-| `coverage.yml`                        | main push, 수동                            | 참고용 — 명시적으로 게이트 아님("가시화"): Rust llvm-cov + TS c8 요약    | 아니오    | `bun run coverage:rust` / `bun run coverage:ts`                                        |
-| `bench.yml`                           | main push(경로 필터), 수동                 | 성능 회귀 예산: criterion vs 이전 베이스라인, 10% 임계                   | 아니오    | `cargo bench` 후 `bun scripts/check-criterion-regression.mjs --max-regression 0.10`    |
-| `registry-consumer.yml`               | 수동 전용                                  | 정확한 발행 버전이 macOS에서 설치·동작, 영수증 아티팩트                  | 아니오    | `bun run verify:consumer:registry`                                                     |
+| 워크플로                                          | 트리거                                                               | 지키는 것                                                                                                                                                      | 필수 체크 | 로컬 등가물                                                                                                                                      |
+| ------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `release.yml`                                     | main에서 CI 성공(`workflow_run`) 또는 수동                           | 발행은 언제나 green CI SHA에서만: 후보 고정, 발행 전 게이트 재확인                                                                                             | 아니오    | `bun run verify:release-gates` (같은 검사기)                                                                                                     |
+| `miri.yml` (release 경유 + 주간 + PR 게이트)      | workflow_call, 주간 일요일 cron, 수동, `ci.yml` PR 게이트(경로 필터) | `rustra`의 unsafe/순수 로직 경로 UB(lib, frame_wire, field_order_drift)                                                                                        | 아니오    | `bash scripts/run-safety-check.sh lib cargo miri test -p rustra --lib` (nightly)                                                                 |
+| `sanitizer.yml` (release 경유 + 주간 + PR 게이트) | workflow_call, 주간 일요일 cron, 수동, `ci.yml` PR 게이트(경로 필터) | lib 및 명시한 FFI 통합의 debug/release ASan+LSan, C++ 예외 containment, ASan+LSan+UBSan `cpp-codec` 잡                                                         | 아니오    | `bash scripts/safety/run-linux-validation.sh` (Linux nightly, C++, Python, cargo-fuzz)                                                           |
+| `fuzz.yml` (release 경유 + 주간 + PR 게이트)      | workflow_call, 주간 토요일 cron, 수동, `ci.yml` PR 게이트(경로 필터) | 기존 3 타깃 × 10분/1KiB + large-boundary 10분/1MiB+1/2GiB RSS, 시드 재생                                                                                       | 아니오    | `cargo fuzz run invoke_frame ...` (nightly, `fuzz/` 크레이트)                                                                                    |
+| `tsan.yml` (release 경유 + 주간)                  | workflow_call, 주간 수요일 cron, 수동                                | `ffi_pool`/events 스레드 경로의 데이터 경합: nightly `-Zsanitizer=thread`를 `-Z build-std`와 함께 `-p rustra --lib`에 실행(`halt_on_error=1:abort_on_error=1`) | 아니오    | `bash scripts/run-safety-check.sh tsan-lib cargo test -Z build-std -p rustra --lib --target x86_64-unknown-linux-gnu` (nightly, 전용 target dir) |
+| `coverage.yml`                                    | main push, 수동                                                      | 참고용 — 명시적으로 게이트 아님("가시화"): Rust llvm-cov + TS c8 요약                                                                                          | 아니오    | `bun run coverage:rust` / `bun run coverage:ts`                                                                                                  |
+| `bench.yml`                                       | main push(경로 필터), 수동                                           | 성능 회귀 예산: criterion vs 이전 베이스라인, 10% 임계                                                                                                         | 아니오    | `cargo bench` 후 `bun scripts/check-criterion-regression.mjs --max-regression 0.10`                                                              |
+| `registry-consumer.yml`                           | 수동 전용                                                            | 정확한 발행 버전이 macOS에서 설치·동작, 영수증 아티팩트                                                                                                        | 아니오    | `bun run verify:consumer:registry`                                                                                                               |
 
-`miri.yml`, `sanitizer.yml`, `fuzz.yml`는 재사용 워크플로다: 주간 스케줄로도
-도리고, 모든 `release.yml` 발행의 필수 의존으로도 도린다
-([릴리스 절차](./release-procedure.ko.md) 전제 조건 참고).
+`miri.yml`, `sanitizer.yml`, `fuzz.yml`, `tsan.yml`은 재사용 워크플로다: 주간
+스케줄로도 도리고, 모든 `release.yml` 발행의 필수 의존으로도 도린다
+([릴리스 절차](./release-procedure.ko.md) 전제 조건 참고). 2026-11-01 부터
+`miri.yml`, `sanitizer.yml`, `fuzz.yml`은 PR 시점에 `ci.yml`의 `gate` 잡으로도
+실행된다(docs 전용 PR은 스킵); `tsan.yml`은 릴리스 + 주간 전용이며 PR 게이트에는
+연결돼 있지 않다.
 
 ASan/LSan 통합 대상은 `trust_baseline_ffi`, `payload_robustness`,
 `ffi_process_contract`, `large_payload_boundary`, `ffi_scriptc`다. 오용 자식 프로세스는
 debug에서만 실행하고 release는 올바른 소유권 경로를 검사한다. C++ harness는 호스트
 wrapper가 실제 예외를 처리하는지 검증하며, RN native sanitizer나 실기기 증거를 대신하지 않는다.
+sanitizer.yml의 Rust 구간은 `-Cunsafe-allow-abi-mismatch=sanitizer`를 지정한다 —
+nightly 1.101.0 부터 사전컴파일(미계측) std vs `-Zsanitizer` 조합이 경고가 아닌
+하드 에러가 되어 필요하다. 별도 `cpp-codec` 잡은 생성 C++ 코덱 교차 테스트
+(`test-rustra-generated-codecs.cpp`)와 저수준 Writer/Reader 테스트
+(`test-rustra-codec.cpp`)·sync-core 테스트(`test-rustra-sync-core.cpp`)를 JSI
+shim 빌드로 ASan+LSan+UBSan(`RUSTRA_CPP_SANITIZERS=address,undefined`) 아래
+실행한다; `RustraJSIBridge.cpp` 자체는 실제 folly/JSI 헤더를 요구하므로 기기/Xcode
+수동 체크리스트 영역에 남는다.
 
 ## 언제 어떤 게이트를
 
-| 상황                            | 무엇이 도는지                                                                                                                                                         |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 모든 `git commit`(자동)         | lefthook pre-commit: 스테이지 파일에 eslint --fix, prettier --write, rustfmt(자동 재스테이지)                                                                         |
-| pre-push                        | 없음 — pre-push 훅 미구성                                                                                                                                             |
-| 로컬 편집 루프                  | `bun run test:fast` (웜 ≈15초)                                                                                                                                        |
-| 상황별(docs, codegen, 표면...)  | CONTRIBUTING의 [Which Gate When](../CONTRIBUTING.ko.md) 표(`test:docs`, `test:codegen-fresh`, `test:api-surface`, `test:architecture`, `test:release-coherence`, ...) |
-| PR 열기 전                      | 최소 `bun run test:compat`; 만진 것에 따라 위 상황별 게이트 추가                                                                                                      |
-| docs 전용 변경                  | `bun run test:docs` (docs:sync 영역 + en/ko 미러 — 이 파일도 스코프); docs 전용 PR에서는 네 모바일 에뮬레이터 CI 잡이 자동 스킵된다                                   |
-| main에서만(절대 PR 게이트 아님) | `bench.yml`(경로 필터), `coverage.yml`                                                                                                                                |
-| 릴리스 전용                     | `release.yml` 경유 `miri` + `sanitizer` + `fuzz`, registry-consumer(수동), 발행 후 `audit:registry` — [릴리스 절차](./release-procedure.ko.md) 참고                   |
+| 상황                            | 무엇이 도는지                                                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 모든 `git commit`(자동)         | lefthook pre-commit: 스테이지 파일에 eslint --fix, prettier --write, rustfmt(자동 재스테이지)                                                                                   |
+| pre-push                        | 없음 — pre-push 훅 미구성                                                                                                                                                       |
+| 로컬 편집 루프                  | `bun run test:fast` (웜 ≈15초)                                                                                                                                                  |
+| 상황별(docs, codegen, 표면...)  | CONTRIBUTING의 [Which Gate When](../CONTRIBUTING.ko.md) 표(`test:docs`, `test:codegen-fresh`, `test:api-surface`, `test:architecture`, `test:release-coherence`, ...)           |
+| PR 열기 전                      | 최소 `bun run test:compat`; 만진 것에 따라 위 상황별 게이트 추가                                                                                                                |
+| docs 전용 변경                  | `bun run test:docs` (docs:sync 영역 + en/ko 미러 — 이 파일도 스코프); docs 전용 PR에서는 네 모바일 에뮬레이터 잡과 세 안전망 PR 잡(`miri`, `sanitizer`, `fuzz`)이 자동 스킵된다 |
+| main에서만(절대 PR 게이트 아님) | `bench.yml`(경로 필터), `coverage.yml`                                                                                                                                          |
+| 릴리스 전용                     | `release.yml` 경유 `miri` + `sanitizer` + `fuzz` + `tsan`, registry-consumer(수동), 발행 후 `audit:registry` — [릴리스 절차](./release-procedure.ko.md) 참고                    |
 
 모바일/에뮬레이터 스위트(`rn-android`, `rn-ios`, `uniffi-*`)는 쓸 만한 로컬
 등가물이 없다; 이들은 CI에 의지한다.
@@ -216,6 +246,11 @@ wrapper가 실제 예외를 처리하는지 검증하며, RN native sanitizer나
   `needs`와 `scripts/ci-gate.sh`가 함께 갱신되는 한(`scripts/ci-gate.test.ts`가
   양쪽 일치를 loud 하게 검증) 잡 이름은 자유롭게 바꿀 수 있다. TS 잡들은 docs
   전용 PR에서 스킵되지 않는 구 계약도 그대로 유지한다.
+- **2026-11-01:** `gate`의 `needs`가 다시 늘었다 — 안전망 재사용 호출 `miri`,
+  `sanitizer`, `fuzz`가 합류했다(14 → 17 집계 잡; `scripts/ci-gate.sh`: 15 → 18
+  `job=result` 인자, `ci.yml` 전체 19잡). 이로써 안전망은 `ci.yml` changes 필터가 잡는 모든
+  코드 경로 변화(crates·packages·examples·scripts·워크플로·lockfile)의 PR 시점
+  머지 블로커가 됐고, `gate`에 actionlint v1.7.12 스텝이 생겼다. 필수 컨텍스트 자체는 변함없다 — 여전히 정확히 `gate` 하나다.
 
 한 단계 재검증:
 
@@ -228,9 +263,9 @@ gh api repos/loopy-lim/rustra/branches/main/protection --jq '.required_status_ch
 - 8개 개별 컨텍스트로의 롤백과 변경 절차는
   [릴리스 절차](./release-procedure.ko.md) Step 3.5에 문서화돼 있다.
 - docs 전용 PR에서는 모바일 에뮬레이터 잡(`rn-android`, `rn-ios`,
-  `uniffi-android`, `uniffi-ios`)이 `skipped` 상태로 끝난다(`changes` 경로
-  필터); `gate`는 정확히 이 스킵만 통과로 인정해 green을 유지하고 머지 요건도
-  충족된다. docs 전용 PR도 머지된다 — 설계된 동작이지 보호 설정의 regression이
-  아니다.
+  `uniffi-android`, `uniffi-ios`)과 안전망 PR 잡(`miri`, `sanitizer`, `fuzz`)이
+  `skipped` 상태로 끝난다(`changes` 경로 필터); `gate`는 정확히 이 스킵만 통과로
+  인정해 green을 유지하고 머지 요건도 충족된다. docs 전용 PR도 머지된다 — 설계된
+  동작이지 보호 설정의 regression이 아니다.
 - CI 잡을 추가/제거할 때는 이 맵과 `gate`의 `needs`(+ `scripts/ci-gate.sh`)를
   함께 갱신한다 — 이제 집계 잡이 곧 머지 계약이다.
