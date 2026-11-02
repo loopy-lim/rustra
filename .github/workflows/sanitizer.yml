@@ -49,21 +49,33 @@ jobs:
           { git rev-parse HEAD; rustc -Vv; } > "$SAFETY_LOG_DIR/environment.txt"
       - name: Run lib tests under AddressSanitizer + LeakSanitizer
         env:
-          RUSTFLAGS: -Zsanitizer=address
+          # -Cunsafe-allow-abi-mismatch=sanitizer — 1.101 nightly(2026-11-01 로컬
+          # 실측, 2026-10-31 nightly f9ceb4a4d)부터 사전컴파일 std(미계측)와
+          # -Zsanitizer 조합이 경고가 아닌 하드 에러가 되어 기존 실행 모델이 깨진다.
+          # 기존 의미론(app 코드만 계측, std 미계측 허용)을 유지하는 플래그.
+          RUSTFLAGS: -Zsanitizer=address -Cunsafe-allow-abi-mismatch=sanitizer
           ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=${{ github.workspace }}/target/safety/asan/asan
           RUST_TEST_THREADS: '1'
         run: bash scripts/run-safety-check.sh lib cargo test -p rustra --lib --target x86_64-unknown-linux-gnu
       - name: Run FFI integration tests under AddressSanitizer + LeakSanitizer
         if: ${{ !cancelled() }}
         env:
-          RUSTFLAGS: -Zsanitizer=address
+          # -Cunsafe-allow-abi-mismatch=sanitizer — 1.101 nightly(2026-11-01 로컬
+          # 실측, 2026-10-31 nightly f9ceb4a4d)부터 사전컴파일 std(미계측)와
+          # -Zsanitizer 조합이 경고가 아닌 하드 에러가 되어 기존 실행 모델이 깨진다.
+          # 기존 의미론(app 코드만 계측, std 미계측 허용)을 유지하는 플래그.
+          RUSTFLAGS: -Zsanitizer=address -Cunsafe-allow-abi-mismatch=sanitizer
           ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=${{ github.workspace }}/target/safety/asan/ffi
           RUST_TEST_THREADS: '1'
         run: bash scripts/run-safety-check.sh ffi-debug cargo test -p rustra --target x86_64-unknown-linux-gnu --test trust_baseline_ffi --test payload_robustness --test ffi_process_contract --test large_payload_boundary --test ffi_scriptc
       - name: Run release FFI integration tests under AddressSanitizer + LeakSanitizer
         if: ${{ !cancelled() }}
         env:
-          RUSTFLAGS: -Zsanitizer=address
+          # -Cunsafe-allow-abi-mismatch=sanitizer — 1.101 nightly(2026-11-01 로컬
+          # 실측, 2026-10-31 nightly f9ceb4a4d)부터 사전컴파일 std(미계측)와
+          # -Zsanitizer 조합이 경고가 아닌 하드 에러가 되어 기존 실행 모델이 깨진다.
+          # 기존 의미론(app 코드만 계측, std 미계측 허용)을 유지하는 플래그.
+          RUSTFLAGS: -Zsanitizer=address -Cunsafe-allow-abi-mismatch=sanitizer
           ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=${{ github.workspace }}/target/safety/asan/ffi-release
           RUST_TEST_THREADS: '1'
         run: bash scripts/run-safety-check.sh ffi-release cargo test -p rustra --release --target x86_64-unknown-linux-gnu --test trust_baseline_ffi --test payload_robustness --test ffi_process_contract --test large_payload_boundary --test ffi_scriptc
@@ -76,4 +88,34 @@ jobs:
         with:
           name: asan-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ github.workspace }}/target/safety/asan/
+          if-no-files-found: error
+
+  # C++ 어댑터 표면 — 생성 C++ 코덱·저수준 Writer/Reader·sync core 테스트를
+  # ASan+LSan+UBSan 으로 검증한다. test-jsi-shim.hpp 덕에 Linux 에서 헤더 의존
+  # 없이 빌드 가능하며, RustraJSIBridge.cpp 등 실제 JSI 바인딩은 여전히
+  # 기기/Xcode 빌드(수동 체크리스트) 영역이다. UBSan 위반은
+  # -fno-sanitize-recover 로 조용한 경고가 아닌 치명 실패가 된다.
+  cpp-codec:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SAFETY_LOG_DIR: ${{ github.workspace }}/target/safety/cpp-codec
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - name: Record candidate
+        run: |
+          mkdir -p "$SAFETY_LOG_DIR"
+          { git rev-parse HEAD; clang++ --version; } > "$SAFETY_LOG_DIR/environment.txt"
+      - name: Run C++ codec tests under ASan + LSan + UBSan
+        env:
+          RUSTRA_CPP_SANITIZERS: address,undefined
+        run: bash scripts/run-safety-check.sh cpp-codec bash examples/react-native-calculator/modules/rustra-jsi/ios/run-cpp-codec-tests.sh
+      - name: Upload sanitizer reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cpp-codec-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/target/safety/cpp-codec/
           if-no-files-found: error

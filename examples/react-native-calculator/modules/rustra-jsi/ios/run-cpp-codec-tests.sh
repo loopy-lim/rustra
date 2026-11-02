@@ -23,6 +23,19 @@ printf '#pragma once\n// stub: facebook::jsi 는 test-jsi-shim.hpp (force-includ
   > "$STUB_DIR/jsi.h"
 
 COMMON_FLAGS=(-std=c++17 -O2 -Wall -Wextra -DRUSTRA_TEST_JSI_SHIM=1 -I"$IOS_DIR" -I"$ADAPTER_CPP" -I"$GENERATED_DIR" -I"$BUILD_DIR" -include test-jsi-shim.hpp)
+
+# RUSTRA_CPP_SANITIZERS — 예: "address,undefined". 설정 시 모든 바이너리가
+# sanitizer 빌드·실행된다(ASan Linux 빌드는 LSan 포함). -fno-sanitize-recover 로
+# UBSan 위반을 조용한 경고가 아니라 치명 실패로 승격하고, -fno-omit-frame-pointer
+# 로 sanitizer 스택 트레이스의 기호 해상을 보장한다. sanitizer.yml 의 cpp-codec
+# 잡이 이 경로를 사용한다.
+if [ -n "${RUSTRA_CPP_SANITIZERS:-}" ]; then
+  COMMON_FLAGS+=(
+    -fsanitize="$RUSTRA_CPP_SANITIZERS"
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+  )
+fi
 FAIL=0
 
 run_one() {
