@@ -173,9 +173,13 @@ export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBo
       } catch (error) {
         requireActive();
         if (error instanceof RustraCommandError) throw error;
-        throw new Error(
+        // 설정 경계 실패도 오류 분류 체계를 통과하게 한다 — 소비자가
+        // error.code 로 invoke 오류와 같은 방식으로 분기할 수 있음.
+        throw new RustraCommandError(
+          RustraErrorCode.BootstrapFailed,
           `[rustra:bootstrap] Native setup failed: ${error instanceof Error ? error.message : String(error)}. Rebuild the native app after checking autolinking, generated codecs, and Rust FFI symbols.`,
-          { cause: error },
+          false,
+          error instanceof Error ? error : undefined,
         );
       }
     },
@@ -244,7 +248,11 @@ function guardBootstrapEngine(engine: FrameEngine, requireActive: () => void): F
 export function getRustraNative(): RustraJSINative & RustraNative {
   const native = (globalThis as Record<string, unknown>).__rustraNative;
   if (!native) {
-    throw new Error(
+    // 미설치도 분류된 오류(native.not_installed)로 — invoke 계열과 동일한
+    // error.code 분기를 제공한다. RustraCommandError 는 Error 확현이므로
+    // 기존 catch (Error) 소비 코드는 그대로 동작한다.
+    throw new RustraCommandError(
+      RustraErrorCode.NativeNotInstalled,
       'JSI native module not installed. Call installRustraJSI() from your native module first. ' +
         'Expo Go cannot load JSI; rebuild the native app after checking autolinking, the Rust static archive, ' +
         'and required extern "C" FFI symbols. A JavaScript reload cannot repair native drift.',

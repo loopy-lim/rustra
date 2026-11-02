@@ -15,7 +15,7 @@ import { createSchemaPostcardCodec, decodeUtf8, encodeUtf8, exactArrayBuffer } f
 
 const encoder = new TextEncoder();
 
-test('Hermes fallback encodes and decodes Korean and emoji without WHATWG globals', async () => {
+void test('Hermes fallback encodes and decodes Korean and emoji without WHATWG globals', async () => {
   const encoderDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'TextEncoder');
   const decoderDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'TextDecoder');
   Object.defineProperty(globalThis, 'TextEncoder', { configurable: true, value: undefined });
@@ -37,7 +37,7 @@ test('Hermes fallback encodes and decodes Korean and emoji without WHATWG global
 function createMockNative(returnValue: { ok: boolean; result?: unknown; error?: string }) {
   return {
     invoke(_payload: ArrayBuffer): ArrayBuffer {
-      return encoder.encode(JSON.stringify(returnValue)).buffer as ArrayBuffer;
+      return encoder.encode(JSON.stringify(returnValue)).buffer;
     },
   };
 }
@@ -49,7 +49,7 @@ function createSetupNative(): RustraJSINative {
   };
 }
 
-test('missing JSI module error points through native linking to the Rust ABI', () => {
+void test('missing JSI module error points through native linking to the Rust ABI', () => {
   const globalRecord = globalThis as Record<string, unknown>;
   const previous = Object.getOwnPropertyDescriptor(globalRecord, '__rustraNative');
   Reflect.deleteProperty(globalRecord, '__rustraNative');
@@ -58,6 +58,8 @@ test('missing JSI module error points through native linking to the Rust ABI', (
       () => getRustraNative(),
       (error: unknown) =>
         error instanceof Error &&
+        // 구조화 코드 계약 — 미설치도 invoke 계열과 같은 error.code 분기를 제공.
+        (error as { code?: string }).code === 'native.not_installed' &&
         /Expo Go/.test(error.message) &&
         /Rust static archive/.test(error.message) &&
         /extern "C" FFI symbols/.test(error.message),
@@ -67,7 +69,7 @@ test('missing JSI module error points through native linking to the Rust ABI', (
   }
 });
 
-test('React Native bootstrap installs and configures once across concurrent readiness', async () => {
+void test('React Native bootstrap installs and configures once across concurrent readiness', async () => {
   let installs = 0;
   const native = createSetupNative();
   const bootstrap = createRustraBootstrap({
@@ -84,7 +86,7 @@ test('React Native bootstrap installs and configures once across concurrent read
   assert.equal(left, right);
 });
 
-test('React Native bootstrap adds native-to-Rust remediation to install failures', async () => {
+void test('React Native bootstrap adds native-to-Rust remediation to install failures', async () => {
   const bootstrap = createRustraBootstrap({
     install: async () => {
       throw new Error('ERR_NO_BRIDGE');
@@ -97,6 +99,11 @@ test('React Native bootstrap adds native-to-Rust remediation to install failures
     bootstrap.ready(),
     (error: unknown) =>
       error instanceof Error &&
+      // 설정 경계 실패도 구조화 코드로 분류된다 — invoke 오류와 같은 분기 축.
+      error instanceof RustraCommandError &&
+      error.code === 'bootstrap.failed' &&
+      error.retryable === false &&
+      (error.cause as Error | undefined)?.message === 'ERR_NO_BRIDGE' &&
       /ERR_NO_BRIDGE/.test(error.message) &&
       /autolinking/.test(error.message) &&
       /Rust FFI symbols/.test(error.message),
@@ -104,7 +111,7 @@ test('React Native bootstrap adds native-to-Rust remediation to install failures
 });
 
 for (const native of [{ invoke: () => new ArrayBuffer(0) }, { invokeFrame: 'old bridge' }, null]) {
-  test(`Frame engine reports an incompatible selected native transport (${native === null ? 'null' : typeof native.invokeFrame})`, () => {
+  void test(`Frame engine reports an incompatible selected native transport (${native === null ? 'null' : typeof native.invokeFrame})`, () => {
     assert.throws(
       () => createFastEngine(native as unknown as RustraJSINative, { frameCodecs: new Map() }),
       (error: unknown) => {
@@ -121,7 +128,7 @@ for (const native of [{ invoke: () => new ArrayBuffer(0) }, { invokeFrame: 'old 
   });
 }
 
-test('JSON engine reports a missing selected invoke transport before the first command', () => {
+void test('JSON engine reports a missing selected invoke transport before the first command', () => {
   assert.throws(
     () => createReactNativeEngine({} as { invoke(payload: ArrayBuffer): ArrayBuffer }),
     (error: unknown) => {
@@ -134,7 +141,7 @@ test('JSON engine reports a missing selected invoke transport before the first c
   );
 });
 
-test('Frame-only legacy transport reaches the first typed command without optional native methods', async () => {
+void test('Frame-only legacy transport reaches the first typed command without optional native methods', async () => {
   const codec = createSchemaPostcardCodec(
     1,
     {
@@ -156,7 +163,7 @@ test('Frame-only legacy transport reaches the first typed command without option
   assert.deepEqual(await engine.invoke('addNumbers', { a: 20, b: 22 }), { value: 42 });
 });
 
-test('RN bootstrap cannot report ready when installation lacks the selected Frame transport', async () => {
+void test('RN bootstrap cannot report ready when installation lacks the selected Frame transport', async () => {
   const native = createMockNative({ ok: true, result: null }) as RustraJSINative;
   const bootstrap = createRustraBootstrap({
     install: async () => {},
@@ -175,7 +182,7 @@ test('RN bootstrap cannot report ready when installation lacks the selected Fram
   }
 });
 
-test('RN bootstrap preserves contract mismatch code and native/client diagnosis', async () => {
+void test('RN bootstrap preserves contract mismatch code and native/client diagnosis', async () => {
   const bootstrap = createRustraBootstrap({
     install: async () => {},
     getNative: () => ({
@@ -200,7 +207,7 @@ test('RN bootstrap preserves contract mismatch code and native/client diagnosis'
   }
 });
 
-test('RN bootstrap preserves structured native setup error cause and request data', async () => {
+void test('RN bootstrap preserves structured native setup error cause and request data', async () => {
   const cause = new Error('native registration rejected');
   const failure = Object.assign(
     new RustraCommandError('bridge.install_failed', 'install request 42 rejected', true, cause),
@@ -228,7 +235,7 @@ test('RN bootstrap preserves structured native setup error cause and request dat
   }
 });
 
-test('routes invoke through JSI native module', async () => {
+void test('routes invoke through JSI native module', async () => {
   const native = createMockNative({ ok: true, result: { value: 42 } });
   const engine = createReactNativeEngine(native);
 
@@ -236,7 +243,7 @@ test('routes invoke through JSI native module', async () => {
   assert.deepEqual(result, { value: 42 });
 });
 
-test('throws on error response', async () => {
+void test('throws on error response', async () => {
   const native = createMockNative({ ok: false, error: 'command not found' });
   const engine = createReactNativeEngine(native);
 
@@ -250,7 +257,7 @@ test('throws on error response', async () => {
   );
 });
 
-test('includes default error message when error is missing', async () => {
+void test('includes default error message when error is missing', async () => {
   const native = createMockNative({ ok: false });
   const engine = createReactNativeEngine(native);
 
@@ -264,12 +271,12 @@ test('includes default error message when error is missing', async () => {
   );
 });
 
-test('JSON adapter rejects a pre-aborted call without crossing native', async () => {
+void test('JSON adapter rejects a pre-aborted call without crossing native', async () => {
   let calls = 0;
   const engine = createReactNativeEngine({
     invoke() {
       calls++;
-      return encoder.encode('{"ok":true,"result":1}').buffer as ArrayBuffer;
+      return encoder.encode('{"ok":true,"result":1}').buffer;
     },
   });
   const ac = new AbortController();
@@ -281,12 +288,12 @@ test('JSON adapter rejects a pre-aborted call without crossing native', async ()
   assert.equal(calls, 0);
 });
 
-test('JSON adapter honors timeoutMs through the common timeout contract', async () => {
+void test('JSON adapter honors timeoutMs through the common timeout contract', async () => {
   const engine = createReactNativeEngine(createMockNative({ ok: true, result: 42 }));
   assert.equal(await engine.invoke('fast', undefined, { timeoutMs: 100 }), 42);
 });
 
-test('JSON adapter exposes Promise-based invokeBatch with stable order', async () => {
+void test('JSON adapter exposes Promise-based invokeBatch with stable order', async () => {
   const engine = createReactNativeEngine({
     invoke(payload) {
       const request = JSON.parse(decodeUtf8(payload)) as { command: string };
@@ -303,7 +310,7 @@ test('JSON adapter exposes Promise-based invokeBatch with stable order', async (
 // 현재 결함을 "현재 동작"으로 고정한다. Phase 1 수정 후 각 단언이
 // 실패하며, 그때 새 동작(Promise.reject / RustraCommandError)으로 전환한다.
 
-test('F3: native.invoke throw is caught by .catch() (Promise<T> honored)', async () => {
+void test('F3: native.invoke throw is caught by .catch() (Promise<T> honored)', async () => {
   // EngineClient 계약: invoke()는 Promise<T>를 반환해야 하므로,
   // 네이티브 실패는 반드시 rejected Promise여야 한다. async 전환 후
   // 동기 throw 는 rejected Promise 로 정규화되어 .catch() 에서 잡힌다.
@@ -325,7 +332,7 @@ test('F3: native.invoke throw is caught by .catch() (Promise<T> honored)', async
   );
 });
 
-test('F4: error response rejects with RustraCommandError carrying code', async () => {
+void test('F4: error response rejects with RustraCommandError carrying code', async () => {
   const engine = createReactNativeEngine(
     createMockNative({ ok: false, error: 'command.not_found: unknown' }),
   );
@@ -333,11 +340,7 @@ test('F4: error response rejects with RustraCommandError carrying code', async (
     async () => engine.invoke('cmd', {}),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError (code preserved)');
-      assert.equal(
-        (err as RustraCommandError).code,
-        'command.not_found',
-        'RustaError "code: message" → code parsed',
-      );
+      assert.equal(err.code, 'command.not_found', 'RustaError "code: message" → code parsed');
       assert.match((err as Error).message, /unknown/);
       return true;
     },
@@ -373,7 +376,7 @@ function createEventNative() {
   };
 }
 
-test('subscribeEvent registers a native listener and parses the JSON payload once', () => {
+void test('subscribeEvent registers a native listener and parses the JSON payload once', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -390,13 +393,13 @@ test('subscribeEvent registers a native listener and parses the JSON payload onc
   }
 
   assert.equal(h.calls.length, 1, 'native.onEvent must be called once');
-  assert.equal(h.calls[0].name, 'progress.tick');
+  assert.equal(h.calls[0]!.name, 'progress.tick');
   h.emit('progress.tick', payloadJson);
 
   assert.deepEqual(received, [{ step: 1, total: 5 }], 'callback receives the parsed object');
 });
 
-test('subscribeEvent supports the canonical name-first shape used by generated events', () => {
+void test('subscribeEvent supports the canonical name-first shape used by generated events', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -411,7 +414,7 @@ test('subscribeEvent supports the canonical name-first shape used by generated e
   }
 });
 
-test('subscribeEvent unsubscribe removes the native listener', () => {
+void test('subscribeEvent unsubscribe removes the native listener', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -429,7 +432,7 @@ test('subscribeEvent unsubscribe removes the native listener', () => {
   assert.equal(h.listeners.size, 0, 'offEvent must remove the listener');
 });
 
-test('subscribeEvent normalizes unparseable payloads to null', () => {
+void test('subscribeEvent normalizes unparseable payloads to null', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -448,7 +451,7 @@ test('subscribeEvent normalizes unparseable payloads to null', () => {
   assert.deepEqual(received, [null], 'broken JSON must arrive as null, not throw');
 });
 
-test('subscribeEvent fails loudly when native has no event capability', () => {
+void test('subscribeEvent fails loudly when native has no event capability', () => {
   const legacy: RustraEventNative = {};
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -463,7 +466,7 @@ test('subscribeEvent fails loudly when native has no event capability', () => {
   }
 });
 
-test('subscribeEvent allows an explicit no-op fallback when native lacks events', () => {
+void test('subscribeEvent allows an explicit no-op fallback when native lacks events', () => {
   const legacy: RustraEventNative = {};
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -479,7 +482,7 @@ test('subscribeEvent allows an explicit no-op fallback when native lacks events'
   unsubscribe(); // throw 하지 않아야 한다
 });
 
-test('subscribeEvent coexists with multiple event names', () => {
+void test('subscribeEvent coexists with multiple event names', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -500,7 +503,7 @@ test('subscribeEvent coexists with multiple event names', () => {
   assert.deepEqual(dones, [{ emitted: 6 }]);
 });
 
-test('createChannel exposes a typed handle and idempotent close', () => {
+void test('createChannel exposes a typed handle and idempotent close', () => {
   let callback: ((payloadJson: string) => void) | undefined;
   const dropped: number[] = [];
   const channel = createChannel((payload) => assert.deepEqual(payload, { chunk: 1 }), {
@@ -520,7 +523,7 @@ test('createChannel exposes a typed handle and idempotent close', () => {
   assert.deepEqual(dropped, [42]);
 });
 
-test('createChannel delivers once when a user callback throws', () => {
+void test('createChannel delivers once when a user callback throws', () => {
   let deliver: ((payloadJson: string) => void) | undefined;
   const received: unknown[] = [];
   const failure = new Error('consumer failed');
@@ -555,7 +558,7 @@ test('createChannel delivers once when a user callback throws', () => {
   }
 });
 
-test('event resubscription cannot revisit a listener during the same delivery', () => {
+void test('event resubscription cannot revisit a listener during the same delivery', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -584,7 +587,7 @@ test('event resubscription cannot revisit a listener during the same delivery', 
   }
 });
 
-test('event delivery skips listeners removed before their turn and defers new listeners', () => {
+void test('event delivery skips listeners removed before their turn and defers new listeners', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -615,13 +618,13 @@ test('event delivery skips listeners removed before their turn and defers new li
   }
 });
 
-test('createBytesChannel round-trips binary frames without JSON parsing', () => {
+void test('createBytesChannel round-trips binary frames without JSON parsing', () => {
   let callback: ((payload: ArrayBuffer) => void) | undefined;
   const dropped: number[] = [];
   const frames: number[][] = [];
   const channel = createBytesChannel((payload) => frames.push(Array.from(payload)), {
     createChannelBytes(next) {
-      callback = next as (payload: ArrayBuffer) => void;
+      callback = next;
       return 7;
     },
     dropChannel(handle) {
@@ -637,7 +640,7 @@ test('createBytesChannel round-trips binary frames without JSON parsing', () => 
   assert.deepEqual(dropped, [7]);
 });
 
-test('invokeTypedSync returns the decoded value without a Promise hop', () => {
+void test('invokeTypedSync returns the decoded value without a Promise hop', () => {
   const native = {
     invokeTyped(name: string, args: unknown) {
       assert.equal(name, 'addNumbers');
@@ -649,7 +652,7 @@ test('invokeTypedSync returns the decoded value without a Promise hop', () => {
   assert.deepEqual(result, { value: 3 }, 'sync path returns the decoded output directly');
 });
 
-test('invokeTypedSync normalizes C++ "code: message" JSError into RustraCommandError', () => {
+void test('invokeTypedSync normalizes C++ "code: message" JSError into RustraCommandError', () => {
   const native = {
     invokeTyped() {
       throw new Error("platform.unavailable: command 'x' is declared for platforms [macos]");
@@ -659,17 +662,17 @@ test('invokeTypedSync normalizes C++ "code: message" JSError into RustraCommandE
     () => invokeTypedSync('x', {}, native),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'platform.unavailable');
+      assert.equal(err.code, 'platform.unavailable');
       return true;
     },
   );
 });
 
-test('invokeTypedSync loud-fails on natives without the typed fast path', () => {
+void test('invokeTypedSync loud-fails on natives without the typed fast path', () => {
   assert.throws(() => invokeTypedSync('x', {}, {}), /invokeTyped/);
 });
 
-test('createBytesChannel loud-fails on natives without the bytes path', () => {
+void test('createBytesChannel loud-fails on natives without the bytes path', () => {
   const native = {
     createChannel: () => 1,
     dropChannel: () => true,
@@ -677,7 +680,7 @@ test('createBytesChannel loud-fails on natives without the bytes path', () => {
   assert.throws(() => createBytesChannel(() => {}, native), /createChannelBytes/);
 });
 
-test('createChannel rejects an invalid native handle instead of creating an unusable channel', () => {
+void test('createChannel rejects an invalid native handle instead of creating an unusable channel', () => {
   const native = {
     createChannel: () => Number.NaN,
     dropChannel: () => true,
@@ -693,7 +696,7 @@ import type { RustraJSIAsyncNative } from './index.js';
 // ── FastEngineOptions → core 옵션 전달 (follow-up 2) ───────
 // 어댑터는 "전달됐는지"만 검증 — core 동작 상세는 @rustra/types 에서 이미 검증됨.
 
-test('createFastEngine forwards maxPayloadBytes to the core pre-check', async () => {
+void test('createFastEngine forwards maxPayloadBytes to the core pre-check', async () => {
   // maxPayloadBytes: 8 → 인코딩 후 8B 초과면 payload.too_large 로 네이티브 호출 없이 reject.
   const native: RustraJSINative = {
     invoke: () => new ArrayBuffer(0),
@@ -716,13 +719,12 @@ test('createFastEngine forwards maxPayloadBytes to the core pre-check', async ()
   );
 });
 
-test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)', () => {
+void test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)', () => {
   const stale: unknown[] = [];
   const native: RustraJSINative = {
     invoke: () => new ArrayBuffer(0),
     invokeFrame: () => new ArrayBuffer(8),
-    getSchema: () =>
-      encoder.encode(JSON.stringify({ schemaVersion: 1, commands: [] })).buffer as ArrayBuffer,
+    getSchema: () => encoder.encode(JSON.stringify({ schemaVersion: 1, commands: [] })).buffer,
   };
   const engine = createFastEngine(native, {
     frameCodecs: new Map(),
@@ -734,7 +736,7 @@ test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)
   assert.deepEqual(stale, [{ nativeVersion: 1, jsVersion: 4 }]);
 });
 
-test('createFastEngine forwards contractVerification (warn accepts hash mismatch)', () => {
+void test('createFastEngine forwards contractVerification (warn accepts hash mismatch)', () => {
   const warnings: unknown[][] = [];
   const originalWarn = console.warn;
   console.warn = (...args: unknown[]) => warnings.push(args);
@@ -742,7 +744,7 @@ test('createFastEngine forwards contractVerification (warn accepts hash mismatch
     const native: RustraJSINative = {
       invoke: () => new ArrayBuffer(0),
       invokeFrame: () => new ArrayBuffer(0),
-      getContractHash: () => encoder.encode('native-hash-AAAA').buffer as ArrayBuffer,
+      getContractHash: () => encoder.encode('native-hash-AAAA').buffer,
     };
     // 'warn' — 불일치해도 엔진은 생성된다(degraded). 포워딩이 끊기면 strict
     // 기본으로 되돌아가 throw 하므로 생성 성공 자체가 전달 증거다.
@@ -758,12 +760,12 @@ test('createFastEngine forwards contractVerification (warn accepts hash mismatch
   }
 });
 
-test('createFastEngine forwards onContractMismatch (degraded mode entry)', () => {
+void test('createFastEngine forwards onContractMismatch (degraded mode entry)', () => {
   const mismatches: unknown[] = [];
   const native: RustraJSINative = {
     invoke: () => new ArrayBuffer(0),
     invokeFrame: () => new ArrayBuffer(0),
-    getContractHash: () => encoder.encode('native-hash-AAAA').buffer as ArrayBuffer,
+    getContractHash: () => encoder.encode('native-hash-AAAA').buffer,
   };
   const engine = createFastEngine(native, {
     frameCodecs: new Map(),
@@ -814,7 +816,7 @@ function makeAsyncNative() {
   return { native, state };
 }
 
-test('async engine without signal resolves via invokeTypedAsync (T1 baseline)', async () => {
+void test('async engine without signal resolves via invokeTypedAsync (T1 baseline)', async () => {
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -826,7 +828,7 @@ test('async engine without signal resolves via invokeTypedAsync (T1 baseline)', 
   assert.equal(h.state.calls, 1, 'invokeTypedAsync must be called exactly once');
 });
 
-test('async engine exposes Promise-based invokeBatch with stable order', async () => {
+void test('async engine exposes Promise-based invokeBatch with stable order', async () => {
   const native: RustraJSIAsyncNative = {
     invoke: () => new ArrayBuffer(0),
     invokeFrame: () => new ArrayBuffer(0),
@@ -842,7 +844,7 @@ test('async engine exposes Promise-based invokeBatch with stable order', async (
   );
 });
 
-test('createAsyncEngine reports when it falls back to the synchronous engine', () => {
+void test('createAsyncEngine reports when it falls back to the synchronous engine', () => {
   const native: RustraJSIAsyncNative = {
     invoke: () => new ArrayBuffer(0),
     invokeFrame: () => new ArrayBuffer(0),
@@ -861,7 +863,7 @@ test('createAsyncEngine reports when it falls back to the synchronous engine', (
   );
 });
 
-test('async engine without signal rejects via invokeTypedAsync error callback (T1 baseline)', async () => {
+void test('async engine without signal rejects via invokeTypedAsync error callback (T1 baseline)', async () => {
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -869,12 +871,12 @@ test('async engine without signal rejects via invokeTypedAsync error callback (T
   h.state.rejectNow('math.divide_by_zero: nope');
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError);
-    assert.equal((err as RustraCommandError).code, 'math.divide_by_zero');
+    assert.equal(err.code, 'math.divide_by_zero');
     return true;
   });
 });
 
-test('pre-aborted signal rejects cancelled without calling invokeTypedAsync (T1)', async () => {
+void test('pre-aborted signal rejects cancelled without calling invokeTypedAsync (T1)', async () => {
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -882,15 +884,15 @@ test('pre-aborted signal rejects cancelled without calling invokeTypedAsync (T1)
   ac.abort();
   await assert.rejects(engine.invoke('heavy', { n: 1 }, { signal: ac.signal }), (err: unknown) => {
     assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
-    assert.equal((err as RustraCommandError).code, 'cancelled');
-    assert.equal((err as RustraCommandError).retryable, true, 'cancelled is retryable');
+    assert.equal(err.code, 'cancelled');
+    assert.equal(err.retryable, true, 'cancelled is retryable');
     assert.match((err as Error).message, /heavy/);
     return true;
   });
   assert.equal(h.state.calls, 0, 'native must never be called for a pre-aborted signal');
 });
 
-test('abort mid-flight rejects cancelled; late native resolve is ignored (T1)', async () => {
+void test('abort mid-flight rejects cancelled; late native resolve is ignored (T1)', async () => {
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -901,7 +903,7 @@ test('abort mid-flight rejects cancelled; late native resolve is ignored (T1)', 
 
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError);
-    assert.equal((err as RustraCommandError).code, 'cancelled');
+    assert.equal(err.code, 'cancelled');
     return true;
   });
 
@@ -910,8 +912,7 @@ test('abort mid-flight rejects cancelled; late native resolve is ignored (T1)', 
   await new Promise<void>((r) => queueMicrotask(() => r()));
   await assert.rejects(
     p,
-    (err: unknown) =>
-      err instanceof RustraCommandError && (err as RustraCommandError).code === 'cancelled',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'cancelled',
     'promise must stay rejected (late resolve is a no-op)',
   );
   assert.equal(h.state.delivered, true, 'native callback did fire — it was just ignored');
@@ -952,7 +953,7 @@ function makePropagatingAsyncNative() {
   return { native, state };
 }
 
-test('abort mid-flight propagates: invokeCancel(id) is called (follow-up 3)', async () => {
+void test('abort mid-flight propagates: invokeCancel(id) is called (follow-up 3)', async () => {
   const h = makePropagatingAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -963,7 +964,7 @@ test('abort mid-flight propagates: invokeCancel(id) is called (follow-up 3)', as
 
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError);
-    assert.equal((err as RustraCommandError).code, 'cancelled');
+    assert.equal(err.code, 'cancelled');
     return true;
   });
   assert.deepEqual(
@@ -977,13 +978,12 @@ test('abort mid-flight propagates: invokeCancel(id) is called (follow-up 3)', as
   await new Promise<void>((r) => queueMicrotask(() => r()));
   await assert.rejects(
     p,
-    (err: unknown) =>
-      err instanceof RustraCommandError && (err as RustraCommandError).code === 'cancelled',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'cancelled',
     'promise must stay rejected (late resolve is a no-op)',
   );
 });
 
-test('abort mid-flight propagates and late native error is ignored (follow-up 3)', async () => {
+void test('abort mid-flight propagates and late native error is ignored (follow-up 3)', async () => {
   const h = makePropagatingAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -994,12 +994,12 @@ test('abort mid-flight propagates and late native error is ignored (follow-up 3)
 
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError);
-    assert.equal((err as RustraCommandError).code, 'cancelled', 'abort wins over the late error');
+    assert.equal(err.code, 'cancelled', 'abort wins over the late error');
     return true;
   });
 });
 
-test('signal path without invokeCancel falls back to shallow cancel (follow-up 3)', async () => {
+void test('signal path without invokeCancel falls back to shallow cancel (follow-up 3)', async () => {
   // 구형 네이티브 — invokeCancel 미노출 (void 반환). 얕은 취소로 폴백해야 한다.
   const h = makeAsyncNative();
   let cancelCalls = 0;
@@ -1019,13 +1019,13 @@ test('signal path without invokeCancel falls back to shallow cancel (follow-up 3
 
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError);
-    assert.equal((err as RustraCommandError).code, 'cancelled');
+    assert.equal(err.code, 'cancelled');
     return true;
   });
   assert.equal(cancelCalls, 0, 'no invokeCancel call in the shallow fallback');
 });
 
-test('new native without abort resolves normally through the id path (follow-up 3)', async () => {
+void test('new native without abort resolves normally through the id path (follow-up 3)', async () => {
   const h = makePropagatingAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
 
@@ -1036,7 +1036,7 @@ test('new native without abort resolves normally through the id path (follow-up 
   assert.deepEqual(h.state.cancels, [], 'no cancel without an abort');
 });
 
-test('async engine applies timeoutMs and ignores a late native callback', async () => {
+void test('async engine applies timeoutMs and ignores a late native callback', async () => {
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
   const promise = engine.invoke('slow', undefined, { timeoutMs: 10 });
@@ -1094,7 +1094,7 @@ function makeByIdAsyncNative() {
   return { native, state };
 }
 
-test('async engine routes static commands through invokeTypedAsyncById (G2)', async () => {
+void test('async engine routes static commands through invokeTypedAsyncById (G2)', async () => {
   const h = makeByIdAsyncNative();
   const registry = new Map<string, { commandId: number }>([['heavy', { commandId: 5 }]]);
   const engine = createAsyncEngine(h.native, { frameCodecs: registry as never });
@@ -1112,7 +1112,7 @@ test('async engine routes static commands through invokeTypedAsyncById (G2)', as
   assert.deepEqual(h.state.nameCalls, [], 'name entry must be bypassed on the byId path');
 });
 
-test('async engine falls back to the name path for commands outside the registry (G2)', async () => {
+void test('async engine falls back to the name path for commands outside the registry (G2)', async () => {
   // registry 밖 = 동적 명령 — C++ 코덱 테이블에 없으므로 byId 로 진입하면 안 된다.
   const h = makeByIdAsyncNative();
   const engine = createAsyncEngine(h.native, {
@@ -1127,7 +1127,7 @@ test('async engine falls back to the name path for commands outside the registry
   assert.deepEqual(h.state.nameCalls, ['dynamicCmd']);
 });
 
-test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)', async () => {
+void test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)', async () => {
   // 구형 네이티브 — byId 미노출 시 기존 이름 진입 유지.
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, {
@@ -1144,7 +1144,7 @@ test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)'
 // 두 어댑터의 pre-abort 경로도 CancelledError 서브클래스로 승격 — abort
 // 타이밍(pre-abort vs mid-flight)에 관계없이 같은 instanceof 답을 보장한다.
 
-test('JSON adapter pre-abort rejects with CancelledError instance', async () => {
+void test('JSON adapter pre-abort rejects with CancelledError instance', async () => {
   const engine = createReactNativeEngine({
     invoke() {
       throw new Error('native must not be called when already aborted');
@@ -1160,23 +1160,23 @@ test('JSON adapter pre-abort rejects with CancelledError instance', async () => 
         error instanceof RustraCommandError,
         'CancelledError must remain a RustraCommandError',
       );
-      assert.equal((error as CancelledError).code, 'cancelled');
-      assert.equal((error as CancelledError).retryable, true);
+      assert.equal(error.code, 'cancelled');
+      assert.equal(error.retryable, true);
       assert.match((error as Error).message, /aborted before dispatch/);
       return true;
     },
   );
 });
 
-test('async engine pre-abort rejects with CancelledError instance (matches mid-flight)', async () => {
+void test('async engine pre-abort rejects with CancelledError instance (matches mid-flight)', async () => {
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { frameCodecs: new Map() });
   const ac = new AbortController();
   ac.abort();
   await assert.rejects(engine.invoke('heavy', { n: 1 }, { signal: ac.signal }), (err: unknown) => {
     assert.ok(err instanceof CancelledError, 'async pre-abort must be CancelledError');
-    assert.equal((err as CancelledError).code, 'cancelled');
-    assert.equal((err as CancelledError).retryable, true);
+    assert.equal(err.code, 'cancelled');
+    assert.equal(err.retryable, true);
     assert.match((err as Error).message, /heavy/);
     return true;
   });
@@ -1192,7 +1192,7 @@ test('async engine pre-abort rejects with CancelledError instance (matches mid-f
 // 체크포인트까지) → 'cooperative' / 배치 ✅ 정적 명령 단일 횡단 →
 // 'single-crossing' / 이벤트 ✅ → 'push' / 채널 ✅ → true / timeoutMs ✅ → true.
 
-test('A02: createReactNativeEngine exposes supports matching the compatibility matrix', async () => {
+void test('A02: createReactNativeEngine exposes supports matching the compatibility matrix', async () => {
   const engine = createReactNativeEngine(createMockNative({ ok: true, result: { value: 42 } }));
   assert.deepEqual(engine.supports, {
     cancellation: 'shallow',
@@ -1203,7 +1203,7 @@ test('A02: createReactNativeEngine exposes supports matching the compatibility m
   });
 });
 
-test('A02: createAsyncEngine exposes cooperative cancellation supports', async () => {
+void test('A02: createAsyncEngine exposes cooperative cancellation supports', async () => {
   // 리뷰 정정 — async invokeBatch 는 항목별 Promise.all 폴백이므로 sync 엔진의
   // `single-crossing` 셀을 상속하지 않는다: batch 는 `per-entry` 재정의.
   const h = makeAsyncNative();
@@ -1225,7 +1225,7 @@ const A05_SLOT_ENGINE = {
   invoke: async <T>() => 'slot' as T,
 } as unknown as import('@rustra/types').EngineClientWithBatch;
 
-test('A05: createRustraBootstrap exposes the lifecycle state surface', async () => {
+void test('A05: createRustraBootstrap exposes the lifecycle state surface', async () => {
   const { configure } = await import('@rustra/types');
   const native = createSetupNative();
   configure(A05_SLOT_ENGINE);
@@ -1247,7 +1247,7 @@ test('A05: createRustraBootstrap exposes the lifecycle state surface', async () 
   }
 });
 
-test('A05: ready after dispose rejects loudly (react-native)', async () => {
+void test('A05: ready after dispose rejects loudly (react-native)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -1266,7 +1266,7 @@ test('A05: ready after dispose rejects loudly (react-native)', async () => {
   }
 });
 
-test('A05: dispose is idempotent — second dispose is a no-op (react-native)', async () => {
+void test('A05: dispose is idempotent — second dispose is a no-op (react-native)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -1283,7 +1283,7 @@ test('A05: dispose is idempotent — second dispose is a no-op (react-native)', 
   }
 });
 
-test('A05: concurrent ready calls share one initialization promise (react-native)', async () => {
+void test('A05: concurrent ready calls share one initialization promise (react-native)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -1306,7 +1306,7 @@ test('A05: concurrent ready calls share one initialization promise (react-native
   }
 });
 
-test('disposing an uninitialized RN bootstrap releases global lazy setup', async () => {
+void test('disposing an uninitialized RN bootstrap releases global lazy setup', async () => {
   const { configure, ensureConfigured } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let installs = 0;
@@ -1326,7 +1326,7 @@ test('disposing an uninitialized RN bootstrap releases global lazy setup', async
   }
 });
 
-test('disposing RN bootstrap during install cannot publish its engine', async () => {
+void test('disposing RN bootstrap during install cannot publish its engine', async () => {
   const { configure, ensureConfigured } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let release!: () => void;
@@ -1351,7 +1351,7 @@ test('disposing RN bootstrap during install cannot publish its engine', async ()
   }
 });
 
-test('replaced RN bootstrap cannot claim another engine as ready', async () => {
+void test('replaced RN bootstrap cannot claim another engine as ready', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let release!: () => void;
@@ -1377,20 +1377,19 @@ test('replaced RN bootstrap cannot claim another engine as ready', async () => {
   }
 });
 
-test('captured RN engine stops every public route after bootstrap disposal', async () => {
+void test('captured RN engine stops every public route after bootstrap disposal', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let nativeCalls = 0;
   const bootstrap = createRustraBootstrap({
     install: async () => {},
-    getNative: () =>
-      ({
-        ...createSetupNative(),
-        getSchema() {
-          nativeCalls++;
-          return exactArrayBuffer(encodeUtf8('{"commands":[]}'));
-        },
-      }) as RustraJSINative,
+    getNative: () => ({
+      ...createSetupNative(),
+      getSchema() {
+        nativeCalls++;
+        return exactArrayBuffer(encodeUtf8('{"commands":[]}'));
+      },
+    }),
     frameCodecs: new Map(),
   });
   try {
@@ -1408,7 +1407,7 @@ test('captured RN engine stops every public route after bootstrap disposal', asy
   }
 });
 
-test('captured RN engine rejects replacement and old dispose preserves the new owner', async () => {
+void test('captured RN engine rejects replacement and old dispose preserves the new owner', async () => {
   const { configure, invoke } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   const bootstrap = createRustraBootstrap({
@@ -1429,26 +1428,25 @@ test('captured RN engine rejects replacement and old dispose preserves the new o
   }
 });
 
-test('captured RN synchronous binding follows bootstrap ownership', async () => {
+void test('captured RN synchronous binding follows bootstrap ownership', async () => {
   const { configure } = await import('@rustra/types');
   for (const retirement of ['dispose', 'replace'] as const) {
     configure(A05_SLOT_ENGINE);
     let nativeCalls = 0;
     const bootstrap = createRustraBootstrap({
       install: async () => {},
-      getNative: () =>
-        ({
-          invoke: () => {
-            throw new Error('unexpected JSON invocation');
-          },
-          invokeFrame: () => {
-            throw new Error('unexpected Frame invocation');
-          },
-          bindSyncCommand: () => () => {
-            nativeCalls++;
-            return 42;
-          },
-        }) as RustraJSINative,
+      getNative: () => ({
+        invoke: () => {
+          throw new Error('unexpected JSON invocation');
+        },
+        invokeFrame: () => {
+          throw new Error('unexpected Frame invocation');
+        },
+        bindSyncCommand: () => () => {
+          nativeCalls++;
+          return 42;
+        },
+      }),
       contractHash: 'expected',
       contractVerification: 'off',
       frameCodecs: new Map([
@@ -1486,7 +1484,7 @@ test('captured RN synchronous binding follows bootstrap ownership', async () => 
 // 네이티브 HostFunction 이 구현한다 — JS 표면은 __rustraNative 슬롯 통과 계약
 // (정적 모드 = null, 핫 모드 = 마지막 스왑 해시/오류)만 고정한다.
 
-test('hotCoreStatus passes the native swap report through __rustraNative', () => {
+void test('hotCoreStatus passes the native swap report through __rustraNative', () => {
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
   try {
@@ -1516,7 +1514,7 @@ test('hotCoreStatus passes the native swap report through __rustraNative', () =>
   }
 });
 
-test('hotCoreStatus reports the last swap error through __rustraNative', () => {
+void test('hotCoreStatus reports the last swap error through __rustraNative', () => {
   // 실패 스왑 — CLI 게이트 reject 등으로 dlopen 이 거절된 개발자 관측 경로.
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -1541,7 +1539,7 @@ test('hotCoreStatus reports the last swap error through __rustraNative', () => {
 
 // ── subscribeEvent pollMs — CallInvoker 없는 호스트의 JS 폴링 drain ─────────
 
-test('subscribeEvent pollMs drains queued events from a CallInvoker-less native', async () => {
+void test('subscribeEvent pollMs drains queued events from a CallInvoker-less native', async () => {
   // C++ 디스패처 계약 재현: CallInvoker 없으면 emit 이 큐에만 쌓이고 JS 의
   // drainEvents() 폴링을 기다린다. onEvent 콜백은 큐 소비 시점에 호출된다.
   const received: unknown[] = [];
@@ -1588,7 +1586,7 @@ test('subscribeEvent pollMs drains queued events from a CallInvoker-less native'
   }
 });
 
-test('subscribeEvent pollMs delivers directly on onEvent hosts without waiting for drain', () => {
+void test('subscribeEvent pollMs delivers directly on onEvent hosts without waiting for drain', () => {
   // CallInvoker 호스트 — onEvent 콜백이 즉시 호출되고 drain 은 비어 있어 무해.
   const received: unknown[] = [];
   const h = createEventNative();
@@ -1608,7 +1606,7 @@ test('subscribeEvent pollMs delivers directly on onEvent hosts without waiting f
   }
 });
 
-test('subscribeEvent pollMs is ignored on natives without drainEvents', () => {
+void test('subscribeEvent pollMs is ignored on natives without drainEvents', () => {
   // drainEvents 미노출 — 옵션은 조용히 무시(푸시 전용 네이티브 보호).
   const h = createEventNative();
   const received: unknown[] = [];
@@ -1629,7 +1627,7 @@ test('subscribeEvent pollMs is ignored on natives without drainEvents', () => {
 
 // ── 채널 pollMs — CallInvoker 없는 호스트의 채널 큐 폴링 drain ─────────────
 
-test('createChannel pollMs drains queued frames from a CallInvoker-less native', async () => {
+void test('createChannel pollMs drains queued frames from a CallInvoker-less native', async () => {
   // C++ ChannelDispatcher 계약 재현: CallInvoker 없으면 send 가 큐에만 쌓이고 JS 의
   // drainEvents() 폴링을 기다린다(이벤트 폴링 테스트의 채널 변주).
   const received: unknown[] = [];
@@ -1667,7 +1665,7 @@ test('createChannel pollMs drains queued frames from a CallInvoker-less native',
   }
 });
 
-test('createChannel close releases polling demand — last close stops the loop', async () => {
+void test('createChannel close releases polling demand — last close stops the loop', async () => {
   // 폴링 루프는 네이티브 인스턴스당 수요 집계 — 채널 하나가 close 해도 다른
   // 채널의 수요가 남으면 유지되고, 마지막 close 로 정지한다(타이머 해제).
   let drainCount = 0;
@@ -1710,7 +1708,7 @@ test('createChannel close releases polling demand — last close stops the loop'
   }
 });
 
-test('createChannel pollMs is ignored on natives without drainEvents', () => {
+void test('createChannel pollMs is ignored on natives without drainEvents', () => {
   // drainEvents 미노출 — 옵션은 조용히 무시, 채널 생성 자체는 정상 동작한다.
   const received: unknown[] = [];
   const dropped: number[] = [];
@@ -1733,14 +1731,14 @@ test('createChannel pollMs is ignored on natives without drainEvents', () => {
   assert.deepEqual(dropped, [3]);
 });
 
-test('createBytesChannel pollMs drains queued binary frames from a CallInvoker-less native', async () => {
+void test('createBytesChannel pollMs drains queued binary frames from a CallInvoker-less native', async () => {
   const frames: number[][] = [];
   let drainCount = 0;
   const callbacks = new Map<number, (payload: ArrayBuffer) => void>();
   const queue: Array<[number, Uint8Array]> = [];
   const native = {
     createChannelBytes(next: (payload: ArrayBuffer | Uint8Array) => void) {
-      callbacks.set(9, next as (payload: ArrayBuffer) => void);
+      callbacks.set(9, next);
       return 9;
     },
     dropChannel(handle: number) {
@@ -1768,7 +1766,7 @@ test('createBytesChannel pollMs drains queued binary frames from a CallInvoker-l
   }
 });
 
-test('polling demand is shared between event subscriptions and channels on one native', async () => {
+void test('polling demand is shared between event subscriptions and channels on one native', async () => {
   // 이벤트 구독 해제는 채널 폴링을 끄지 않고, pollMs 없는 구독이 남아 있어도
   // 마지막 채널 close 로 루프가 정지한다(정지 조건 = pollMs 수요 합계 0).
   let drainCount = 0;
@@ -1856,7 +1854,7 @@ function withPollingClock(run: (clock: { pending(): number; tick(): void }) => v
   }
 }
 
-test('closing a channel with disabled polling preserves another channel delivery', () => {
+void test('closing a channel with disabled polling preserves another channel delivery', () => {
   withPollingClock((clock) => {
     let nextHandle = 0;
     let drains = 0;
@@ -1880,7 +1878,7 @@ test('closing a channel with disabled polling preserves another channel delivery
   });
 });
 
-test('unsubscribing an event with disabled polling preserves a channel polling loop', () => {
+void test('unsubscribing an event with disabled polling preserves a channel polling loop', () => {
   withPollingClock((clock) => {
     const h = createEventNative();
     const native = {
@@ -1907,7 +1905,7 @@ test('unsubscribing an event with disabled polling preserves a channel polling l
   });
 });
 
-test('non-finite polling intervals leave push channels usable without scheduling timers', () => {
+void test('non-finite polling intervals leave push channels usable without scheduling timers', () => {
   withPollingClock((clock) => {
     for (const pollMs of [Number.NaN, Number.POSITIVE_INFINITY]) {
       let deliver: ((payload: ArrayBuffer | Uint8Array) => void) | undefined;
@@ -1935,7 +1933,7 @@ test('non-finite polling intervals leave push channels usable without scheduling
   });
 });
 
-test('a channel replaced during drain keeps one timer and stops at its last close', () => {
+void test('a channel replaced during drain keeps one timer and stops at its last close', () => {
   withPollingClock((clock) => {
     let nextHandle = 0;
     let replacement: ReturnType<typeof createChannel> | undefined;
@@ -1963,7 +1961,7 @@ test('a channel replaced during drain keeps one timer and stops at its last clos
   });
 });
 
-test('repeated old unsubscribe cannot remove a replacement subscription', () => {
+void test('repeated old unsubscribe cannot remove a replacement subscription', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -1983,7 +1981,7 @@ test('repeated old unsubscribe cannot remove a replacement subscription', () => 
   }
 });
 
-test('a failed native event registration can be retried and deliver events', () => {
+void test('a failed native event registration can be retried and deliver events', () => {
   const h = createEventNative();
   const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
   const previous = root.__rustraNative;
@@ -2015,7 +2013,7 @@ test('a failed native event registration can be retried and deliver events', () 
   }
 });
 
-test('unsubscribe releases polling even when native listener removal throws', () => {
+void test('unsubscribe releases polling even when native listener removal throws', () => {
   withPollingClock((clock) => {
     const failure = new Error('native removal failed');
     const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
@@ -2039,14 +2037,14 @@ test('unsubscribe releases polling even when native listener removal throws', ()
   });
 });
 
-test('channel creation rejects the native zero-handle failure sentinel', () => {
+void test('channel creation rejects the native zero-handle failure sentinel', () => {
   assert.throws(
     () => createChannel(() => {}, { createChannel: () => 0, dropChannel: () => false }),
     (error: unknown) => error instanceof RustraCommandError && error.code === 'channel.unavailable',
   );
 });
 
-test('channel close retains a native producer-bound closer across core replacement', () => {
+void test('channel close retains a native producer-bound closer across core replacement', () => {
   let currentCore = 0;
   const drops: number[] = [];
   const native = {
@@ -2072,7 +2070,7 @@ test('channel close retains a native producer-bound closer across core replaceme
   assert.deepEqual(drops, [0, 1]);
 });
 
-test('failed native close binding releases the created channel before reporting failure', () => {
+void test('failed native close binding releases the created channel before reporting failure', () => {
   const failure = new Error('native close binding failed');
   const dropped: number[] = [];
   assert.throws(
