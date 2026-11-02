@@ -136,7 +136,8 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
     try {
       return Promise.resolve(dispatch<T>(command, args));
     } catch (error) {
-      return Promise.reject(error);
+      // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
   };
 
@@ -185,7 +186,8 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
     try {
       return Promise.resolve(dispatchById<T>(commandId, command, args));
     } catch (error) {
-      return Promise.reject(error);
+      // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
   };
 

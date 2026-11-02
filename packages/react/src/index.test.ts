@@ -27,7 +27,7 @@ function createTestEngine(dataMap: Record<string, unknown>): EngineClient {
   };
 }
 
-test('RustraProvider supplies engine to useRustraEngine', () => {
+void test('RustraProvider supplies engine to useRustraEngine', () => {
   const engine = createTestEngine({ testCmd: 'hello' });
   let capturedEngine: EngineClient | null = null;
 
@@ -41,7 +41,7 @@ test('RustraProvider supplies engine to useRustraEngine', () => {
   assert.equal(capturedEngine, engine);
 });
 
-test('useCommand hook contract and properties', () => {
+void test('useCommand hook contract and properties', () => {
   async function dummyCmd(input: { val: number }): Promise<{ res: number }> {
     return { res: input.val * 2 };
   }
@@ -63,7 +63,7 @@ test('useCommand hook contract and properties', () => {
   assert.equal(typeof result.refetch, 'function');
 });
 
-test('inputKey supports bigint values without throwing', () => {
+void test('inputKey supports bigint values without throwing', () => {
   assert.equal(inputKey({ value: 42n }), inputKey({ value: 42n }));
   assert.notEqual(inputKey({ value: 42n }), inputKey({ value: { $rustraBigInt: '42' } }));
 });
@@ -72,7 +72,7 @@ class Repo {
   constructor(public name: string) {}
 }
 
-test('inputKey keys class instances, functions, and symbols stably without throwing', () => {
+void test('inputKey keys class instances, functions, and symbols stably without throwing', () => {
   // 같은 인스턴스/함수/심볼 → 매 렌더 같은 키 (WeakMap 인스턴스 id, String(symbol))
   const instance = new Repo('stable');
   const fn = () => {};
@@ -96,7 +96,7 @@ test('inputKey keys class instances, functions, and symbols stably without throw
   assert.notEqual(inputKey(new Repo('a')), inputKey({ name: 'a' }));
 });
 
-test('inputKey warns once per key for identity-keyed inputs', () => {
+void test('inputKey warns once per key for identity-keyed inputs', () => {
   const original = console.warn;
   let warnings = 0;
   console.warn = () => {
@@ -114,7 +114,7 @@ test('inputKey warns once per key for identity-keyed inputs', () => {
   }
 });
 
-test('useCommand render path no longer crashes on class instance, function, or symbol inputs', () => {
+void test('useCommand render path no longer crashes on class instance, function, or symbol inputs', () => {
   async function load(_input: unknown): Promise<string> {
     return 'ok';
   }
@@ -139,7 +139,7 @@ test('useCommand render path no longer crashes on class instance, function, or s
   assert.match(render(Symbol('render')), /ready/);
 });
 
-test('useMutation hook contract and execution', async () => {
+void test('useMutation hook contract and execution', async () => {
   async function updateItem(_input: { id: string }): Promise<{ updated: boolean }> {
     return { updated: true };
   }
@@ -191,7 +191,7 @@ function flushAsync(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-test('suspense cache state machine: pending -> fulfilled stores value', async () => {
+void test('suspense cache state machine: pending -> fulfilled stores value', async () => {
   invalidateCommands();
   const deferred = createDeferred<string>();
   let invocations = 0;
@@ -228,7 +228,7 @@ test('suspense cache state machine: pending -> fulfilled stores value', async ()
   assert.equal(invocations, 1);
 });
 
-test('suspense cache state machine: pending -> rejected stores error and re-throws same object', async () => {
+void test('suspense cache state machine: pending -> rejected stores error and re-throws same object', async () => {
   invalidateCommands();
   const deferred = createDeferred<string>();
   const failure = new Error('engine exploded');
@@ -244,7 +244,7 @@ test('suspense cache state machine: pending -> rejected stores error and re-thro
   assert.equal(entry.error, failure);
 });
 
-test('suspense cache: non-Error rejections are normalized to Error', async () => {
+void test('suspense cache: non-Error rejections are normalized to Error', async () => {
   invalidateCommands();
   const deferred = createDeferred<string>();
   // useCommand/useMutation 과의 관례 정합: non-Error reject 는 Error 로 감싼다
@@ -259,10 +259,10 @@ test('suspense cache: non-Error rejections are normalized to Error', async () =>
 
   assert.equal(entry.status, 'rejected');
   assert.ok(entry.error instanceof Error);
-  assert.equal((entry.error as Error).message, 'plain string failure');
+  assert.equal(entry.error.message, 'plain string failure');
 });
 
-test('suspense cache: different inputs to same command create separate entries', async () => {
+void test('suspense cache: different inputs to same command create separate entries', async () => {
   invalidateCommands();
   let invocations = 0;
   const start = () => {
@@ -280,7 +280,7 @@ test('suspense cache: different inputs to same command create separate entries',
   assert.equal(entryB.value, 2);
 });
 
-test('invalidateCommands(commandName) clears only that command, () clears all', async () => {
+void test('invalidateCommands(commandName) clears only that command, () clears all', async () => {
   invalidateCommands();
   const deferredA = createDeferred<string>();
   const deferredB = createDeferred<string>();
@@ -320,7 +320,7 @@ test('invalidateCommands(commandName) clears only that command, () clears all', 
   assert.equal(afterFull.value, 'recreated');
 });
 
-test('invalidateCommands matches the owning command exactly, not a key prefix', async () => {
+void test('invalidateCommands matches the owning command exactly, not a key prefix', async () => {
   invalidateCommands();
   let invocations = 0;
   const start = () => {
@@ -342,7 +342,7 @@ test('invalidateCommands matches the owning command exactly, not a key prefix', 
   assert.equal(invocations, 2);
 });
 
-test('suspense cache: bigint input does not throw and keys stay distinct', () => {
+void test('suspense cache: bigint input does not throw and keys stay distinct', () => {
   invalidateCommands();
   let invocations = 0;
   const start = () => {
@@ -372,12 +372,12 @@ test('suspense cache: bigint input does not throw and keys stay distinct', () =>
   assert.equal(invocations, 2);
 });
 
-test('useSuspenseCommand and invalidateCommands are exported from index', () => {
+void test('useSuspenseCommand and invalidateCommands are exported from index', () => {
   assert.equal(typeof useSuspenseCommand, 'function');
   assert.equal(typeof invalidateCommands, 'function');
 });
 
-test('resolveSuspenseEntry wires engine.invoke exactly once', async () => {
+void test('resolveSuspenseEntry wires engine.invoke exactly once', async () => {
   invalidateCommands();
   // 훅의 얇은 위임 계약을 실행 기반으로 확인: 훅은 engine.invoke 를
   // resolveSuspenseEntry 에 위임할 뿐이며, settle 후 재접근은 재실행하지 않는다.

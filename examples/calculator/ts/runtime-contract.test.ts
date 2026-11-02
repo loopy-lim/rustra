@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('host apps use generated zero-config entrypoints without local transport wiring', async () => {
+void test('host apps use generated zero-config entrypoints without local transport wiring', async () => {
   const nodeApp = await readFile('examples/calculator/apps/node-app.ts', 'utf8');
   const bunApp = await readFile('examples/calculator/apps/bun-ffi-app.ts', 'utf8');
   const tauriApp = await readFile('examples/tauri-calculator/src/app.ts', 'utf8');
@@ -44,7 +44,7 @@ test('host apps use generated zero-config entrypoints without local transport wi
   assert.doesNotMatch(tauriMain, /calculator_package|tauri_support/);
 });
 
-test('react native runtime fixture exposes a native Rust-backed invoke module', async () => {
+void test('react native runtime fixture exposes a native Rust-backed invoke module', async () => {
   const swiftModule = await readFile(
     'examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculatorModule.swift',
     'utf8',

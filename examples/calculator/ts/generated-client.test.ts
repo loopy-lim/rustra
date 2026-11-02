@@ -7,7 +7,7 @@ import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 import type { EngineClient } from '../generated/types.js';
 
-test('generated command helper calls the host EngineClient invoke contract', async () => {
+void test('generated command helper calls the host EngineClient invoke contract', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const engine: EngineClient = {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
@@ -28,7 +28,7 @@ test('generated command helper calls the host EngineClient invoke contract', asy
   ]);
 });
 
-test('generated client stays host neutral for Node, Bun, Tauri, and React Native', async () => {
+void test('generated client stays host neutral for Node, Bun, Tauri, and React Native', async () => {
   const commands = await readFile(
     join(process.cwd(), 'examples/calculator/generated/commands.ts'),
     'utf8',

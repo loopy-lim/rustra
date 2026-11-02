@@ -2,8 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runTrackBBench } from './track-b-bench.mjs';
 
-test('track B benchmark emits a bounded machine-readable receipt', () => {
-  const receipt = runTrackBBench({ iterations: 25, warmup: 5 });
+// track-b-bench.mjs 는 타입 없는 JS 모듈 — receipt 스키마를 구조 타입으로 고정한다.
+type TrackBReceipt = {
+  command?: string;
+  route?: string;
+  runs?: string;
+  verified?: boolean;
+  results: Array<{ op?: string; schema?: string; us: number; iterations?: number; bytes?: number }>;
+  allRunsUs: Record<string, number[]>;
+};
+
+void test('track B benchmark emits a bounded machine-readable receipt', () => {
+  // .mjs 함수 반환을 receipt 스키마로 고정한다(아래 TrackBReceipt 와 동일).
+  const receipt: TrackBReceipt = runTrackBBench({ iterations: 25, warmup: 5 });
   assert.equal(receipt.route, 'complex-binary-js');
   assert.equal(receipt.results.length, 4);
   for (const row of receipt.results) {
@@ -14,8 +25,9 @@ test('track B benchmark emits a bounded machine-readable receipt', () => {
   assert.equal(receipt.verified, true);
 });
 
-test('reported median is the actual median of the recorded runs', () => {
-  const receipt = runTrackBBench({ iterations: 25, warmup: 5 });
+void test('reported median is the actual median of the recorded runs', () => {
+  // .mjs 함수 반환을 receipt 스키마로 고정한다(아래 TrackBReceipt 와 동일).
+  const receipt: TrackBReceipt = runTrackBBench({ iterations: 25, warmup: 5 });
   assert.equal(receipt.runs, 'median of 3 executions');
   const opKeys = Object.keys(receipt.allRunsUs);
   assert.equal(opKeys.length, 4);
@@ -31,7 +43,7 @@ test('reported median is the actual median of the recorded runs', () => {
   }
 });
 
-test('committed receipt matches the script output shape — no hand-edited receipts', async () => {
+void test('committed receipt matches the script output shape — no hand-edited receipts', async () => {
   // 재발 방지(2026-08-29): receipt 를 스크립트 밖에서 손으로 편집한 적이
   // 있다. 커밋된 receipt 가 스크립트 스키마와 내부 정합성을 유지하는지 검증
   // — 타이밍 수치 자체가 아니라 "스크립트 산출물의 모양"을 검사하므로 기계
@@ -41,7 +53,7 @@ test('committed receipt matches the script output shape — no hand-edited recei
     new URL('../docs/benchmark-receipts/2026-08-29-track-b.json', import.meta.url),
     'utf8',
   );
-  const receipt = JSON.parse(raw);
+  const receipt = JSON.parse(raw) as TrackBReceipt;
   assert.equal(receipt.command, 'bun scripts/track-b-bench.mjs');
   assert.equal(receipt.runs, 'median of 3 executions');
   assert.ok(Array.isArray(receipt.results) && receipt.results.length === 4);

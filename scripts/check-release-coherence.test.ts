@@ -60,7 +60,7 @@ function makeFixture(): string {
   return root;
 }
 
-test('accepts independently versioned packages with compatible dependencies', () => {
+void test('accepts independently versioned packages with compatible dependencies', () => {
   const root = makeFixture();
   try {
     assert.deepEqual(checkReleaseCoherence(root), []);
@@ -69,7 +69,7 @@ test('accepts independently versioned packages with compatible dependencies', ()
   }
 });
 
-test('reports an incompatible internal dependency range', () => {
+void test('reports an incompatible internal dependency range', () => {
   const root = makeFixture();
   try {
     const manifestPath = join(root, 'packages', 'bun', 'package.json');
@@ -89,7 +89,7 @@ test('reports an incompatible internal dependency range', () => {
 // wasm 백엔드는 dev/experimental 전용이다 — 릴리스 아티팩트(npm tarball 의 files
 // 경로)에 wasm 엔진 계열 경로가 포함되면 fail 해야 한다.
 
-test('rejects release files that ship the experimental wasm backend', () => {
+void test('rejects release files that ship the experimental wasm backend', () => {
   const root = makeFixture();
   try {
     const manifestPath = join(root, 'packages', 'react-native', 'package.json');
@@ -107,7 +107,7 @@ test('rejects release files that ship the experimental wasm backend', () => {
   }
 });
 
-test('wasm backend guard tolerates unrelated native paths and conventional files', () => {
+void test('wasm backend guard tolerates unrelated native paths and conventional files', () => {
   const root = makeFixture();
   try {
     for (const name of ['react-native', 'bun']) {
@@ -129,7 +129,7 @@ test('wasm backend guard tolerates unrelated native paths and conventional files
 // 코드젠의 어댑터 버전 게이트가 새 버전을 거부해 main CI 가 깨진다. 범위는
 // 항상 워크스페이스 어댑터 버전을 포함해야 한다.
 
-test('reports a reactNativeRange that no longer contains the adapter version', () => {
+void test('reports a reactNativeRange that no longer contains the adapter version', () => {
   const root = makeFixture();
   try {
     const manifestPath = join(root, 'packages', 'react-native', 'package.json');
@@ -146,11 +146,13 @@ test('reports a reactNativeRange that no longer contains the adapter version', (
   }
 });
 
-test('codegen host ranges must contain independently published host versions', () => {
+void test('codegen host ranges must contain independently published host versions', () => {
   const root = makeFixture();
   try {
     const path = join(root, 'packages/cli/package.json');
-    const cli = JSON.parse(readFileSync(path, 'utf8'));
+    const cli = JSON.parse(readFileSync(path, 'utf8')) as {
+      rustraTemplate: Record<string, string>;
+    };
     Object.assign(cli.rustraTemplate, {
       nodeRange: '^0.9.0',
       bunRange: '^0.9.0',

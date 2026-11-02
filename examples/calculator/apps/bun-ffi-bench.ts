@@ -54,8 +54,11 @@ function e2eRun(iters: number): number {
     if (written <= 0 || written > outputBuffer.length) {
       throw new Error(`implausible response length: ${written}`);
     }
-    const response = JSON.parse(decoder.decode(outputBuffer.subarray(0, Number(written))));
-    const result = response.result ?? response;
+    const response = JSON.parse(decoder.decode(outputBuffer.subarray(0, Number(written)))) as {
+      result?: { value: number };
+    };
+    // result 래퍼 유무와 무관하게 { value } 형태로 좁힌다(fixture 응답 계약).
+    const result = (response.result ?? response) as { value: number };
     last = result.value;
   }
   if (last !== 42) throw new Error(`expected 42, got ${last}`);

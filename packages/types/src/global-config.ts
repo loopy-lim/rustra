@@ -1,12 +1,7 @@
 import { RustraCommandError, RustraErrorCode } from './errors.js';
 import { invokeByIdWithTimeout, invokeWithTimeout } from './cancel.js';
 import type { EngineClient, InvokeOptions } from './public.js';
-import {
-  invokeByIdSync,
-  resetConfiguredRoutes,
-  runtime,
-  type InternalEngineClient,
-} from './global-state.js';
+import { invokeByIdSync, resetConfiguredRoutes, runtime } from './global-state.js';
 
 /** configure/configureLazy 의 선택적 등록자 식별 — 충돌 진단 메시지에만 쓰인다. */
 export type ConfigureOptions = {
@@ -122,7 +117,7 @@ export function ensureConfigured(): Promise<EngineClient> {
         runtime.engineInitializer = undefined;
         runtime.engineInitialization = undefined;
         resetConfiguredRoutes();
-        return engine as InternalEngineClient;
+        return engine;
       })
       .catch((error) => {
         if (runtime.engineInitialization === initialization)
@@ -174,7 +169,8 @@ export function invokeGenerated<T>(
     try {
       return Promise.resolve(syncInvoke<T>(commandId, command, args));
     } catch (error) {
-      return Promise.reject(error);
+      // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
   }
   if (!engine.invokeById) return invokeWithTimeout(engine, command, args, options);

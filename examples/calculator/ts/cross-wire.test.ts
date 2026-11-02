@@ -34,18 +34,18 @@ function bytesToHex(buf: ArrayBuffer): string {
 
 // ── addNumbers (Tier1 i64) ──────────────────────────────────
 
-test('cross-wire addNumbers: Rust response → TS codec.decode', () => {
+void test('cross-wire addNumbers: Rust response → TS codec.decode', () => {
   const r = addNumbersCodec.decode(hexToBytes(ADDNUMBERS_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.value, 5, '2 + 3 must decode to 5');
 });
 
-test('cross-wire addNumbers: TS codec.encode → Rust request wire', () => {
+void test('cross-wire addNumbers: TS codec.encode → Rust request wire', () => {
   const req = addNumbersCodec.encode({ a: 2, b: 3 });
   assert.equal(bytesToHex(req), ADDNUMBERS_REQUEST, 'TS encode must match Rust request hex');
 });
 
-test('encodeInto is byte-identical to encode across representative commands', () => {
+void test('encodeInto is byte-identical to encode across representative commands', () => {
   // 재사용 버퍼 직접 기록 경로(encodeInto)는 encode 와 완전히 같은 와이어를
   // 내야 한다 — 커맨드별 최근 버퍼 1개 재사용이 dispatch 핫패스에 들어가므로
   // 패리티가 깨지면 즉시 잡아야 한다. 부정수/멀티바이트 varint/문자열/배열로
@@ -84,41 +84,41 @@ test('encodeInto is byte-identical to encode across representative commands', ()
 
 // ── greet (Tier2 String) ────────────────────────────────────
 
-test('cross-wire greet: Rust response → TS codec.decode', () => {
+void test('cross-wire greet: Rust response → TS codec.decode', () => {
   const r = greetCodec.decode(hexToBytes(GREET_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.message, 'Hello, Lynx!');
 });
 
-test('cross-wire greet: TS codec.encode → Rust request wire', () => {
+void test('cross-wire greet: TS codec.encode → Rust request wire', () => {
   const req = greetCodec.encode({ name: 'Lynx' });
   assert.equal(bytesToHex(req), GREET_REQUEST);
 });
 
 // ── divide (에러 프레임 교차, Task 2.6) ─────────────────────
 
-test('cross-wire divide: Rust error frame → TS codec.decode → RustraError', () => {
+void test('cross-wire divide: Rust error frame → TS codec.decode → RustraError', () => {
   const r = divideCodec.decode(hexToBytes(DIVIDE_RESPONSE));
   assert.equal(r.ok, false, 'divide-by-zero must decode as an error frame');
   assert.equal(r.error?.code, 'math.divide_by_zero');
   assert.equal(r.error?.message, 'cannot divide by zero');
 });
 
-test('cross-wire divide: TS codec.encode → Rust request wire', () => {
+void test('cross-wire divide: TS codec.encode → Rust request wire', () => {
   const req = divideCodec.encode({ a: 1, b: 0 });
   assert.equal(bytesToHex(req), DIVIDE_REQUEST);
 });
 
 // ── 구조적 단언: success/error 프레임 레이아웃 ──────────────
 
-test('cross-wire frame layout: success has ok=1 at byte 0, payload at offset 8', () => {
+void test('cross-wire frame layout: success has ok=1 at byte 0, payload at offset 8', () => {
   const u = new Uint8Array(hexToBytes(ADDNUMBERS_RESPONSE));
   assert.equal(u[0], 1, 'success frame ok=1');
   // offset 1..7 reserved(0)
   assert.deepEqual(Array.from(u.slice(1, 8)), [0, 0, 0, 0, 0, 0, 0]);
 });
 
-test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () => {
+void test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () => {
   const buf = hexToBytes(DIVIDE_RESPONSE);
   const u = new Uint8Array(buf);
   const view = new DataView(buf);
@@ -142,7 +142,7 @@ const GAUGE_REQUEST = '1100ac02f0a204';
 const GAUGE_RESPONSE = '01000000000000009ca504';
 
 // sizeOf — Vec<u8> len+raw (u32 출력 plain varint)
-test('cross-wire sizeOf: TS encode → Rust request / Rust response → TS decode', () => {
+void test('cross-wire sizeOf: TS encode → Rust request / Rust response → TS decode', () => {
   const req = sizeOfCodec.encode({ data: [1, 2, 3, 250] });
   assert.equal(bytesToHex(req), SIZEOF_REQUEST, 'bytes: len varint + raw');
   const r = sizeOfCodec.decode(hexToBytes(SIZEOF_RESPONSE));
@@ -153,7 +153,7 @@ test('cross-wire sizeOf: TS encode → Rust request / Rust response → TS decod
 
 // scoreTotal — map count+(k,v)*. 요청은 해시 순서가 비결정적이라 hex 고정
 // 불가(Rust 측 동일) — 엔트리 수/길이 구조 검증 + 응답 round-trip.
-test('cross-wire scoreTotal: map structure + response round-trip', () => {
+void test('cross-wire scoreTotal: map structure + response round-trip', () => {
   const req = scoreTotalCodec.encode({ scores: { a: 10, b: 32 } });
   const u = new Uint8Array(req);
   assert.equal(u[0], 0x0f, 'cmd_id LSB (14)');
@@ -169,7 +169,7 @@ test('cross-wire scoreTotal: map structure + response round-trip', () => {
 // span — postcard tuple: prefix-free ("hi", -5) → str len + bytes + zigzag i64
 // NOTE: 0.4.1 complex-codec tuple wire was count + elements; this is a
 // wire break for consumers mixing old TS codecs with regenerated Rust.
-test('cross-wire span: postcard tuple is prefix-free', () => {
+void test('cross-wire span: postcard tuple is prefix-free', () => {
   const req = spanCodec.encode({ pair: ['hi', -5] });
   assert.equal(bytesToHex(req), SPAN_REQUEST, 'postcard tuple: str len + bytes + zigzag i64');
   const r = spanCodec.decode(hexToBytes(SPAN_RESPONSE));
@@ -179,7 +179,7 @@ test('cross-wire span: postcard tuple is prefix-free', () => {
 });
 
 // gauge — u64/u32 plain varint (과거 zigzag 인코딩 버그의 회귀 방지)
-test('cross-wire gauge: unsigned fields use plain varint, not zigzag', () => {
+void test('cross-wire gauge: unsigned fields use plain varint, not zigzag', () => {
   const req = gaugeCodec.encode({ limit: 300, offset: 70000 });
   assert.equal(bytesToHex(req), GAUGE_REQUEST, '300 → ac02, 70000 → f0a204 (plain)');
   const r = gaugeCodec.decode(hexToBytes(GAUGE_RESPONSE));
@@ -200,7 +200,7 @@ const SPAN_2POW53_M1_RESPONSE = '0100000000000000026869feffffffffffff1f';
 const SPAN_2POW53_P1_REQUEST = '10000268698280808080808020';
 const SPAN_2POW53_P1_RESPONSE = '01000000000000000268698280808080808020';
 
-test('cross-wire gauge u64::MAX: 10-byte LEB128 round-trip', () => {
+void test('cross-wire gauge u64::MAX: 10-byte LEB128 round-trip', () => {
   const req = gaugeCodec.encode({ limit: 18446744073709551615n, offset: 0 });
   assert.equal(bytesToHex(req), GAUGE_U64MAX_REQUEST, 'u64::MAX → ff x9 + 01');
   const r = gaugeCodec.decode(hexToBytes(GAUGE_U64MAX_RESPONSE));
@@ -208,7 +208,7 @@ test('cross-wire gauge u64::MAX: 10-byte LEB128 round-trip', () => {
   assert.equal(r.result?.next, 18446744073709551615n, 'u64::MAX restored as bigint');
 });
 
-test('cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip', () => {
+void test('cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip', () => {
   const req = spanCodec.encode({ pair: ['hi', -9223372036854775808n] });
   assert.equal(bytesToHex(req), SPAN_I64MIN_REQUEST, 'zigzag(i64::MIN) = u64::MAX');
   const r = spanCodec.decode(hexToBytes(SPAN_I64MIN_RESPONSE));
@@ -216,7 +216,7 @@ test('cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip', () => 
   assert.equal(r.result?.second, -9223372036854775808n, 'i64::MIN restored as bigint');
 });
 
-test('cross-wire span 2^53-1: largest exact number', () => {
+void test('cross-wire span 2^53-1: largest exact number', () => {
   const req = spanCodec.encode({ pair: ['hi', 9007199254740991] });
   assert.equal(bytesToHex(req), SPAN_2POW53_M1_REQUEST);
   const r = spanCodec.decode(hexToBytes(SPAN_2POW53_M1_RESPONSE));
@@ -224,7 +224,7 @@ test('cross-wire span 2^53-1: largest exact number', () => {
   assert.equal(r.result?.second, 9007199254740991, 'stays a safe number');
 });
 
-test('cross-wire span 2^53+1: decode restores bigint beyond number precision', () => {
+void test('cross-wire span 2^53+1: decode restores bigint beyond number precision', () => {
   const req = spanCodec.encode({ pair: ['hi', 9007199254740993n] });
   assert.equal(bytesToHex(req), SPAN_2POW53_P1_REQUEST);
   const r = spanCodec.decode(hexToBytes(SPAN_2POW53_P1_RESPONSE));
@@ -250,7 +250,7 @@ const WIDEAGG_EMPTY_RESPONSE = '01000000000000000000';
 const WIDEAGG_MULTIELEM_REQUEST = '1c000380808080018080808080018080808080808001010a';
 const WIDEAGG_MULTIELEM_RESPONSE = '0100000000000000808080808080800110';
 
-test('cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream', () => {
+void test('cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream', () => {
   const req = wideAggCodec.encode({
     samples: [1, 127, 128, 9007199254740993n, 18446744073709551615n],
     offset: -9223372036854775808n,
@@ -266,7 +266,7 @@ test('cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream', ()
   assert.equal(r.result?.adjusted, -9223372036854775803n, 'i64::MIN + 5 restored');
 });
 
-test('cross-wire wideAgg: empty vec + None option', () => {
+void test('cross-wire wideAgg: empty vec + None option', () => {
   const req = wideAggCodec.encode({ samples: [], offset: null });
   assert.equal(bytesToHex(req), WIDEAGG_EMPTY_REQUEST, 'len=0 then None tag 0');
   const r = wideAggCodec.decode(hexToBytes(WIDEAGG_EMPTY_RESPONSE));
@@ -275,7 +275,7 @@ test('cross-wire wideAgg: empty vec + None option', () => {
   assert.equal(r.result?.adjusted, 0);
 });
 
-test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream boundaries', () => {
+void test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream boundaries', () => {
   const req = wideAggCodec.encode({
     samples: [268435456, 34359738368, 562949953421312],
     offset: 5,
@@ -299,7 +299,7 @@ import { tagSetCodec } from '../generated/frame-codecs.js';
 const TAGSET_REQUEST = '1d00030d1ed00f';
 const TAGSET_RESPONSE = '01000000000000000303742d3705743130303003743135';
 
-test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire', () => {
+void test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire', () => {
   // Rust BTreeSet {-7, 15, 1000} 은 정렬 순서 [-7, 15, 1000] 로 직렬화된다
   // (zigzag: 13, 30, 2000=LEB128 d0 0f). TS Set 을 같은 순서로 만들면 동일
   // 바이트여야 한다.
@@ -307,13 +307,13 @@ test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire
   assert.equal(bytesToHex(req), TAGSET_REQUEST, 'sorted Set → same wire as Rust BTreeSet');
 });
 
-test('cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins', () => {
+void test('cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins', () => {
   // 역순 삽입 Set 은 역순 그대로 인코딩된다(정렬 없음이 계약).
   const req = tagSetCodec.encode({ ids: new Set([1000, 15, -7]) });
   assert.equal(bytesToHex(req), '1d0003d00f1e0d', 'insertion order preserved');
 });
 
-test('cross-wire tagSet: Rust response → TS decode restores a real Set<string>', () => {
+void test('cross-wire tagSet: Rust response → TS decode restores a real Set<string>', () => {
   const r = tagSetCodec.decode(hexToBytes(TAGSET_RESPONSE));
   assert.equal(r.ok, true);
   const tags = r.result?.tags;
@@ -342,7 +342,7 @@ const SIZEOF_LARGE_RESPONSE = '010000000000000080a00b8010';
 // kindEcho — serde 외부 태그 enum 의 postcard 변형 인덱스 와이어. unit 변형은
 // 인덱스 한 바이트, struct 변형은 인덱스 + 필드. TS 표면은 serde JSON 과 같은
 // 모양('Clear' 문자열 / {Set:{value}} 키 객체)이다.
-test('cross-wire kindEcho unit variant: enum tag wire is a single variant index', () => {
+void test('cross-wire kindEcho unit variant: enum tag wire is a single variant index', () => {
   const req = kindEchoCodec.encode({ kind: 'Clear' });
   assert.equal(bytesToHex(req), KINDECHO_UNIT_REQUEST, 'Clear → variant index 0 only');
   const r = kindEchoCodec.decode(hexToBytes(KINDECHO_UNIT_RESPONSE));
@@ -350,7 +350,7 @@ test('cross-wire kindEcho unit variant: enum tag wire is a single variant index'
   assert.equal(r.result?.echoed, 'Clear', 'unit variant restores as the bare string');
 });
 
-test('cross-wire kindEcho data variant: index + struct body on request and response', () => {
+void test('cross-wire kindEcho data variant: index + struct body on request and response', () => {
   const req = kindEchoCodec.encode({ kind: { Set: { value: -5 } } });
   assert.equal(bytesToHex(req), KINDECHO_SET_REQUEST, 'Set{value:-5} → index 1 + zigzag 9');
   const r = kindEchoCodec.decode(hexToBytes(KINDECHO_SET_RESPONSE));
@@ -360,7 +360,7 @@ test('cross-wire kindEcho data variant: index + struct body on request and respo
 
 // processItem — 중첩 구조체(Item{active,name,value}) + 응답 선언순
 // (doubled, item). 코드젠이 알파벳순으로 드리프트하면 이 디코드가 깨진다.
-test('cross-wire processItem: nested struct wire + declaration-order output', () => {
+void test('cross-wire processItem: nested struct wire + declaration-order output', () => {
   const req = processItemCodec.encode({ item: { active: true, name: 'pen', value: 60 } });
   assert.equal(
     bytesToHex(req),
@@ -379,7 +379,7 @@ test('cross-wire processItem: nested struct wire + declaration-order output', ()
 
 // echoGroups — BTreeMap 은 정렬 순서로 직렬화되므로 요청 hex 도 결정론적이다
 // (HashMap scoreTotal 과의 차이). 맵 → 시퀀스 중첩 와이어.
-test('cross-wire echoGroups: sorted map → vec<string> wire is fully pinned', () => {
+void test('cross-wire echoGroups: sorted map → vec<string> wire is fully pinned', () => {
   const req = echoGroupsCodec.encode({ groups: { a: ['x'], b: ['y', 'z'] } });
   assert.equal(bytesToHex(req), ECHOGROUPS_REQUEST, 'count + (key, len + elements)* sorted');
   const r = echoGroupsCodec.decode(hexToBytes(ECHOGROUPS_RESPONSE));
@@ -389,7 +389,7 @@ test('cross-wire echoGroups: sorted map → vec<string> wire is fully pinned', (
 
 // sizeOf 2KB — 대용량 페이로드 프레이밍: 길이 varint 2048→[80 10], 원시 복사,
 // checksum 184320→[80 a0 0b]. 페이로드가 상수이므로 접두/길이/전체 내용으로 고정.
-test('cross-wire sizeOf 2KB payload: length varint framing and raw copy', () => {
+void test('cross-wire sizeOf 2KB payload: length varint framing and raw copy', () => {
   const req = sizeOfCodec.encode({ data: Array<number>(2048).fill(0x5a) });
   const hex = bytesToHex(req);
   assert.equal(hex.slice(0, 8), '0e008010', 'cmd 14 LE + len varint 2048');

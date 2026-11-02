@@ -43,7 +43,7 @@ function writeExample(root: string, name: string, packageJson: object): void {
   writeFileSync(join(generated, '.rustra-generated.json'), '{}');
 }
 
-test('discoverCodegenExamples collects only rustra.json examples, sorted by name', () => {
+void test('discoverCodegenExamples collects only rustra.json examples, sorted by name', () => {
   const root = makeFixture();
   try {
     const examples = discoverCodegenExamples(root);
@@ -60,7 +60,7 @@ test('discoverCodegenExamples collects only rustra.json examples, sorted by name
   }
 });
 
-test('resolveCheckCommand ignores example codegen:check scripts and always uses the repo CLI', () => {
+void test('resolveCheckCommand ignores example codegen:check scripts and always uses the repo CLI', () => {
   // 감사 수정 — 예제 스크립트는 diff 내 가변 코드라 신뢰 앵커가 못 된다.
   // 스크립트가 있어도 없어도 커맨드는 repo CLI 고정 호출이어야 한다.
   const root = makeFixture();
@@ -83,14 +83,20 @@ test('resolveCheckCommand ignores example codegen:check scripts and always uses 
   }
 });
 
-test('real examples with codegen:check wire the same underlying command the gate runs', () => {
+void test('real examples with codegen:check wire the same underlying command the gate runs', () => {
   // 게이트는 스크립트를 실행하지 않지만, 로컬 개발자가 bun run codegen:check 로
   // 게이트와 다른 결과를 보는 사고는 여전히 가능하다 — 스크립트가 게이트의 고정
   // 커맨드와 동일한 CLI 호출로 남아 있는지 고정한다.
   for (const example of discoverCodegenExamples(REPO_ROOT)) {
     const packageJsonPath = join(example.dir, 'package.json');
     if (!existsSync(packageJsonPath)) continue;
-    const scripts = JSON.parse(readFileSync(packageJsonPath, 'utf8')).scripts ?? {};
+    // .mjs 임포트/JSON 파싱은 any — package.json scripts 구조로 고정한다.
+    const scripts =
+      (
+        JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+          scripts?: Record<string, unknown>;
+        }
+      ).scripts ?? {};
     const check = scripts['codegen:check'];
     if (typeof check !== 'string') continue;
     assert.match(
@@ -101,7 +107,7 @@ test('real examples with codegen:check wire the same underlying command the gate
   }
 });
 
-test('runCodegenFreshChecks runs every example and passes when exec reports success', () => {
+void test('runCodegenFreshChecks runs every example and passes when exec reports success', () => {
   const root = makeFixture();
   try {
     const ran: string[] = [];
@@ -111,7 +117,7 @@ test('runCodegenFreshChecks runs every example and passes when exec reports succ
       ran: count,
     } = runCodegenFreshChecks({
       root,
-      exec: (command) => {
+      exec: (command: { file: string; args: string[]; cwd: string }) => {
         ran.push(basename(command.cwd));
         return { status: 0, stdout: 'ok', stderr: '' };
       },
@@ -125,7 +131,7 @@ test('runCodegenFreshChecks runs every example and passes when exec reports succ
   }
 });
 
-test('runCodegenFreshChecks stops at the first drift with captured diagnostics', () => {
+void test('runCodegenFreshChecks stops at the first drift with captured diagnostics', () => {
   const root = makeFixture();
   try {
     const ran: string[] = [];
@@ -135,7 +141,7 @@ test('runCodegenFreshChecks stops at the first drift with captured diagnostics',
       ran: count,
     } = runCodegenFreshChecks({
       root,
-      exec: (command) => {
+      exec: (command: { file: string; args: string[]; cwd: string }) => {
         ran.push(basename(command.cwd));
         return {
           status: 1,
@@ -155,14 +161,14 @@ test('runCodegenFreshChecks stops at the first drift with captured diagnostics',
   }
 });
 
-test('runCodegenFreshChecks fails an example whose committed manifest is missing', () => {
+void test('runCodegenFreshChecks fails an example whose committed manifest is missing', () => {
   const root = makeFixture();
   try {
     rmSync(join(root, 'examples', 'calc', 'generated', '.rustra-generated.json'));
     const execCalls: string[] = [];
     const { ok, failures } = runCodegenFreshChecks({
       root,
-      exec: (command) => {
+      exec: (command: { file: string; args: string[]; cwd: string }) => {
         execCalls.push(basename(command.cwd));
         return { status: 0, stdout: '', stderr: '' };
       },
@@ -176,14 +182,14 @@ test('runCodegenFreshChecks fails an example whose committed manifest is missing
   }
 });
 
-test('--example filter narrows the run to the selected examples', () => {
+void test('--example filter narrows the run to the selected examples', () => {
   const root = makeFixture();
   try {
     const ran: string[] = [];
     const { ok, ran: count } = runCodegenFreshChecks({
       root,
       filter: new Set(['stream']),
-      exec: (command) => {
+      exec: (command: { file: string; args: string[]; cwd: string }) => {
         ran.push(basename(command.cwd));
         return { status: 0, stdout: '', stderr: '' };
       },
@@ -196,7 +202,7 @@ test('--example filter narrows the run to the selected examples', () => {
   }
 });
 
-test('runCodegenFreshChecks refuses a silent no-op (no examples, unknown filter)', () => {
+void test('runCodegenFreshChecks refuses a silent no-op (no examples, unknown filter)', () => {
   const root = makeFixture();
   try {
     const empty = runCodegenFreshChecks({ root: dirname(root), exec: () => ({ status: 0 }) });
@@ -214,14 +220,14 @@ test('runCodegenFreshChecks refuses a silent no-op (no examples, unknown filter)
   }
 });
 
-test('default exec path works end-to-end on a trivial command', () => {
+void test('default exec path works end-to-end on a trivial command', () => {
   // EBADF 회피(레포 루트 bun test 의 spawnSync 환경 이슈) 검증을 겸한 최소 스모크 —
   // exec 주입 없이 process.execPath 한 번 스폰이 가능한지만 단언한다.
   const result = spawnSync(process.execPath, ['-e', 'process.exit(0)'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
 });
 
-test('real repo has the six known rustra.json examples wired for this gate', () => {
+void test('real repo has the six known rustra.json examples wired for this gate', () => {
   // 새 예제가 rustra.json 을 도입하면 이 게이트에 자동 편입된다(테스트 수정 불요).
   // 아래 단언은 "최소 이 여섯 예제가 게이트 안에 있다"를 고정한다.
   const names = discoverCodegenExamples(REPO_ROOT).map((example) => example.name);
@@ -241,7 +247,7 @@ function basename(path: string): string {
   return path.split(/[\\/]/).at(-1) ?? path;
 }
 
-test('bindings mode selects only UniFFI configs and uses the independent binding gate', () => {
+void test('bindings mode selects only UniFFI configs and uses the independent binding gate', () => {
   const root = makeFixture();
   try {
     const config = join(root, 'examples', 'calc', 'rustra.json');
@@ -249,11 +255,12 @@ test('bindings mode selects only UniFFI configs and uses the independent binding
       config,
       JSON.stringify({ output: './generated', uniffi: { output: './uniffi' } }),
     );
-    const commands: ReturnType<typeof resolveCheckCommand>[] = [];
+    // .mjs 함수의 ReturnType 은 any — exec 계약 타입으로 고정한다.
+    const commands: { file: string; args: string[]; cwd: string }[] = [];
     const result = runCodegenFreshChecks({
       root,
       bindings: true,
-      exec: (command) => {
+      exec: (command: { file: string; args: string[]; cwd: string }) => {
         commands.push(command);
         return { status: 0 };
       },
@@ -268,7 +275,7 @@ test('bindings mode selects only UniFFI configs and uses the independent binding
   }
 });
 
-test('bindings mode fails closed when no configured UniFFI example matches', () => {
+void test('bindings mode fails closed when no configured UniFFI example matches', () => {
   const root = makeFixture();
   try {
     const result = runCodegenFreshChecks({

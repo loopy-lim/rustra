@@ -32,9 +32,10 @@ export function encodeNode(
       const selected = node.variants.findIndex((variant) => variantMatches(variant, value));
       if (selected < 0) throw new ComplexCodecError('value does not match any enum variant');
       writer.varint(BigInt(selected));
+      // findIndex 의 음수가 위에서 throw 되므로 selected 는 유효 인덱스다.
       encodeVariant(
         writer,
-        node.variants[selected],
+        node.variants[selected]!,
         value,
         maxDepth,
         depth + 1,

@@ -7,6 +7,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSurface, compareSurface, serializeSurface } from './api-surface.mjs';
 
+// api-surface.mjs 는 타입 없는 JS 모듈이라 반환 타입이 미해결로 열린다 —
+// diff 표면을 구조 타입으로 고정한다(불요단언 규칙은 미해결 타입을 검증 못 해 해제).
+type SurfaceDiff = {
+  added: { packageExports?: string[] };
+  changed: { packageExports?: string[] };
+  removed: { packageExports?: string[] };
+};
+
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 function put(root: string, path: string, text: string) {
   mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -81,7 +89,7 @@ function cli(root: string, args: string[] = []) {
   });
 }
 
-test('same-name reexported TS parameters and return types drift from current source', () =>
+void test('same-name reexported TS parameters and return types drift from current source', () =>
   withFixture((root) => {
     hasDrift(root, () =>
       put(
@@ -91,7 +99,7 @@ test('same-name reexported TS parameters and return types drift from current sou
       ),
     );
   }));
-test('reachable TS interface field and default export signatures drift', () =>
+void test('reachable TS interface field and default export signatures drift', () =>
   withFixture((root) => {
     hasDrift(root, () =>
       put(
@@ -108,7 +116,7 @@ test('reachable TS interface field and default export signatures drift', () =>
       ),
     );
   }));
-test('export subpaths, condition targets and subpath declarations are pinned', () =>
+void test('export subpaths, condition targets and subpath declarations are pinned', () =>
   withFixture((root) => {
     put(
       root,
@@ -136,7 +144,7 @@ test('export subpaths, condition targets and subpath declarations are pinned', (
       ),
     );
   }));
-test('multiline Rust use, reexported struct fields, trait methods, impl signatures, aliases and FFI drift', () =>
+void test('multiline Rust use, reexported struct fields, trait methods, impl signatures, aliases and FFI drift', () =>
   withFixture((root) => {
     hasDrift(root, () =>
       put(
@@ -160,7 +168,7 @@ test('multiline Rust use, reexported struct fields, trait methods, impl signatur
       ),
     );
   }));
-test('Rust include files, cfg alternatives and macro declarations are collected', () =>
+void test('Rust include files, cfg alternatives and macro declarations are collected', () =>
   withFixture((root) => {
     put(root, 'crates/rustra/src/hidden.rs', 'include!("fields.rs");');
     put(
@@ -183,7 +191,7 @@ test('Rust include files, cfg alternatives and macro declarations are collected'
       ),
     );
   }));
-test('function body-only changes and comments do not drift', () =>
+void test('function body-only changes and comments do not drift', () =>
   withFixture((root) => {
     const baseline = collectSurface(root);
     put(
@@ -202,7 +210,7 @@ test('function body-only changes and comments do not drift', () =>
       changed: {},
     });
   }));
-test('missing TS source and malformed Rust fail closed', () =>
+void test('missing TS source and malformed Rust fail closed', () =>
   withFixture((root) => {
     rmSync(join(root, 'packages/demo/src/model.ts'));
     assert.throws(() => collectSurface(root), /model|resolve|2307/);
@@ -214,7 +222,7 @@ test('missing TS source and malformed Rust fail closed', () =>
     put(root, 'crates/rustra/src/hidden.rs', 'pub struct Widget {');
     assert.throws(() => collectSurface(root), /Rust|parse|delimiter/);
   }));
-test('stale built declarations cannot hide current source drift', () =>
+void test('stale built declarations cannot hide current source drift', () =>
   withFixture((root) => {
     put(root, 'packages/demo/dist/index.d.ts', 'export declare const fake: number;');
     const baseline = collectSurface(root);
@@ -228,7 +236,7 @@ test('stale built declarations cannot hide current source drift', () =>
       ),
     );
   }));
-test('missing snapshot and old version fail without regeneration', () =>
+void test('missing snapshot and old version fail without regeneration', () =>
   withFixture((root) => {
     const missing = cli(root);
     assert.equal(missing.status, 1);
@@ -239,7 +247,7 @@ test('missing snapshot and old version fail without regeneration', () =>
     assert.equal(old.status, 1);
     assert.match(old.stderr, /snapshot version 0/);
   }));
-test('snapshot update is stable, compare detects signature changes and rebaseline restores success', () =>
+void test('snapshot update is stable, compare detects signature changes and rebaseline restores success', () =>
   withFixture((root) => {
     const first = cli(root, ['--update']);
     assert.equal(first.status, 0, first.stderr);
@@ -258,7 +266,7 @@ test('snapshot update is stable, compare detects signature changes and rebaselin
     assert.equal(cli(root, ['--update']).status, 0);
     assert.equal(cli(root).status, 0);
   }));
-test('real source collection is byte-stable and matches versioned snapshot', () => {
+void test('real source collection is byte-stable and matches versioned snapshot', () => {
   const current = collectSurface(REPO_ROOT);
   const bytes = readFileSync(join(REPO_ROOT, 'api-surface/snapshot.json'), 'utf8');
   assert.deepEqual(compareSurface(current, JSON.parse(bytes)), {
@@ -269,7 +277,7 @@ test('real source collection is byte-stable and matches versioned snapshot', () 
   assert.ok(serializeSurface(current) === bytes, 'snapshot version or serialization differs');
 });
 
-test('each Rust declaration contract independently triggers drift', () =>
+void test('each Rust declaration contract independently triggers drift', () =>
   withFixture((root) => {
     const path = 'crates/rustra/src/hidden.rs';
     const original = `pub struct Widget { pub id: u32, secret: u8 }
@@ -301,7 +309,7 @@ pub extern "C" fn rustra_ffi_call(x: u8) -> u8 { x }
       );
     }
   }));
-test('workspace aliases follow current declarations, including inferred types and star exports', () =>
+void test('workspace aliases follow current declarations, including inferred types and star exports', () =>
   withFixture((root) => {
     put(
       root,
@@ -320,7 +328,7 @@ test('workspace aliases follow current declarations, including inferred types an
       ),
     );
   }));
-test('unsupported wildcard exports and missing Rust module sources fail closed', () =>
+void test('unsupported wildcard exports and missing Rust module sources fail closed', () =>
   withFixture((root) => {
     put(
       root,
@@ -336,7 +344,7 @@ test('unsupported wildcard exports and missing Rust module sources fail closed',
     rmSync(join(root, 'crates/rustra/src/hidden.rs'));
     assert.throws(() => collectSurface(root), /Rust source/);
   }));
-test('package add and removal are detected, and conditional target ordering is pinned', () =>
+void test('package add and removal are detected, and conditional target ordering is pinned', () =>
   withFixture((root) => {
     const baseline = collectSurface(root);
     put(
@@ -346,7 +354,10 @@ test('package add and removal are detected, and conditional target ordering is p
     );
     put(root, 'packages/new/src/index.ts', 'export const ADDED = 1;');
     assert.ok(
-      compareSurface(collectSurface(root), baseline).added.packageExports?.includes('packages/new'),
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- 미해결 .mjs 반환의 구조 고정이 필요하다
+      (
+        compareSurface(collectSurface(root), baseline) as SurfaceDiff
+      ).added.packageExports?.includes('packages/new'),
     );
     rmSync(join(root, 'packages/new'), { recursive: true });
     assert.deepEqual(compareSurface(collectSurface(root), baseline), {
@@ -361,19 +372,21 @@ test('package add and removal are detected, and conditional target ordering is p
     };
     put(root, 'packages/demo/package.json', JSON.stringify(manifest));
     assert.ok(
-      compareSurface(collectSurface(root), baseline).changed.packageExports?.includes(
-        'packages/demo',
-      ),
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- 미해결 .mjs 반환의 구조 고정이 필요하다
+      (
+        compareSurface(collectSurface(root), baseline) as SurfaceDiff
+      ).changed.packageExports?.includes('packages/demo'),
     );
     rmSync(join(root, 'packages/demo'), { recursive: true });
     assert.ok(
-      compareSurface(collectSurface(root), baseline).removed.packageExports?.includes(
-        'packages/demo',
-      ),
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- 미해결 .mjs 반환의 구조 고정이 필요하다
+      (
+        compareSurface(collectSurface(root), baseline) as SurfaceDiff
+      ).removed.packageExports?.includes('packages/demo'),
     );
   }));
 
-test('Rust private aliases and constants used by public declarations cannot hide type drift', () =>
+void test('Rust private aliases and constants used by public declarations cannot hide type drift', () =>
   withFixture((root) => {
     put(
       root,
@@ -396,7 +409,7 @@ test('Rust private aliases and constants used by public declarations cannot hide
     );
   }));
 
-test('source declaration-only exports include both ESM and CommonJS declarations', () =>
+void test('source declaration-only exports include both ESM and CommonJS declarations', () =>
   withFixture((root) => {
     put(
       root,
@@ -425,7 +438,7 @@ test('source declaration-only exports include both ESM and CommonJS declarations
     );
   }));
 
-test('Rust inline literal path follows its module directory rather than a decoy sibling', () =>
+void test('Rust inline literal path follows its module directory rather than a decoy sibling', () =>
   withFixture((root) => {
     put(root, 'crates/rustra/src/lib.rs', 'pub mod inline { #[path="api.rs"] pub mod api; }');
     put(root, 'crates/rustra/src/api.rs', 'pub fn public_api() -> bool { true }');
@@ -435,7 +448,7 @@ test('Rust inline literal path follows its module directory rather than a decoy 
     );
   }));
 
-test('source declaration files reject unresolved types and package imports', () =>
+void test('source declaration files reject unresolved types and package imports', () =>
   withFixture((root) => {
     rmSync(join(root, 'packages/demo/src/index.ts'));
     for (const text of [
@@ -447,7 +460,7 @@ test('source declaration files reject unresolved types and package imports', () 
     }
   }));
 
-test('Rust path-overridden file and inline modules retain rustc child lookup semantics', () =>
+void test('Rust path-overridden file and inline modules retain rustc child lookup semantics', () =>
   withFixture((root) => {
     put(root, 'crates/rustra/src/lib.rs', '#[path="custom.rs"] pub mod renamed; pub mod ordinary;');
     put(root, 'crates/rustra/src/custom.rs', 'pub mod child;');

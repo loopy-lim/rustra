@@ -29,7 +29,8 @@ export function compareUtf8(left: string, right: string): number {
   const b = utf8Encode(right);
   const length = Math.min(a.length, b.length);
   for (let i = 0; i < length; i += 1) {
-    if (a[i] !== b[i]) return a[i] - b[i];
+    // length 는 min(a.length, b.length) 이므로 양쪽 인덱스 모두 유효하다.
+    if (a[i] !== b[i]) return a[i]! - b[i]!;
   }
   return a.length - b.length;
 }

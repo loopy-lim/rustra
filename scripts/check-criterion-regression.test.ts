@@ -86,7 +86,7 @@ async function fixture(point: number, lower: number, upper: number): Promise<str
   return root;
 }
 
-test('parseRegressionArgs validates the budget and resolves the root', () => {
+void test('parseRegressionArgs validates the budget and resolves the root', () => {
   const parsed = parseRegressionArgs([
     '--max-regression',
     '0.05',
@@ -102,7 +102,7 @@ test('parseRegressionArgs validates the budget and resolves the root', () => {
   assert.throws(() => parseRegressionArgs(['--improvement-share', '1.5']), /ratio in \(0,1\)/);
 });
 
-test('missing Criterion changes fails closed', async () => {
+void test('missing Criterion changes fails closed', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-empty-'));
   try {
     const output = logger();
@@ -118,7 +118,7 @@ test('missing Criterion changes fails closed', async () => {
   }
 });
 
-test('a missing Criterion root fails closed without a stack trace', async () => {
+void test('a missing Criterion root fails closed without a stack trace', async () => {
   const output = logger();
   const result = await checkCriterionRegression({
     criterionRoot: join(tmpdir(), `rustra-criterion-missing-${crypto.randomUUID()}`),
@@ -129,7 +129,7 @@ test('a missing Criterion root fails closed without a stack trace', async () => 
   assert.match(output.errors[0], /No Criterion change estimates/);
 });
 
-test('a regression below budget passes', async () => {
+void test('a regression below budget passes', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     const result = await checkCriterionRegression({
@@ -143,7 +143,7 @@ test('a regression below budget passes', async () => {
   }
 });
 
-test('an uncertain slowdown does not fail the statistical gate', async () => {
+void test('an uncertain slowdown does not fail the statistical gate', async () => {
   const root = await fixture(0.15, -0.01, 0.3);
   try {
     const result = await checkCriterionRegression({
@@ -158,7 +158,7 @@ test('an uncertain slowdown does not fail the statistical gate', async () => {
   }
 });
 
-test('a statistically significant slowdown over budget fails', async () => {
+void test('a statistically significant slowdown over budget fails', async () => {
   const root = await fixture(0.15, 0.11, 0.2);
   try {
     const result = await checkCriterionRegression({
@@ -175,7 +175,7 @@ test('a statistically significant slowdown over budget fails', async () => {
   }
 });
 
-test('a CPU mismatch cannot classify an apparent slowdown as a code regression', async () => {
+void test('a CPU mismatch cannot classify an apparent slowdown as a code regression', async () => {
   const root = await fixture(10.4894, 10.3973, 10.5784);
   try {
     await writeProvenance(root, {
@@ -201,7 +201,7 @@ test('a CPU mismatch cannot classify an apparent slowdown as a code regression',
   }
 });
 
-test('a comparison without baseline-era provenance is unmeasurable, not a pass', async () => {
+void test('a comparison without baseline-era provenance is unmeasurable, not a pass', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     await rm(join(root, 'restored-runner-environment.json'));
@@ -222,7 +222,7 @@ test('a comparison without baseline-era provenance is unmeasurable, not a pass',
   }
 });
 
-test('a comparison without the current-era record is unmeasurable too', async () => {
+void test('a comparison without the current-era record is unmeasurable too', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     await rm(join(root, 'runner-environment.json'));
@@ -239,7 +239,7 @@ test('a comparison without the current-era record is unmeasurable too', async ()
   }
 });
 
-test('a corrupted provenance record is treated as unknown provenance', async () => {
+void test('a corrupted provenance record is treated as unknown provenance', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     await Bun.write(join(root, 'restored-runner-environment.json'), '{broken');
@@ -256,7 +256,7 @@ test('a corrupted provenance record is treated as unknown provenance', async () 
   }
 });
 
-test('a toolchain drift between eras refuses the comparison', async () => {
+void test('a toolchain drift between eras refuses the comparison', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     await writeProvenance(root, {
@@ -278,7 +278,7 @@ test('a toolchain drift between eras refuses the comparison', async () => {
   }
 });
 
-test('provenanceDrifts compares measurement inputs without workflow identity', () => {
+void test('provenanceDrifts compares measurement inputs without workflow identity', () => {
   const current = environmentRecord({
     workflow: { ...environmentRecord().workflow, GITHUB_SHA: 'aaa' },
     capturedAt: 'a',
@@ -300,7 +300,7 @@ test('provenanceDrifts compares measurement inputs without workflow identity', (
   );
 });
 
-test('image and kernel patches and small reserved-memory changes remain advisory', async () => {
+void test('image and kernel patches and small reserved-memory changes remain advisory', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     const baseline = environmentRecord();
@@ -332,7 +332,7 @@ test('image and kernel patches and small reserved-memory changes remain advisory
   }
 });
 
-test('hardware, OS series and compiler flags mismatches cannot pass even with a speedup', async () => {
+void test('hardware, OS series and compiler flags mismatches cannot pass even with a speedup', async () => {
   const root = await fixture(-0.4, -0.45, -0.35);
   try {
     const baseline = environmentRecord();
@@ -363,7 +363,7 @@ test('hardware, OS series and compiler flags mismatches cannot pass even with a 
   }
 });
 
-test('JSON-shaped but incomplete provenance cannot certify a comparison', async () => {
+void test('JSON-shaped but incomplete provenance cannot certify a comparison', async () => {
   const root = await fixture(0.05, 0.02, 0.08);
   try {
     const baseline = environmentRecord();
@@ -391,7 +391,7 @@ test('JSON-shaped but incomplete provenance cannot certify a comparison', async 
   }
 });
 
-test('regression amid widespread implausible improvement flags baseline mismatch', async () => {
+void test('regression amid widespread implausible improvement flags baseline mismatch', async () => {
   // 2026-08-29 실측 사고 재현: baseline(runner A, 느림) vs 현재(runner B, 빠름)
   // — 대다수 벤치가 -40%대 '개선'을 보이는 가운데 일부가 +70%대 '회귀'.
   const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-mixed-'));
@@ -440,7 +440,7 @@ test('regression amid widespread implausible improvement flags baseline mismatch
   }
 });
 
-test('a lone regression with normal improvements stays a genuine failure', async () => {
+void test('a lone regression with normal improvements stays a genuine failure', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-lone-'));
   try {
     for (const [name, point] of [
@@ -480,7 +480,7 @@ test('a lone regression with normal improvements stays a genuine failure', async
   }
 });
 
-test('renderRegressionReport renders verdict badges per exit code', () => {
+void test('renderRegressionReport renders verdict badges per exit code', () => {
   const rows = [
     {
       name: 'g/fast',
@@ -521,13 +521,13 @@ test('renderRegressionReport renders verdict badges per exit code', () => {
   assert.doesNotMatch(drifted, /자문/u);
 });
 
-test('an inconclusive comparison never claims a new baseline was accepted', () => {
+void test('an inconclusive comparison never claims a new baseline was accepted', () => {
   const report = renderRegressionReport({ exitCode: 3, rows: [] });
   assert.doesNotMatch(report, /채택했습니다/);
   assert.match(report, /미채택|not adopted/);
 });
 
-test('malformed numeric estimates cannot become a successful zero-percent change', async () => {
+void test('malformed numeric estimates cannot become a successful zero-percent change', async () => {
   const root = await fixture(0.5, 0.4, 0.6);
   try {
     for (const [point, lower, upper] of [
@@ -561,7 +561,7 @@ test('malformed numeric estimates cannot become a successful zero-percent change
   }
 });
 
-test('reports use the configured CLI budget including fractional percentages', () => {
+void test('reports use the configured CLI budget including fractional percentages', () => {
   for (const [ratio, percent] of [
     ['0.2', '20'],
     ['0.005', '0.5'],
@@ -573,7 +573,7 @@ test('reports use the configured CLI budget including fractional percentages', (
   }
 });
 
-test('a malformed CLI input replaces an old successful report with the failure', async () => {
+void test('a malformed CLI input replaces an old successful report with the failure', async () => {
   const root = await fixture(0.5, 0.4, 0.6);
   try {
     await Bun.write(join(root, 'group/case/change/estimates.json'), '{broken json');
@@ -596,7 +596,7 @@ test('a malformed CLI input replaces an old successful report with the failure',
   }
 });
 
-test('fresh measurements without a matching change estimate fail closed', async () => {
+void test('fresh measurements without a matching change estimate fail closed', async () => {
   const root = await fixture(0.01, -0.01, 0.02);
   try {
     await mkdir(join(root, 'new-route/new'), { recursive: true });
@@ -612,7 +612,7 @@ test('fresh measurements without a matching change estimate fail closed', async 
   }
 });
 
-test('preparation removes restored measurements while retaining comparison baselines', async () => {
+void test('preparation removes restored measurements while retaining comparison baselines', async () => {
   const { prepareCriterionRun } = await import('./check-criterion-regression.mjs');
   const root = await mkdtemp(join(tmpdir(), 'rustra-criterion-prepare-'));
   try {

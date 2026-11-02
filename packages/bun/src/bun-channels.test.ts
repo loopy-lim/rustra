@@ -98,6 +98,8 @@ test('bun channel bridge: non-JSON payload falls back to the raw string', async 
 });
 
 test('bun channel bridge: throws TransportUnavailable when no library resolves', async () => {
+  // bun:test 의 expect() 반환 타입이 thenable 로 선언되지 않아 await-thenable 이 오탐한다.
+  // eslint-disable-next-line @typescript-eslint/await-thenable -- rejects 단정에는 await 가 필요하다
   await expect(createBunChannelBridge({ library: '/nonexistent/librustra.dylib' })).rejects.toThrow(
     'channel',
   );
@@ -178,7 +180,7 @@ test('bun bytes channel bridge: JS callback exceptions are isolated between fram
   channelSendBytes(channel.handle, frame, BigInt(8));
   await Bun.sleep(5);
   assert.equal(received.length, 1, 'listener survived its own exception');
-  assert.equal(readLeU64(received[0]), 2n);
+  assert.equal(readLeU64(received[0]!), 2n);
   channel.close();
 });
 
@@ -187,9 +189,10 @@ test('bun bytes channel bridge: channelDemoBytes round-trips LE u64 frames throu
   const { createBunFfiEngine } = await import('./index.js');
   // 생성된 레지스트리를 그대로 코덱 소스로 쓴다(node e2e 의 channelDemo 왕복과
   // 동일한 증거를 bytes 경로로 — channelDemoBytesCodec 는 cmd_id=31).
-  const { frameRegistry } = await import(
+  // 절대경로 동적 임포트는 타입이 any 로 열린다 — 소비 지점 타입으로 고정한다.
+  const { frameRegistry } = (await import(
     resolve(repoRoot, 'examples/calculator/generated/frame-registry.ts')
-  );
+  )) as { frameRegistry: import('./bun-ffi-library.js').BunFfiEngineOptions['frameCodecs'] };
   const runtime = await createBunFfiEngine({ library: dylib, frameCodecs: frameRegistry });
   try {
     const createBytesChannel = await createBunChannelBytesBridge({ library: dylib });
@@ -265,6 +268,7 @@ test('bun bytes channel bridge: one handle serves exactly one path (JSON xor byt
 });
 
 test('bun bytes channel bridge: throws TransportUnavailable when no library resolves', async () => {
+  // eslint-disable-next-line @typescript-eslint/await-thenable -- bun:test expect() 타입 선언 한계 (위와 동일)
   await expect(
     createBunChannelBytesBridge({ library: '/nonexistent/librustra.dylib' }),
   ).rejects.toThrow('channel');

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runComplexCodecBench } from './complex-codec-bench.mjs';
 
-test('complex benchmark emits a bounded machine-readable receipt', () => {
+void test('complex benchmark emits a bounded machine-readable receipt', () => {
   const receipt = runComplexCodecBench({ iterations: 25, warmup: 5 });
   assert.equal(receipt.route, 'complex-binary-js');
   assert.equal(receipt.schema, 'nested-map-option-set-data-enum');

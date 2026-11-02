@@ -207,7 +207,9 @@ export function subscribeEvent(
     );
   }
   let events = nativeListeners.get(native);
-  if (!events) nativeListeners.set(native, (events = new Map()));
+  // nativeListeners 값 타입을 명시해 Map<any, any> 확산을 끊는다.
+  if (!events)
+    nativeListeners.set(native, (events = new Map<string, Set<(payload: unknown) => void>>()));
   let listeners = events.get(name);
   if (!listeners) {
     events.set(name, (listeners = new Set()));

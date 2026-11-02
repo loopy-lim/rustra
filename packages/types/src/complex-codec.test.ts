@@ -41,7 +41,7 @@ const complexSchema = {
   required: ['profiles', 'maybeScores', 'status'],
 };
 
-test('complex codec round-trips nested maps, options, sets, and data enums', () => {
+void test('complex codec round-trips nested maps, options, sets, and data enums', () => {
   const codec = createComplexCodec({
     commandId: 7,
     inputSchema: complexSchema,
@@ -75,7 +75,7 @@ test('complex codec round-trips nested maps, options, sets, and data enums', () 
   });
 });
 
-test('complex codec rejects truncated frames and collection limit violations', () => {
+void test('complex codec rejects truncated frames and collection limit violations', () => {
   const codec = createComplexCodec({
     commandId: 1,
     inputSchema: {
@@ -90,7 +90,7 @@ test('complex codec rejects truncated frames and collection limit violations', (
   assert.deepEqual(codec.decode(new Uint8Array([1, 0, 1]).buffer).ok, false);
 });
 
-test('complex codec rejects invalid presence tags', () => {
+void test('complex codec rejects invalid presence tags', () => {
   const codec = createComplexCodec({
     commandId: 1,
     inputSchema: { type: 'object', properties: {}, required: [] },
@@ -104,7 +104,7 @@ test('complex codec rejects invalid presence tags', () => {
   assert.equal(codec.decode(response.buffer).ok, false);
 });
 
-test('complex codec rejects oneOf variants without stable keys', () => {
+void test('complex codec rejects oneOf variants without stable keys', () => {
   // 컴파일 시점(코덱 생성)에 키 유도 실패가 조기 검출된다 — 이전에는
   // encode 호출 시점이었다.
   assert.throws(
@@ -118,7 +118,7 @@ test('complex codec rejects oneOf variants without stable keys', () => {
   );
 });
 
-test('complex codec accepts explicit keys for anonymous oneOf variants', () => {
+void test('complex codec accepts explicit keys for anonymous oneOf variants', () => {
   const codec = createComplexCodec({
     commandId: 1,
     inputSchema: {
@@ -133,7 +133,7 @@ test('complex codec accepts explicit keys for anonymous oneOf variants', () => {
   );
 });
 
-test('complex codec validates integer ranges and preserves unsafe uint64 as bigint', () => {
+void test('complex codec validates integer ranges and preserves unsafe uint64 as bigint', () => {
   const codec = createComplexCodec({
     commandId: 4,
     inputSchema: {
@@ -157,7 +157,7 @@ test('complex codec validates integer ranges and preserves unsafe uint64 as bigi
   assert.deepEqual(decoded, { ok: true, result: { value } });
 });
 
-test('complex codec pins the Rust data-enum wire independently of oneOf order', () => {
+void test('complex codec pins the Rust data-enum wire independently of oneOf order', () => {
   const codec = createComplexCodec({
     commandId: 1,
     inputSchema: {
@@ -243,7 +243,7 @@ const adjacentGateInput = {
   required: ['event', 'tags'],
 };
 
-test('complex codec encodes every adjacent-tagged variant on its own wire', () => {
+void test('complex codec encodes every adjacent-tagged variant on its own wire', () => {
   const codec = createComplexCodec({
     commandId: 3,
     inputSchema: adjacentGateInput,

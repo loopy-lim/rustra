@@ -49,7 +49,7 @@ function okFrame(postcardBytes: number[]): ArrayBuffer {
   return out.buffer;
 }
 
-test('updateItem encode includes Option fields (name/value) — past silent-drop regression', () => {
+void test('updateItem encode includes Option fields (name/value) — past silent-drop regression', () => {
   // postcard(UpdateItemInput) = string(id) + Option<string>(name=Some "X") + Option<i64>(value=None)
   const expected = [
     ...[4, 0], // cmd_id = 4 (u16 LE)
@@ -62,7 +62,7 @@ test('updateItem encode includes Option fields (name/value) — past silent-drop
   assert.deepEqual(Array.from(new Uint8Array(buf)), expected);
 });
 
-test('updateItem encode with Some(value) — both options present', () => {
+void test('updateItem encode with Some(value) — both options present', () => {
   const expected = [
     ...[4, 0], // cmd_id = 4 (u16 LE)
     ...pcString('abc'),
@@ -75,7 +75,7 @@ test('updateItem encode with Some(value) — both options present', () => {
   assert.deepEqual(Array.from(new Uint8Array(buf)), expected);
 });
 
-test('updateItem decode round-trips Option fields', () => {
+void test('updateItem decode round-trips Option fields', () => {
   const frame = okFrame([
     1, // item: Some
     ...pcString('abc'),
@@ -87,19 +87,19 @@ test('updateItem decode round-trips Option fields', () => {
   assert.deepEqual(out.result, { item: { id: 'abc', name: 'Renamed', value: 7 } });
 });
 
-test('updateItem decode None item', () => {
+void test('updateItem decode None item', () => {
   const out = updateItemCodec.decode(okFrame([0]));
   assert.equal(out.ok, true);
   assert.deepEqual(out.result, { item: null });
 });
 
-test('listItems encode includes Option<minValue>', () => {
+void test('listItems encode includes Option<minValue>', () => {
   const expected = [...[3, 0], 1, ...zigzagVarint(5)];
   const buf = listItemsCodec.encode({ minValue: 5 });
   assert.deepEqual(Array.from(new Uint8Array(buf)), expected);
 });
 
-test('listItems decode round-trips Vec<struct>', () => {
+void test('listItems decode round-trips Vec<struct>', () => {
   // items: len=2, 각 Item = { id: string, name: string, value: i64 }
   const item = (id: string, name: string, v: number) => [
     ...pcString(id),
@@ -117,7 +117,7 @@ test('listItems decode round-trips Vec<struct>', () => {
   });
 });
 
-test('createItem/getItem round-trip', () => {
+void test('createItem/getItem round-trip', () => {
   const enc = createItemCodec.encode({ name: 'W', value: 42 });
   assert.deepEqual(Array.from(new Uint8Array(enc)), [
     ...[1, 0],
@@ -133,7 +133,7 @@ test('createItem/getItem round-trip', () => {
   assert.deepEqual(noneOut.result, { item: null });
 });
 
-test('all crud commands are registered — no silent partial codecs', () => {
+void test('all crud commands are registered — no silent partial codecs', () => {
   const names = ['createItem', 'getItem', 'listItems', 'updateItem', 'deleteItem'];
   for (const n of names) {
     assert.ok(frameRegistry.has(n), `command '${n}' must be in frameRegistry`);

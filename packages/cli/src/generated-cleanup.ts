@@ -103,11 +103,15 @@ export async function planGeneratedCleanup(
       )
         if (symlinkedParents.has(directory))
           throw new Error(`${label}: parent directory is a symlink; ${hint}`);
+      // realRoots/realPaths/contents 는 roots/existing 과 인덱스 정렬이라
+      // 런타임에 비는 원소가 없다 — indexed-access 타입만 좁힌다.
       const realRoot = realRoots[rootIndex];
-      if (realRoot !== null && within(realRoot, realPaths[index])) allowed = true;
+      const realPath = realPaths[index];
+      if (realRoot != null && realPath != null && within(realRoot, realPath)) allowed = true;
     }
     if (!allowed) throw new Error(`${label}: outside generated roots; ${hint}`);
-    if (sha256(contents[index]) !== recorded.get(path))
+    const content = contents[index];
+    if (content === undefined || sha256(content) !== recorded.get(path))
       throw new Error(`${label}: modified since generation; ${hint}`);
     removable.push(path);
   }

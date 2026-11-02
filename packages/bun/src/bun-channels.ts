@@ -79,7 +79,7 @@ function issueBunChannel<L>(
   invalidHandleMessage: string,
 ): BunChannel {
   // FFI 심볼 반환값은 bun:ffi 타입상 unknown — 경계에서 1회 좁힌다.
-  const rawHandle = create() as unknown;
+  const rawHandle = create();
   const handle = Number(rawHandle);
   if (!Number.isSafeInteger(handle) || handle < 1) {
     throw new RustraCommandError(RustraErrorCode.ChannelUnavailable, invalidHandleMessage);

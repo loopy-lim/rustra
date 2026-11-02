@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { configure, RustraCommandError } from '@rustra/types';
+import { configure } from '@rustra/types';
 import { signIn, signOut, grant, adminStats } from '../generated/commands.js';
 import type { EngineClient } from '../generated/types.js';
 
@@ -14,7 +14,7 @@ function mockEngine(handler: Handler): EngineClient {
   };
 }
 
-test('signIn returns token and role', async () => {
+void test('signIn returns token and role', async () => {
   configure(
     mockEngine((cmd) => {
       assert.equal(cmd, 'signIn');
@@ -26,7 +26,7 @@ test('signIn returns token and role', async () => {
   assert.equal(result.role, 'admin');
 });
 
-test('grant carries capability name on wire', async () => {
+void test('grant carries capability name on wire', async () => {
   let seen: unknown;
   configure(
     mockEngine((cmd, args) => {
@@ -40,7 +40,7 @@ test('grant carries capability name on wire', async () => {
   assert.deepEqual(seen, { token: 'tok-1', capability: 'admin.stats' });
 });
 
-test('capability.denied error code is preserved through RustraCommandError', async () => {
+void test('capability.denied error code is preserved through RustraCommandError', async () => {
   configure(
     mockEngine(() => {
       // JSON fallback 경로 에러 — Rust Display 포맷 "code: message"
@@ -57,13 +57,13 @@ test('capability.denied error code is preserved through RustraCommandError', asy
   }
 });
 
-test('signOut reports session removal', async () => {
+void test('signOut reports session removal', async () => {
   configure(mockEngine(() => ({ signedOut: true })));
   const result = await signOut({ token: 'tok-1' });
   assert.equal(result.signedOut, true);
 });
 
-test('generated types include auth command surface', async () => {
+void test('generated types include auth command surface', async () => {
   const { readFile } = await import('node:fs/promises');
   const { fileURLToPath } = await import('node:url');
   // 컴파일 위치(dist-ts/...)에서 소스 트리의 generated/*.ts 로 —

@@ -30,7 +30,7 @@ function executable(path: string) {
 }
 
 for (const kind of ['string', 'URL'] as const) {
-  processTest(
+  void processTest(
     `relative runtime candidates invoke successfully with a ${kind} child cwd`,
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'rustra-node-runtime cwd-'));
@@ -53,7 +53,7 @@ for (const kind of ['string', 'URL'] as const) {
   );
 }
 
-test('inferred Cargo binaries are searched from the requested child directory', () => {
+void test('inferred Cargo binaries are searched from the requested child directory', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-node-inferred-cwd-'));
   const cwd = join(root, 'apps/client space');
   const binaryName = 'rustra-cwd-example';
@@ -75,7 +75,7 @@ test('inferred Cargo binaries are searched from the requested child directory', 
   }
 });
 
-test('missing-runtime diagnostics identify the requested cwd and exact checked candidate', () => {
+void test('missing-runtime diagnostics identify the requested cwd and exact checked candidate', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-node-missing-cwd-'));
   try {
     assert.throws(
@@ -98,7 +98,7 @@ test('missing-runtime diagnostics identify the requested cwd and exact checked c
   }
 });
 
-processTest(
+void processTest(
   'an explicit bare command still uses the child PATH rather than becoming a local filename',
   async () => {
     const root = mkdtempSync(join(tmpdir(), 'rustra-node-path-command-'));

@@ -9,19 +9,19 @@ import { createNodeEventSubscription } from './node-event-subscription.js';
  */
 const isBun = typeof process.versions.bun === 'string';
 
-test('event subscription is lazy — nothing is spawned or resolved before the first subscribe', () => {
+void test('event subscription is lazy — nothing is spawned or resolved before the first subscribe', () => {
   const subscription = createNodeEventSubscription({ commandCandidates: ['./missing-runtime'] });
   // 생성만으로는 해상이 일어나지 않는다(throw 없음).
   subscription.dispose();
 });
 
-test('event subscription surfaces runtime discovery failure on the first subscribe', () => {
+void test('event subscription surfaces runtime discovery failure on the first subscribe', () => {
   const subscription = createNodeEventSubscription({ commandCandidates: ['./missing-runtime'] });
   assert.throws(() => subscription.subscribeEvent('x', () => {}), /RUSTRA_NODE_BINARY/);
   subscription.dispose();
 });
 
-test('event subscription shares one transport across subscribers and stops on dispose', async () => {
+void test('event subscription shares one transport across subscribers and stops on dispose', async () => {
   if (isBun) return; // node:child_process posix_spawn EBADF — Bun 러너 회피(index.test.ts 관례).
   const { execFileSync } =
     (await import('node:child_process')) as typeof import('node:child_process');

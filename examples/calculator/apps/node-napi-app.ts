@@ -25,11 +25,13 @@ if (!napiFile) {
 }
 const native = createRequire(__dirname)(resolve(napiDir, napiFile)) as {
   rustraInvoke: (cmd: string, args: string | undefined) => string;
-  rustraInvokeBuffer: (cmd: string, args: string | string | undefined) => Buffer;
+  rustraInvokeBuffer: (cmd: string, args: string | undefined) => Buffer;
   rustraInvokeFrame: (payload: Buffer) => Buffer;
 };
 
 const engine = createNodeEngine({
+  // 데모 앱 어댑터는 async 래핑을 표준 계약으로 시연한다(본문은 동기 FFI 호출).
+  // eslint-disable-next-line @typescript-eslint/require-await
   async invoke(command: string, args?: unknown): Promise<unknown> {
     const argsJson = args !== undefined ? JSON.stringify(args) : undefined;
     const rawResponse = native.rustraInvoke(command, argsJson);

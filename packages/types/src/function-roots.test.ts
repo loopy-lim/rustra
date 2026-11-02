@@ -130,13 +130,14 @@ test('optional and vector reference depth matches Rust without charging the ref 
 test('int8 ordinary arguments and returns use raw signed postcard bytes', () => {
   const int8 = { type: 'integer', format: 'int8' };
   const codec = createSchemaPostcardCodec(1, tuple(int8), int8, {}, true)!;
+  // as const 로 행을 읽기전용 튜플로 고정 — 디스트럭처링 원소가 number 로 좁혀진다.
   for (const [value, byte] of [
     [-128, 128],
     [-1, 255],
     [0, 0],
     [1, 1],
     [127, 127],
-  ]) {
+  ] as const) {
     expect([...new Uint8Array(codec.encode([value]))]).toEqual([1, 0, byte]);
     expect(codec.decode(response(byte))).toEqual({ ok: true, result: value });
   }

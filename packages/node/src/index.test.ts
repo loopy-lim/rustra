@@ -5,7 +5,7 @@ import type { NodeProcessTransport } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 import type { EngineClientWithBatch } from '@rustra/types';
 
-test('createNodeEngine routes invoke to transport', async () => {
+void test('createNodeEngine routes invoke to transport', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const engine = createNodeEngine({
     async invoke(command, args) {
@@ -19,7 +19,7 @@ test('createNodeEngine routes invoke to transport', async () => {
   assert.deepEqual(calls, [{ command: 'addNumbers', args: { a: 20, b: 22 } }]);
 });
 
-test('createNodeEngine applies timeoutMs and shallow abort to pending transports', async () => {
+void test('createNodeEngine applies timeoutMs and shallow abort to pending transports', async () => {
   const engine = createNodeEngine({
     invoke: () => new Promise<never>(() => {}),
   });
@@ -38,7 +38,7 @@ test('createNodeEngine applies timeoutMs and shallow abort to pending transports
   );
 });
 
-test('createNodeEngine exposes Promise-based invokeBatch with stable order', async () => {
+void test('createNodeEngine exposes Promise-based invokeBatch with stable order', async () => {
   const engine = createNodeEngine({
     async invoke(command) {
       return command === 'first' ? 1 : 2;
@@ -48,9 +48,11 @@ test('createNodeEngine exposes Promise-based invokeBatch with stable order', asy
   assert.deepEqual(out, [1, 2]);
 });
 
-test('createNodeEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
+void test('createNodeEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
   const engine = createNodeEngine({
     async invoke() {
+      // 객체 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw { code: 'transport.timeout', message: 'request timed out', retryable: true };
     },
   });
@@ -67,9 +69,11 @@ test('createNodeEngine wraps RustraError-shaped rejects into RustraCommandError'
   );
 });
 
-test('createNodeEngine wraps unknown errors into RustraCommandError', async () => {
+void test('createNodeEngine wraps unknown errors into RustraCommandError', async () => {
   const engine = createNodeEngine({
     async invoke() {
+      // 문자열 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'something broke';
     },
   });
@@ -87,7 +91,7 @@ test('createNodeEngine wraps unknown errors into RustraCommandError', async () =
 
 // ── napi 와이어 에러 — Error.message 의 RustraError JSON/Display 복원 ──
 
-test('createNodeEngine parses RustraError JSON message from napi Error', async () => {
+void test('createNodeEngine parses RustraError JSON message from napi Error', async () => {
   // napi transport 는 Rust 의 RustraError 를 Error.reason(JSON 직렬화)로 던진다.
   // engine 은 이를 파싱해 code/retryable 을 보존해야 한다(unknown 래핑 금지).
   const engine = createNodeEngine({
@@ -108,7 +112,7 @@ test('createNodeEngine parses RustraError JSON message from napi Error', async (
   );
 });
 
-test('createNodeEngine parses Display-style "code: message" Error message', async () => {
+void test('createNodeEngine parses Display-style "code: message" Error message', async () => {
   // Display 평탄화("code: message") 경로도 동일하게 code 를 복원한다.
   const engine = createNodeEngine({
     async invoke() {
@@ -145,7 +149,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '.
 const isBun = typeof process.versions.bun === 'string';
 const processTest = isBun || process.env.RUSTRA_BUN_COVERAGE === '1' ? test.skip : test;
 
-processTest(
+void processTest(
   'createNodeProcessTransport invokes a real Rust runtime over stdio',
   { timeout: 30_000 },
   async () => {
@@ -162,7 +166,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeProcessTransport exposes the runtime contract hash endpoint',
   { timeout: 30_000 },
   async () => {
@@ -176,20 +180,23 @@ processTest(
   },
 );
 
-processTest('createNodeBootstrap owns lazy configure and Cargo runtime discovery', async () => {
-  const bootstrap = createNodeBootstrap({
-    commandCandidates: [resolve(repoRoot, 'target/debug/rustra-calculator-example')],
-  });
-  try {
-    const engine = await bootstrap.ready();
-    const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
-    assert.equal(result.value, 42);
-  } finally {
-    bootstrap.dispose();
-  }
-});
+void processTest(
+  'createNodeBootstrap owns lazy configure and Cargo runtime discovery',
+  async () => {
+    const bootstrap = createNodeBootstrap({
+      commandCandidates: [resolve(repoRoot, 'target/debug/rustra-calculator-example')],
+    });
+    try {
+      const engine = await bootstrap.ready();
+      const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+      assert.equal(result.value, 42);
+    } finally {
+      bootstrap.dispose();
+    }
+  },
+);
 
-test('createNodeBootstrap reports the exact runtime override when discovery fails', async () => {
+void test('createNodeBootstrap reports the exact runtime override when discovery fails', async () => {
   const previous = process.env.RUSTRA_NODE_BINARY;
   delete process.env.RUSTRA_NODE_BINARY;
   const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
@@ -246,7 +253,7 @@ function seedStaleReleaseFixture(prefix: string): { root: string; stale: string;
   return { root, stale, fresh };
 }
 
-test('nodeRuntimeCandidates orders existing candidates newest-build-first', () => {
+void test('nodeRuntimeCandidates orders existing candidates newest-build-first', () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-candidates-');
   const previous = process.env.RUSTRA_NODE_BINARY;
   delete process.env.RUSTRA_NODE_BINARY;
@@ -270,7 +277,7 @@ test('nodeRuntimeCandidates orders existing candidates newest-build-first', () =
   }
 });
 
-test('selectVerifiedRuntime treats contract mismatch as candidate rejection, not fatal', async () => {
+void test('selectVerifiedRuntime treats contract mismatch as candidate rejection, not fatal', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-select-');
   try {
     const attempts: string[] = [];
@@ -287,7 +294,7 @@ test('selectVerifiedRuntime treats contract mismatch as candidate rejection, not
   }
 });
 
-test('selectVerifiedRuntime reports every attempted candidate with mtime when all are stale', async () => {
+void test('selectVerifiedRuntime reports every attempted candidate with mtime when all are stale', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-allstale-');
   try {
     await assert.rejects(
@@ -309,7 +316,7 @@ test('selectVerifiedRuntime reports every attempted candidate with mtime when al
   }
 });
 
-test('selectVerifiedRuntime rethrows non-contract failures without trying further candidates', async () => {
+void test('selectVerifiedRuntime rethrows non-contract failures without trying further candidates', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-fatal-');
   try {
     const attempts: string[] = [];
@@ -326,7 +333,7 @@ test('selectVerifiedRuntime rethrows non-contract failures without trying furthe
   }
 });
 
-processTest(
+void processTest(
   'createNodeBootstrap skips a stale release candidate and adopts the fresh build',
   { timeout: 30_000 },
   async () => {
@@ -358,7 +365,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeBootstrap reports fix guidance and all candidate paths when every runtime is stale',
   { timeout: 30_000 },
   async () => {
@@ -391,7 +398,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeBootstrap contractVerification warn adopts the mismatched candidate with a warning',
   { timeout: 30_000 },
   async () => {
@@ -431,7 +438,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeBootstrap contractVerification off skips the contract handshake',
   { timeout: 30_000 },
   async () => {
@@ -463,18 +470,21 @@ processTest(
   },
 );
 
-processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
-  const transport = createNodeProcessTransport({
-    command: './definitely-not-a-real-binary',
-  });
-  await assert.rejects(transport.invoke('addNumbers', {}) as Promise<unknown>, (err: unknown) => {
-    if (!(err instanceof RustraCommandError)) return false;
-    assert.equal(err.code, 'transport.error');
-    return true;
-  });
-});
+void processTest(
+  'createNodeProcessTransport surfaces spawn failures as transport.error',
+  async () => {
+    const transport = createNodeProcessTransport({
+      command: './definitely-not-a-real-binary',
+    });
+    await assert.rejects(transport.invoke('addNumbers', {}) as Promise<unknown>, (err: unknown) => {
+      if (!(err instanceof RustraCommandError)) return false;
+      assert.equal(err.code, 'transport.error');
+      return true;
+    });
+  },
+);
 
-processTest('createNodeProcessTransport preserves structured retryable errors', async () => {
+void processTest('createNodeProcessTransport preserves structured retryable errors', async () => {
   const transport = createNodeProcessTransport({
     command: process.execPath,
     args: [
@@ -495,50 +505,53 @@ processTest('createNodeProcessTransport preserves structured retryable errors', 
   transport.dispose();
 });
 
-processTest('createNodeLoopTransport keeps a persistent process and correlates by id', async () => {
-  const { createNodeLoopTransport } = await import('./index.js');
-  const bin = join(repoRoot, 'target', 'debug', 'loop-stdio');
-  const transport = createNodeLoopTransport({ command: bin, args: [] });
-  try {
-    // 첫 invoke 후 프로세스가 살아 있다(lazy spawn).
-    const a = (await transport.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
-    const pid1 = transport.pid;
-    assert.ok(pid1, 'process spawned lazily on first invoke');
+void processTest(
+  'createNodeLoopTransport keeps a persistent process and correlates by id',
+  async () => {
+    const { createNodeLoopTransport } = await import('./index.js');
+    const bin = join(repoRoot, 'target', 'debug', 'loop-stdio');
+    const transport = createNodeLoopTransport({ command: bin, args: [] });
+    try {
+      // 첫 invoke 후 프로세스가 살아 있다(lazy spawn).
+      const a = (await transport.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+      const pid1 = transport.pid;
+      assert.ok(pid1, 'process spawned lazily on first invoke');
 
-    // 이후 호출이 같은 프로세스에서 처리된다(persistent 증명).
-    const b = (await transport.invoke('greet', { name: 'loop' })) as { message: string };
-    assert.equal(a.value, 42);
-    assert.equal(b.message, 'Hello, loop!');
-    assert.equal(transport.pid, pid1, 'process is reused, not respawned');
+      // 이후 호출이 같은 프로세스에서 처리된다(persistent 증명).
+      const b = (await transport.invoke('greet', { name: 'loop' })) as { message: string };
+      assert.equal(a.value, 42);
+      assert.equal(b.message, 'Hello, loop!');
+      assert.equal(transport.pid, pid1, 'process is reused, not respawned');
 
-    // 이벤트 drain (특수 명령 경유) — 실제 비어 있지 않은 top-level `events`
-    // 프레임을 읽어 result와 혼동하지 않는지 검증한다.
-    const emitted = (await transport.invoke('emitDemo', {
-      ticks: 2,
-      stepDelayMs: 0,
-    })) as { emitted: number };
-    assert.equal(emitted.emitted, 3);
-    const events = await transport.drainEvents();
-    assert.deepEqual(events, [
-      { name: 'progress.tick', payload: { step: 1, total: 2 } },
-      { name: 'progress.tick', payload: { step: 2, total: 2 } },
-      { name: 'demo.done', payload: { emitted: 3 } },
-    ]);
+      // 이벤트 drain (특수 명령 경유) — 실제 비어 있지 않은 top-level `events`
+      // 프레임을 읽어 result와 혼동하지 않는지 검증한다.
+      const emitted = (await transport.invoke('emitDemo', {
+        ticks: 2,
+        stepDelayMs: 0,
+      })) as { emitted: number };
+      assert.equal(emitted.emitted, 3);
+      const events = await transport.drainEvents();
+      assert.deepEqual(events, [
+        { name: 'progress.tick', payload: { step: 1, total: 2 } },
+        { name: 'progress.tick', payload: { step: 2, total: 2 } },
+        { name: 'demo.done', payload: { emitted: 3 } },
+      ]);
 
-    // 존재하지 않는 명령 — id 상관 에러 전파.
-    await assert.rejects(
-      () => transport.invoke('nope') as Promise<unknown>,
-      (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
-    );
-  } finally {
-    transport.dispose();
-    assert.equal(transport.pid, null);
-  }
-});
+      // 존재하지 않는 명령 — id 상관 에러 전파.
+      await assert.rejects(
+        () => transport.invoke('nope') as Promise<unknown>,
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
+      );
+    } finally {
+      transport.dispose();
+      assert.equal(transport.pid, null);
+    }
+  },
+);
 
 // ── 바이너리 모드 (트랙 D) — __hello 핸드셰이크 후 length-prefixed Frame ──
 
-processTest(
+void processTest(
   'createNodeLoopTransport negotiates binary mode and round-trips Frame frames',
   { timeout: 30_000 },
   async () => {
@@ -579,7 +592,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeLoopTransport without codecs stays on legacy NDJSON (no handshake)',
   { timeout: 30_000 },
   async () => {
@@ -598,7 +611,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'dev replacement workflow: register → invoke → replace → invoke over the persistent loop (T0-4)',
   { timeout: 30_000 },
   async () => {
@@ -610,25 +623,25 @@ processTest(
     });
     try {
       const engine = createNodeEngine(transport);
-      const base = (await engine.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+      const base = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
       assert.equal(base.value, 42);
 
       // 런타임 register — JS 는 아무 것도 안 해도 새 명령을 부를 수 있다.
-      const reg = (await engine.invoke('rustraRegistryDemo', { op: 'register' })) as {
-        message: string;
-      };
+      const reg = await engine.invoke<{ message: string }>('rustraRegistryDemo', {
+        op: 'register',
+      });
       assert.match(reg.message, /registered 'ping'/);
-      const ping = (await engine.invoke('ping', {})) as { pong: boolean };
+      const ping = await engine.invoke<{ pong: boolean }>('ping', {});
       assert.equal(ping.pong, true);
 
       // 치환 — 같은 이름 addNumbers 가 곱하기로 동작 (스키마 동일, 핸들러 교체).
       await engine.invoke('rustraRegistryDemo', { op: 'replaceAdd' });
-      const replaced = (await engine.invoke('addNumbers', { a: 6, b: 7 })) as { value: number };
+      const replaced = await engine.invoke<{ value: number }>('addNumbers', { a: 6, b: 7 });
       assert.equal(replaced.value, 42, '6*7 — the replaced handler must serve');
 
       // 복원.
       await engine.invoke('rustraRegistryDemo', { op: 'restoreAdd' });
-      const restored = (await engine.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+      const restored = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
       assert.equal(restored.value, 42);
     } finally {
       transport.dispose();
@@ -638,7 +651,7 @@ processTest(
 
 // ── 핫스왑 reload (Task A1) — drain → dispose → 재부트스트랩 ─────────────────
 
-processTest(
+void processTest(
   'createNodeLoopTransport drain resolves when in-flight invocations settle',
   { timeout: 30_000 },
   async () => {
@@ -661,7 +674,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeLoopTransport drain gives up after the timeout guard when a request never settles',
   { timeout: 30_000 },
   async () => {
@@ -680,14 +693,14 @@ processTest(
       assert.ok(elapsed >= 150, `drain waited until the guard fired (took ${elapsed}ms)`);
       assert.ok(elapsed < 5_000, 'drain must not wait past the guard');
       transport.dispose();
-      await assert.rejects(() => never as Promise<unknown>, /disposed/);
+      await assert.rejects(() => never, /disposed/);
     } finally {
       transport.dispose();
     }
   },
 );
 
-processTest('createNodeBootstrap reload disposes and re-bootstraps the runtime', async () => {
+void processTest('createNodeBootstrap reload disposes and re-bootstraps the runtime', async () => {
   const bootstrap = createNodeBootstrap({
     commandCandidates: [resolve(repoRoot, 'target/debug/rustra-calculator-example')],
     args: ['invoke'],
@@ -708,7 +721,7 @@ processTest('createNodeBootstrap reload disposes and re-bootstraps the runtime',
   }
 });
 
-test('createNodeBootstrap reload rejects when engine spawn fails (one-shot transport, no injected drain)', async () => {
+void test('createNodeBootstrap reload rejects when engine spawn fails (one-shot transport, no injected drain)', async () => {
   // NodeBootstrap.reload 은 원샷 트랜스포트를 내부에서 생성한다 — drain 주입은
   // 공개 계약에 없으며(drain 은 NodeLoopTransport 전용), 여기서 검증하는 것은
   // 스폰 실패(resolveNodeRuntime 부재) 전파뿐이다. 정상 경로 재부트스트랩은
@@ -725,16 +738,17 @@ test('createNodeBootstrap reload rejects when engine spawn fails (one-shot trans
 // subscribeEvent 콜백 사슬 전체를 연결해 매트릭스 "Node 푸시" 문구의 증거가
 // 된다.
 
-processTest(
+void processTest(
   'subscribeEvent delivers real emitted events as 0xfffd push frames from a spawned loop-stdio runtime',
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport, subscribeEvent } = await import('./index.js');
     // test:ts:node 체인이 컴파일한 calculator 생성 레지스트리(dist-ts) —
     // frameRegistry 는 frame-registry.js 의 export(name→codec Map).
-    const { frameRegistry } = await import(
+    // dist-ts 산출물은 선언 파일 없는 .js — 동적 임포트 결과를 unknown 으로 고정한다.
+    const { frameRegistry } = (await import(
       resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
-    );
+    )) as { frameRegistry: unknown };
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
@@ -760,13 +774,13 @@ processTest(
           clearTimeout(deadline);
           resolve();
         };
-        const unsubscribe = subscribeEvent(transport as never, 'progress.tick', (payload) => {
+        const unsubscribe = subscribeEvent(transport, 'progress.tick', (payload) => {
           seen.push({ name: 'progress.tick', payload });
           maybeSettled();
         });
         void unsubscribe;
         // demo.done 구독도 같은 루프 — 세 번째 이벤트 도달 시 settle.
-        subscribeEvent(transport as never, 'demo.done', (payload) => {
+        subscribeEvent(transport, 'demo.done', (payload) => {
           seen.push({ name: 'demo.done', payload });
           maybeSettled();
         });
@@ -805,7 +819,7 @@ const GARBAGE_EMITTER = [
   "process.stdout.write(JSON.stringify({ id: 1, ok: true, result: { value: 42 } }) + '\\n');",
 ].join('');
 
-processTest(
+void processTest(
   'createNodeLoopTransport resolves a valid response even when garbage lines interleave (Task 7)',
   { timeout: 15_000 },
   async () => {
@@ -825,7 +839,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeLoopTransport attaches preserved unparsed lines to pending rejections at exit (Task 7)',
   { timeout: 15_000 },
   async () => {
@@ -869,7 +883,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeLoopTransport collects stderr and attaches it at exit in debug mode (Task 7)',
   { timeout: 15_000 },
   async () => {
@@ -913,7 +927,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeLoopTransport clears diagnostics at respawn so a second exit attaches nothing stale (Task 7)',
   { timeout: 15_000 },
   async () => {
@@ -979,7 +993,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeLoopTransport never attaches a stderr section outside debug mode (Task 7)',
   { timeout: 15_000 },
   async () => {
@@ -1031,7 +1045,7 @@ const cleanSlotEngine = {
   invoke: async <T>() => 'slot-clean' as T,
 } as unknown as EngineClientWithBatch;
 
-test('R08: 소비 전 경쟁 lazy 등록은 loud-fail 하고 첫 등록이 승리한다', async () => {
+void test('R08: 소비 전 경쟁 lazy 등록은 loud-fail 하고 첫 등록이 승리한다', async () => {
   const { configure, configureLazy, invoke } = await import('@rustra/types');
   try {
     // 슬롯을 알려진 상태로 — configure 이후의 등록이 유일한 pending 이 된다.
@@ -1052,7 +1066,7 @@ test('R08: 소비 전 경쟁 lazy 등록은 loud-fail 하고 첫 등록이 승�
         ),
       (err: unknown) => {
         assert.ok(err instanceof RustraCommandError, 'conflict must be a RustraCommandError');
-        assert.equal((err as RustraCommandError).code, 'registry.frozen');
+        assert.equal(err.code, 'registry.frozen');
         assert.match((err as Error).message, /host-a/);
         assert.match((err as Error).message, /host-b/);
         return true;
@@ -1067,7 +1081,7 @@ test('R08: 소비 전 경쟁 lazy 등록은 loud-fail 하고 첫 등록이 승�
   }
 });
 
-test('R08: createNodeBootstrap 도 같은 가드를 통과한다 — pending 노드 bootstrap 위 다른 호스트 등록 거부', async () => {
+void test('R08: createNodeBootstrap 도 같은 가드를 통과한다 — pending 노드 bootstrap 위 다른 호스트 등록 거부', async () => {
   const { configure, configureLazy } = await import('@rustra/types');
   try {
     configure(cleanSlotEngine);
@@ -1086,7 +1100,7 @@ test('R08: createNodeBootstrap 도 같은 가드를 통과한다 — pending 노
         ),
       (err: unknown) => {
         assert.ok(err instanceof RustraCommandError);
-        assert.equal((err as RustraCommandError).code, 'registry.frozen');
+        assert.equal(err.code, 'registry.frozen');
         assert.match((err as Error).message, /node/);
         return true;
       },
@@ -1098,7 +1112,7 @@ test('R08: createNodeBootstrap 도 같은 가드를 통과한다 — pending 노
   }
 });
 
-test('R08: 소비가 시작된 뒤의 교체와 소비 실패 뒤의 복구 등록은 허용된다', async () => {
+void test('R08: 소비가 시작된 뒤의 교체와 소비 실패 뒤의 복구 등록은 허용된다', async () => {
   const { configure, configureLazy, ensureConfigured, invoke } = await import('@rustra/types');
   try {
     // (a) 소비 진행 중 교체 — 기존 "newer wins" 계약 보존.
@@ -1140,7 +1154,7 @@ test('R08: 소비가 시작된 뒤의 교체와 소비 실패 뒤의 복구 등�
   }
 });
 
-test('R08: 같은 bootstrap 클로저의 재등록(reload 경로)은 허용된다', async () => {
+void test('R08: 같은 bootstrap 클로저의 재등록(reload 경로)은 허용된다', async () => {
   const { configure, configureLazy, ensureConfigured } = await import('@rustra/types');
   try {
     configure(cleanSlotEngine);
@@ -1159,7 +1173,7 @@ test('R08: 같은 bootstrap 클로저의 재등록(reload 경로)은 허용된�
   }
 });
 
-processTest(
+void processTest(
   'R08: import 순서 격리 — 서브프로세스에서 마지막 bootstrap 이 조용히 이기는 대신 loud-fail 한다',
   { timeout: 15_000 },
   async () => {
@@ -1198,7 +1212,7 @@ processTest(
 // Promise fallback → 'per-entry' / 이벤트 ✅ 0xfffd 푸시 프레임(폴링 폴백) → 'push'
 // / 채널 ❌ → false / timeoutMs ✅ 레이스 → true.
 
-test('A02: createNodeEngine exposes supports matching the compatibility matrix', async () => {
+void test('A02: createNodeEngine exposes supports matching the compatibility matrix', async () => {
   const engine = createNodeEngine({
     invoke: () => ({ value: 1 }),
   });
@@ -1216,7 +1230,7 @@ test('A02: createNodeEngine exposes supports matching the compatibility matrix',
 // 연결한다(기존 시그니처 유지, 타임아웃 후 진행). dispose 는 멱등(두 번째는
 // no-op)하되 dispose 후 ready 는 loud-fail 한다.
 
-test('A05: createNodeBootstrap exposes the lifecycle state surface', async () => {
+void test('A05: createNodeBootstrap exposes the lifecycle state surface', async () => {
   const { configure } = await import('@rustra/types');
   try {
     configure(cleanSlotEngine);
@@ -1232,7 +1246,7 @@ test('A05: createNodeBootstrap exposes the lifecycle state surface', async () =>
   }
 });
 
-test('A05: ready after dispose rejects loudly (no zombie re-resolution)', async () => {
+void test('A05: ready after dispose rejects loudly (no zombie re-resolution)', async () => {
   const { configure } = await import('@rustra/types');
   try {
     configure(cleanSlotEngine);
@@ -1241,7 +1255,7 @@ test('A05: ready after dispose rejects loudly (no zombie re-resolution)', async 
     assert.equal(bootstrap.state, 'disposed');
     await assert.rejects(bootstrap.ready(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.match((err as RustraCommandError).message, /disposed/);
+      assert.match(err.message, /disposed/);
       return true;
     });
   } finally {
@@ -1249,14 +1263,14 @@ test('A05: ready after dispose rejects loudly (no zombie re-resolution)', async 
   }
 });
 
-test('A05: dispose is idempotent — second dispose is a no-op', () => {
+void test('A05: dispose is idempotent — second dispose is a no-op', () => {
   const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
   bootstrap.dispose();
   bootstrap.dispose(); // no-op — must not throw
   assert.equal(bootstrap.state, 'disposed');
 });
 
-test('A05: concurrent ready calls share one initialization promise (ensureConfigured regression)', async () => {
+void test('A05: concurrent ready calls share one initialization promise (ensureConfigured regression)', async () => {
   // 동일 초기화 프라미스 공유는 ensureConfigured 의 기존 계약 — JSON 엔진을
   // 직접 configure 하는 스파로 회귀를 고정한다(스폰 없는 node bootstrap 은
   // 만들 수 없다 — 원샷 transport 내장).
@@ -1266,7 +1280,7 @@ test('A05: concurrent ready calls share one initialization promise (ensureConfig
     let constructions = 0;
     configureLazy(async () => {
       constructions++;
-      return { invoke: async <T>() => 'shared' as T } as unknown as EngineClientWithBatch;
+      return { invoke: async <T>() => 'shared' as T };
     });
     const [a, b] = (await Promise.all([ensureConfigured(), ensureConfigured()])) as unknown as [
       EngineClientWithBatch,
@@ -1279,7 +1293,7 @@ test('A05: concurrent ready calls share one initialization promise (ensureConfig
   }
 });
 
-test('A05: reload duck-drains its own transport before dispose (createTransport seam)', async () => {
+void test('A05: reload duck-drains its own transport before dispose (createTransport seam)', async () => {
   // drain 연결 계약 — reload 는 bootstrap 이 소유한 transport 를 duck-typing 으로
   // drain 한다. drain 이 있는 transport(createTransport seam 주입)만 drain 되고,
   // drain 이 없는 원샷 transport 는 즉시 진행한다. drain 시맨틱 자체는
@@ -1313,13 +1327,14 @@ test('A05: reload duck-drains its own transport before dispose (createTransport 
     assert.deepEqual(drained, [5_000], 'reload must drain its own transport with the 5s default');
     assert.equal(spawnCount, 2, 'reload must re-bootstrap through the seam after draining');
     assert.equal(bootstrap.state, 'ready', 'reload ends in the ready state');
-    await bootstrap.dispose();
+    // dispose 는 동기 계약(void) — await 없이 호출한다.
+    bootstrap.dispose();
   } finally {
     configure(cleanSlotEngine);
   }
 });
 
-test('A05: dispose during reload drain aborts the reload — no zombie ready (I-1)', async () => {
+void test('A05: dispose during reload drain aborts the reload — no zombie ready (I-1)', async () => {
   // I-1 회귀 — drain 중 dispose 하면 reload 가 재개해 state='ready' 로 부활하고
   // ready() 가 해소하는 좀비를 만들 수 없다. await 경계마다 disposed 재검사.
   const { configure } = await import('@rustra/types');
@@ -1350,7 +1365,7 @@ test('A05: dispose during reload drain aborts the reload — no zombie ready (I-
     releaseDrain?.();
     await assert.rejects(reloading, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.match((err as RustraCommandError).message, /disposed/);
+      assert.match(err.message, /disposed/);
       return true;
     });
     assert.equal(bootstrap.state, 'disposed', 'state stays disposed after abort');
@@ -1361,7 +1376,7 @@ test('A05: dispose during reload drain aborts the reload — no zombie ready (I-
   }
 });
 
-test('A05: failed reload keeps the original error and restores retryable state (I-2)', async () => {
+void test('A05: failed reload keeps the original error and restores retryable state (I-2)', async () => {
   // I-2 회귀 — 재초기화 실패는 bootstrap 을 'disposed' 로 벽돌화하지 않는다.
   // 상태는 'initializing' 으로 복원되고 다음 ready() 는 원본 에러를 다시 낸다.
   const { configure } = await import('@rustra/types');
@@ -1398,13 +1413,14 @@ test('A05: failed reload keeps the original error and restores retryable state (
     await bootstrap.ready();
     assert.equal(bootstrap.state, 'ready', 'retry succeeds after transient failure');
     assert.equal(spawnCount, 3);
-    await bootstrap.dispose();
+    // dispose 는 동기 계약(void) — await 없이 호출한다.
+    bootstrap.dispose();
   } finally {
     configure(cleanSlotEngine);
   }
 });
 
-test('A05: dispose during reload re-init leaves no zombie engine in the global slot (I-NEW seam)', async () => {
+void test('A05: dispose during reload re-init leaves no zombie engine in the global slot (I-NEW seam)', async () => {
   // I-NEW 회귀(RV7) — 재초기화 클로저의 transport 주입 await 중 dispose 하면
   // 클로저의 엔진이 전역 슬롯에 설치되어선 안 된다. 클로저 반환 직전 disposed
   // 재검사가 configure(engine) 기록을 막고(ensureConfigured catch 가 초기화를
@@ -1459,7 +1475,7 @@ test('A05: dispose during reload re-init leaves no zombie engine in the global s
   }
 });
 
-test('A05: dispose during reload re-init on the one-shot path leaves no TypeError engine (I-NEW default)', async () => {
+void test('A05: dispose during reload re-init on the one-shot path leaves no TypeError engine (I-NEW default)', async () => {
   // I-NEW 회귀(RV8b) — 원샷 경로에서 dispose 가 transport 를 undefined 로 만든
   // 뒤 클로저가 엔진을 반환하면 글로벌 invoke() 가 TypeError 로 터진다. 반환 직전
   // 재검사가 이를 막는다.
@@ -1505,14 +1521,15 @@ test('A05: dispose during reload re-init on the one-shot path leaves no TypeErro
 // 매트릭스 "Node 채널" 셀의 증거가 된다. Bun FFI 브릿지와 달리 백그라운드
 // 스레드 send(stdout 프레임은 JS 턴 데이터 이벤트로 도달)도 이 사슬에서 안전하다.
 
-processTest(
+void processTest(
   'createNodeChannel round-trips channelDemo frames from a spawned loop-stdio runtime',
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
-    const { frameRegistry } = await import(
+    // dist-ts 산출물은 선언 파일 없는 .js — 동적 임포트 결과를 unknown 으로 고정한다.
+    const { frameRegistry } = (await import(
       resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
-    );
+    )) as { frameRegistry: unknown };
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
@@ -1580,7 +1597,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeChannel loud-fails on an NDJSON transport instead of hanging',
   { timeout: 30_000 },
   async () => {
@@ -1594,7 +1611,7 @@ processTest(
       await transport.ready();
       assert.equal(transport.mode, 'ndjson');
       await assert.rejects(
-        createNodeChannel(transport as never, () => {}),
+        createNodeChannel(transport, () => {}),
         (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
       );
     } finally {
@@ -1609,12 +1626,12 @@ processTest(
 // 유닛 테스트는 Bun 러너에서도 실행되고, 실제 런타임 왕복은 아래 processTest
 // (node 러너 전용 — channelDemoBytes 로 LE u64 프레임 왕복).
 
-test('createNodeBytesChannel loud-fails without a bytes frame path', async () => {
+void test('createNodeBytesChannel loud-fails without a bytes frame path', async () => {
   const { createNodeBytesChannel } = await import('./index.js');
   // 원샷 invoke transport — onChannelBytesFrame 노출 없음(경로 자체 부재).
   const transport = { invoke: async () => ({ handle: 1 }) };
   await assert.rejects(
-    createNodeBytesChannel(transport as never, () => {}),
+    createNodeBytesChannel(transport, () => {}),
     (err: unknown) =>
       err instanceof RustraCommandError &&
       err.code === 'channel.unavailable' &&
@@ -1622,7 +1639,7 @@ test('createNodeBytesChannel loud-fails without a bytes frame path', async () =>
   );
 });
 
-test('createNodeBytesChannel loud-fails on an NDJSON transport', async () => {
+void test('createNodeBytesChannel loud-fails on an NDJSON transport', async () => {
   const { createNodeBytesChannel } = await import('./index.js');
   const transport = {
     invoke: async () => ({ handle: 1 }),
@@ -1631,7 +1648,7 @@ test('createNodeBytesChannel loud-fails on an NDJSON transport', async () => {
     mode: 'ndjson' as const,
   };
   await assert.rejects(
-    createNodeBytesChannel(transport as never, () => {}),
+    createNodeBytesChannel(transport, () => {}),
     (err: unknown) =>
       err instanceof RustraCommandError &&
       err.code === 'channel.unavailable' &&
@@ -1639,7 +1656,7 @@ test('createNodeBytesChannel loud-fails on an NDJSON transport', async () => {
   );
 });
 
-test('createNodeBytesChannel loud-fails when the runtime lacks the channelBytes capability', async () => {
+void test('createNodeBytesChannel loud-fails when the runtime lacks the channelBytes capability', async () => {
   const { createNodeBytesChannel } = await import('./index.js');
   // 구 런타임 매트릭스 — 바이너리 모드는 협상됐지만 channelBytes capability 가
   // 없다(모드 바이트를 무시하고 JSON 채널을 파는 위상). 프레임을 보내기 전에
@@ -1656,7 +1673,7 @@ test('createNodeBytesChannel loud-fails when the runtime lacks the channelBytes 
     channelBytesCapable: false,
   };
   await assert.rejects(
-    createNodeBytesChannel(transport as never, () => {}),
+    createNodeBytesChannel(transport, () => {}),
     (err: unknown) =>
       err instanceof RustraCommandError &&
       err.code === 'channel.unavailable' &&
@@ -1665,7 +1682,7 @@ test('createNodeBytesChannel loud-fails when the runtime lacks the channelBytes 
   assert.deepEqual(invokes, [], 'capability gate must fire before any wire frame is sent');
 });
 
-test('createNodeBytesChannel issues, delivers copied bytes, and drops on close', async () => {
+void test('createNodeBytesChannel issues, delivers copied bytes, and drops on close', async () => {
   const { createNodeBytesChannel } = await import('./index.js');
   // 최소 바이너리 모드 모의 — 발급 invoke 는 모드 플래그 프레임을 보내는
   // 내부 커맨드(__createChannelBytes), 프레임은 등록된 핸들러로 시뮬레이션.
@@ -1689,9 +1706,7 @@ test('createNodeBytesChannel issues, delivers copied bytes, and drops on close',
     channelBytesCapable: true,
   };
   const received: Uint8Array[] = [];
-  const channel = await createNodeBytesChannel(transport as never, (payload) =>
-    received.push(payload),
-  );
+  const channel = await createNodeBytesChannel(transport, (payload) => received.push(payload));
   assert.equal(channel.handle, 42);
   assert.deepEqual(invokes, [{ command: '__createChannelBytes', args: undefined }]);
 
@@ -1716,15 +1731,16 @@ test('createNodeBytesChannel issues, delivers copied bytes, and drops on close',
   });
 });
 
-processTest(
+void processTest(
   'createNodeBytesChannel round-trips channelDemoBytes frames from a spawned loop-stdio runtime',
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } =
       await import('./index.js');
-    const { frameRegistry } = await import(
+    // dist-ts 산출물은 선언 파일 없는 .js — 동적 임포트 결과를 unknown 으로 고정한다.
+    const { frameRegistry } = (await import(
       resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
-    );
+    )) as { frameRegistry: unknown };
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
@@ -1828,7 +1844,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'createNodeBytesChannel loud-fails on an NDJSON transport instead of hanging',
   { timeout: 30_000 },
   async () => {
@@ -1842,7 +1858,7 @@ processTest(
       await transport.ready();
       assert.equal(transport.mode, 'ndjson');
       await assert.rejects(
-        createNodeBytesChannel(transport as never, () => {}),
+        createNodeBytesChannel(transport, () => {}),
         (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
       );
     } finally {
@@ -1851,7 +1867,7 @@ processTest(
   },
 );
 
-processTest('JSON transports preserve explicit null for zero-argument functions', async () => {
+void processTest('JSON transports preserve explicit null for zero-argument functions', async () => {
   const { createNodeLoopTransport } = await import('./index.js');
   const once = createNodeProcessTransport({
     command: process.execPath,

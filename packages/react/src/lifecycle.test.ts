@@ -32,7 +32,7 @@ const command = Object.assign(
 const wrap = (engine: unknown, child: React.ReactNode) =>
   h(RustraProvider, { engine: engine as EngineClient }, child);
 
-test('mutation invoked from a layout effect uses that render callbacks', async () => {
+void test('mutation invoked from a layout effect uses that render callbacks', async () => {
   const calls: string[] = [];
   function View() {
     const mutation = useMutation(command, {
@@ -52,7 +52,7 @@ test('mutation invoked from a layout effect uses that render callbacks', async (
   await act(async () => tree!.unmount());
 });
 
-test('child layout mutation snapshots updated parent callbacks', async () => {
+void test('child layout mutation snapshots updated parent callbacks', async () => {
   const calls: string[] = [];
   const engine = { invoke: async () => 42 };
   function Child({
@@ -82,11 +82,11 @@ test('child layout mutation snapshots updated parent callbacks', async () => {
   assert.deepEqual(calls, ['A', 'B']);
 });
 
-test('input key distinguishes supported Set and ArrayBuffer values', () => {
+void test('input key distinguishes supported Set and ArrayBuffer values', () => {
   assert.notEqual(inputKey(new Set(['first'])), inputKey(new Set(['second'])));
 });
 
-test('useCommand rerenders with a changed Set and invokes using the new value', async () => {
+void test('useCommand rerenders with a changed Set and invokes using the new value', async () => {
   const calls: string[][] = [];
   let current!: ReturnType<typeof useCommand<unknown, unknown>>;
   const engine = {
@@ -97,6 +97,8 @@ test('useCommand rerenders with a changed Set and invokes using the new value', 
   };
   function View({ value }: { value: Set<string> }) {
     current = useCommand(command, value);
+    // 렌더 픽스처 — data 는 임의 unknown 이어도 표시용 문자열화만 한다.
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return h('span', null, String(current.data ?? ''));
   }
   let root!: ReturnType<typeof create>;
@@ -116,7 +118,7 @@ test('useCommand rerenders with a changed Set and invokes using the new value', 
   assert.equal(result.data, 'second');
 });
 
-test('Suspense cache is isolated for distinct provider engines', async () => {
+void test('Suspense cache is isolated for distinct provider engines', async () => {
   invalidateCommands();
   const calls: string[] = [];
   const engine = (owner: string) => ({
@@ -146,7 +148,7 @@ test('Suspense cache is isolated for distinct provider engines', async () => {
   assert.deepEqual(result.second, { type: 'span', props: {}, children: ['account-B'] });
 });
 
-test('old mutation completing after engine replacement does not update new scope', async () => {
+void test('old mutation completing after engine replacement does not update new scope', async () => {
   const a = deferred();
   let current!: ReturnType<typeof useMutation<unknown, unknown>>;
   const callbacks: unknown[] = [];
@@ -178,7 +180,7 @@ test('old mutation completing after engine replacement does not update new scope
   assert.deepEqual(callbacks, [{ owner: 'A', data: 'account-A-result' }]);
 });
 
-test('async useEvent subscription does not deliver events after unmount', async () => {
+void test('async useEvent subscription does not deliver events after unmount', async () => {
   const registered = deferred<() => void>();
   let handler!: (value: string) => void;
   let unsubscriptions = 0;
@@ -208,7 +210,7 @@ test('async useEvent subscription does not deliver events after unmount', async 
   assert.equal(unsubscriptions, 1);
 });
 
-test('old async subscription does not deliver events into replacement event callback', async () => {
+void test('old async subscription does not deliver events into replacement event callback', async () => {
   const oldSubscription = deferred<() => void>();
   const handlers = new Map<string, (value: string) => void>();
   const events: unknown[] = [];
@@ -235,7 +237,7 @@ test('old async subscription does not deliver events into replacement event call
   assert.deepEqual(events, []);
 });
 
-test('useCommand uses changed ArrayBuffer contents after update and refetch', async () => {
+void test('useCommand uses changed ArrayBuffer contents after update and refetch', async () => {
   const calls: number[][] = [];
   let current!: ReturnType<typeof useCommand<unknown, unknown>>;
   const engine = {
@@ -266,7 +268,7 @@ test('useCommand uses changed ArrayBuffer contents after update and refetch', as
   assert.equal(result.data, '2');
 });
 
-test('mutation command replacement invalidates old pending result', async () => {
+void test('mutation command replacement invalidates old pending result', async () => {
   const pendingA = deferred();
   const commandA = Object.assign(async function commandA() {}, { commandId: 'command-A' });
   const commandB = Object.assign(async function commandB() {}, { commandId: 'command-B' });
@@ -300,7 +302,7 @@ test('mutation command replacement invalidates old pending result', async () => 
   assert.equal(data, undefined);
 });
 
-test('value-equal inline records do not restart a mounted command', async () => {
+void test('value-equal inline records do not restart a mounted command', async () => {
   let calls = 0;
   const engine = {
     invoke: async () => {
@@ -326,7 +328,7 @@ test('value-equal inline records do not restart a mounted command', async () => 
   });
 });
 
-test('tagged identities distinguish records, undefined, special numbers, binary views, and Map contents', () => {
+void test('tagged identities distinguish records, undefined, special numbers, binary views, and Map contents', () => {
   const pairs: [unknown, unknown][] = [
     [42n, { $rustraBigInt: '42' }],
     [{ optional: undefined }, {}],
@@ -358,7 +360,7 @@ test('tagged identities distinguish records, undefined, special numbers, binary 
   assert.notEqual(inputKey(new Point(1)), inputKey({ x: 1 }));
 });
 
-test('mutation error keeps invocation callbacks and cannot overwrite replacement state', async () => {
+void test('mutation error keeps invocation callbacks and cannot overwrite replacement state', async () => {
   let reject!: (error: Error) => void;
   const pending = new Promise((_, r) => {
     reject = r;
@@ -401,13 +403,13 @@ test('mutation error keeps invocation callbacks and cannot overwrite replacement
   });
 });
 
-test('mutation reset excludes pending results while preserving invocation callbacks', async () => {
+void test('mutation reset excludes pending results while preserving invocation callbacks', async () => {
   const pending = deferred();
   const callbacks: string[] = [];
   let current!: ReturnType<typeof useMutation<unknown, unknown>>;
   function View() {
     current = useMutation(command, {
-      onSuccess: (value) => callbacks.push(value as unknown as string),
+      onSuccess: (value) => callbacks.push(value as string),
     });
     return null;
   }
@@ -433,7 +435,7 @@ test('mutation reset excludes pending results while preserving invocation callba
   });
 });
 
-test('event callback updates without resubscribing and synchronous cleanup runs once', async () => {
+void test('event callback updates without resubscribing and synchronous cleanup runs once', async () => {
   let handler!: (payload: string) => void;
   let subscriptions = 0,
     cleanups = 0;
@@ -466,7 +468,7 @@ test('event callback updates without resubscribing and synchronous cleanup runs 
   assert.equal(cleanups, 1);
 });
 
-test('mounted Suspense shows fallback then renders the command result', async () => {
+void test('mounted Suspense shows fallback then renders the command result', async () => {
   const pending = deferred();
   const calls: unknown[] = [];
   const engine = {
@@ -501,7 +503,7 @@ test('mounted Suspense shows fallback then renders the command result', async ()
   invalidateCommands(undefined, engine as EngineClient);
 });
 
-test('overlapping mutations retain loading until all finish and keep invocation-time callbacks', async () => {
+void test('overlapping mutations retain loading until all finish and keep invocation-time callbacks', async () => {
   const older = deferred(),
     newer = deferred();
   const callbacks: string[] = [];
@@ -511,7 +513,10 @@ test('overlapping mutations retain loading until all finish and keep invocation-
       input === 'older' ? older.promise : newer.promise,
   };
   function View({ label }: { label: string }) {
-    current = useMutation(command, { onSuccess: (value) => callbacks.push(`${label}:${value}`) });
+    // onSuccess 값은 이 픽스처에서 항상 문자열('old'/'new')로 resolve 된다.
+    current = useMutation(command, {
+      onSuccess: (value) => callbacks.push(`${label}:${value as string}`),
+    });
     return null;
   }
   let root!: ReturnType<typeof create>, first: Promise<unknown>, second: Promise<unknown>;

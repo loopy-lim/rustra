@@ -37,7 +37,10 @@ function _tier3DecodeString(u: Uint8Array, offset: number): { value: string; byt
   let bytesRead = 0;
   let len = 0;
   while (true) {
-    const b = u[offset + bytesRead];
+    const raw = u[offset + bytesRead];
+    // 경계 밖 바이트는 기존 런타임에서도 (undefined & mask) === 0 으로 취급돼
+    // 즉시 종료됐다 — 0 으로 고정해 동일 동작을 유지한다.
+    const b = raw ?? 0;
     len |= (b & 0x7f) << shift;
     bytesRead++;
     if ((b & 0x80) === 0) break;
@@ -77,7 +80,14 @@ export function decodeTier3Response(bytes: ArrayBuffer | ArrayBufferView): {
     try {
       return { ok: true, result: JSON.parse(json) };
     } catch (e) {
-      return { ok: false, error: { code: 'invoke.malformed', message: `invalid json: ${e}` } };
+      return {
+        ok: false,
+        error: {
+          code: 'invoke.malformed',
+          // JSON.parse 의 throw 는 SyntaxError 뿐이라 e.message 가 표준 경로다.
+          message: `invalid json: ${e instanceof Error ? e.message : JSON.stringify(e)}`,
+        },
+      };
     }
   }
   if (bytes.byteLength < 10) {

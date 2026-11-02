@@ -1,0 +1,56 @@
+{
+  // eslint type-checked 규칙용 프로그램(T5). 패키지/스크립트/예제의 린트 범위를
+  // 하나의 프로그램으로 커버한다 — 개별 tsconfig 는 include/exclude 가 제각각이라
+  // (types·cli·react 는 test 파일 제외, calculator 는 bun ffi 앱 제외) 린트 파일
+  // 일부가 프로그램에서 빠져 type-aware 규칙이 실패한다. 여기서는 린트 대상 전수를
+  // 루트 파일로 잡고 import 로 끌려 들어오는 나머지(.tsx·generated)는 프로그램이
+  // 자동 포함한다.
+  // base 를 extends 해 noUncheckedIndexedAccess 등 플래그를 공유한다 — 어긋나면
+  // no-unnecessary-type-assertion 가 tsc 게이트에 필요한 `!` 를 지워버린다.
+  // 컴파일 게이트가 아니다 — 타입 오류는 tsc 게이트(test:fast, 각 패키지
+  // tsconfig)의 소관이고, 이 설정은 type-aware 린트의 타입 해석용이다.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "outDir": null,
+    "rootDir": null,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    // scripts/** 의 .mjs 임포트(onboarding-gate.mjs 등)가 error 타입으로
+    // 떨어져 no-unsafe-* 오탐이 쏟아지지 않게 실제 소스에서 타입을 추론한다.
+    "allowJs": true
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "scripts/**/*.ts",
+    "scripts/**/*.mjs",
+    "examples/calculator/ts/**/*.ts",
+    "examples/calculator/apps/**/*.ts",
+    "examples/calculator/scriptc/**/*.ts",
+    "examples/crud/ts/**/*.ts",
+    "examples/crud/apps/**/*.ts",
+    "examples/auth/ts/**/*.ts",
+    "examples/auth/apps/**/*.ts",
+    "examples/streaming/ts/**/*.ts",
+    "examples/streaming/apps/**/*.ts",
+    "examples/tauri-calculator/src/**/*.ts",
+    "examples/reference-app/src/**/*.ts",
+    "examples/reference-app/src/**/*.tsx",
+    "examples/react-native-bare-calculator/index.ts",
+    "examples/react-native-bare-calculator/modules/**/*.ts",
+    "examples/rn-wasm-spike/app/modules/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-ts/**",
+    "**/dist-test/**",
+    "**/generated/**"
+  ]
+}

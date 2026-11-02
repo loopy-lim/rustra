@@ -137,18 +137,16 @@ function createPollingEventBridge(options: BunEventBridgeOptions): BunEventBridg
  * - `poll` 지정: 폴링 경로(Node 어댑터 계약과 동일).
  * - 둘 다 지정: FFI 등록 실패 시 `fallbackToPolling`(기본 true)로 폴백.
  */
-export async function createBunEventBridge(
-  options: BunEventBridgeOptions,
-): Promise<BunEventBridge> {
+export function createBunEventBridge(options: BunEventBridgeOptions): Promise<BunEventBridge> {
   if (options.library) {
     try {
-      return createBunFfiEventBridge(options.library);
+      return Promise.resolve(createBunFfiEventBridge(options.library));
     } catch (error) {
       if (!options.poll || options.fallbackToPolling === false) throw error;
       console.warn('Rustra: FFI event sink registration failed; falling back to polling:', error);
     }
   }
-  return createPollingEventBridge(options);
+  return Promise.resolve(createPollingEventBridge(options));
 }
 
 // ── 코드젠 SubscribeFn 정합 (컴파일 타임 고정) ─────────────────
@@ -160,7 +158,8 @@ export async function createBunEventBridge(
 
 /** 생성 계약의 동형 타입 — 이벤트 'x' 하나가 선언된 스키마에 상당. */
 type ContractPayloads = { x: number };
-type ContractName = keyof ContractPayloads & string;
+// keyof 가 단일 문자열 리터럴 키라 & string 은 타입상 no-op — 규칙 지적에 따라 제거한다.
+type ContractName = keyof ContractPayloads;
 type GeneratedSubscribeFn = <N extends ContractName>(
   name: N,
   callback: (payload: ContractPayloads[N]) => void,

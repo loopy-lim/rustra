@@ -121,7 +121,7 @@ export function createMockEngine(mockOptions: MockEngineOptions = {}): MockEngin
         subscriptions.set(name, handlersForName);
       }
       handlersForName.add(handler);
-      return () => handlersForName!.delete(handler);
+      return () => handlersForName.delete(handler);
     },
     async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       // pre-aborted signal — 전 어댑터 공통 CancelledError instanceof 계약 정합
@@ -147,7 +147,7 @@ export function createMockEngine(mockOptions: MockEngineOptions = {}): MockEngin
         );
       }
       try {
-        return (await (handler as (args: unknown) => unknown)(args)) as T;
+        return (await handler(args)) as T;
       } catch (e) {
         throw toMockError(e);
       }

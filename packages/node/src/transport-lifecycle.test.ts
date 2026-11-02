@@ -7,7 +7,7 @@ import { createNodeLoopTransport } from './index.js';
 const processTest = process.versions.bun ? test.skip : test;
 const adapterUrl = new URL('./index.js', import.meta.url).href;
 
-processTest('a missing loop runtime rejects without crashing the host process', () => {
+void processTest('a missing loop runtime rejects without crashing the host process', () => {
   const script = `
     import assert from 'node:assert/strict';
     import { createNodeLoopTransport } from ${JSON.stringify(adapterUrl)};
@@ -28,39 +28,45 @@ for (const [name, response] of [
   ['missing-ok', JSON.stringify({ id: 1, result: 7 })],
   ['failed-error-object', JSON.stringify({ id: 1, ok: false, error: {} })],
 ]) {
-  processTest(`a malformed JSON response (${name}) rejects without crashing the Node host`, () => {
-    const producer = `process.stdin.once('data',()=>process.stdout.write(${JSON.stringify(response + '\n')}))`;
-    const script = `
+  void processTest(
+    `a malformed JSON response (${name}) rejects without crashing the Node host`,
+    () => {
+      const producer = `process.stdin.once('data',()=>process.stdout.write(${JSON.stringify(response + '\n')}))`;
+      const script = `
       import assert from 'node:assert/strict';
       import {createNodeLoopTransport} from ${JSON.stringify(adapterUrl)};
       const transport=createNodeLoopTransport({command:process.execPath,args:['-e',${JSON.stringify(producer)}]});
       try { await assert.rejects(async()=>await transport.invoke('ping'),error=>error.code==='invoke.malformed'); }
       finally {transport.dispose();}
     `;
-    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      encoding: 'utf8',
-      timeout: 2_000,
-    });
-    assert.equal(result.status, 0, result.stderr || String(result.error));
-  });
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+        encoding: 'utf8',
+        timeout: 2_000,
+      });
+      assert.equal(result.status, 0, result.stderr || String(result.error));
+    },
+  );
 }
 
-processTest('an early one-shot exit rejects a failed stdin write without crashing the host', () => {
-  const script = `
+void processTest(
+  'an early one-shot exit rejects a failed stdin write without crashing the host',
+  () => {
+    const script = `
     import assert from 'node:assert/strict';
     import { createNodeProcessTransport } from ${JSON.stringify(adapterUrl)};
     const transport = createNodeProcessTransport({ command: process.execPath, args: ['-e', 'process.exit(0)'] });
     await assert.rejects(transport.invoke('ping', 'x'.repeat(1_000_000)), (error) => error.code === 'transport.error');
     transport.dispose();
   `;
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-    encoding: 'utf8',
-    timeout: 2_000,
-  });
-  assert.equal(result.status, 0, result.stderr);
-});
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      timeout: 2_000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+  },
+);
 
-processTest('NDJSON preserves a multibyte character split across stdout chunks', async () => {
+void processTest('NDJSON preserves a multibyte character split across stdout chunks', async () => {
   const script = String.raw`
     process.stdin.once('data', (request) => {
       const { id } = JSON.parse(request.toString());
@@ -78,7 +84,7 @@ processTest('NDJSON preserves a multibyte character split across stdout chunks',
   }
 });
 
-processTest(
+void processTest(
   'a runtime closing its inherited stdout is not replaced before teardown settles',
   async () => {
     const script = String.raw`
@@ -107,7 +113,7 @@ processTest(
   },
 );
 
-processTest('binary negotiation preserves a push frame in the same stdout chunk', async () => {
+void processTest('binary negotiation preserves a push frame in the same stdout chunk', async () => {
   const script = String.raw`
     process.stdin.once('data', (request) => {
       const { id } = JSON.parse(request.toString());
@@ -149,7 +155,7 @@ const pingCodec: FrameCodec<unknown, unknown> = {
   },
 };
 
-processTest('a restarted binary runtime renegotiates before the next invocation', async () => {
+void processTest('a restarted binary runtime renegotiates before the next invocation', async () => {
   const script = String.raw`
     let binary = false;
     process.stdin.on('data', (request) => {
@@ -179,7 +185,7 @@ processTest('a restarted binary runtime renegotiates before the next invocation'
   }
 });
 
-processTest(
+void processTest(
   'loop disposal prevents invocation and event drain from reviving the process',
   async () => {
     const transport = createNodeLoopTransport({
@@ -201,7 +207,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'a failed binary handshake rejects readiness instead of reporting success',
   async () => {
     const transport = createNodeLoopTransport({

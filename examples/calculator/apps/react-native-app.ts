@@ -25,7 +25,7 @@ const NativeRustraModule = {
       throw new TypeError('expected addNumbers with numeric a and b arguments');
     }
     const value = decoded.args.a + decoded.args.b;
-    return encoder.encode(JSON.stringify({ ok: true, result: { value } })).buffer as ArrayBuffer;
+    return encoder.encode(JSON.stringify({ ok: true, result: { value } })).buffer;
   },
 };
 

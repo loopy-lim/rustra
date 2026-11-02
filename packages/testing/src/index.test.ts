@@ -12,14 +12,14 @@ import {
 } from './index.js';
 import { CancelledError, RustraCommandError } from '@rustra/types';
 
-test('mock engine invokes registered handler', async () => {
+void test('mock engine invokes registered handler', async () => {
   const engine = createMockEngine();
   engine.on('addNumbers', (args: { a: number; b: number }) => args.a + args.b);
   const result = await engine.invoke<number>('addNumbers', { a: 20, b: 22 });
   assert.equal(result, 42);
 });
 
-test('type-safe mock method registers command by function reference', async () => {
+void test('type-safe mock method registers command by function reference', async () => {
   async function computeSum(input: { a: number; b: number }): Promise<{ sum: number }> {
     return { sum: input.a + input.b };
   }
@@ -29,7 +29,7 @@ test('type-safe mock method registers command by function reference', async () =
   assert.deepEqual(result, { sum: 35 });
 });
 
-test('unknown command rejects with RustraCommandError command.not_found', async () => {
+void test('unknown command rejects with RustraCommandError command.not_found', async () => {
   const engine = createMockEngine();
   await assert.rejects(
     () => engine.invoke('missing'),
@@ -37,9 +37,11 @@ test('unknown command rejects with RustraCommandError command.not_found', async 
   );
 });
 
-test('handler errors become RustraCommandError with custom code', async () => {
+void test('handler errors become RustraCommandError with custom code', async () => {
   const engine = createMockEngine();
   engine.on('fail', () => {
+    // 객체 throw 의 RustraCommandError 정규화 계약이 검증 대상이다.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw { code: 'validation.too_large', message: 'value exceeds limit' };
   });
   await assert.rejects(
@@ -48,13 +50,13 @@ test('handler errors become RustraCommandError with custom code', async () => {
   );
 });
 
-test('on returns engine for chaining', () => {
+void test('on returns engine for chaining', () => {
   const engine = createMockEngine();
   const returned = engine.on('x', () => 1);
   assert.equal(returned, engine);
 });
 
-test('mock engine records calls for ordering assertions', async () => {
+void test('mock engine records calls for ordering assertions', async () => {
   const engine = createMockEngine();
   engine.on('a', () => 1).on('b', () => 2);
   await engine.invoke('a', { x: 1 });
@@ -65,7 +67,7 @@ test('mock engine records calls for ordering assertions', async () => {
   ]);
 });
 
-test('mock engine records options and rejects pre-aborted signals', async () => {
+void test('mock engine records options and rejects pre-aborted signals', async () => {
   const engine = createMockEngine();
   engine.on('a', () => 1);
   const ac = new AbortController();
@@ -92,16 +94,17 @@ test('mock engine records options and rejects pre-aborted signals', async () => 
   assert.deepEqual(engine.calls(), []);
 });
 
-test('mock engine supports invokeBatch routing per entry', async () => {
+void test('mock engine supports invokeBatch routing per entry', async () => {
   const engine = createMockEngine();
   engine.on('a', () => 1).on('b', () => 2);
-  const batch = engine.invokeBatch!;
+  // bind 로 this 를 고정해 분리 참조를 차단한다.
+  const batch = engine.invokeBatch!.bind(engine);
   const results = await batch([{ command: 'a', args: { x: 1 } }, { command: 'b' }]);
   assert.deepEqual(results, [1, 2]);
   assert.equal(engine.calls().length, 2);
 });
 
-test('mock engine supports deterministic delay, injected errors, and events', async () => {
+void test('mock engine supports deterministic delay, injected errors, and events', async () => {
   const engine = createMockEngine({ delayMs: 1 });
   const received: unknown[] = [];
   const unsubscribe = engine.subscribeEvent('progress', (payload) => received.push(payload));
@@ -128,7 +131,7 @@ test('mock engine supports deterministic delay, injected errors, and events', as
   assert.deepEqual(received, [{ step: 1 }]);
 });
 
-test('assertContractCurrent passes when commands match', () => {
+void test('assertContractCurrent passes when commands match', () => {
   const schema = JSON.parse(
     readFileSync(new URL('../fixtures/schema.sample.json', import.meta.url), 'utf-8'),
   ) as { commands: Array<{ name: string }> };
@@ -137,14 +140,14 @@ test('assertContractCurrent passes when commands match', () => {
   assert.deepEqual(ok.missingInSchema, []);
 });
 
-test('assertContractCurrent detects drift both ways', () => {
+void test('assertContractCurrent detects drift both ways', () => {
   const schema = { commands: [{ name: 'addNumbers' }] };
   const result = assertContractCurrent(schema, ['addNumbers', 'staleCommand']);
   assert.deepEqual(result.missingInSchema, ['staleCommand']);
   assert.deepEqual(result.missingInClient, []);
 });
 
-test('expectContractCurrent throws with human-readable drift message', () => {
+void test('expectContractCurrent throws with human-readable drift message', () => {
   const schema = { commands: [{ name: 'addNumbers' }, { name: 'extra' }] };
   // 드리프트: extra 는 클라이언트에 없고, ghost 는 스키마에 없다.
   assert.throws(
@@ -163,13 +166,14 @@ test('expectContractCurrent throws with human-readable drift message', () => {
 /** 실제 코드젠 렌더러와 같은 형태의 commands.ts 조각을 만든다. */
 function genFields2(commandId: number, name: string, fields: string[], fnName = name): string {
   return (
-    `export const ${fnName} = createGeneratedFields2<${name[0].toUpperCase()}${name.slice(1)}Input, ` +
-    `${name[0].toUpperCase()}${name.slice(1)}Output>(${commandId}, '${name}', ` +
+    // name 은 항상 비어있지 않은 명령 이름('addNumbers' 등)으로 호출된다.
+    `export const ${fnName} = createGeneratedFields2<${name[0]!.toUpperCase()}${name.slice(1)}Input, ` +
+    `${name[0]!.toUpperCase()}${name.slice(1)}Output>(${commandId}, '${name}', ` +
     `${fields.map((f) => JSON.stringify(f)).join(', ')}, '${fnName}');`
   );
 }
 
-test('assertContractFieldsCurrent passes when fields match in wire order', () => {
+void test('assertContractFieldsCurrent passes when fields match in wire order', () => {
   // 와이어 순서의 원천은 properties 키 순서(required 아님 — emitDemo 실측:
   // required ["stepDelayMs","ticks"] vs 생성 "ticks","stepDelayMs").
   const schema = {
@@ -187,7 +191,7 @@ test('assertContractFieldsCurrent passes when fields match in wire order', () =>
   assert.deepEqual(assertContractFieldsCurrent(schema, source).drift, []);
 });
 
-test('assertContractFieldsCurrent detects field dropped from generated client', () => {
+void test('assertContractFieldsCurrent detects field dropped from generated client', () => {
   const schema = {
     commands: [
       {
@@ -209,7 +213,7 @@ test('assertContractFieldsCurrent detects field dropped from generated client', 
   ]);
 });
 
-test('assertContractFieldsCurrent detects field order mismatch', () => {
+void test('assertContractFieldsCurrent detects field order mismatch', () => {
   const schema = {
     commands: [
       {
@@ -231,7 +235,7 @@ test('assertContractFieldsCurrent detects field order mismatch', () => {
   ]);
 });
 
-test('assertContractFieldsCurrent detects schema-only field', () => {
+void test('assertContractFieldsCurrent detects schema-only field', () => {
   const schema = {
     commands: [
       {
@@ -280,7 +284,7 @@ test('assertContractFieldsCurrent detects schema-only field', () => {
   );
 });
 
-test('assertContractFieldsCurrent falls back to required when properties absent', () => {
+void test('assertContractFieldsCurrent falls back to required when properties absent', () => {
   const schema = {
     commands: [
       { name: 'greet', inputSchema: { required: ['name'] } },
@@ -301,7 +305,7 @@ test('assertContractFieldsCurrent falls back to required when properties absent'
   assert.deepEqual(assertContractFieldsCurrent(schema, source).drift, []);
 });
 
-test('assertContractFieldsCurrent reports command missing from generated source', () => {
+void test('assertContractFieldsCurrent reports command missing from generated source', () => {
   const schema = {
     commands: [
       {
@@ -321,7 +325,7 @@ test('assertContractFieldsCurrent reports command missing from generated source'
   ]);
 });
 
-test('assertContractFieldsCurrent reports unparseable source instead of silent pass', () => {
+void test('assertContractFieldsCurrent reports unparseable source instead of silent pass', () => {
   const schema = {
     commands: [
       {
@@ -334,12 +338,13 @@ test('assertContractFieldsCurrent reports unparseable source instead of silent p
   for (const empty of ['', 'export const x = 1;']) {
     const { drift } = assertContractFieldsCurrent(schema, empty);
     assert.equal(drift.length, 1);
-    assert.equal(drift[0].command, 'addNumbers');
-    assert.equal(drift[0].kind, 'unparseable_source');
+    // drift.length === 1 검증 직후다.
+    assert.equal(drift[0]!.command, 'addNumbers');
+    assert.equal(drift[0]!.kind, 'unparseable_source');
   }
 });
 
-test('assertContractFieldsCurrent covers every parser branch', () => {
+void test('assertContractFieldsCurrent covers every parser branch', () => {
   // invokeGeneratedFields3 — 3필드 와이어 순서 그대로.
   // invokeGeneratedBytes — bytes 1필드.
   // 평문 invokeGenerated — 필드 계약 없는 형태(비교 스킵).
@@ -377,7 +382,7 @@ test('assertContractFieldsCurrent covers every parser branch', () => {
   assert.deepEqual(assertContractFieldsCurrent(schema, source).drift, []);
 });
 
-test('expectContractFieldsCurrent throws with drift message and passes silently when clean', () => {
+void test('expectContractFieldsCurrent throws with drift message and passes silently when clean', () => {
   const schema = {
     commands: [
       {
@@ -404,7 +409,7 @@ test('expectContractFieldsCurrent throws with drift message and passes silently 
   );
 });
 
-test('assertContractCurrent and expectContractCurrent keep prior behavior', () => {
+void test('assertContractCurrent and expectContractCurrent keep prior behavior', () => {
   // 신규 함수 추가가 기존 게이트를 깨지 않았는지 회귀 확인.
   const ok = assertContractCurrent({ commands: [{ name: 'addNumbers' }] }, ['addNumbers']);
   assert.deepEqual(ok, { missingInClient: [], missingInSchema: [] });
@@ -417,14 +422,14 @@ test('assertContractCurrent and expectContractCurrent keep prior behavior', () =
 
 // ── assertContractHashCurrent — schema.json 원문 ↔ contract.ts 해시 대조 ──
 
-test('assertContractHashCurrent passes when hash matches schema content', () => {
+void test('assertContractHashCurrent passes when hash matches schema content', () => {
   const schemaJson = '{"packageId":"demo","commands":[]}';
   const hash = createHash('sha256').update(schemaJson, 'utf8').digest('hex');
   const contractTs = `export const GENERATED_CONTRACT_HASH = '${hash}';\nexport const SCHEMA_VERSION = 1;\n`;
   assertContractHashCurrent(schemaJson, contractTs);
 });
 
-test('assertContractHashCurrent throws on single-character hash mismatch', () => {
+void test('assertContractHashCurrent throws on single-character hash mismatch', () => {
   const schemaJson = '{"packageId":"demo","commands":[]}';
   const hash = createHash('sha256').update(schemaJson, 'utf8').digest('hex');
   const flipped = (hash[0] === '0' ? '1' : '0') + hash.slice(1);
@@ -447,7 +452,7 @@ test('assertContractHashCurrent throws on single-character hash mismatch', () =>
   );
 });
 
-test('assertContractHashCurrent throws when hash constant is absent', () => {
+void test('assertContractHashCurrent throws when hash constant is absent', () => {
   assert.throws(
     () => assertContractHashCurrent('{"commands":[]}', 'export const SCHEMA_VERSION = 1;\n'),
     (err: unknown) => {

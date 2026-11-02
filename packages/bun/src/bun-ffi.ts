@@ -250,13 +250,14 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     // Guard method calls, including empty batches and cached sync entry points.
     // Native guards also protect already-resolved generated routes.
     for (const key of Reflect.ownKeys(engine)) {
-      const method = Reflect.get(engine, key);
+      // Reflect.get 의 any 를 unknown 으로 고정해 typeof 좁히기가 유효하게 한다.
+      const method = Reflect.get(engine, key) as unknown;
       if (typeof method !== 'function') continue;
       Reflect.set(engine, key, (...args: unknown[]) => {
         if (closed && (key === 'invoke' || key === 'invokeById' || key === 'invokeBatch'))
           return Promise.reject(disposedBootstrapError('Bun FFI'));
         assertOpen();
-        return Reflect.apply(method, engine, args);
+        return Reflect.apply(method, engine, args) as unknown;
       });
     }
     return {

@@ -31,7 +31,8 @@ function postcardNodeSupported(
   if (depth > 8 || schema.uniqueItems === true) return false;
   if (schema.allOf)
     return (
-      schema.allOf.length === 1 && postcardNodeSupported(schema.allOf[0], definitions, depth + 1)
+      // length === 1 이 같은 식에서 먼저 검증되므로 [0] 은 항상 존재한다.
+      schema.allOf.length === 1 && postcardNodeSupported(schema.allOf[0]!, definitions, depth + 1)
     );
   if (schema.$ref) {
     const target = definitions[schema.$ref.split('/').pop()!];
@@ -39,7 +40,8 @@ function postcardNodeSupported(
   }
   if (schema.anyOf) {
     const refs = schema.anyOf.filter((node) => node.$ref);
-    const target = refs.length === 1 ? definitions[refs[0].$ref!.split('/').pop()!] : undefined;
+    // refs.length === 1 이 같은 식에서 먼저 검증되므로 refs[0] 은 항상 존재한다.
+    const target = refs.length === 1 ? definitions[refs[0]!.$ref!.split('/').pop()!] : undefined;
     return (
       schema.anyOf.length === 2 &&
       refs.length === 1 &&
@@ -54,7 +56,8 @@ function postcardNodeSupported(
       schema.type.length === 2 &&
       schema.type.includes('null') &&
       types.length === 1 &&
-      ['integer', 'number', 'boolean', 'string'].includes(types[0])
+      // length === 1 검증 직후이므로 [0] 은 항상 존재한다.
+      ['integer', 'number', 'boolean', 'string'].includes(types[0]!)
     );
   }
   if (schema.oneOf) return false;

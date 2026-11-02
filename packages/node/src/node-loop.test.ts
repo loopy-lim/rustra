@@ -45,7 +45,7 @@ function responseBody(result: unknown): Buffer {
   return body;
 }
 
-test('demultiplexBinaryFrame routes 0xfffd frames to push listeners', () => {
+void test('demultiplexBinaryFrame routes 0xfffd frames to push listeners', () => {
   const pushes: Array<{ name: string; payload: string; seq: number }> = [];
   let responseHits = 0;
   let channelHits = 0;
@@ -66,7 +66,7 @@ test('demultiplexBinaryFrame routes 0xfffd frames to push listeners', () => {
   assert.equal(channelHits, 0, 'push frame must not reach channel listeners');
 });
 
-test('demultiplexBinaryFrame routes non-push frames to the response queue', () => {
+void test('demultiplexBinaryFrame routes non-push frames to the response queue', () => {
   const pushes: unknown[] = [];
   const responses: Uint8Array[] = [];
   const body = responseBody({ value: 42 });
@@ -82,7 +82,7 @@ test('demultiplexBinaryFrame routes non-push frames to the response queue', () =
   assert.deepEqual(pushes, []);
 });
 
-test('demultiplexBinaryFrame tolerates malformed push bodies without throwing', () => {
+void test('demultiplexBinaryFrame tolerates malformed push bodies without throwing', () => {
   const pushes: unknown[] = [];
   // cmd id 뒤에 비정상 JSON — 조용히 건너뛴다(폴링 drain 파싱과 동일 정책).
   demultiplexBinaryFrame({
@@ -95,7 +95,7 @@ test('demultiplexBinaryFrame tolerates malformed push bodies without throwing', 
   assert.deepEqual(pushes, []);
 });
 
-test('interleaved push and response frames dispatch independently', () => {
+void test('interleaved push and response frames dispatch independently', () => {
   const pushes: Array<{ name: string; payload: string; seq: number }> = [];
   const responses: string[] = [];
   // 응답-푸시-응답이 한 stdout 청크에 붙어 들어오는 시나리오 — 각 프레임이
@@ -122,8 +122,10 @@ test('interleaved push and response frames dispatch independently', () => {
           frameBytes[4]! | (frameBytes[5]! << 8) | (frameBytes[6]! << 16) | (frameBytes[7]! << 24);
         responses.push(
           String(
-            JSON.parse(
-              Buffer.from(frameBytes.buffer, frameBytes.byteOffset + 8, jsonLen).toString(),
+            (
+              JSON.parse(
+                Buffer.from(frameBytes.buffer, frameBytes.byteOffset + 8, jsonLen).toString(),
+              ) as { value: number }
             ).value,
           ),
         );
@@ -146,7 +148,7 @@ function newState(): UnparsedLineState {
   return { buffer: [], warned: false };
 }
 
-test('recordUnparsedLine preserves lines in the ring buffer when debug is off', () => {
+void test('recordUnparsedLine preserves lines in the ring buffer when debug is off', () => {
   delete process.env.RUSTRA_DEBUG;
   resetDebugEnvForTests(); // dump 게이트 메모이즈 무효화 — env 변경이 보이게.
   const state = newState();
@@ -155,7 +157,7 @@ test('recordUnparsedLine preserves lines in the ring buffer when debug is off', 
   assert.deepEqual(state.buffer, ['not json {', '<html>oops</html>']);
 });
 
-test('recordUnparsedLine ring buffer never exceeds the capacity and keeps the most recent lines', () => {
+void test('recordUnparsedLine ring buffer never exceeds the capacity and keeps the most recent lines', () => {
   delete process.env.RUSTRA_DEBUG;
   resetDebugEnvForTests();
   const state = newState();
@@ -173,7 +175,7 @@ test('recordUnparsedLine ring buffer never exceeds the capacity and keeps the mo
   );
 });
 
-test('recordUnparsedLine emits a ndjson.unparsed debug event and a once-only stderr warn in debug mode', () => {
+void test('recordUnparsedLine emits a ndjson.unparsed debug event and a once-only stderr warn in debug mode', () => {
   // resetDebugEnvForTests 는 env 변수도 지우므로 먼저 무효화하고 env 를 세팅한다
   // (packages/types debug.test.ts 의 관례와 동일 순서).
   resetDebugEnvForTests();
@@ -208,13 +210,13 @@ test('recordUnparsedLine emits a ndjson.unparsed debug event and a once-only std
   }
 });
 
-test('attachExitContext keeps the original message when there is nothing to attach', () => {
+void test('attachExitContext keeps the original message when there is nothing to attach', () => {
   const message = 'runtime process exited before responding';
   assert.equal(attachExitContext(message, []), message);
   assert.equal(attachExitContext(message, [], undefined), message);
 });
 
-test('attachExitContext preserves the original message as prefix and appends preserved lines', () => {
+void test('attachExitContext preserves the original message as prefix and appends preserved lines', () => {
   const message = attachExitContext('runtime process exited before responding', [
     'line-one',
     'line-two',
@@ -227,7 +229,7 @@ test('attachExitContext preserves the original message as prefix and appends pre
   assert.ok(message.includes('line-two'));
 });
 
-test('attachExitContext appends the stderr tail after the preserved lines', () => {
+void test('attachExitContext appends the stderr tail after the preserved lines', () => {
   const message = attachExitContext('exited', ['bad-line'], 'thread panicked at src/main.rs:7');
   assert.ok(message.includes('bad-line'));
   assert.ok(message.includes('thread panicked at src/main.rs:7'));
@@ -236,7 +238,7 @@ test('attachExitContext appends the stderr tail after the preserved lines', () =
   assert.ok(linesIndex >= 0 && stderrIndex > linesIndex, 'stderr section comes last');
 });
 
-test('recordUnparsedLine truncates a huge line to the char cap', () => {
+void test('recordUnparsedLine truncates a huge line to the char cap', () => {
   delete process.env.RUSTRA_DEBUG;
   resetDebugEnvForTests();
   const state = newState();
@@ -260,7 +262,7 @@ function channelBody(handle: number, payloadJson: string): Buffer {
   return body;
 }
 
-test('demultiplexBinaryFrame routes 0xfffc frames to channel listeners', () => {
+void test('demultiplexBinaryFrame routes 0xfffc frames to channel listeners', () => {
   const channels: Array<{ handle: number; payload: string }> = [];
   let pushHits = 0;
   let responseHits = 0;
@@ -280,7 +282,7 @@ test('demultiplexBinaryFrame routes 0xfffc frames to channel listeners', () => {
   assert.equal(responseHits, 0, 'channel frame must not resolve a response waiter');
 });
 
-test('demultiplexBinaryFrame tolerates malformed channel bodies without throwing', () => {
+void test('demultiplexBinaryFrame tolerates malformed channel bodies without throwing', () => {
   const channels: unknown[] = [];
   demultiplexBinaryFrame({
     cmd: BINARY_CHANNEL_PUSH_CMD,
@@ -293,7 +295,7 @@ test('demultiplexBinaryFrame tolerates malformed channel bodies without throwing
   assert.deepEqual(channels, []);
 });
 
-test('channel frames and response frames interleave without interference', () => {
+void test('channel frames and response frames interleave without interference', () => {
   const channels: Array<{ handle: number; payload: string }> = [];
   const responses: Uint8Array[] = [];
   // 채널 프레임이 응답 프레임 두 개 사이에 끼어 드는 시나리오 — Rust 쪽
@@ -339,7 +341,7 @@ function channelBytesBody(handle: number, payload: Uint8Array): Buffer {
   return body;
 }
 
-test('demultiplexBinaryFrame routes 0xfff9 frames to bytes channel listeners', () => {
+void test('demultiplexBinaryFrame routes 0xfff9 frames to bytes channel listeners', () => {
   const frames: Array<{ handle: number; payload: Uint8Array }> = [];
   let pushHits = 0;
   let channelHits = 0;
@@ -367,7 +369,7 @@ test('demultiplexBinaryFrame routes 0xfff9 frames to bytes channel listeners', (
   assert.equal(responseHits, 0, 'bytes channel frame must not resolve a response waiter');
 });
 
-test('demultiplexBinaryFrame tolerates short 0xfff9 bodies without throwing', () => {
+void test('demultiplexBinaryFrame tolerates short 0xfff9 bodies without throwing', () => {
   const frames: unknown[] = [];
   demultiplexBinaryFrame({
     cmd: BINARY_CHANNEL_PUSH_BYTES_CMD,
@@ -382,7 +384,7 @@ test('demultiplexBinaryFrame tolerates short 0xfff9 bodies without throwing', ()
   assert.deepEqual(frames, []);
 });
 
-test('demultiplexBinaryFrame drops 0xfff9 frames when no bytes sink is attached', () => {
+void test('demultiplexBinaryFrame drops 0xfff9 frames when no bytes sink is attached', () => {
   // onChannelBytes 는 옵셔널 — 구 형태 호출(멤버 생략)도 그대로 동작한다.
   // 중요한 계약: 0xfff9 는 onResponse 폴백으로 흘러가지 않는다(waiter 오염 방지).
   let responseHits = 0;
@@ -398,7 +400,7 @@ test('demultiplexBinaryFrame drops 0xfff9 frames when no bytes sink is attached'
   assert.equal(responseHits, 0, '0xfff9 must never resolve a response waiter');
 });
 
-test('bytes channel, JSON channel, and response frames interleave without interference', () => {
+void test('bytes channel, JSON channel, and response frames interleave without interference', () => {
   const bytesFrames: Array<{ handle: number; payload: Uint8Array }> = [];
   const channels: Array<{ handle: number; payload: string }> = [];
   const responses: number[] = [];
@@ -449,7 +451,7 @@ test('bytes channel, JSON channel, and response frames interleave without interf
   assert.deepEqual(responses, [1, 2]);
 });
 
-test('0xfff9 frames carry payload bytes that are not valid UTF-8 or JSON', () => {
+void test('0xfff9 frames carry payload bytes that are not valid UTF-8 or JSON', () => {
   // 바이너리 경로의 존재 이유 — 임의 바이트(0xff 시퀀스 등)가 JSON 파싱 없이
   // 온전히 도달한다. 본문이 JSON 처럼 보이는 페이로드여도 파싱되지 않는다.
   const frames: Array<{ handle: number; payload: Uint8Array }> = [];

@@ -38,7 +38,8 @@ const benchEchoBytesCodec = (): FrameCodec<Uint8Array, Uint8Array> => ({
       out[w++] = (v % 128) | 0x80;
       v = Math.floor(v / 128);
     }
-    out[w - 1] &= 0x7f;
+    // out 은 2+5+args.length 이상이고 w 는 2+varint 바이트수 — w-1 은 항상 유효하다.
+    out[w - 1]! &= 0x7f;
     out.set(args, w);
     return out.slice(0, w + args.length).buffer;
   },
@@ -63,11 +64,11 @@ const benchEchoBytesCodec = (): FrameCodec<Uint8Array, Uint8Array> => ({
 const benchEchoBytes = (length: number) => Uint8Array.from({ length }, (_, i) => i % 251);
 
 const testRegistry = new Map<string, FrameCodec<unknown, unknown>>([
-  ['addNumbers', addNumbersCodec as FrameCodec<unknown, unknown>],
-  ['benchEchoBytes', benchEchoBytesCodec() as FrameCodec<unknown, unknown>],
+  ['addNumbers', addNumbersCodec],
+  ['benchEchoBytes', benchEchoBytesCodec()],
 ]);
 
-test('createBunEngine routes invoke to transport', async () => {
+void test('createBunEngine routes invoke to transport', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const engine = createBunEngine({
     async invoke(command, args) {
@@ -81,7 +82,7 @@ test('createBunEngine routes invoke to transport', async () => {
   assert.deepEqual(calls, [{ command: 'addNumbers', args: { a: 20, b: 22 } }]);
 });
 
-test('createBunEngine applies timeoutMs and shallow abort to pending transports', async () => {
+void test('createBunEngine applies timeoutMs and shallow abort to pending transports', async () => {
   const engine = createBunEngine({
     invoke: () => new Promise<never>(() => {}),
   });
@@ -100,7 +101,7 @@ test('createBunEngine applies timeoutMs and shallow abort to pending transports'
   );
 });
 
-test('createBunEngine exposes Promise-based invokeBatch with stable order', async () => {
+void test('createBunEngine exposes Promise-based invokeBatch with stable order', async () => {
   const engine = createBunEngine({
     async invoke(command) {
       return command === 'first' ? 1 : 2;
@@ -110,9 +111,11 @@ test('createBunEngine exposes Promise-based invokeBatch with stable order', asyn
   assert.deepEqual(out, [1, 2]);
 });
 
-test('createBunEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
+void test('createBunEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
   const engine = createBunEngine({
     async invoke() {
+      // 객체 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw { code: 'transport.timeout', message: 'request timed out', retryable: true };
     },
   });
@@ -129,9 +132,11 @@ test('createBunEngine wraps RustraError-shaped rejects into RustraCommandError',
   );
 });
 
-test('createBunEngine wraps unknown errors into RustraCommandError', async () => {
+void test('createBunEngine wraps unknown errors into RustraCommandError', async () => {
   const engine = createBunEngine({
     async invoke() {
+      // 문자열 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'something broke';
     },
   });
@@ -149,7 +154,7 @@ test('createBunEngine wraps unknown errors into RustraCommandError', async () =>
 
 // ── Rust 와이어 에러 — Error.message 의 RustraError JSON/Display 복원 ──
 
-test('createBunEngine parses RustraError JSON message from wire Error', async () => {
+void test('createBunEngine parses RustraError JSON message from wire Error', async () => {
   // Rust 가 RustraError 를 JSON 직렬화해 Error 로 던지는 경우 code/retryable 을
   // 보존한다(unknown 래핑 금지 — @rustra/node 와 동일 파이프라인).
   const engine = createBunEngine({
@@ -169,7 +174,7 @@ test('createBunEngine parses RustraError JSON message from wire Error', async ()
   );
 });
 
-test('createBunEngine parses Display-style "code: message" Error message', async () => {
+void test('createBunEngine parses Display-style "code: message" Error message', async () => {
   const engine = createBunEngine({
     async invoke() {
       throw new Error('command.not_found: nope');
@@ -187,7 +192,7 @@ test('createBunEngine parses Display-style "code: message" Error message', async
   );
 });
 
-test('createBunBootstrap loads the stable Rustra ABI without transport boilerplate', async () => {
+void test('createBunBootstrap loads the stable Rustra ABI without transport boilerplate', async () => {
   const bootstrap = createBunBootstrap({
     libraryCandidates: [
       resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
@@ -204,7 +209,7 @@ test('createBunBootstrap loads the stable Rustra ABI without transport boilerpla
   }
 });
 
-test('createBunBootstrap gives an actionable library override hint', async () => {
+void test('createBunBootstrap gives an actionable library override hint', async () => {
   const previous = process.env.RUSTRA_BUN_LIBRARY;
   delete process.env.RUSTRA_BUN_LIBRARY;
   const bootstrap = createBunBootstrap({
@@ -228,7 +233,7 @@ test('createBunBootstrap gives an actionable library override hint', async () =>
 // 핸들이 살아 있을 수 있어 진짜 이미지 스왑은 보장할 수 없다. 따라서 A1 계약은
 // "엔진 상태 재초기화 + 새 바이너리는 다음 프로세스 시작 시 적용" 경고.
 
-test('createBunBootstrap reload re-initializes engine state and warns loudly', async () => {
+void test('createBunBootstrap reload re-initializes engine state and warns loudly', async () => {
   const bootstrap = createBunBootstrap({
     libraryCandidates: [
       resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
@@ -270,7 +275,7 @@ test('createBunBootstrap reload re-initializes engine state and warns loudly', a
 // 바로 dispatch+write, 부족하면 usize::MAX 상태 + 필요 크기 → 정확한 크기로
 // 1회 재시도. Rust 는 응답을 malloc 하지 않으므로 free 짝이 필요 없다.
 
-test('rustra_ffi_invoke_frame_into honors the caller-buffer status contract', async () => {
+void test('rustra_ffi_invoke_frame_into honors the caller-buffer status contract', async () => {
   const { dlopen, FFIType, suffix } = await import('bun:ffi');
   const dylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
   const lib = dlopen(dylib, {
@@ -310,7 +315,7 @@ test('rustra_ffi_invoke_frame_into honors the caller-buffer status contract', as
   assert.equal(buffer[8], 84);
 });
 
-test('createBunFfiEngine dispatches Frame through caller-buffer and large-response paths', async () => {
+void test('createBunFfiEngine dispatches Frame through caller-buffer and large-response paths', async () => {
   const runtime = await createBunFfiEngine({
     libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
     frameCodecs: testRegistry,
@@ -340,7 +345,7 @@ test('createBunFfiEngine dispatches Frame through caller-buffer and large-respon
   }
 });
 
-test('createBunFfiEngine decodes caller-buffer responses without a copy', async () => {
+void test('createBunFfiEngine decodes caller-buffer responses without a copy', async () => {
   const runtime = await createBunFfiEngine({
     libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
     frameCodecs: testRegistry,
@@ -369,7 +374,7 @@ test('createBunFfiEngine decodes caller-buffer responses without a copy', async 
 // Promise fallback → 'per-entry' / 이벤트 ✅ FFI 푸시 싱크(폴링 폴백) → 'push'
 // / 채널 ❌ → false / timeoutMs ✅ 레이스 → true.
 
-test('A02: createBunEngine exposes supports matching the compatibility matrix', async () => {
+void test('A02: createBunEngine exposes supports matching the compatibility matrix', async () => {
   const engine = createBunEngine({
     invoke: () => ({ value: 1 }),
   });
@@ -391,7 +396,7 @@ const A05_SLOT_ENGINE = {
   invoke: async <T>() => 'slot' as T,
 } as unknown as import('@rustra/types').EngineClientWithBatch;
 
-test('A05: createBunBootstrap exposes the lifecycle state surface', async () => {
+void test('A05: createBunBootstrap exposes the lifecycle state surface', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -406,7 +411,7 @@ test('A05: createBunBootstrap exposes the lifecycle state surface', async () => 
   }
 });
 
-test('A05: ready after dispose rejects loudly (bun)', async () => {
+void test('A05: ready after dispose rejects loudly (bun)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -414,7 +419,7 @@ test('A05: ready after dispose rejects loudly (bun)', async () => {
     bootstrap.dispose();
     await assert.rejects(bootstrap.ready(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.match((err as RustraCommandError).message, /disposed/);
+      assert.match(err.message, /disposed/);
       return true;
     });
   } finally {
@@ -422,7 +427,7 @@ test('A05: ready after dispose rejects loudly (bun)', async () => {
   }
 });
 
-test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () => {
+void test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -435,7 +440,7 @@ test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () 
   }
 });
 
-test('A05: failed reload keeps the original error and stays retryable, not disposed (bun I-2)', async () => {
+void test('A05: failed reload keeps the original error and stays retryable, not disposed (bun I-2)', async () => {
   // I-2 회귀 — reload 내부 리셋이 state 를 'disposed' 로 만들면 재초기화 실패 시
   // bootstrap 이 벽돌이 된다. resetForReinit 은 'initializing' 을 유지하고
   // reload 는 원본 에러로 reject 해야 한다. env 전환으로 재초기화 실패를 만든다
@@ -472,7 +477,7 @@ test('A05: failed reload keeps the original error and stays retryable, not dispo
   }
 });
 
-test('A05: dispose during reload re-init is honored at the await boundary (bun I-1)', async () => {
+void test('A05: dispose during reload re-init is honored at the await boundary (bun I-1)', async () => {
   // I-1 회귀 — reload 의 await 경계 재검사가 dispose 를 존중한다. 재초기화가
   // dispose 보다 먼저 끝나면 reload 는 정상 성공(state=ready)하고, dispose 가
   // 재초기화 완료 전에 불리면 reload 는 'ready' 기록 없이 disposed 를 유지한다.
@@ -512,7 +517,7 @@ test('A05: dispose during reload re-init is honored at the await boundary (bun I
   }
 });
 
-test('A05: concurrent ready calls share one initialization promise (bun)', async () => {
+void test('A05: concurrent ready calls share one initialization promise (bun)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   const bootstrap = createBunBootstrap({ libraryCandidates: [], frameCodecs: testRegistry });
@@ -521,16 +526,12 @@ test('A05: concurrent ready calls share one initialization promise (bun)', async
   const [a, b] = await Promise.allSettled([bootstrap.ready(), bootstrap.ready()]);
   assert.equal(a.status, 'rejected');
   assert.equal(b.status, 'rejected');
-  assert.equal(
-    (a as PromiseRejectedResult).reason,
-    (b as PromiseRejectedResult).reason,
-    'both ready calls must observe the same failure',
-  );
+  assert.equal(a.reason, b.reason, 'both ready calls must observe the same failure');
   bootstrap.dispose();
   configure(A05_SLOT_ENGINE);
 });
 
-test('A02: createBunFfiEngine exposes supports reflecting the actual FFI bindings (real dylib)', async () => {
+void test('A02: createBunFfiEngine exposes supports reflecting the actual FFI bindings (real dylib)', async () => {
   // 리뷰 정정 — bun FFI native 는 invokeFrame/getSchema/getContractHash/
   // getSchemaGeneration 만 바인딩한다. invokeAsync/invokeCancel·invokeTypedBatch
   // 심볼은 바인딩되지 않으므로 Frame 코어의 전파/단일 횡단 조건이 도달 불가:

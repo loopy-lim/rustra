@@ -88,7 +88,12 @@ for (let cycle = 0; cycle < cycles; cycle += 1) {
 eventsActive = false;
 
 const onAsync: (handle: number, payload: Uint8Array) => void = (_handle, payload) => {
-  const envelope = JSON.parse(decoder.decode(payload));
+  // 취소 시나리오 응답 봉투 { ok, result | error } — 구조 타입으로 고정한다.
+  const envelope = JSON.parse(decoder.decode(payload)) as {
+    ok: boolean;
+    result?: number;
+    error?: unknown;
+  };
   if (envelope.ok) {
     if (envelope.result !== 100 && envelope.result !== 101)
       throw new Error('cancelled handler ran');

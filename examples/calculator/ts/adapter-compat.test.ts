@@ -40,19 +40,20 @@ async function assertGeneratedCommandWorks(
   );
 }
 
-test('node adapter forwards generated commands to injected Node transport', async () => {
+void test('node adapter forwards generated commands to injected Node transport', async () => {
   const transport = createRecordingTransport();
   await assertGeneratedCommandWorks('node', createNodeEngine(transport), transport.calls);
 });
 
-test('bun adapter forwards generated commands to injected Bun transport', async () => {
+void test('bun adapter forwards generated commands to injected Bun transport', async () => {
   const transport = createRecordingTransport();
   await assertGeneratedCommandWorks('bun', createBunEngine(transport), transport.calls);
 });
 
-test('tauri adapter routes generated commands through rustra_dispatch', async () => {
+void test('tauri adapter routes generated commands through rustra_dispatch', async () => {
   const transport = createRecordingTransport();
-  const engine = createTauriEngine({ invoke: transport.invoke });
+  // 화살표 위임으로 this 분리를 차단한다(unbound-method 계약).
+  const engine = createTauriEngine({ invoke: (...args) => transport.invoke(...args) });
   configure(engine);
 
   const result = await addNumbers({ a: 20, b: 22 });
@@ -66,14 +67,14 @@ test('tauri adapter routes generated commands through rustra_dispatch', async ()
   ]);
 });
 
-test('react native adapter forwards generated commands through JSI native module', async () => {
+void test('react native adapter forwards generated commands through JSI native module', async () => {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const nativeModule = {
     invoke(payload: ArrayBuffer): ArrayBuffer {
-      const { command, args } = JSON.parse(decoder.decode(payload));
-      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } }))
-        .buffer as ArrayBuffer;
+      // fixture 는 페이로드 파싱 성공만이 대상 — 응답은 고정값이다.
+      void (JSON.parse(decoder.decode(payload)) as { command: string; args: unknown });
+      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } })).buffer;
     },
   };
   const engine = createReactNativeEngine(nativeModule);
@@ -82,7 +83,7 @@ test('react native adapter forwards generated commands through JSI native module
   assert.deepEqual(result, { value: 42 });
 });
 
-test('adapter packages keep host-specific imports out of the shared contract path', async () => {
+void test('adapter packages keep host-specific imports out of the shared contract path', async () => {
   const adapterSources = await Promise.all([
     import('node:fs/promises').then((fs) => fs.readFile('packages/node/src/index.ts', 'utf8')),
     import('node:fs/promises').then((fs) => fs.readFile('packages/bun/src/index.ts', 'utf8')),

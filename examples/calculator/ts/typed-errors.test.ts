@@ -18,7 +18,7 @@ function rejectingEngine(code: string, message: string): Parameters<typeof confi
   };
 }
 
-test('isDivideError narrows a declared domain error code', async () => {
+void test('isDivideError narrows a declared domain error code', async () => {
   configure(rejectingEngine('math.divide_by_zero', 'cannot divide by zero'));
 
   await assert.rejects(
@@ -33,7 +33,7 @@ test('isDivideError narrows a declared domain error code', async () => {
   );
 });
 
-test('isDivideError rejects undeclared codes — the runtime contract stays open', async () => {
+void test('isDivideError rejects undeclared codes — the runtime contract stays open', async () => {
   configure(rejectingEngine('math.future_code', 'declared after this JS was generated'));
 
   await assert.rejects(
@@ -47,13 +47,13 @@ test('isDivideError rejects undeclared codes — the runtime contract stays open
   );
 });
 
-test('isDivideError rejects non-RustraCommandError values', () => {
+void test('isDivideError rejects non-RustraCommandError values', () => {
   assert.equal(isDivideError(new Error('plain')), false);
   assert.equal(isDivideError('math.divide_by_zero'), false);
   assert.equal(isDivideError(null), false);
 });
 
-test('resource guards cover the declared resource.not_found code', async () => {
+void test('resource guards cover the declared resource.not_found code', async () => {
   configure(rejectingEngine('resource.not_found', 'unknown or closed handle'));
 
   await assert.rejects(

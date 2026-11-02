@@ -151,9 +151,10 @@ for (const offset of [0, 3]) {
     );
     const lengths = [4, 4, 80, 80, 2, 2, 0, 0, 64, 64];
     for (let i = 0; i < lengths.length; i++) {
-      const args = Array.from({ length: lengths[i] }, (_, j) => (i + j) % 128);
+      // i 는 lengths.length 미만 — lengths[i]/received[i] 는 모두 유효한 인덱스다.
+      const args = Array.from({ length: lengths[i]! }, (_, j) => (i + j) % 128);
       assert.deepEqual(await engine.invoke('bytes', args), args);
-      assert.equal(received[i].byteLength, args.length, 'native must see exact frame length');
+      assert.equal(received[i]!.byteLength, args.length, 'native must see exact frame length');
       if (i % 2 === 1) {
         assert.equal(received[i], received[i - 1], 'stable lengths must reuse the ArrayBuffer');
       }
@@ -167,8 +168,9 @@ test('frame encodeInto releases reusable buffers after native and decode errors'
   const encodeError = new Error('encode failed');
   const received: ArrayBuffer[] = [];
   const codec = reusableBytesCodec();
-  const encodeInto = codec.encodeInto!;
-  const decode = codec.decode;
+  // bind 로 this 를 고정해 분리 참조를 차단한다.
+  const encodeInto = codec.encodeInto!.bind(codec);
+  const decode = codec.decode.bind(codec);
   let failure: 'native' | 'decode' | 'outcome' | 'encode' | undefined;
   codec.encodeInto = (args, reuse) => {
     if (failure === 'encode') throw encodeError;

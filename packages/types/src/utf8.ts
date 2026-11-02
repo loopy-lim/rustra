@@ -66,6 +66,13 @@ export function decodeUtf8(
   let index = start;
   while (index < end) {
     const first = bytes[index];
+    // noUncheckedIndexedAccess: end 가 bytes.length 를 넘는 호출은 기존에도
+    // 런타임에서 undefined 바이트 → U+FFFD 로 귀결됐다. 가드가 그 동작을 그대로 고정한다.
+    if (first === undefined) {
+      output += '�';
+      index += 1;
+      continue;
+    }
     if (first < 0x80) {
       output += String.fromCharCode(first);
       index += 1;
@@ -86,7 +93,8 @@ export function decodeUtf8(
     let valid = true;
     for (let offset = 1; offset < width; offset += 1) {
       const next = bytes[index + offset];
-      if ((next & 0xc0) !== 0x80) {
+      // undefined 는 기존에도 (undefined & 0xc0) !== 0x80 경로로 invalid 처리됐다.
+      if (next === undefined || (next & 0xc0) !== 0x80) {
         valid = false;
         break;
       }
@@ -116,5 +124,5 @@ export function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
     return bytes.buffer as ArrayBuffer;
   }
-  return bytes.slice().buffer as ArrayBuffer;
+  return bytes.slice().buffer;
 }

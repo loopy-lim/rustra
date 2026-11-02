@@ -33,5 +33,11 @@ export function snapshot(value: unknown, depth = 0, budget = { remaining: 4096 }
     }
     return result;
   }
+  // 위 분기에서 null/문자열/숫자/불리언/bigint/undefined/함수/배열/객체를 모두
+  // 처리했다 — 여기 남는 것은 symbol 하나뿐이다.
+  if (typeof value === 'symbol') return value.toString();
+  // 남는 것은 never 지만 규칙이 unknown 좁히기를 따라가지 못해 해제한다 —
+  // 객체/배열 경로는 위에서 전부 처리됐다.
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
   return String(value);
 }

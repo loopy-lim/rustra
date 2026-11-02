@@ -44,7 +44,8 @@ const GENERATED_HEADER = [
 ].join('\n');
 
 /** 마커 규약 그대로의 docs:sync 영역 본문을 만든다. */
-function region(path, bodyLines, lang = 'ts') {
+// .mjs 테스트 보조 함수 — 파라미터를 명시해 any 확산을 끊는다.
+function region(path: string, bodyLines: string[], lang = 'ts') {
   return [
     `<!-- docs:sync:begin ${path} -->`,
     '',
@@ -58,7 +59,7 @@ function region(path, bodyLines, lang = 'ts') {
 }
 
 /** root 밑에 문서와 참조 파일을 쓰고 root를 돌려준다. */
-function fixture(docRel, docText, refRel, refBody) {
+function fixture(docRel: string, docText: string, refRel: string, refBody: string) {
   const root = makeTmp();
   const docPath = join(root, docRel);
   mkdirSync(docPath.slice(0, docPath.lastIndexOf('/')), { recursive: true });
@@ -69,7 +70,7 @@ function fixture(docRel, docText, refRel, refBody) {
   return root;
 }
 
-test('잘 정합된 영역은 통과한다 — 8줄 생성 헤더 뒤 본문과 일치', () => {
+void test('잘 정합된 영역은 통과한다 — 8줄 생성 헤더 뒤 본문과 일치', () => {
   const body = ['export type A = number;', 'export const x = 1;'];
   const root = fixture(
     'docs/guide.md',
@@ -80,19 +81,20 @@ test('잘 정합된 영역은 통과한다 — 8줄 생성 헤더 뒤 본문과 
   const report = verifyDocs(root);
   assert.equal(report.ok, true, JSON.stringify(report.failures));
   assert.deepEqual(
-    report.regions.map((r) => [r.doc, r.path]),
+    // .mjs 추론상 regions 요소가 any — 콜백 파라미터를 명시한다.
+    report.regions.map((r: { doc: string; path: string }) => [r.doc, r.path]),
     [['docs/guide.md', 'gen/types.ts']],
   );
 });
 
-test('헤더 없는 참조 파일은 전체가 본문과 비교된다', () => {
+void test('헤더 없는 참조 파일은 전체가 본문과 비교된다', () => {
   const body = ['plain content', 'second line'];
   const root = fixture('docs/a.md', region('f.txt', body), 'f.txt', `${body.join('\n')}\n`);
   const report = verifyDocs(root);
   assert.equal(report.ok, true, JSON.stringify(report.failures));
 });
 
-test('본문이 드리프트하면 실패하고 파일·경로·첫 불일치 줄을 이름으로 보고한다', () => {
+void test('본문이 드리프트하면 실패하고 파일·경로·첫 불일치 줄을 이름으로 보고한다', () => {
   const body = ['export type A = number;', 'export const x = 1;'];
   const drifted = ['export type A = number;', 'export const x = 2;'];
   const root = fixture(
@@ -112,7 +114,7 @@ test('본문이 드리프트하면 실패하고 파일·경로·첫 불일치 �
   assert.match(f.message, /x = 1/);
 });
 
-test('줄 끝 공백 하나까지도 드리프트로 잡는다 (byte-for-byte)', () => {
+void test('줄 끝 공백 하나까지도 드리프트로 잡는다 (byte-for-byte)', () => {
   const body = ['const a = 1;', 'const b = 2;'];
   const root = fixture(
     'docs/a.md',
@@ -125,14 +127,14 @@ test('줄 끝 공백 하나까지도 드리프트로 잡는다 (byte-for-byte)',
   assert.match(report.failures[0].message, /line 2 differs/);
 });
 
-test('참조 파일이 없으면 실패하고 경로를 이름으로 보고한다', () => {
+void test('참조 파일이 없으면 실패하고 경로를 이름으로 보고한다', () => {
   const root = fixture('docs/a.md', region('gen/missing.ts', ['x']), 'unrelated.txt', 'x\n');
   const report = verifyDocs(root);
   assert.equal(report.ok, false);
   assert.match(report.failures[0].message, /gen\/missing\.ts/);
 });
 
-test('끝나지 않은 begin 마커는 실패한다', () => {
+void test('끝나지 않은 begin 마커는 실패한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(
@@ -148,7 +150,7 @@ test('끝나지 않은 begin 마커는 실패한다', () => {
   assert.match(f.message, /docs:sync:end/);
 });
 
-test('begin 없는 end 마커는 실패한다', () => {
+void test('begin 없는 end 마커는 실패한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/a.md'), 'text\n\n<!-- docs:sync:end -->\n');
@@ -158,7 +160,7 @@ test('begin 없는 end 마커는 실패한다', () => {
   assert.match(report.failures[0].message, /docs\/a\.md/);
 });
 
-test('prettier-ignore가 빠진 구조는 구조 위반으로 실패한다', () => {
+void test('prettier-ignore가 빠진 구조는 구조 위반으로 실패한다', () => {
   const body = ['x'];
   const broken = [
     '<!-- docs:sync:begin gen/types.ts -->',
@@ -175,7 +177,7 @@ test('prettier-ignore가 빠진 구조는 구조 위반으로 실패한다', () 
   assert.match(report.failures[0].message, /prettier-ignore/);
 });
 
-test('본문 뒤 닫는 펜스가 없으면(곧장 end 마커) 구조 위반으로 실패한다', () => {
+void test('본문 뒤 닫는 펜스가 없으면(곧장 end 마커) 구조 위반으로 실패한다', () => {
   const broken = [
     '<!-- docs:sync:begin gen/types.ts -->',
     '',
@@ -190,14 +192,14 @@ test('본문 뒤 닫는 펜스가 없으면(곧장 end 마커) 구조 위반으�
   assert.match(report.failures[0].message, /펜스|fence|```/);
 });
 
-test('마커 없는 문서는 그대로 통과한다 (점진 채택)', () => {
+void test('마커 없는 문서는 그대로 통과한다 (점진 채택)', () => {
   const root = fixture('docs/plain.md', '# 그냥 문서\n\n내용\n', 'unused.txt', 'unused\n');
   const report = verifyDocs(root);
   assert.equal(report.ok, true, JSON.stringify(report.failures));
   assert.equal(report.regions.length, 0);
 });
 
-test('docs/plans/ 아래는 스캔에서 제외된다', () => {
+void test('docs/plans/ 아래는 스캔에서 제외된다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs/plans'), { recursive: true });
   writeFileSync(
@@ -214,7 +216,7 @@ test('docs/plans/ 아래는 스캔에서 제외된다', () => {
   assert.deepEqual(docs, []);
 });
 
-test('여러 실패는 하나만이 아니라 전부 보고된다', () => {
+void test('여러 실패는 하나만이 아니라 전부 보고된다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(
@@ -244,17 +246,17 @@ test('여러 실패는 하나만이 아니라 전부 보고된다', () => {
   assert.equal(report.failures.length, 2);
 });
 
-test('stripGeneratedHeader — 생성 헤더 블록과 뒤따르는 빈 줄을 제거한다', () => {
+void test('stripGeneratedHeader — 생성 헤더 블록과 뒤따르는 빈 줄을 제거한다', () => {
   const text = `${GENERATED_HEADER}export const a = 1;\n`;
   assert.deepEqual(stripGeneratedHeader(text), ['export const a = 1;']);
 });
 
-test('stripGeneratedHeader — 헤더가 없으면 원문을 그대로 돌려준다', () => {
+void test('stripGeneratedHeader — 헤더가 없으면 원문을 그대로 돌려준다', () => {
   assert.deepEqual(stripGeneratedHeader('line1\nline2\n'), ['line1', 'line2']);
   assert.deepEqual(stripGeneratedHeader(''), []);
 });
 
-test('영역이 하나도 파싱되지 못해도 failures가 있으면 ok=false를 유지한다 (fail-open 차단)', () => {
+void test('영역이 하나도 파싱되지 못해도 failures가 있으면 ok=false를 유지한다 (fail-open 차단)', () => {
   // 종결 없는 begin → regions 0개. exit 순서 결함(수정 전)에서는 이 입력이
   // "no docs:sync markers found"로 위장해 드리프트를 숨기고 통과했다.
   const root = makeTmp();
@@ -271,7 +273,7 @@ test('영역이 하나도 파싱되지 못해도 failures가 있으면 ok=false�
   assert.ok(report.failures.length > 0);
 });
 
-test('CRLF 체크아웃 문서도 정상 파싱해 통과한다', () => {
+void test('CRLF 체크아웃 문서도 정상 파싱해 통과한다', () => {
   const body = ['export type A = number;', 'export const x = 1;'];
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
@@ -287,7 +289,7 @@ test('CRLF 체크아웃 문서도 정상 파싱해 통과한다', () => {
   assert.equal(report.regions.length, 1);
 });
 
-test('begin 다음 빈 줄이 없으면 구조 위반으로 실패한다', () => {
+void test('begin 다음 빈 줄이 없으면 구조 위반으로 실패한다', () => {
   const broken = [
     '<!-- docs:sync:begin gen/types.ts -->',
     '<!-- prettier-ignore -->',
@@ -303,7 +305,7 @@ test('begin 다음 빈 줄이 없으면 구조 위반으로 실패한다', () =>
   assert.match(report.failures[0].message, /빈 줄/);
 });
 
-test('여는 코드 펜스가 없으면 구조 위반으로 실패한다', () => {
+void test('여는 코드 펜스가 없으면 구조 위반으로 실패한다', () => {
   const broken = [
     '<!-- docs:sync:begin gen/types.ts -->',
     '',
@@ -319,7 +321,7 @@ test('여는 코드 펜스가 없으면 구조 위반으로 실패한다', () =>
   assert.match(report.failures[0].message, /펜스/);
 });
 
-test('참조 경로가 비면 실패한다', () => {
+void test('참조 경로가 비면 실패한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(
@@ -331,7 +333,7 @@ test('참조 경로가 비면 실패한다', () => {
   assert.match(report.failures[0].message, /참조 경로가 없다/);
 });
 
-test('end 마커 뒤 공백이 붙어도 마커로 인식한다 (CRLF/공백 내성의 일환)', () => {
+void test('end 마커 뒤 공백이 붙어도 마커로 인식한다 (CRLF/공백 내성의 일환)', () => {
   // 종결은 되지만 정합 영역이 아닌 입력 — regions에 들어가 구조 검증을 받는다.
   const body = ['x'];
   const root = makeTmp();
@@ -346,7 +348,7 @@ test('end 마커 뒤 공백이 붙어도 마커로 인식한다 (CRLF/공백 내
   assert.equal(report.ok, true, JSON.stringify(report.failures));
 });
 
-test('begin 마커 뒤 공백이 붙어도 경로 추출이 깨지지 않는다 (end trimEnd와 대칭)', () => {
+void test('begin 마커 뒤 공백이 붙어도 경로 추출이 깨지지 않는다 (end trimEnd와 대칭)', () => {
   const body = ['x'];
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
@@ -358,10 +360,13 @@ test('begin 마커 뒤 공백이 붙어도 경로 추출이 깨지지 않는다 
   writeFileSync(join(root, 'gen/types.ts'), `${GENERATED_HEADER}x\n`);
   const report = verifyDocs(root);
   assert.equal(report.ok, true, JSON.stringify(report.failures));
-  assert.equal(report.regions[0].path, 'gen/types.ts'); // `gen/types.ts -->` 같은 쓰레기 경로 아님
+  // 변수 타입 지정으로 any 요소 접근을 고정한다(단언 대신).
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- .mjs 추론 any 요소의 구조 고정
+  const firstRegion: { path: string } | undefined = report.regions[0];
+  assert.equal(firstRegion?.path, 'gen/types.ts'); // `gen/types.ts -->` 같은 쓰레기 경로 아님
 });
 
-test('CLI: 종결 없는 begin은 실제 프로세스 exit 1과 begin 진단을 낸다 (fail-open 변이 방어)', () => {
+void test('CLI: 종결 없는 begin은 실제 프로세스 exit 1과 begin 진단을 낸다 (fail-open 변이 방어)', () => {
   // verifyDocs 불변식만으론 run()의 exit 해석(수정 전 regions-first 순서)을 못 잡는다.
   // 실제 프로세스를 띄워 exit 코드 자체를 고정한다 — 결함 순서로 되돌리는 변이를 잡는다.
   const root = makeTmp();
@@ -378,7 +383,7 @@ test('CLI: 종결 없는 begin은 실제 프로세스 exit 1과 begin 진단을 
   assert.doesNotMatch(r.stdout, /no docs:sync markers found/);
 });
 
-test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메시지를 낸다 (점진 채택)', () => {
+void test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메시지를 낸다 (점진 채택)', () => {
   // 결정 고정: 마커 0 허용은 점진 채택 정책 — fail 전환하지 않는다. exit 0과
   // 안내 문구를 함께 고정해, fail 전환 변이가 들어오면 이 테스트가 깨진다.
   // "조용한 통과"가 아니라 게이트가 docs를 봤다는 증거를 stdout에 남긴다.
@@ -396,7 +401,7 @@ test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메�
 
 // ── ko 미러 완전성 (A8) ─────────────────────────────────────────────────────
 
-test('미러가 있는 문서 쌍은 통과하고 스코프 문서 수를 보고한다', () => {
+void test('미러가 있는 문서 쌍은 통과하고 스코프 문서 수를 보고한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/guide.md'), '# Guide\n');
@@ -406,7 +411,7 @@ test('미러가 있는 문서 쌍은 통과하고 스코프 문서 수를 보고
   assert.equal(report.checked, 2);
 });
 
-test('영문 원본만 있으면 한국어 미러 누락으로 실패하고 .ko.md 경로와 생성 힌트를 이름으로 보고한다', () => {
+void test('영문 원본만 있으면 한국어 미러 누락으로 실패하고 .ko.md 경로와 생성 힌트를 이름으로 보고한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/guide.md'), '# Guide\n');
@@ -420,7 +425,7 @@ test('영문 원본만 있으면 한국어 미러 누락으로 실패하고 .ko.
   assert.match(f.message, /번역/); // 해소 힌트: 미러를 만들라는 안내
 });
 
-test('한국어 미러만 있으면 영문 원본 누락으로 실패한다 (양방향 검사)', () => {
+void test('한국어 미러만 있으면 영문 원본 누락으로 실패한다 (양방향 검사)', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/guide.ko.md'), '# 가이드\n');
@@ -430,7 +435,7 @@ test('한국어 미러만 있으면 영문 원본 누락으로 실패한다 (양
   assert.match(report.failures[0].message, /영문 원본이 없다/);
 });
 
-test('스코프 하위 디렉터리(extending/internal/adr)도 쌍을 강제한다', () => {
+void test('스코프 하위 디렉터리(extending/internal/adr)도 쌍을 강제한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs/adr'), { recursive: true });
   writeFileSync(join(root, 'docs/adr/0001-decision.md'), '# ADR 1\n');
@@ -444,7 +449,7 @@ test('스코프 하위 디렉터리(extending/internal/adr)도 쌍을 강제한�
   assert.match(report.failures[0].message, /한국어 미러가 없다/);
 });
 
-test('스코프 밖 디렉터리(research/plans/specs/prs/migrations/superpowers)는 단일 언어를 허용한다', () => {
+void test('스코프 밖 디렉터리(research/plans/specs/prs/migrations/superpowers)는 단일 언어를 허용한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs/research'), { recursive: true });
   mkdirSync(join(root, 'docs/plans'), { recursive: true });
@@ -456,7 +461,7 @@ test('스코프 밖 디렉터리(research/plans/specs/prs/migrations/superpowers
   assert.equal(report.checked, 0);
 });
 
-test('allowlist에 있던 미완결 문서는 베이스라인 예외로 통과한다', () => {
+void test('allowlist에 있던 미완결 문서는 베이스라인 예외로 통과한다', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/legacy.md'), '# legacy\n');
@@ -464,7 +469,7 @@ test('allowlist에 있던 미완결 문서는 베이스라인 예외로 통과�
   assert.equal(report.ok, true, JSON.stringify(report.failures));
 });
 
-test('미러 스코프는 최상위 + 고정 하위 디렉터리 1단계다 (중첩 재귀 아님)', () => {
+void test('미러 스코프는 최상위 + 고정 하위 디렉터리 1단계다 (중첩 재귀 아님)', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs/adr'), { recursive: true });
   mkdirSync(join(root, 'docs/adr/nested'), { recursive: true });
@@ -485,7 +490,7 @@ test('미러 스코프는 최상위 + 고정 하위 디렉터리 1단계다 (중
   assert.equal(report.checked, 4);
 });
 
-test('CLI: 미러 누락은 실제 프로세스 exit 1과 한국어 진단을 낸다 (마커와 무관한 독립 게이트)', () => {
+void test('CLI: 미러 누락은 실제 프로세스 exit 1과 한국어 진단을 낸다 (마커와 무관한 독립 게이트)', () => {
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/plain.md'), '# plain\n');
@@ -495,7 +500,7 @@ test('CLI: 미러 누락은 실제 프로세스 exit 1과 한국어 진단을 �
   assert.match(r.stderr, /plain\.ko\.md/);
 });
 
-test('stripGeneratedHeader — 본문 첫 줄이 우연히 // ──로 시작해도 규약대로 strip한다 (트레이드오프 수용)', () => {
+void test('stripGeneratedHeader — 본문 첫 줄이 우연히 // ──로 시작해도 규약대로 strip한다 (트레이드오프 수용)', () => {
   // 결정 고정: 과잉 strip 가능성은 수용된 트레이드오프다. strip 동작을 바꿔
   // "우연한 헤더"를 구하려는 변이는 이 테스트가 잡는다. 회피 관례는 코드가
   // 아니라 docs:sync 대상 파일 선택으로 한다 — 첫 줄이 `// ──`인 파일은
@@ -506,7 +511,7 @@ test('stripGeneratedHeader — 본문 첫 줄이 우연히 // ──로 시작�
 
 // ── 무테스트 failure 분기 2건 (nested-begin / fence→end 간격) ────────────────
 
-test('열린 region 안에서 begin이 재등장하면(nested-begin) 실패한다', () => {
+void test('열린 region 안에서 begin이 재등장하면(nested-begin) 실패한다', () => {
   // verifyDocs 의 open-region 분기 — "새 begin이 이전 begin 종료 전에 나왔다".
   // 첫 region 은 정합 규약을 갖추되 end 전에 두 번째 begin 이 끼어든 형태다.
   const broken = [
@@ -531,7 +536,7 @@ test('열린 region 안에서 begin이 재등장하면(nested-begin) 실패한�
   assert.match(f.message, /1줄/);
 });
 
-test('닫는 펜스와 end 마커 사이가 빈 줄 하나가 아니면 실패한다 (fence→end 간격 위반)', () => {
+void test('닫는 펜스와 end 마커 사이가 빈 줄 하나가 아니면 실패한다 (fence→end 간격 위반)', () => {
   // verifyRegion 의 펜스~end 간격 분기 — 규약은 "닫는 펜스 다음 빈 줄 하나,
   // 그 다음 end 마커". 본문이 정확히 일치해도 구조 위반이면 fail 해야 한다.
   const body = ['x'];

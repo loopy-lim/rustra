@@ -9,14 +9,14 @@ import {
   syncReactNativeRange,
 } from './version-packages.mjs';
 
-test('caretMinorRange tracks the minor on 0.x and keeps major bumps on 1.x+', () => {
+void test('caretMinorRange tracks the minor on 0.x and keeps major bumps on 1.x+', () => {
   assert.equal(caretMinorRange('0.4.0'), '^0.4.0');
   assert.equal(caretMinorRange('0.4.2'), '^0.4.0');
   assert.equal(caretMinorRange('1.2.3'), '^1.2.0');
   assert.throws(() => caretMinorRange('0.4'), /not a released x\.y\.z version/);
 });
 
-test('syncReactNativeRange rewrites only the range value and preserves formatting', () => {
+void test('syncReactNativeRange rewrites only the range value and preserves formatting', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-version-packages-'));
   try {
     const manifestPath = join(root, 'package.json');
@@ -45,7 +45,7 @@ test('syncReactNativeRange rewrites only the range value and preserves formattin
   }
 });
 
-test('syncLockWorkspaceMetadata rewrites workspace version and internal ranges only', () => {
+void test('syncLockWorkspaceMetadata rewrites workspace version and internal ranges only', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-version-packages-'));
   try {
     const lockPath = join(root, 'bun.lock');
@@ -96,7 +96,7 @@ test('syncLockWorkspaceMetadata rewrites workspace version and internal ranges o
   }
 });
 
-test('version step tracks each host independently of a CLI-only patch', async () => {
+void test('version step tracks each host independently of a CLI-only patch', async () => {
   const { syncHostRanges } = await import('./version-packages.mjs');
   const root = mkdtempSync(join(tmpdir(), 'rustra-host-ranges-'));
   try {

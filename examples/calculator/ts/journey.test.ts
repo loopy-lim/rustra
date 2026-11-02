@@ -61,7 +61,7 @@ const journeyTest: typeof test = runningUnderBunTest
   ? (((name: string, _fn?: never) => test.skip(name, () => {})) as typeof test)
   : test;
 
-journeyTest(journeyName, { timeout: 30_000 }, async () => {
+void journeyTest(journeyName, { timeout: 30_000 }, async () => {
   const transport = createNodeLoopTransport({
     command: resolve(ROOT, 'target/debug/loop-stdio'),
     args: [],
@@ -84,7 +84,7 @@ journeyTest(journeyName, { timeout: 30_000 }, async () => {
       settleProgress = resolveSettled;
     });
     const unsubscribeTick = subscribeEvent(transport, 'progress.tick', (payload) => {
-      ticks.push(payload as { step: number; total: number });
+      ticks.push(payload);
       if (ticks.length >= 3) settleProgress?.();
     });
     // 잔여 emit 정착 관찰자 — transport 수준 브로드캐스트(onPushEvent)는
@@ -143,11 +143,7 @@ journeyTest(journeyName, { timeout: 30_000 }, async () => {
             error instanceof RustraCommandError && error.code === 'cancelled',
             `cancel code must be 'cancelled', got ${String(error)}`,
           );
-          assert.equal(
-            (error as RustraCommandError).retryable,
-            true,
-            'cancelled must be retryable',
-          );
+          assert.equal(error.retryable, true, 'cancelled must be retryable');
           return 'cancelled' as const;
         },
       );

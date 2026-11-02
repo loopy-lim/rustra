@@ -28,7 +28,7 @@ const PINNED_FRAME_ALL_TRUE = '01000000000000000101056472696674';
 // swap 드리프트(ok↔frozen)를 잡는다. 본체: 01 | 00 | 01 | "x"(78)
 const PINNED_FRAME_DISTINCT = '010000000000000001000178';
 
-test('field-order: decode pinned non-alphabetical frame → {ok,frozen,message} (Rust 선언순)', () => {
+void test('field-order: decode pinned non-alphabetical frame → {ok,frozen,message} (Rust 선언순)', () => {
   const r = rustraRegistryDemoCodec.decode(hexToBytes(PINNED_FRAME_ALL_TRUE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.ok, true);
@@ -36,7 +36,7 @@ test('field-order: decode pinned non-alphabetical frame → {ok,frozen,message} 
   assert.equal(r.result?.message, 'drift');
 });
 
-test('field-order: ok/frozen distinct values are not swapped', () => {
+void test('field-order: ok/frozen distinct values are not swapped', () => {
   // 코드젠이 ok 와 frozen 을 뒤바꿔 읽으면 {ok:false, frozen:true} 가 된다 — 잡아야 한다.
   const r = rustraRegistryDemoCodec.decode(hexToBytes(PINNED_FRAME_DISTINCT));
   assert.equal(r.ok, true);
@@ -45,7 +45,7 @@ test('field-order: ok/frozen distinct values are not swapped', () => {
   assert.equal(r.result?.message, 'x');
 });
 
-test('field-order: alphabetical-order codec would mis-decode (드리프트 회귀 가드)', () => {
+void test('field-order: alphabetical-order codec would mis-decode (드리프트 회귀 가드)', () => {
   // 의도: 본체 01|01|05|drift 를 *알파벳순*(frozen,message,ok) 으로 읽으면
   // frozen=01, message len=01 → message="\x05", ok='d'(≠0/1 → decode failure/wrong).
   // 현재 코드젠이 선언순으로 읽으므로 ok=true 가 나와야 한다. 이 단언이

@@ -111,7 +111,7 @@ async function issueNodeChannelHandle(
 ): Promise<number> {
   const issued = (await transport.invoke(createCommand)) as { handle?: unknown };
   const handle = issued?.handle as number;
-  if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
+  if (!Number.isSafeInteger(handle) || handle < 1) {
     throw new RustraCommandError(RustraErrorCode.ChannelUnavailable, invalidHandleMessage);
   }
   return handle;
@@ -128,7 +128,7 @@ function channelCloser(
     state.closed = true;
     detach();
     // 0xfffa drop 은 JSON/바이트 두 테이블을 같이 내린다(코어 drop_channel).
-    const dropped = (await transport.invoke('__dropChannel', { handle })) as unknown;
+    const dropped = await transport.invoke('__dropChannel', { handle });
     return dropped === true;
   };
 }

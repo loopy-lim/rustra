@@ -35,7 +35,8 @@ function invokeWithTimeoutInternal<T>(
   try {
     promise = Promise.resolve(engine.invoke<T>(command, args, options));
   } catch (error) {
-    return Promise.reject(error);
+    // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
   const ms = options?.timeoutMs;
   if (ms === undefined && signal === undefined) return promise;
@@ -113,7 +114,8 @@ export function invokeCallbackWithAbort<T>(
     try {
       const id = dispatch(
         (value) => finish(() => resolve(value)),
-        (reason) => finish(() => reject(reason)),
+        (reason) =>
+          finish(() => reject(reason instanceof Error ? reason : new Error(String(reason)))),
         () => settled,
       );
       if (typeof id === 'number') invocationId = id;

@@ -45,13 +45,13 @@ function hexToBytes(hex: string): ArrayBuffer {
 
 // ── codec.decode — 비정상/경계 프레임은 clean 에러 ─────────────
 
-test('decode empty buffer → too_short (no throw)', () => {
+void test('decode empty buffer → too_short (no throw)', () => {
   const r = addNumbersCodec.decode(new ArrayBuffer(0));
   assert.equal(r.ok, false);
   assert.equal(r.error?.code, 'invoke.too_short');
 });
 
-test('decode sub-8-byte buffer → too_short (no throw)', () => {
+void test('decode sub-8-byte buffer → too_short (no throw)', () => {
   // 4바이트, 7바이트 모두 8바이트 헤더 미만.
   for (const len of [1, 4, 7]) {
     const r = addNumbersCodec.decode(new ArrayBuffer(len));
@@ -60,14 +60,14 @@ test('decode sub-8-byte buffer → too_short (no throw)', () => {
   }
 });
 
-test('decode well-formed success frame → ok (대조: 음성 위양성 방지)', () => {
+void test('decode well-formed success frame → ok (대조: 음성 위양성 방지)', () => {
   // 2+3=5 → response body 0x0a (zigzag(5)=10). 정상 프레임은 ok=true 여야 한다.
   const r = addNumbersCodec.decode(hexToBytes('01000000000000000a'));
   assert.equal(r.ok, true);
   assert.equal(r.result?.value, 5);
 });
 
-test('decode error frame → { code, message } (divide-by-zero)', () => {
+void test('decode error frame → { code, message } (divide-by-zero)', () => {
   // addNumbersCodec 라도 response 레이아웃(commandId 무관)은 균일하므로
   // divide error 프레임을 clean 하게 풀 수 있어야 한다.
   const r = addNumbersCodec.decode(hexToBytes(DIVIDE_RESPONSE));
@@ -76,7 +76,7 @@ test('decode error frame → { code, message } (divide-by-zero)', () => {
   assert.equal(r.error?.message, 'cannot divide by zero');
 });
 
-test('divideCodec.decode empty buffer → too_short (codec 무관 동일 가드)', () => {
+void test('divideCodec.decode empty buffer → too_short (codec 무관 동일 가드)', () => {
   const r = divideCodec.decode(new ArrayBuffer(0));
   assert.equal(r.ok, false);
   assert.equal(r.error?.code, 'invoke.too_short');
@@ -93,7 +93,7 @@ function nativeReturning(frame: ArrayBuffer) {
   };
 }
 
-test('engine: too-short response → reject RustraCommandError(invoke.too_short)', async () => {
+void test('engine: too-short response → reject RustraCommandError(invoke.too_short)', async () => {
   const engine = createFrameEngine(nativeReturning(new ArrayBuffer(4)), frameRegistry);
   await assert.rejects(
     () => engine.invoke('addNumbers', { a: 2, b: 3 }),
@@ -105,7 +105,7 @@ test('engine: too-short response → reject RustraCommandError(invoke.too_short)
   );
 });
 
-test('engine: error response → reject RustraCommandError(command code)', async () => {
+void test('engine: error response → reject RustraCommandError(command code)', async () => {
   // 호스트가 divide-by-zero error 프레임을 내면 engine 이 code/message 를
   // RustraCommandError 로 투명하게 전달해야 한다.
   const engine = createFrameEngine(nativeReturning(hexToBytes(DIVIDE_RESPONSE)), frameRegistry);
@@ -120,7 +120,7 @@ test('engine: error response → reject RustraCommandError(command code)', async
   );
 });
 
-test('engine: empty response → reject RustraCommandError(invoke.too_short)', async () => {
+void test('engine: empty response → reject RustraCommandError(invoke.too_short)', async () => {
   const engine = createFrameEngine(nativeReturning(new ArrayBuffer(0)), frameRegistry);
   await assert.rejects(
     () => engine.invoke('addNumbers', { a: 2, b: 3 }),
@@ -134,7 +134,7 @@ test('engine: empty response → reject RustraCommandError(invoke.too_short)', a
 
 // ── napi 와이어 — RustraError 가 평탄화(Display)되지 않고 구조로 건너는지 ──
 
-test('napi: error crosses the wire as structured JSON (code preserved)', () => {
+void test('napi: error crosses the wire as structured JSON (code preserved)', () => {
   const napiPath = join(
     ROOT,
     `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,

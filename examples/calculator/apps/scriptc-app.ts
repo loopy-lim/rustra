@@ -28,8 +28,11 @@ if (written === 0xffff_ffff_ffff_ffffn) {
 if (written === 0n || written > BigInt(outputBuffer.length)) {
   throw new Error(`implausible response length: ${written}`);
 }
-const response = JSON.parse(decoder.decode(outputBuffer.subarray(0, Number(written))));
-const result = response.result ?? response;
+const response = JSON.parse(decoder.decode(outputBuffer.subarray(0, Number(written)))) as {
+  result?: { value: number };
+};
+// result 래퍼 유무와 무관하게 { value } 형태로 좁힌다(fixture 응답 계약).
+const result = (response.result ?? response) as { value: number };
 if (result.value !== 42) throw new Error(`expected 42, got ${result.value}`);
 console.log(`scriptc FFI zero-config result: ${result.value}`);
 
@@ -54,8 +57,12 @@ if (emitted === 0n || emitted > BigInt(outputBuffer.length))
   throw new Error('event command failed');
 
 const onComplete: (handle: number, payload: Uint8Array) => void = (_handle, payload) => {
-  const envelope = JSON.parse(decoder.decode(payload));
-  if (!envelope.ok || envelope.result.value !== 42) throw new Error('async result mismatch');
+  // fixture 응답 봉투 { ok, result: { value } } — 파서 결과를 구조 타입으로 고정한다.
+  const envelope = JSON.parse(decoder.decode(payload)) as {
+    ok: boolean;
+    result?: { value: number };
+  };
+  if (!envelope.ok || envelope.result?.value !== 42) throw new Error('async result mismatch');
   rustra_ffi_channel_release_scriptc(onComplete);
   console.log('scriptc FFI async result: 42');
 };

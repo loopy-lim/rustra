@@ -52,8 +52,9 @@ function unwrapOption(schema: ComplexSchema): ComplexSchema | null {
   if (Array.isArray(schema.type)) return optionInner(schema);
   if (Array.isArray(schema.anyOf) && schema.anyOf.length === 2) {
     const nonNull = schema.anyOf.filter((item) => item.type !== 'null' && !('anyOf' in item));
+    // length === 1 검증을 통과한 분기만 여기 온다 — [0] 은 항상 존재한다.
     return nonNull.length === 1 && schema.anyOf.some((item) => item.type === 'null')
-      ? nonNull[0]
+      ? nonNull[0]!
       : null;
   }
   return null;
@@ -83,7 +84,8 @@ function compileNode(
 
   // tuple newtype (schemars: single-entry allOf + $ref) — 내부로 투명하게.
   if (Array.isArray(schema.allOf) && schema.allOf.length === 1) {
-    return compileNode(schema.allOf[0], definitions, depth + 1);
+    // length === 1 검증 직후이므로 [0] 은 항상 존재한다.
+    return compileNode(schema.allOf[0]!, definitions, depth + 1);
   }
 
   // string enum — variant index varint (선언순).
@@ -128,8 +130,10 @@ function compileNode(
         encode: (value) => new Uint8Array([value as number]),
         decode: (buf, offset) => {
           if (offset >= buf.length) throw new Error('byte out of bounds');
+          // offset < buf.length 가 위에서 검증됐다 — Uint8Array 는 dense 배열이다.
+          const byte = buf[offset]!;
           return {
-            value: schema.format === 'int8' && buf[offset] >= 128 ? buf[offset] - 256 : buf[offset],
+            value: schema.format === 'int8' && byte >= 128 ? byte - 256 : byte,
             bytesRead: 1,
           };
         },
@@ -215,7 +219,8 @@ function compileNode(
             if (!Array.isArray(v) || v.length !== nodes.length)
               throw new Error('invalid tuple arity');
             const arr = v;
-            return concatBytes(arr.map((el, i) => nodes[i].encode(el)));
+            // tuple arity 검증(v.length !== nodes.length throw) 직후이므로 인덱스는 유효하다.
+            return concatBytes(arr.map((el, i) => nodes[i]!.encode(el)));
           },
           decode: (buf, offset) => {
             let bytesRead = 0;
@@ -231,7 +236,7 @@ function compileNode(
       }
       return null;
     }
-    const items = schema.items as ComplexSchema;
+    const items = schema.items;
     if (
       Number.isInteger(schema.minItems) &&
       schema.minItems === schema.maxItems &&
@@ -353,8 +358,9 @@ function compileStruct(
   const names = Object.keys(schema.properties ?? {});
   const nodes: SchemaNode[] = [];
   for (const name of names) {
+    // name 은 바로 위 Object.keys 의 원소다 — 같은 객체의 유효 키다.
     const node = compileNode(
-      (schema.properties as Record<string, ComplexSchema>)[name],
+      (schema.properties as Record<string, ComplexSchema>)[name]!,
       definitions,
       fieldDepth,
     );
@@ -364,15 +370,17 @@ function compileStruct(
   return {
     encode: (v) => {
       const obj = v as Record<string, unknown>;
-      return concatBytes(nodes.map((n, i) => n.encode(obj[names[i]])));
+      // nodes 는 names 길이와 동일(name 별 1개 push) — map 인덱스는 양쪽 모두 유효하다.
+      return concatBytes(nodes.map((n, i) => n.encode(obj[names[i]!])));
     },
     decode: (buf, offset) => {
       let cursor = offset;
       const obj: Record<string, unknown> = {};
       for (let i = 0; i < names.length; i++) {
-        const v = nodes[i].decode(buf, cursor);
+        // nodes.length === names.length 불변 — 루프 인덱스는 유효하다.
+        const v = nodes[i]!.decode(buf, cursor);
         cursor += v.bytesRead;
-        obj[names[i]] = v.value;
+        obj[names[i]!] = v.value;
       }
       return { value: obj, bytesRead: cursor - offset };
     },

@@ -11,7 +11,7 @@ const options = {
 };
 const clean = () => configure({ invoke: async <T>() => null as T });
 
-test(
+void test(
   'Bun pending ready is invalidated when reload closes its generation',
   { skip: !existsSync(options.library) },
   async () => {
@@ -28,7 +28,7 @@ test(
   },
 );
 
-test('Bun disposal before ready releases its registration', () => {
+void test('Bun disposal before ready releases its registration', () => {
   clean();
   const first = createBunBootstrap(options);
   first.dispose();
@@ -36,14 +36,15 @@ test('Bun disposal before ready releases its registration', () => {
   second.dispose();
 });
 
-test(
+void test(
   'Bun disposal removes the ready engine and cached public methods reject safely',
   { skip: !existsSync(options.library) },
   async () => {
     clean();
     const b = createBunBootstrap(options);
     const engine = await b.ready();
-    const lookup = engine.refreshLiveSchema;
+    // bind 로 this 를 고정해 분리 참조를 차단한다.
+    const lookup = engine.refreshLiveSchema.bind(engine);
     b.dispose();
     b.dispose();
     await assert.rejects(ensureConfigured(), /not configured/i);
@@ -54,7 +55,7 @@ test(
   },
 );
 
-test(
+void test(
   'Bun direct runtime close invalidates engine metadata and empty batch calls',
   { skip: !existsSync(options.library) },
   async () => {
@@ -66,7 +67,7 @@ test(
   },
 );
 
-test(
+void test(
   'Bun disposal at initialization microtasks cannot reinstall a closed engine',
   { skip: !existsSync(options.library) },
   async () => {
@@ -82,7 +83,7 @@ test(
   },
 );
 
-test(
+void test(
   'Bun overlapping reloads share one reload operation',
   { skip: !existsSync(options.library) },
   async () => {

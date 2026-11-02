@@ -39,7 +39,7 @@ function run(command: string, args: string[], input?: string): string {
 }
 type WireResponse = { hex: string; calls: number };
 const wire = (hex: string, capacity?: number): WireResponse =>
-  JSON.parse(run(fixture, [], JSON.stringify([{ hex, capacity }])))[0];
+  (JSON.parse(run(fixture, [], JSON.stringify([{ hex, capacity }]))) as WireResponse[])[0];
 const hex = (buffer: ArrayBuffer | ArrayBufferView): string =>
   (ArrayBuffer.isView(buffer)
     ? Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength)
@@ -50,7 +50,11 @@ const buffer = (value: string): ArrayBuffer => Uint8Array.from(Buffer.from(value
 try {
   run('cargo', ['build', '--locked', '-p', 'rustra', '--example', 'function_fixture']);
   run('bun', ['run', '--cwd', 'packages/types', 'build']);
-  const emitted = JSON.parse(run(fixture, ['schema']));
+  const emitted = JSON.parse(run(fixture, ['schema'])) as {
+    schema: string;
+    commands: string;
+    contract: string;
+  };
   const schema = parsePackageSchema(emitted.schema);
   mkdirSync(join(scratch, 'node_modules/@rustra'), { recursive: true });
   symlinkSync(join(root, 'packages/types'), join(scratch, 'node_modules/@rustra/types'));
@@ -150,12 +154,23 @@ void [n, v, s, wrong];
     }),
   );
   run('node', [require.resolve('typescript/bin/tsc'), '-p', join(scratch, 'tsconfig.json')]);
-  const { frameRegistry } = await import(pathToFileURL(join(scratch, 'frame-registry.ts')).href);
-  const commands = await import(pathToFileURL(join(scratch, 'commands.ts')).href);
-  const rustCommands = await import(pathToFileURL(join(scratch, 'rust-commands.ts')).href);
-  const { createFrameEngine, configure } = await import(
+  // 스크래치 생성물/빌드 산출물의 동적 임포트는 타입이 any 로 열린다 —
+  // 소비 형태(소스 모듈 타입)로 구조 캐스트해 고정한다.
+  const { frameRegistry } = (await import(
+    pathToFileURL(join(scratch, 'frame-registry.ts')).href
+  )) as {
+    frameRegistry: Map<string, FrameCodec<unknown, unknown>>;
+  };
+  const commands = (await import(pathToFileURL(join(scratch, 'commands.ts')).href)) as Record<
+    string,
+    (...args: unknown[]) => Promise<unknown>
+  >;
+  const rustCommands = (await import(
+    pathToFileURL(join(scratch, 'rust-commands.ts')).href
+  )) as Record<string, (...args: unknown[]) => Promise<unknown>>;
+  const { createFrameEngine, configure } = (await import(
     pathToFileURL(join(root, 'packages/types/dist/index.js')).href
-  );
+  )) as typeof import('../packages/types/src/index.ts');
   const cases: { name: string; args: unknown[]; expected: unknown; calls?: number }[] = [
     { name: 'add', args: [2, 3], expected: 5 },
     { name: 'reset', args: [], expected: undefined, calls: 1 },
@@ -233,7 +248,10 @@ void [n, v, s, wrong];
           }
         : {}),
     };
-    const engine = createFrameEngine(native, mode === 'live' ? new Map() : frameRegistry);
+    const engine = createFrameEngine(
+      native,
+      mode === 'live' ? new Map<string, FrameCodec<unknown, unknown>>() : frameRegistry,
+    );
     const release = configure(engine);
     try {
       for (const api of [commands, rustCommands]) {
@@ -262,8 +280,15 @@ void [n, v, s, wrong];
   const jsonEngines = {
     'node-process': createNodeEngine(transport),
     'tauri-json': createTauriEngine({
+      // fixture 트랜스포트는 run() 동기 실행 결과를 그대로 돌려준다(async 래핑은
+      // 에러를 rejection 으로 균질화하는 계약 유지용).
+      // eslint-disable-next-line @typescript-eslint/require-await
       invoke: async (_command: string, payload: unknown) => {
-        const response = JSON.parse(run(fixture, ['json'], JSON.stringify(payload)));
+        const response = JSON.parse(run(fixture, ['json'], JSON.stringify(payload))) as {
+          ok: boolean;
+          error?: unknown;
+          result?: unknown;
+        };
         if (!response.ok) throw response.error;
         return response.result;
       },
@@ -303,7 +328,8 @@ void [n, v, s, wrong];
   let encodingBenchmark;
   if (process.argv.includes('--bench')) {
     const codec: FrameCodec<unknown, unknown> = frameRegistry.get('add');
-    assert.ok(codec.encodeInto);
+    // 메서드 참조 분리 없이 존재 검사(typeof 는 unbound-method 예외).
+    assert.ok(typeof codec.encodeInto === 'function');
     const reuse = new Uint8Array(64);
     const args = [20, 22];
     let checksum = 0;
@@ -333,8 +359,12 @@ void [n, v, s, wrong];
       checksum,
       nanoseconds: Object.fromEntries(
         Object.entries(samples).map(([name, values]) => {
-          const sorted = values.toSorted((a, b) => a - b);
-          return [name, { median: (sorted[9] + sorted[10]) / 2, min: sorted[0], max: sorted[19] }];
+          // toSorted(ES2023) 대신 복사 정렬 — 동작 동일, lib 의존 제거.
+          const sorted = [...values].sort((a, b) => a - b);
+          return [
+            name,
+            { median: (sorted[9]! + sorted[10]!) / 2, min: sorted[0]!, max: sorted[19]! },
+          ];
         }),
       ),
     };

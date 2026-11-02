@@ -50,7 +50,7 @@ function useFastPolling() {
   };
 }
 
-test('subscribeEvent delivers drained events to the matching callback', async () => {
+void test('subscribeEvent delivers drained events to the matching callback', async () => {
   const restore = useFastPolling();
   try {
     const { transport } = fakeTransport([
@@ -73,7 +73,7 @@ test('subscribeEvent delivers drained events to the matching callback', async ()
   }
 });
 
-test('subscribeEvent keeps delivering while at least one subscriber remains', async () => {
+void test('subscribeEvent keeps delivering while at least one subscriber remains', async () => {
   const restore = useFastPolling();
   try {
     // 이후 폴링마다 계속 이벤트가 나온다(마지막 배치 반복).
@@ -101,7 +101,7 @@ test('subscribeEvent keeps delivering while at least one subscriber remains', as
   }
 });
 
-test('subscribeEvent stops polling when the last subscriber unsubscribes', async () => {
+void test('subscribeEvent stops polling when the last subscriber unsubscribes', async () => {
   const restore = useFastPolling();
   const { transport, drains } = fakeTransport([[{ name: 'tick', payload: 1 }], [], [], []]);
   const seen: unknown[] = [];
@@ -117,7 +117,7 @@ test('subscribeEvent stops polling when the last subscriber unsubscribes', async
   restore();
 });
 
-test('subscribeEvent shares one polling loop across separate subscribe calls', async () => {
+void test('subscribeEvent shares one polling loop across separate subscribe calls', async () => {
   const restore = useFastPolling();
   try {
     const { transport, drains } = fakeTransport([
@@ -139,7 +139,7 @@ test('subscribeEvent shares one polling loop across separate subscribe calls', a
   }
 });
 
-test('subscribeEvent survives a synchronous drainEvents throw', async () => {
+void test('subscribeEvent survives a synchronous drainEvents throw', async () => {
   const restore = useFastPolling();
   try {
     let calls = 0;
@@ -246,10 +246,10 @@ function pushTransport() {
   return transport;
 }
 
-test('push-capable transport subscribes via push without starting the polling loop', async () => {
+void test('push-capable transport subscribes via push without starting the polling loop', async () => {
   const transport = pushTransport();
   const got: unknown[] = [];
-  const unsubscribe = subscribeEvent(transport as never, 'progress.tick', (p) => got.push(p));
+  const unsubscribe = subscribeEvent(transport, 'progress.tick', (p) => got.push(p));
   // 푸시 도착 — 폴링 틱 없이 즉시 전달된다.
   transport.emit('progress.tick', '{"step":1}');
   await waitFor(() => got.length >= 1);
@@ -259,12 +259,12 @@ test('push-capable transport subscribes via push without starting the polling lo
   assert.equal(transport.listenerCount, 0, 'unsubscribe removes the push listener');
 });
 
-test('push-capable transport parses payload string JSON and shares one push subscription', async () => {
+void test('push-capable transport parses payload string JSON and shares one push subscription', async () => {
   const transport = pushTransport();
   const a: unknown[] = [];
   const b: unknown[] = [];
-  const unA = subscribeEvent(transport as never, 'tick', (p) => a.push(p));
-  const unB = subscribeEvent(transport as never, 'tick', (p) => b.push(p));
+  const unA = subscribeEvent(transport, 'tick', (p) => a.push(p));
+  const unB = subscribeEvent(transport, 'tick', (p) => b.push(p));
   transport.emit('tick', '{"n":7}');
   await waitFor(() => a.length >= 1 && b.length >= 1);
   assert.deepEqual(a, [{ n: 7 }]);
@@ -275,19 +275,19 @@ test('push-capable transport parses payload string JSON and shares one push subs
   assert.equal(transport.listenerCount, 0);
 });
 
-test('push-capable transport survives a throwing listener', async () => {
+void test('push-capable transport survives a throwing listener', async () => {
   const transport = pushTransport();
   const got: unknown[] = [];
-  subscribeEvent(transport as never, 'tick', () => {
+  subscribeEvent(transport, 'tick', () => {
     throw new Error('listener boom');
   });
-  subscribeEvent(transport as never, 'tick', (p) => got.push(p));
+  subscribeEvent(transport, 'tick', (p) => got.push(p));
   transport.emit('tick', '{"n":1}');
   await waitFor(() => got.length >= 1);
   assert.deepEqual(got, [{ n: 1 }]);
 });
 
-test('subscribeEvent throws loudly when the transport cannot deliver events', () => {
+void test('subscribeEvent throws loudly when the transport cannot deliver events', () => {
   // 이슈 A — 페어링 갭: drain 도 push 능력도 없는 transport(예: one-shot
   // invoke 바이너리에 붙인 transport)는 조용한 빈 스트림 대신 loud-fail 한다.
   const deafTransport = {
@@ -296,12 +296,12 @@ test('subscribeEvent throws loudly when the transport cannot deliver events', ()
     },
   };
   assert.throws(
-    () => subscribeEvent(deafTransport as never, 'tick', () => {}),
+    () => subscribeEvent(deafTransport, 'tick', () => {}),
     (error: unknown) => error instanceof Error && /drainEvents|push/i.test(String(error)),
   );
 });
 
-test('transport without push capability moves to polling after the handshake verdict', async () => {
+void test('transport without push capability moves to polling after the handshake verdict', async () => {
   // 실 NodeLoopTransport 는 onPushEvent 를 항상 노출하지만, 능력(pushCapable)
   // 은 핸드셰이크 정착 후 확정된다. 미수용(codecs 미제공/구 런타임)이 확정되면
   // 푸시 경로가 폴링으로 1회 이동한다 — 죽은 푸시 스트림에 조용히 갇히지 않게.
@@ -350,7 +350,7 @@ test('transport without push capability moves to polling after the handshake ver
       },
     };
     const got: unknown[] = [];
-    subscribeEvent(transport as never, 'tick', (p) => got.push(p));
+    subscribeEvent(transport, 'tick', (p) => got.push(p));
     // 확정 전 푸시 프레임은 전달된다(싱크는 핸드셰이크 응답 전 설치 — 유실 없음).
     transport.emit('tick', '{"early":true}');
     await waitFor(() => drains >= 1, 2000);

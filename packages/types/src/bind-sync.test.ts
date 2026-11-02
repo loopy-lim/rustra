@@ -34,7 +34,8 @@ function setup(overrides: Record<string, unknown> = {}) {
       }),
     invokeFrame: (bytes) => {
       calls++;
-      const args = JSON.parse(new TextDecoder().decode(bytes));
+      // fixture 가 { a, b } 인코딩을 보내는 것이 이 테스트의 전제다.
+      const args = JSON.parse(new TextDecoder().decode(bytes)) as { a: number; b: number };
       return wire({ value: args.a + args.b });
     },
     getCodecCapabilities: () => 3,
