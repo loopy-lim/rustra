@@ -23,6 +23,10 @@ tauri_upstream_advisories=(
   RUSTSEC-2025-0081 # unic-char-property via tauri-utils
   RUSTSEC-2025-0098 # unic-ucd-version via tauri-utils
   RUSTSEC-2025-0100 # unic-ucd-ident via tauri-utils
+  # askama_derive 0.16.1(tauri-codegen 경유, 0.16 최신)이 아직 basic-toml 을
+  # 쓴다 — unmaintained 어드바이저리이고 askama 상위 해소까지 예외한다.
+  # askama 가 basic-toml 을 떼는 버전이 나오면 즉시 이 예외를 제거한다.
+  RUSTSEC-2026-0374 # basic-toml unmaintained via askama_derive (tauri-codegen)
 )
 
 audit_args=(--quiet --deny warnings)
