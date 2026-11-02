@@ -1,3 +1,6 @@
+// 벤치 하니스 — 측정 대상 호출은 unwrap/expect 로 간결하게 유지한다(프로덕션 경로 아님).
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Tier 비교 벤치마크 — 동일 의미 연산(echo: `{"v":7}`)을 wire 만 바꿔 측정한다.
 //!
 //! 기존 구성(add/greet/echo 혼합)은 "연산 효과 + wire 효과"가 섞여 있어

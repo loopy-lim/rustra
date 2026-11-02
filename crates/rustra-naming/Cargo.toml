@@ -9,5 +9,9 @@ license.workspace = true
 version.workspace = true
 rust-version.workspace = true
 
+# 워크스페이스 공용 lints(clippy::unwrap_used/expect_used deny) 옵트인.
+[lints]
+workspace = true
+
 [lib]
 path = "src/lib.rs"

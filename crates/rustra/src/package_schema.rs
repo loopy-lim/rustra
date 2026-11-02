@@ -28,17 +28,15 @@ impl Package {
         // 무효화되고 새 세대로 다시 채워지므로 live_schema() 소비자는 항상
         // 일치하는 세대를 본다. schema() (contract hash 입력) 는 불변.
         let mut schema = Self::schema(&self.id, &state, &self.event_contracts);
-        schema
-            .as_object_mut()
-            .expect("live schema root is an object")
-            .insert(
+        // Self::schema 가 json!(...) 객체 루트를 만들므로 객체 보증은 단일 출처에
+        // 있다 — expect 대신 if let 으로 동일한 불변을 유지한다.
+        if let Some(root) = schema.as_object_mut() {
+            root.insert(
                 "schemaGeneration".into(),
                 Value::from(state.schema_generation),
             );
-        schema
-            .as_object_mut()
-            .expect("live schema root is an object")
-            .insert("registryFrozen".into(), Value::Bool(self.is_frozen()));
+            root.insert("registryFrozen".into(), Value::Bool(self.is_frozen()));
+        }
         state.live_schema_cache = Some(schema.clone());
         schema
     }
@@ -61,8 +59,10 @@ impl Package {
     ///
     /// 호출자가 이미 잡은 read lock 상태에서 쓴다 — self에서 lock을 다시 잡지
     /// 않는다.
+    #[allow(clippy::expect_used)]
     fn contract_schema_json(&self, state: &RegistryState) -> String {
-        // serde_json::Value 직렬화는 실패할 수 없다(비문자열 키 맵이 없음).
+        // serde_json::Value 직렬화는 실패할 수 없다(비문자열 키 맵이 없음). 함수가
+        // String 을 돌려주는 계약 해시 단일 소스라 Result 로 전파하지 않는다.
         serde_json::to_string_pretty(&Self::schema(&self.id, state, &self.event_contracts))
             .expect("schema serialization cannot fail on a serde_json::Value")
     }
@@ -136,9 +136,10 @@ impl Package {
                     json!({ "name": name, "payload": &contract["payload"], "definitions": &contract["definitions"] })
                 })
                 .collect();
-            root.as_object_mut()
-                .expect("root is an object")
-                .insert("events".into(), json!(events));
+            // root 는 위 json!(...) 로 만든 객체다 — expect 대신 if let 으로 유지.
+            if let Some(root_obj) = root.as_object_mut() {
+                root_obj.insert("events".into(), json!(events));
+            }
         }
         // (Dev Tier B절) 디바이스 역량 카탈로그 단일소싱 — 선언이 있는 패키지에
         // 한해 카탈로그 전체(ALL, 선언 순)를 최상위에 기록한다. CLI(generate-devices)
@@ -153,9 +154,9 @@ impl Package {
                 .iter()
                 .map(|capability| capability.as_str())
                 .collect();
-            root.as_object_mut()
-                .expect("root is an object")
-                .insert("deviceCapabilities".into(), json!(catalog));
+            if let Some(root_obj) = root.as_object_mut() {
+                root_obj.insert("deviceCapabilities".into(), json!(catalog));
+            }
         }
         root
     }
@@ -164,6 +165,10 @@ impl Package {
 /// 스키마의 명령 한 항목 — `Package::schema` 와 핫 리로드 와이어 서명
 /// (`command_wire_signature`)이 함께 쓰는 단일 소스. 여기가 갈라지면 계약
 /// 해시와 서명이 어긋나므로 항목 형태 변경은 이 함수 하나에서만.
+// entry 는 json!({...}) 객체 리터럴이므로 as_object_mut 이 실패할 수 없다. 객체
+// Map 조립으로 바꾸면 계약 해시 입력 바이트가 드리프트할 위험이 있어 expect 와
+// unwrap 을 이 함수에서만 허용한다.
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
     let mut input_schema = (*command.input_schema).clone();
     let mut output_schema = (*command.output_schema).clone();
@@ -256,7 +261,9 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
 /// SHA-256 hex. 계약 해시(`contract_hash`)와 같은 해시 함수를 쓰고 항목 빌더를
 /// 공유하므로 두 값이 갈라질 수 없다. 핫 리로드 주입(`rustra_ffi_hot_reload`)
 /// 이 "같은 와이어 계약의 핸들러인가"를 판정하는 단일 소스.
+#[allow(clippy::expect_used)]
 pub(crate) fn command_wire_signature(name: &str, command: &Command) -> String {
     let entry = command_schema_entry(name, command);
+    // serde_json::Value 직렬화는 실패할 수 없다(비문자열 키 맵이 없음).
     contract_hash(serde_json::to_vec(&entry).expect("schema entry serializes"))
 }

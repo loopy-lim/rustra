@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! B1 인스펙터 스냅샷의 **정준 골든 바이트** (Rust↔TS 단일 아티팩트).
 //!
 //! 실제 `rustra_ffi_capture_snapshot` 캡처를

@@ -12,6 +12,11 @@ edition.workspace = true
 license.workspace = true
 version.workspace = true
 
+# 워크스페이스 공용 lints(clippy::unwrap_used/expect_used deny) 옵트인 —
+# 경계 코드의 패닉 폴백을 빌드 시점에 차단한다.
+[lints]
+workspace = true
+
 [features]
 tauri = ["dep:tauri"]
 # dev 전용 네이티브 dylib 핫스왑 표면(hot_core) — 릴리스 빌드는 정적 링크 경로를

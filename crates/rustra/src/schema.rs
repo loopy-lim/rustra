@@ -7,11 +7,14 @@ use std::any::type_name;
 use rustra_naming::snake_to_lower_camel;
 
 /// 타입 `T`의 JSON Schema를 (루트 스키마, definitions) 튜플로 직렬화합니다.
+#[allow(clippy::expect_used)]
 pub(super) fn schema_value<T>() -> (Value, Value)
 where
     T: JsonSchema,
 {
     let schema = schemars::schema_for!(T);
+    // schemars 스키마 직렬화는 문자열 키 맵만 다루므로 실패가 없다 — Result 경로가
+    // 없는 함수에서 이 불가결 오류만 expect 로 남긴다.
     let root = serde_json::to_value(schema.schema).expect("schema serializes");
     let defs = serde_json::to_value(schema.definitions).expect("definitions serialize");
     (root, defs)
@@ -21,11 +24,10 @@ where
 ///
 /// 예: `"my_crate::AddNumbersInput"` → `"AddNumbersInput"`
 pub(super) fn short_type_name<T>() -> String {
-    type_name::<T>()
-        .rsplit("::")
-        .next()
-        .expect("type name has a final segment")
-        .to_string()
+    // rsplit 은 최소 1개 세그먼트를 항상 반환하므로 expect 대신 원문 fallback 이
+    // 도달하지 않는다.
+    let raw = type_name::<T>();
+    raw.rsplit("::").next().unwrap_or(raw).to_string()
 }
 
 /// 명령 입출력 타입의 계약 이름 — schemars의 [`JsonSchema::schema_name`]과 단일 소스.

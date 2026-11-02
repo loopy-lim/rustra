@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! invoke_typed + decode_frame_response 통합 테스트.
 //!
 //! typed invoke 가 invoke_frame 의 단일 dispatch 경로를 타는지(같은 와이어,

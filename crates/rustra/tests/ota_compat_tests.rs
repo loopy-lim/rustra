@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! 트랙 2 — OTA 하위 호환: 구 command_id alias 수용.
 
 use rustra::Package;

@@ -1,3 +1,6 @@
+// 테스트 전용 모듈 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! `rustra_ffi_capture_snapshot` (B1 표준 덤프 API) 테스트.
 //!
 //! 전역 `FFI_CONTEXT` 는 테스트 바이너리 전체가 공유하고 등록은 첫 호출이

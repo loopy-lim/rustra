@@ -1,3 +1,6 @@
+// 테스트 전용 모듈 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! command_errors 빌더 단위 테스트 — lib.rs 의 `#[cfg(test)] mod` 스탠드얼론
 //! 테스트 모듈 관례(builder_platform_tests.rs 참고).
 

@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! 동시성 스모크 테스트 — RwLock 기반 런타임 레지스트리의 스레드 안전성.
 //!
 //! `loom` 정합성 모델은 범위 밖; 실제 OS 스레드로 패닉/교착/데이터레이스가

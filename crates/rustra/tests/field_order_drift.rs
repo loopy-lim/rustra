@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Task 3.5 (F7) — 필드 순서(postcard 선언 순서) 드리프트 감지.
 //!
 //! postcard 는 필드를 *선언 순서*대로 직렬화한다 (이름/알파벳 순이 아님).

@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! FFI 동시성 — `extern "C"` invoke 를 다중 스레드에서 병렬 호출해 OnceLock 글로벌
 //! `Package` 의 스레드 안전성을 검증한다. (Task 3.2)
 //!

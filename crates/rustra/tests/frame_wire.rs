@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Frame wire path 종합 테스트 — dynamic import(Tier 3) + 정적 binary 경로.
 //!
 //! 도달 가능한 두 wire 를 다양한 타입으로 검증:

@@ -72,7 +72,9 @@ pub(crate) fn build_frame_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
                         "frame: payload truncated at var-field length",
                     ));
                 }
-                let len_bytes: [u8; 4] = payload[cursor..cursor + 4].try_into().unwrap();
+                // 위의 cursor + 4 가드가 길이를 보증하지만, 신뢰 경계에서는
+                // unwrap 대신 read_fixed_le 로 명시적 오류를 유지한다.
+                let len_bytes: [u8; 4] = read_fixed_le::<4>(payload, cursor)?;
                 let field_len = u32::from_le_bytes(len_bytes) as usize;
                 cursor += 4;
 

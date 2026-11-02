@@ -247,10 +247,10 @@ impl<'a> Context<'a> {
             .or_else(|| single_enum_tag(properties));
         let matcher = if let Some((key, tag)) = exact_tag {
             IrMatcher::Discriminator { key, tag }
-        } else if let Some(properties) = properties.filter(|properties| properties.len() == 1) {
-            IrMatcher::SingleProperty {
-                key: properties.keys().next().unwrap().clone(),
-            }
+        } else if let Some(properties) = properties.filter(|properties| properties.len() == 1)
+            && let Some(key) = properties.keys().next()
+        {
+            IrMatcher::SingleProperty { key: key.clone() }
         } else if let Some(constant) = variant.get("const") {
             IrMatcher::ConstEq(constant.clone())
         } else if let Some(values) = variant.get("enum").and_then(Value::as_array)
@@ -277,8 +277,10 @@ impl<'a> Context<'a> {
                 }),
             };
             IrBody::Tagged { node }
-        } else if let Some(properties) = properties.filter(|properties| properties.len() == 1) {
-            let key = properties.keys().next().unwrap().clone();
+        } else if let Some(properties) = properties.filter(|properties| properties.len() == 1)
+            && let Some(key) = properties.keys().next()
+        {
+            let key = key.clone();
             let node = self.compile_node(&properties[&key], depth + 1)?;
             IrBody::UnwrapSingle { key, node }
         } else if let Some(constant) = variant.get("const") {

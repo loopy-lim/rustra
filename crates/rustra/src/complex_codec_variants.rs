@@ -23,8 +23,11 @@ pub(crate) fn variant_key(schema: &Value, _index: usize) -> Option<String> {
         {
             return Some(variant_value_key(value));
         }
-        if properties.len() == 1 {
-            return Some(properties.keys().next().unwrap().clone());
+        // len == 1 이면 키가 존재하지만, unwrap 대신 let 사슬로 단일 출처에서 보증한다.
+        if properties.len() == 1
+            && let Some(key) = properties.keys().next()
+        {
+            return Some(key.clone());
         }
     }
     schema

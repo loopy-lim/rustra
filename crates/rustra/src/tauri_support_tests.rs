@@ -1,3 +1,6 @@
+// 테스트 전용 모듈 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // ── tauri_support 테스트 (파사드의 #[path] 테스트 서브모듈) ──────────────────
 //
 // hot_core_tests.rs 와 같은 관용 — 본체(tauri_support.rs)는 등록·디스패치 배선만

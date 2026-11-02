@@ -65,9 +65,9 @@ pub(crate) fn decode_node_ir(
         IrNode::Float { single } => {
             let bytes = reader.raw(if *single { 4 } else { 8 })?;
             let value = if *single {
-                f32::from_le_bytes(bytes.try_into().unwrap()) as f64
+                f32::from_le_bytes(super::complex_codec_schema::le_bytes_exact::<4>(bytes)?) as f64
             } else {
-                f64::from_le_bytes(bytes.try_into().unwrap())
+                f64::from_le_bytes(super::complex_codec_schema::le_bytes_exact::<8>(bytes)?)
             };
             serde_json::Number::from_f64(value)
                 .map(Value::Number)

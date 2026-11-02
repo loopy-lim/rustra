@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! 트랙 1 — FFI 취소 파이프라인 (별도 바이너리: OnceLock 전역 격리).
 //!
 //! `rustra_ffi_invoke_async` 가 발급하는 invocation_id 로

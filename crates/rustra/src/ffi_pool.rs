@@ -110,6 +110,10 @@ impl AsyncPool {
         let tx = self.sender.lock().unwrap_or_else(|p| p.into_inner());
         // Reserve before publishing: a fast worker must never decrement zero.
         self.counters.inflight.fetch_add(1, Ordering::Relaxed);
+        // Option 은 Drop(&mut self) 의 채널 단절(take)을 위한 것뿐이다 — submit(&self)
+        // 과 Drop 은 배타적이라 이 시점의 sender 는 항상 Some 이다. 정당한 expect 이므로
+        // 허용한다.
+        #[allow(clippy::expect_used)]
         match tx.as_ref().expect("live pool sender").try_send(job) {
             Ok(()) => {
                 self.counters.submitted.fetch_add(1, Ordering::Relaxed);

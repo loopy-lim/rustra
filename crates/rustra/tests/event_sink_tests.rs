@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! `Package::set_event_sink` 푸시 전달 경로의 공개 API 통합 테스트.
 //!
 //! 폴링(`take_pending_events`)과 푸시(싱크)가 상호 배타적으로 전환되는 계약을

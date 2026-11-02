@@ -47,7 +47,11 @@ mod free_guard {
 
     /// Record a freshly handed-out allocation.
     pub(super) fn record(ptr: *mut u8, len: usize, kind: AllocationKind) {
-        let mut set = live().lock().expect("free_guard mutex poisoned");
+        // cancel.rs 와 같은 포이즈닝 관용 — HashSet 은 구조적으로 유효하므로
+        // expect 로 이후 free 감사 전체가 패닉하지 않게 한다.
+        let mut set = live()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         set.insert((ptr as usize, len, kind));
     }
 
@@ -58,7 +62,9 @@ mod free_guard {
     /// react to a misuse verdict.
     pub(super) fn check(ptr: *mut u8, len: usize, kind: AllocationKind) -> Verdict {
         let key = (ptr as usize, len, kind);
-        let mut set = live().lock().expect("free_guard mutex poisoned");
+        let mut set = live()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if set.remove(&key) {
             Verdict::Sound
         } else if set

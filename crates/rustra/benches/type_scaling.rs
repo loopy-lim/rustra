@@ -1,3 +1,6 @@
+// 벤치 하니스 — 측정 대상 호출은 unwrap/expect 로 간결하게 유지한다(프로덕션 경로 아님).
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! 동적 명령 payload scaling 벤치마크 — dynamic 명령의 데이터 크기별 확장성.
 //!
 //! 동적 `processPayload` 명령(register)을 1/10/100/1000 items 로 호출.

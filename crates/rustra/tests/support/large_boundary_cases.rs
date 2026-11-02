@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Shared deterministic boundary cases and mutation entry for the large fuzz campaign.
 use rustra::Package;
 use schemars::JsonSchema;

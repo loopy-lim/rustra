@@ -12,6 +12,10 @@ edition.workspace = true
 license.workspace = true
 version.workspace = true
 
+# 워크스페이스 공용 lints(clippy::unwrap_used/expect_used deny) 옵트인.
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 
@@ -22,6 +26,9 @@ quote = "1"
 proc-macro2 = "1"
 
 [dev-dependencies]
-rustra = { path = "../rustra" }
+# workspace 상속 — path 전용 선언은 cargo-deny wildcards=deny 위반이고, 로컬
+# version 핀은 bump 때마다 수동 동기화 부채를 만든다. 루트 workspace.dependencies
+# (version+path)의 단일 소스를 쓴다.
+rustra.workspace = true
 serde = { version = "1", features = ["derive"] }
 schemars = "0.8"

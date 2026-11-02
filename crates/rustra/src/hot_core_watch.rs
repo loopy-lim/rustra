@@ -44,6 +44,13 @@ impl DylibWatchConfig {
 /// 아티팩트 폴링을 시작한다. std 스레드 + sleep 폴링이며 notify 같은
 /// 파일 감시 의존을 두지 않는다. 반환 스레드는 프로세스 종료까지 감시한다.
 pub fn spawn_dylib_watch(config: DylibWatchConfig) -> std::thread::JoinHandle<()> {
+    spawn_watch_thread(config)
+}
+
+// 반환 타입이 JoinHandle 이라 Result 로 전파할 수 없다(공개 API 계약 유지).
+// 스레드 생성 실패는 fd/메모리 고갈 같은 호스트 이상 상태라 즉시 실패가 맞다.
+#[allow(clippy::expect_used)]
+fn spawn_watch_thread(config: DylibWatchConfig) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new()
         .name("rustra-hot-core-watch".into())
         .spawn(move || run_watch_loop(config))

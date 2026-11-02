@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! 채널 FFI 싱크의 내부 NUL fail-closed 계약 — 채널 유실점 정비(2026-09-20) 후속.
 //!
 //! 계약: JSON 채널 싱크(`FfiChannelSink::invoke`)는 페이로드에 내부 NUL 이

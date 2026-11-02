@@ -63,6 +63,13 @@ postcard = { version = "1", default-features = false, features = ["alloc"] }
 # 버전 핀: 0.32.1 (proc-macro + library 모드 bindgen 동작 검증 스파이크 기준).
 uniffi = "=0.32.1"
 
+# 안전 기둥 — 패닉 폴백(unwrap/expect)을 빌드 시점에 차단한다. 경계 코드에서
+# 불가피한 곳만 #[allow] + 근거 주석으로 남긴다(위경계 신뢰 기반 강화).
+# crates/*/Cargo.toml 의 [lints] workspace = true 로 크레이트 단위 옵트인.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
 # Rustra builds several native hosts and target triples. Full dependency debug
 # info plus incremental caches grows into tens of GiB without a size limit.
 # Keep line tables for workspace debugging, but do not retain incremental state

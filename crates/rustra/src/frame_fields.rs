@@ -105,33 +105,44 @@ pub(crate) fn required_names(schema: &Value) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
+/// `payload[offset..offset + N]` 를 고정폭 바이트 배열로 꺼낸다. 호출자가 길이
+/// 가드를 두는 것이 계약이지만(read_wire_field / frame 디코드 경로), unwrap 대신
+/// 명시적 오류로 신뢰 경계를 닫는다 — 와이어 불변이 깨져도 패닉하지 않는다.
+pub(crate) fn read_fixed_le<const N: usize>(payload: &[u8], offset: usize) -> Result<[u8; N]> {
+    let end = offset + N;
+    let bytes = payload
+        .get(offset..end)
+        .and_then(|slice| <[u8; N]>::try_from(slice).ok());
+    bytes.ok_or_else(|| RustraError::invalid_args("frame: payload truncated"))
+}
+
 pub(crate) fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> Result<Value> {
     if offset + kind.size() > payload.len() {
         return Err(RustraError::invalid_args("frame: payload truncated"));
     }
     Ok(match kind {
         WireFieldKind::I64 => {
-            let bytes: [u8; 8] = payload[offset..offset + 8].try_into().unwrap();
+            let bytes = read_fixed_le::<8>(payload, offset)?;
             json!(i64::from_le_bytes(bytes))
         }
         WireFieldKind::I32 => {
-            let bytes: [u8; 4] = payload[offset..offset + 4].try_into().unwrap();
+            let bytes = read_fixed_le::<4>(payload, offset)?;
             json!(i32::from_le_bytes(bytes))
         }
         WireFieldKind::U32 => {
-            let bytes: [u8; 4] = payload[offset..offset + 4].try_into().unwrap();
+            let bytes = read_fixed_le::<4>(payload, offset)?;
             json!(u32::from_le_bytes(bytes))
         }
         WireFieldKind::U16 => {
-            let bytes: [u8; 2] = payload[offset..offset + 2].try_into().unwrap();
+            let bytes = read_fixed_le::<2>(payload, offset)?;
             json!(u16::from_le_bytes(bytes))
         }
         WireFieldKind::F64 => {
-            let bytes: [u8; 8] = payload[offset..offset + 8].try_into().unwrap();
+            let bytes = read_fixed_le::<8>(payload, offset)?;
             json!(f64::from_le_bytes(bytes))
         }
         WireFieldKind::F32 => {
-            let bytes: [u8; 4] = payload[offset..offset + 4].try_into().unwrap();
+            let bytes = read_fixed_le::<4>(payload, offset)?;
             json!(f32::from_le_bytes(bytes))
         }
         WireFieldKind::Bool => json!(payload[offset] != 0),

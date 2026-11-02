@@ -143,9 +143,9 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
         };
         let bytes = self.reader.raw(if *single { 4 } else { 8 })?;
         let value = if *single {
-            f32::from_le_bytes(bytes.try_into().unwrap())
+            f32::from_le_bytes(super::complex_codec_schema::le_bytes_exact::<4>(bytes)?)
         } else {
-            f64::from_le_bytes(bytes.try_into().unwrap()) as f32
+            f64::from_le_bytes(super::complex_codec_schema::le_bytes_exact::<8>(bytes)?) as f32
         };
         if !value.is_finite() {
             return Err(error("decoded non-finite number"));
@@ -162,9 +162,11 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
         };
         let bytes = self.reader.raw(if *single { 4 } else { 8 })?;
         let value = if *single {
-            f64::from(f32::from_le_bytes(bytes.try_into().unwrap()))
+            f64::from(f32::from_le_bytes(
+                super::complex_codec_schema::le_bytes_exact::<4>(bytes)?,
+            ))
         } else {
-            f64::from_le_bytes(bytes.try_into().unwrap())
+            f64::from_le_bytes(super::complex_codec_schema::le_bytes_exact::<8>(bytes)?)
         };
         if !value.is_finite() {
             return Err(error("decoded non-finite number"));
