@@ -1,3 +1,6 @@
+// 프로파일링 예제 실행 파일 — 측정 목적이라 unwrap/expect 를 허용한다(프로덕션 경로 아님).
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Allocation counts, measured separately from latency (not RSS or peak memory).
 //! Run: cargo run -p rustra --release --example codec_allocations
 use std::alloc::{GlobalAlloc, Layout, System};

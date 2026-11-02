@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! 채널 send 페이로드 한도 계약 — 리스크 감사(2026-09-13 항목 1) 후속.
 //!
 //! 계약: `ChannelHost::send`/`send_bytes` 는 프레임이 현재 최대 페이로드 한도

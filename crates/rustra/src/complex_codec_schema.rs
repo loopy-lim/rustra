@@ -6,6 +6,13 @@ pub(crate) fn error(message: impl Into<String>) -> RustraError {
     RustraError::invalid_args(format!("complex codec: {}", message.into()))
 }
 
+/// `Reader::raw` 결과를 고정폭 바이트 배열로 꺼낸다. raw 가 정확히 n 바이트를
+/// 반환하는 것이 계약이지만, 신뢰 경계에서는 unwrap 대신 명시적 오류로 닫는다 —
+/// 와이어 불변이 깨져도 패닉하지 않고 디코드 실패로 승격된다.
+pub(crate) fn le_bytes_exact<const N: usize>(bytes: &[u8]) -> crate::Result<[u8; N]> {
+    <[u8; N]>::try_from(bytes).map_err(|_| error("truncated complex payload"))
+}
+
 pub(crate) fn ref_name(reference: &str) -> &str {
     reference.rsplit('/').next().unwrap_or(reference)
 }

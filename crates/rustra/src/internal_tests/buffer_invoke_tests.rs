@@ -1,3 +1,6 @@
+// 테스트 전용 모듈 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 #[derive(serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 struct Bytes {
     #[serde(with = "crate::byte_buffer")]

@@ -51,10 +51,11 @@ impl PackageBuilder {
                 let occupant = occupant.clone();
                 let fresh = next_command_id;
                 next_command_id += 1;
-                commands
-                    .get_mut(&occupant)
-                    .expect("occupant verified above")
-                    .command_id = fresh;
+                // 위 find 가 occupant 의 존재를 보증하지만, unwrap 대신 if let 으로
+                // 동일한 불변을 단일 출처에서 유지한다.
+                if let Some(occupant_command) = commands.get_mut(&occupant) {
+                    occupant_command.command_id = fresh;
+                }
             }
         }
 

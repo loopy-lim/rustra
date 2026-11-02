@@ -18,6 +18,11 @@
 //! }
 //! ```
 
+// unsafe 전무 실측 후 금지 — 이 크레이트의 `unsafe` 토큰은 quote! 가 생성하는
+// 사용자 측 코드(capability 래퍼)용이며, 매크로 크레이트 자체에는 unsafe 아이템이
+// 없다. 자체 unsafe 도입을 빌드 시점에 원천 차단한다.
+#![forbid(unsafe_code)]
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;

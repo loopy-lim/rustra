@@ -1,4 +1,7 @@
 impl Package {
+    // 코드젠 문자열 조립이라 Result 경로가 없고, &str 직렬화(serde_json::to_string)
+    // 은 정의상 실패할 수 없다 — 이 불가결 오류만 허용한다.
+    #[allow(clippy::expect_used)]
     fn generate_commands_ts(state: &RegistryState) -> String {
         // Tauri-like 글로벌 invoke 패턴: `configure()`로 설정한 엔진을
         // `invoke()`가 사용하므로 명령 함수는 engine 파라미터를 받지 않는다.

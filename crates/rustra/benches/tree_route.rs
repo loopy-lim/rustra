@@ -1,3 +1,6 @@
+// 벤치 하니스 — 측정 대상 호출은 unwrap/expect 로 간결하게 유지한다(프로덕션 경로 아님).
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Full tree round trip, last-node request, and borrowed in-memory DFS baseline.
 use std::hint::black_box;
 

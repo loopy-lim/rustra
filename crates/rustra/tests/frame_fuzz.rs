@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! proptest 속성 테스트 — 정적(postcard) + 동적(Tier 3) 경로의 round-trip 보존.
 //!
 //! 무작위 페이로드로 wire 직렬화/역직렬화가 값을 보존하는지 검증한다.

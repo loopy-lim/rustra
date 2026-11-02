@@ -15,7 +15,14 @@ fn read_vec_fixed<const N: usize>(
     let mut arr = Vec::with_capacity(count);
     for i in 0..count {
         let off = cursor + i * N;
-        let bytes: [u8; N] = payload[off..off + N].try_into().unwrap();
+        // 호출자의 cursor + field_len <= payload.len() 가드와 multiple-of 검사가
+        // 범위를 보증하지만, unwrap 대신 명시적 오류로 신뢰 경계를 유지한다.
+        let bytes: [u8; N] = payload
+            .get(off..off + N)
+            .and_then(|slice| <[u8; N]>::try_from(slice).ok())
+            .ok_or_else(|| {
+                RustraError::invalid_args("frame: payload truncated at var-field data")
+            })?;
         arr.push(decode_elem(bytes));
     }
     Ok(json!(arr))

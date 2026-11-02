@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 #[path = "../benches/support/tree_cases.rs"]
 mod tree_cases;
 

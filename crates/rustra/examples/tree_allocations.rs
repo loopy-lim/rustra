@@ -1,3 +1,6 @@
+// 프로파일링 예제 실행 파일 — 측정 목적이라 unwrap/expect 를 허용한다(프로덕션 경로 아님).
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Separate allocation sampling: total allocation requests, not RSS/peak memory.
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;

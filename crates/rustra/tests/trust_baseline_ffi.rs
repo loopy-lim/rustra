@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Trust baseline — FFI 안전성 결함을 현재 동작으로 고정 (Phase 0).
 //!
 //! 두 가지 종류의 테스트를 담는다:

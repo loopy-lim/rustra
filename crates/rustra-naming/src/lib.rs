@@ -1,5 +1,9 @@
 //! Shared identifier naming rules used by the Rust and proc-macro codegen paths.
 
+// unsafe 전무 실측 후 금지 — 순수 문자열 처리 크레이트이므로 unsafe 도입을
+// 빌드 시점에 원천 차단한다.
+#![forbid(unsafe_code)]
+
 /// Converts snake-, kebab-, and dot-separated names to lower camel case.
 ///
 /// The first alphanumeric character is always lower-cased. Delimiters are

@@ -99,10 +99,14 @@ impl PackageBuilder {
                  declared platforms {declared:?} — check the #[cfg] guard"
             );
         }
-        let existing = self
-            .commands
-            .get(name)
-            .expect("platform_command declares the command");
+        let existing = self.commands.get(name).unwrap_or_else(|| {
+            // 위 선언 조회가 이미 패닉시키므로 도달 불가다 — 파일 관용대로 이유를
+            // 명시한 panic 으로 유지한다(expect 대신).
+            panic!(
+                "platform_command_impl('{name}'): declaration exists but the command is missing — \
+                 register the plain handler with .command(...) before platform_command_impl"
+            )
+        });
         let command_id = existing.command_id;
         let description = existing.description.clone();
         let required_capability = existing.required_capability;

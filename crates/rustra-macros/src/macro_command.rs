@@ -263,10 +263,11 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut call_args = Vec::new();
 
     for param in &params {
-        if param.is_state {
+        // state_inner 는 is_state 의 단일 출처(extract_state_inner)에서 함께 채워지므로
+        // Some/None 분기만으로 unwrap 없이 동일한 의미를 유지한다.
+        if let Some(inner_ty) = param.state_inner.as_ref() {
             let pat = &param.pat;
             let ty = &param.ty;
-            let inner_ty = param.state_inner.as_ref().unwrap();
             state_bindings.push(quote! {
                 let #pat: #ty = rustra::get_state::<#inner_ty>()
                     .ok_or_else(|| rustra::RustraError::internal(concat!("State<", stringify!(#inner_ty), "> not managed in package")))?;

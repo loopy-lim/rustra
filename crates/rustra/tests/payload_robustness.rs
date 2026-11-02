@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Task 3.4 — large / zero-len / malformed payload robustness (Rust 측).
 //!
 //! 호스트가 Rust 경계로 보낼 수 있는 비정상 페이로드가 **절대 abort / panic 을

@@ -1,3 +1,6 @@
+// 통합 테스트 — 어설션 가독성을 위해 unwrap/expect 를 허용한다.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Exercise the actual debug free entry points in isolated child processes.
 //! Release intentionally tests correct ownership only: invoking UB is not a test.
 #![cfg(all(unix, not(miri)))]

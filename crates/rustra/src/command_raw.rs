@@ -65,8 +65,9 @@ where
         .unwrap_or_default();
     let output_kind = if out_props.is_empty() {
         None
-    } else if out_props.len() == 1 {
-        let (_name, schema) = out_props.iter().next().expect("len==1");
+    } else if out_props.len() == 1
+        && let Some((_name, schema)) = out_props.iter().next()
+    {
         let Some(kind) = raw_scalar_kind(schema) else {
             return (None, Vec::new());
         };

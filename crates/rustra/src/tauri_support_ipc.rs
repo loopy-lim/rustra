@@ -25,6 +25,9 @@ pub(super) fn production_handler<R: tauri::Runtime>()
     ]
 }
 
+// 오류 응답이 JSON Value 라 직렬화 실패를 되던질 수 없다. RustraError 는
+// 문자열/숫자 필드만 직렬화하므로 실패가 없다 — 이 불가결 오류만 허용.
+#[allow(clippy::expect_used)]
 async fn on_blocking_pool<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, Value> {

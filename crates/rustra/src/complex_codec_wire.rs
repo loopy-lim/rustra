@@ -58,14 +58,17 @@ impl<'s> Writer<'s> {
     /// buffer. Scratch spill copies only bytes that have already been written.
     pub(crate) fn reserve_minimum(&mut self, additional: usize) {
         let additional = additional.min(self.limits.max_payload_bytes.saturating_sub(self.written));
-        match self.into.as_ref() {
-            Some(target) if self.spill && self.written + additional > target.len() => {
-                let target = self.into.take().unwrap();
-                self.heap.reserve(self.written + additional);
-                self.heap.extend_from_slice(&target[..self.written]);
-            }
-            None => self.heap.reserve(additional),
-            _ => {}
+        // matches! 로 조건을 먼저 판정한다 — Some 임을 보증한 뒤 take 하므로
+        // 원래의 `.take().unwrap()` 없이 동일한 분기를 유지한다.
+        let spill_needs_heap = matches!(
+            self.into.as_ref(),
+            Some(target) if self.spill && self.written + additional > target.len()
+        );
+        if spill_needs_heap && let Some(target) = self.into.take() {
+            self.heap.reserve(self.written + additional);
+            self.heap.extend_from_slice(&target[..self.written]);
+        } else if self.into.is_none() {
+            self.heap.reserve(additional);
         }
     }
     pub(crate) fn push(&mut self, bytes: &[u8]) -> Result<()> {
@@ -160,7 +163,10 @@ impl<'a> Reader<'a> {
         Ok(&self.bytes[start..self.offset])
     }
     pub(crate) fn byte(&mut self) -> Result<u8> {
-        Ok(*self.raw(1)?.first().unwrap())
+        self.raw(1)?
+            .first()
+            .copied()
+            .ok_or_else(|| error("truncated complex payload"))
     }
     pub(crate) fn varint(&mut self) -> Result<u128> {
         let mut value = 0u128;
