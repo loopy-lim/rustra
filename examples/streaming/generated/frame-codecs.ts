@@ -32,12 +32,12 @@ function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; byte
   let bytesRead = 0;
   while (true) {
     const b = buf[offset + bytesRead];
-    if (b === undefined) throw new Error('varint out of bounds');
+    if (b === undefined) throw new Error('rustra: varint out of bounds (offset ' + (offset + bytesRead) + ')');
     value += (b & 0x7f) * multiplier;
     bytesRead++;
     if ((b & 0x80) === 0) break;
     multiplier *= 128;
-    if (bytesRead > 10) throw new Error('varint too long');
+    if (bytesRead > 10) throw new Error('rustra: varint too long (offset ' + (offset + bytesRead) + ')');
   }
   return { value, bytesRead };
 }
@@ -79,7 +79,7 @@ function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | b
   let bytesRead = 0;
   while (true) {
     const b = buf[offset + bytesRead];
-    if (b === undefined) throw new Error('varint out of bounds');
+    if (b === undefined) throw new Error('rustra: varint out of bounds (offset ' + (offset + bytesRead) + ')');
     bytesRead++;
     if (bytesRead <= 7) {
       num += (b & 0x7f) * multiplier;
@@ -89,12 +89,12 @@ function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | b
       if (bytesRead === 8) big = BigInt(num);
       big |= BigInt(b & 0x7f) << BigInt(7 * (bytesRead - 1));
       if ((b & 0x80) === 0) {
-        if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('varint exceeds 64 bits');
+        if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('rustra: varint exceeds 64 bits (offset ' + (offset + bytesRead) + ')');
         const asNumber = Number(big);
         return { value: Number.isSafeInteger(asNumber) ? asNumber : big, bytesRead };
       }
     }
-    if (bytesRead >= 10) throw new Error('varint too long');
+    if (bytesRead >= 10) throw new Error('rustra: varint too long (offset ' + (offset + bytesRead) + ')');
   }
 }
 
@@ -135,8 +135,10 @@ function _utf8Encode(s: string): Uint8Array {
 
 function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
   // end 가 버퍼를 넘으면 즉시 실패 — 잘린 프레임에서 while (i < end) 가
-  // undefined 바이트를 수없이 돌아 런타임이 멈추는 것을 막는다.
-  if (end > bytes.length) throw new Error('string out of bounds');
+  // undefined 바이트를 수없이 돌아 런타임이 멈추는 것을 막는다. 오류는
+  // 'rustra: <원인> (offset N)' 계약(postcard-primitive 주석)으로 보고한다 —
+  // 읽으려다 만 지점(end)이 실패 경계다.
+  if (end > bytes.length) throw new Error('rustra: string out of bounds (offset ' + end + ')');
   let s = ''; let i = start;
   while (i < end) {
     const b = bytes[i];

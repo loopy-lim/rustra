@@ -1,4 +1,6 @@
 export function postcardWideSource(): string {
+  // 디코드 오류 계약(codegen-postcard-primitive.ts 와 동일) — 'rustra: <원인>
+  // (offset N)' 고정 형식, tier2 정규화가 오프셋을 추출한다.
   return `const _pcI64Min = -(2n ** 63n);
 const _pcI64Max = 2n ** 63n - 1n;
 
@@ -24,7 +26,7 @@ function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | b
   let bytesRead = 0;
   while (true) {
     const b = buf[offset + bytesRead];
-    if (b === undefined) throw new Error('varint out of bounds');
+    if (b === undefined) throw new Error('rustra: varint out of bounds (offset ' + (offset + bytesRead) + ')');
     bytesRead++;
     if (bytesRead <= 7) {
       num += (b & 0x7f) * multiplier;
@@ -34,12 +36,12 @@ function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | b
       if (bytesRead === 8) big = BigInt(num);
       big |= BigInt(b & 0x7f) << BigInt(7 * (bytesRead - 1));
       if ((b & 0x80) === 0) {
-        if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('varint exceeds 64 bits');
+        if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('rustra: varint exceeds 64 bits (offset ' + (offset + bytesRead) + ')');
         const asNumber = Number(big);
         return { value: Number.isSafeInteger(asNumber) ? asNumber : big, bytesRead };
       }
     }
-    if (bytesRead >= 10) throw new Error('varint too long');
+    if (bytesRead >= 10) throw new Error('rustra: varint too long (offset ' + (offset + bytesRead) + ')');
   }
 }
 
