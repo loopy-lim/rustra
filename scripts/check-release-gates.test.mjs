@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { auditReleaseGates, evaluateRuns } from './check-release-gates.mjs';
+import { DEFAULT_WORKFLOWS, auditReleaseGates, evaluateRuns } from './check-release-gates.mjs';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const REPOSITORY = 'rustra/rustra';
@@ -159,6 +159,20 @@ test('evaluateRuns accepts standalone and called safety workflow events', () => 
     );
     assert.equal(result.ok, true, event);
   }
+});
+
+test('evaluateRuns accepts the tsan release gate on every allowed event', () => {
+  for (const event of ['schedule', 'workflow_dispatch', 'workflow_call']) {
+    const result = evaluateRuns(
+      [run({ name: 'ThreadSanitizer', path: '.github/workflows/tsan.yml', event })],
+      { sha: SHA, workflow: 'tsan.yml', repository: REPOSITORY },
+    );
+    assert.equal(result.ok, true, event);
+  }
+});
+
+test('default release gates include the tsan workflow', () => {
+  assert.ok(DEFAULT_WORKFLOWS.includes('tsan.yml'));
 });
 
 test('evaluateRuns rejects a success without a valid run attempt', () => {

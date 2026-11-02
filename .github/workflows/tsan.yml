@@ -1,0 +1,81 @@
+name: ThreadSanitizer
+
+# A09 보완 트랙 — ThreadSanitizer 야간 검증 (nitro 파리티 안전성 강화 2026-11-01).
+#
+# sanitizer.yml 의 ASan/LSan 이 메모리 오염·누수를 담당하는 반면 TSan 은
+# 데이터 경합(data race)을 담다. rustra 의 멀티스레드 표면은 ffi_pool 의 고정
+# worker 풀과 events 채널이며, 경합은 ASan 이 못 잡는다. iOS 에서 TSan 을
+# 1급 CI 시민으로 돌리는 nitro(test-runtime-ios)의 설계를 따른다:
+# halt_on_error=1:abort_on_error=1 로 발견 즉시 치명 실패.
+#
+# nightly 필수: `-Zsanitizer=thread`·`-Z build-std` 는 nightly 전용 플래그.
+# 도구체인 결정은 miri.yml/sanitizer.yml 과 동일한 dtolnay/rust-toolchain@nightly
+# 패턴에 rust-src 컴포넌트를 더한 것.
+#
+# 왜 build-std 인가(로컬 실측 2026-11-01, nightly 1.101.0): ASan 과 달리 TSan 은
+# std 의 원자연산·뮤텍스가 계측돼야 happens-before 엣지를 본다. 미계측 std +
+# 계측 app 조합에서는 std Mutex 내부의 rustra 코드가 전부 가짜 경합으로 보였다
+# (cancel.rs REGISTRY.lock 내부 BTreeMap 접근, libtest CompletedTest 채널).
+# std 를 소스에서 계측 빌드하는 build-std 로 이 문제를 근본 해거하고, 227개 lib
+# 테스트가 경고 0 으로 통과한다. -Cunsafe-allow-abi-mismatch=sanitizer 는
+# autocfg 기반 빌드 스크립트(indexmap 1.x)의 std 프로브가 계측 플래그로 실패하지
+# 않게 한다 — 실제 링크에는 소스 빌드된 계측 std 가 쓰인다.
+# --lib 만 검사한다: FFI 통합 테스트는 외부 프로세스/호스트 포인터를 다뤄
+# TSan 신호가 경합이 아닌 경계 아티팩트로 오인될 수 있다(공개 스레드 표면은
+# --lib 의 ffi_pool/events 유닛 경로가 이미 커버).
+
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
+  workflow_dispatch:
+  schedule:
+    - cron: '19 20 * * 2' # 수요일 KST 새벽 5:19 — sanitizer(일요일)·miri(일요일)·fuzz(토요일)와 분산
+
+jobs:
+  tsan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # 저장소의 stable 핀보다 우선해 nightly 전용 sanitizer를 실행한다.
+      RUSTUP_TOOLCHAIN: nightly
+      # -Zsanitizer 는 ABI 를 바꾼다 — rust-cache 재사용 아티팩트와의 혼합을
+      # 원천 차단하려면 sanitizer 빌드에 전용 target dir 을 쓴다(로컬 실측:
+      # 공유 target 디렉터에서 ABI mismatch 오류 재현 확인).
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/tsan-target
+      SAFETY_LOG_DIR: ${{ github.workspace }}/target/safety/tsan
+    # continue-on-error 없음 — 주간 가시성 게이트. 경합 발견은 즉시 triage 대상.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      - name: Record toolchain and candidate
+        run: |
+          mkdir -p "$SAFETY_LOG_DIR"
+          { git rev-parse HEAD; rustc -Vv; } > "$SAFETY_LOG_DIR/environment.txt"
+      - name: Run lib tests under ThreadSanitizer
+        env:
+          # -Z build-std — TSan 은 std 까지 계측해야 뮤텍스/원자연산의
+          # happens-before 엣지를 본다(미계측 std 에서는 REGISTRY.lock 내부
+          # 접근이 가짜 경합으로 보고됨 — 로컬 실측). 전용 CARGO_TARGET_DIR 과
+          # 마찬가지로 rust-cache 재사용 아티팩트와의 ABI 혼합을 피한다.
+          # -Cunsafe-allow-abi-mismatch=sanitizer — autocfg 프로브(indexmap 1.x
+          # 빌드 스크립트)가 계측 플래그로 실패하지 않게 한다.
+          RUSTFLAGS: -Zsanitizer=thread -Cunsafe-allow-abi-mismatch=sanitizer
+          # nitro test-runtime 설계와 동일 — 발견 즉시 중단해 조용한 green 을 막는다.
+          TSAN_OPTIONS: halt_on_error=1:abort_on_error=1:history_size=7:log_path=${{ github.workspace }}/target/safety/tsan/tsan
+          RUST_TEST_THREADS: '1'
+        run: bash scripts/run-safety-check.sh tsan-lib cargo test -Z build-std -p rustra --lib --target x86_64-unknown-linux-gnu
+      - name: Upload sanitizer reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsan-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/target/safety/tsan/
+          if-no-files-found: error

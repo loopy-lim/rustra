@@ -1,7 +1,7 @@
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const DEFAULT_WORKFLOWS = ['ci.yml', 'miri.yml', 'sanitizer.yml', 'fuzz.yml'];
+export const DEFAULT_WORKFLOWS = ['ci.yml', 'miri.yml', 'sanitizer.yml', 'fuzz.yml', 'tsan.yml'];
 
 function workflowMatches(run, workflow) {
   const requested = basename(workflow).toLowerCase();

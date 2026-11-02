@@ -60,6 +60,12 @@ jobs:
     with:
       candidate_sha: ${{ needs.candidate.outputs.sha }}
 
+  tsan:
+    needs: candidate
+    uses: ./.github/workflows/tsan.yml
+    with:
+      candidate_sha: ${{ needs.candidate.outputs.sha }}
+
   # CI가 green인 경우에만 발행을 시도한다 (CI 실패 시 release 스킵).
   # workflow_dispatch 우회를 제거해 이 조건은 workflow_run success 로만 만족한다.
   # event != 'schedule' 필수: CI 의 주간 schedule 실행은 rust-audit 외 전부 skip
@@ -68,7 +74,7 @@ jobs:
   # 116eae3d Release 를 트리거).
   release:
     name: Changesets Publish (npm)
-    needs: [candidate, miri, sanitizer, fuzz]
+    needs: [candidate, miri, sanitizer, fuzz, tsan]
     if: github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     permissions:
@@ -145,7 +151,7 @@ jobs:
   # 실행 직전 동일 SHA의 CI 성공을 확인하므로 workflow_dispatch가 게이트를 우회하지 않는다.
   cargo-publish:
     name: Publish crates (manual)
-    needs: [candidate, miri, sanitizer, fuzz]
+    needs: [candidate, miri, sanitizer, fuzz, tsan]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
