@@ -7,8 +7,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSurface, compareSurface, serializeSurface } from './api-surface.mjs';
 
-// api-surface.mjs 는 타입 없는 JS 모듈이라 반환 타입이 미해결로 열린다 —
-// diff 표면을 구조 타입으로 고정한다(불요단언 규칙은 미해결 타입을 검증 못 해 해제).
+// api-surface.mjs 는 JS 모듈이라 TS 추론 반환({})이 diff 표면을 반영하지 못한다 —
+// 구조 타입 애노테이션으로 고정한다. 단언(as) 이 아니라 애노테이션인 이유: pre-commit
+// 의 단일 파일 eslint --fix 와 전수 lint 의 타입 해석이 달라 불요단언 규칙이 앵커
+// 단언을 지워 unsafe-call 로 퇴화한 실측이 있다(2026-11-02).
 type SurfaceDiff = {
   added: { packageExports?: string[] };
   changed: { packageExports?: string[] };
@@ -353,12 +355,8 @@ void test('package add and removal are detected, and conditional target ordering
       JSON.stringify({ name: '@fixture/new', type: 'module', exports: './dist/index.js' }),
     );
     put(root, 'packages/new/src/index.ts', 'export const ADDED = 1;');
-    assert.ok(
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- 미해결 .mjs 반환의 구조 고정이 필요하다
-      (
-        compareSurface(collectSurface(root), baseline) as SurfaceDiff
-      ).added.packageExports?.includes('packages/new'),
-    );
+    const addedDiff: SurfaceDiff = compareSurface(collectSurface(root), baseline);
+    assert.ok(addedDiff.added.packageExports?.includes('packages/new'));
     rmSync(join(root, 'packages/new'), { recursive: true });
     assert.deepEqual(compareSurface(collectSurface(root), baseline), {
       added: {},
@@ -371,19 +369,11 @@ void test('package add and removal are detected, and conditional target ordering
       exports: { '.': { import: './dist/index.js', types: './dist/index.d.ts' } },
     };
     put(root, 'packages/demo/package.json', JSON.stringify(manifest));
-    assert.ok(
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- 미해결 .mjs 반환의 구조 고정이 필요하다
-      (
-        compareSurface(collectSurface(root), baseline) as SurfaceDiff
-      ).changed.packageExports?.includes('packages/demo'),
-    );
+    const changedDiff: SurfaceDiff = compareSurface(collectSurface(root), baseline);
+    assert.ok(changedDiff.changed.packageExports?.includes('packages/demo'));
     rmSync(join(root, 'packages/demo'), { recursive: true });
-    assert.ok(
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- 미해결 .mjs 반환의 구조 고정이 필요하다
-      (
-        compareSurface(collectSurface(root), baseline) as SurfaceDiff
-      ).removed.packageExports?.includes('packages/demo'),
-    );
+    const removedDiff: SurfaceDiff = compareSurface(collectSurface(root), baseline);
+    assert.ok(removedDiff.removed.packageExports?.includes('packages/demo'));
   }));
 
 void test('Rust private aliases and constants used by public declarations cannot hide type drift', () =>
