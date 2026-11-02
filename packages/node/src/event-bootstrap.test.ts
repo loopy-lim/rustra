@@ -22,7 +22,7 @@ const script = String.raw`
   });
 `;
 
-processTest(
+void processTest(
   'a persistent bootstrap shares command state and emitted events in one runtime',
   async () => {
     configure({ invoke: async <T>() => null as T });
@@ -53,7 +53,7 @@ processTest(
   },
 );
 
-processTest(
+void processTest(
   'subscribing after a generated call initializes the runtime attaches immediately',
   async () => {
     configure({ invoke: async <T>() => null as T });
@@ -83,7 +83,7 @@ async function waitFor(predicate: () => boolean) {
   }
 }
 
-test('an old bootstrap unsubscribe cannot remove a replacement using the same callback', async () => {
+void test('an old bootstrap unsubscribe cannot remove a replacement using the same callback', async () => {
   configure({ invoke: async <T>() => null as T });
   const handlers = new Set<(event: { name: string; payload: string }) => void>();
   const transport: NodeProcessTransport & {
@@ -119,7 +119,7 @@ test('an old bootstrap unsubscribe cannot remove a replacement using the same ca
   }
 });
 
-processTest(
+void processTest(
   'persistent readiness rejects a silent runtime within its configured deadline',
   async () => {
     configure({ invoke: async <T>() => null as T });

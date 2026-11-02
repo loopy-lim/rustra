@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createConsumerManifest } from './check-packed-react-native-consumer.mjs';
 
-test('pins the local types tarball for transitive 0.4.1 dependencies', () => {
+void test('pins the local types tarball for transitive 0.4.1 dependencies', () => {
   const manifest = createConsumerManifest({
     typesArchive: '/tmp/rustra-types-0.4.1.tgz',
     cliArchive: '/tmp/rustra-cli-0.4.1.tgz',

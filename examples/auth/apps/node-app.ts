@@ -10,7 +10,7 @@
  */
 import { spawn } from 'node:child_process';
 import { signIn, signOut, grant, adminStats } from '../generated/commands.js';
-import { configure, RustraCommandError } from '@rustra/types';
+import { configure } from '@rustra/types';
 import { createNodeEngine } from '@rustra/node';
 
 const RUST_BIN = 'target/debug/rustra-auth-invoke';
@@ -109,7 +109,8 @@ async function expectCapabilityDenied(promise: Promise<unknown>, label: string):
     const err = e as { code?: string; message?: string };
     if (typeof err.code === 'string') {
       if (err.code !== 'capability.denied') {
-        throw new Error(`${label}: wrong code ${err.code}`);
+        // 원인 에러를 cause 로 싣는다 — 증상만 노출하는 것을 막는다.
+        throw new Error(`${label}: wrong code ${err.code}`, { cause: e });
       }
       console.log(`[auth] ${label}: capability.denied (as expected)`);
       return;

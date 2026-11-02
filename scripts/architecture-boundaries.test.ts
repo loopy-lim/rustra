@@ -48,7 +48,10 @@ test('the checker reports boundary violations with stable rule ids', () => {
     );
     writeFileSync(join(root, 'packages/cli/src/index.ts'), 'setTimeout(() => {}, 100);\n');
 
-    const report = checkArchitectureBoundaries({ root });
+    // .mjs 반환을 구조 타입으로 고정한다.
+    const report = checkArchitectureBoundaries({ root }) as {
+      errors: Array<{ rule: string }>;
+    };
     const ruleIds = report.errors.map((error) => error.rule);
 
     assert.ok(ruleIds.includes('rustra-lib-size'));

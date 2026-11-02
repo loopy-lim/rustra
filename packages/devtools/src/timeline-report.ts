@@ -41,6 +41,9 @@ function preview(value: unknown): string {
   try {
     text = JSON.stringify(value) ?? 'undefined';
   } catch {
+    // JSON.stringify 실패(circular 등) 시에도 유한한 문자열 보장이 계약이다
+    // ([object Object] 표기는 timeline-report.test.ts 가 결정론으로 고정한다).
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     text = String(value);
   }
   if (text.length <= 200) return text;

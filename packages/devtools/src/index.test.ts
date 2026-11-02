@@ -11,26 +11,27 @@ function makeInner() {
   };
 }
 
-test('instrumented engine records calls, durations, errors', async () => {
+void test('instrumented engine records calls, durations, errors', async () => {
   const engine = createInstrumentedEngine(makeInner());
   await engine.invoke('addNumbers', { a: 1 });
   await engine.invoke('addNumbers', { a: 2 });
   await engine.invoke('fail').catch(() => {});
   const report = engine.report();
   assert.equal(report.totalCalls, 3);
-  assert.equal(report.commandStats.addNumbers.count, 2);
-  assert.equal(report.commandStats.addNumbers.errors, 0);
-  assert.equal(report.commandStats.fail.errors, 1);
-  assert.ok(report.commandStats.addNumbers.avgMs >= 0);
+  // invoke 된 명령의 stats 는 존재가 보장된다(위 totalCalls 검증).
+  assert.equal(report.commandStats.addNumbers!.count, 2);
+  assert.equal(report.commandStats.addNumbers!.errors, 0);
+  assert.equal(report.commandStats.fail!.errors, 1);
+  assert.ok(report.commandStats.addNumbers!.avgMs >= 0);
 });
 
-test('errors propagate unchanged after being recorded', async () => {
+void test('errors propagate unchanged after being recorded', async () => {
   const engine = createInstrumentedEngine(makeInner());
   await assert.rejects(() => engine.invoke('fail'), /boom/);
-  assert.equal(engine.report().commandStats.fail.errors, 1);
+  assert.equal(engine.report().commandStats.fail!.errors, 1);
 });
 
-test('failure logs capture frame forensics when the error carries frameBytes (M8)', async () => {
+void test('failure logs capture frame forensics when the error carries frameBytes (M8)', async () => {
   // tier2 디코드 실패 정규화(@rustra/types M3) 는 RustraCommandError.frameBytes 에
   // 응답 프레임 복사본을 싣는다 — 계측기는 이를 hex 절단(앞 256B)과 전체 길이로
   // 실패 로그에 남긴다. 프로세스가 끝난 뒤 와이어를 재해석할 수 있는 유일한 흔적이다.
@@ -48,6 +49,7 @@ test('failure logs capture frame forensics when the error carries frameBytes (M8
   };
   const engine = createInstrumentedEngine(inner);
   await engine.invoke('addNumbers', { a: 1 }).catch(() => {});
+  // invoke 기록이 1건(logs[0])임은 위 시나리오가 보장한다.
   const log = engine.report().logs[0]!;
   assert.equal(log.ok, false);
   assert.equal(log.frameByteLength, 300);
@@ -56,10 +58,11 @@ test('failure logs capture frame forensics when the error carries frameBytes (M8
   assert.ok(log.frameBytesHex?.endsWith('ff')); // 255번째 바이트가 창의 끝
 });
 
-test('frame forensics stay absent for successes and frame-less failures (M8)', async () => {
+void test('frame forensics stay absent for successes and frame-less failures (M8)', async () => {
   const engine = createInstrumentedEngine(makeInner());
   await engine.invoke('addNumbers', { a: 1 });
   await engine.invoke('fail').catch(() => {});
+  // 두 번 invoke 했으므로 logs 길이 2가 보장된다.
   const [success, failure] = engine.report().logs;
   assert.equal(success!.ok, true);
   assert.equal(success!.frameBytesHex, undefined);
@@ -69,7 +72,7 @@ test('frame forensics stay absent for successes and frame-less failures (M8)', a
   assert.equal(failure!.frameByteLength, undefined);
 });
 
-test('frame forensics on batch failures surface through onLog entries too (M8)', async () => {
+void test('frame forensics on batch failures surface through onLog entries too (M8)', async () => {
   const seen: unknown[] = [];
   const frame = new Uint8Array([0x01, 0x02]);
   const inner = {
@@ -85,7 +88,8 @@ test('frame forensics on batch failures surface through onLog entries too (M8)',
   const engine = createInstrumentedEngine(inner, {
     onLog: (entry) => seen.push(entry),
   });
-  const batch = engine.invokeBatch!;
+  // 분리 참조 대신 bind 로 this 를 고정한다(unbound-method 계약).
+  const batch = engine.invokeBatch!.bind(engine);
   await batch([{ command: 'addNumbers' }]).catch(() => {});
   const log = seen[0] as { ok: boolean; frameBytesHex?: string; frameByteLength?: number };
   assert.equal(log.ok, false);
@@ -93,17 +97,18 @@ test('frame forensics on batch failures surface through onLog entries too (M8)',
   assert.equal(log.frameByteLength, 2);
 });
 
-test('slowest list is ordered desc and capped at 10', async () => {
+void test('slowest list is ordered desc and capped at 10', async () => {
   const engine = createInstrumentedEngine(makeInner());
   for (let i = 0; i < 12; i++) await engine.invoke('tick');
   const report = engine.report();
   assert.ok(report.slowest.length <= 10);
   for (let i = 1; i < report.slowest.length; i++) {
-    assert.ok(report.slowest[i - 1].ms >= report.slowest[i].ms);
+    // i-1/i 는 모두 length 미만 — 정렬 검증 루프의 유효 인덱스다.
+    assert.ok(report.slowest[i - 1]!.ms >= report.slowest[i]!.ms);
   }
 });
 
-test('invokeBatch is passed through when inner supports it', async () => {
+void test('invokeBatch is passed through when inner supports it', async () => {
   const inner = {
     ...makeInner(),
     async invokeBatch<T>(entries: Array<{ command: string; args?: unknown }>): Promise<T[]> {
@@ -116,7 +121,8 @@ test('invokeBatch is passed through when inner supports it', async () => {
     },
   };
   const engine = createInstrumentedEngine(inner);
-  const batch = engine.invokeBatch!;
+  // 분리 참조 대신 bind 로 this 를 고정한다(unbound-method 계약).
+  const batch = engine.invokeBatch!.bind(engine);
   const results = await batch<{ echoed: unknown }>([
     { command: 'addNumbers', args: { a: 1 } },
     { command: 'greet', args: { name: 'x' } },
@@ -124,24 +130,25 @@ test('invokeBatch is passed through when inner supports it', async () => {
   assert.equal(results.length, 2);
   const report = engine.report();
   assert.equal(report.totalCalls, 2);
-  assert.equal(report.commandStats.addNumbers.count, 1);
-  assert.equal(report.commandStats.greet.count, 1);
+  // 배치로 invoke 된 두 명령의 stats 는 존재가 보장된다.
+  assert.equal(report.commandStats.addNumbers!.count, 1);
+  assert.equal(report.commandStats.greet!.count, 1);
 
   // 배치 실패 원인은 개별 엔트리로 추측하지 않고 batch-level에만 기록한다.
   await assert.rejects(() => batch([{ command: 'addNumbers' }, { command: 'fail' }]), /batch boom/);
   assert.equal(engine.report().batchStats.errors, 1);
   assert.equal(engine.report().batchStats.count, 2);
   assert.equal(engine.report().batchStats.entries, 4);
-  assert.equal(engine.report().commandStats.fail.errors, 0);
-  assert.equal(engine.report().commandStats.addNumbers.errors, 0);
+  assert.equal(engine.report().commandStats.fail!.errors, 0);
+  assert.equal(engine.report().commandStats.addNumbers!.errors, 0);
 });
 
-test('invokeBatch is omitted when inner lacks it', () => {
+void test('invokeBatch is omitted when inner lacks it', () => {
   const engine = createInstrumentedEngine(makeInner());
-  assert.equal(engine.invokeBatch, undefined);
+  assert.equal(typeof engine.invokeBatch, 'undefined');
 });
 
-test('invokeById is passed through without losing id, name, args, or options', async () => {
+void test('invokeById is passed through without losing id, name, args, or options', async () => {
   const seen: unknown[] = [];
   const inner = {
     ...makeInner(),
@@ -166,15 +173,15 @@ test('invokeById is passed through without losing id, name, args, or options', a
 
   assert.deepEqual(result, { value: 42 });
   assert.deepEqual(seen, [7, 'addNumbers', { a: 20, b: 22 }, options]);
-  assert.equal(engine.report().commandStats.addNumbers.count, 1);
+  assert.equal(engine.report().commandStats.addNumbers!.count, 1);
 });
 
-test('invokeById is omitted when inner lacks it', () => {
+void test('invokeById is omitted when inner lacks it', () => {
   const engine = createInstrumentedEngine(makeInner());
-  assert.equal(engine.invokeById, undefined);
+  assert.equal(typeof engine.invokeById, 'undefined');
 });
 
-test('instrumented engine exposes bounded payload logs and a logging hook', async () => {
+void test('instrumented engine exposes bounded payload logs and a logging hook', async () => {
   const seen: string[] = [];
   const engine = createInstrumentedEngine(makeInner(), {
     capturePayload: true,

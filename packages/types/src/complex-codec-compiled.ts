@@ -86,7 +86,8 @@ function compileNode(
   if (schema.allOf) {
     if (schema.allOf.length !== 1)
       throw new ComplexCodecError('complex codec does not support multi-entry allOf');
-    return compileNode(schema.allOf[0], definitions, refs, depth + 1);
+    // length !== 1 이 위에서 throw 되므로 [0] 은 항상 존재한다(불변 검증된 인덱스).
+    return compileNode(schema.allOf[0]!, definitions, refs, depth + 1);
   }
   // optionInner 미러.
   const option = optionInner(schema);
@@ -230,7 +231,8 @@ function compileVariant(
     body = {
       kind: 'unwrapSingle',
       key: singleKey,
-      node: compileNode(properties[singleKey], definitions, refs, depth + 1),
+      // singleKey 는 properties 의 유일 키(Object.keys 길이 1 검증)이므로 항상 존재한다.
+      node: compileNode(properties[singleKey]!, definitions, refs, depth + 1),
     };
   } else if (variant.const !== undefined) {
     body = { kind: 'constValue', value: variant.const };

@@ -17,7 +17,7 @@ import {
   type NodeBootstrapOptions,
   type NodeProcessTransport,
 } from './node-core.js';
-import { subscribeEvent, type NodeEventTransport } from './node-events.js';
+import { subscribeEvent } from './node-events.js';
 import {
   awaitNodeReadiness,
   createNodePersistentTransport,
@@ -212,11 +212,7 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
   const attachEvents = (spawned: NodeProcessTransport) => {
     for (const entry of subscriptions) {
       if (!entry.unsubscribe)
-        entry.unsubscribe = subscribeEvent(
-          spawned as NodeEventTransport,
-          entry.name,
-          entry.callback,
-        );
+        entry.unsubscribe = subscribeEvent(spawned, entry.name, entry.callback);
     }
   };
   let reloadPromise: Promise<void> | undefined;
@@ -331,7 +327,11 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
           'event.unavailable',
           'Node bootstrap events require persistent: true; one-shot invocations cannot share an event bus.',
         );
-      if (eventFailure) throw eventFailure;
+      // 캡처된 구독 실패를 Error 계열로 고정해 throw 한다(non-Error 투기 방지).
+      if (eventFailure)
+        throw eventFailure instanceof Error
+          ? eventFailure
+          : new Error(JSON.stringify(eventFailure) ?? '[unserializable rejection]');
       const entry = { name, callback, unsubscribe: undefined as (() => void) | undefined };
       subscriptions.add(entry);
       if (transport && state === 'ready') attachEvents(transport);

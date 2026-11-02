@@ -224,7 +224,8 @@ export function createNodeLoopTransport(options: {
       try {
         proc = ensureProcess();
       } catch (error) {
-        reject(error);
+        // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+        reject(error instanceof Error ? error : new Error(String(error)));
         return;
       }
       const id = nextId++;
@@ -267,7 +268,8 @@ export function createNodeLoopTransport(options: {
     try {
       ensureProcess();
     } catch (error) {
-      return Promise.reject(error);
+      // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
     if (!handshakeSettled) {
       handshakeSettled = handshake();

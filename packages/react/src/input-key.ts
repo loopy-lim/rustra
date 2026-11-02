@@ -86,7 +86,8 @@ export function inputKey(value: unknown): string {
           ),
         ];
       }
-      const prototype = Object.getPrototypeOf(item);
+      // Object.getPrototypeOf 의 any 를 unknown 으로 고정한다.
+      const prototype: unknown = Object.getPrototypeOf(item);
       if (prototype !== Object.prototype && prototype !== null) {
         // Class instances and host/exotic objects: identity-keyed, non-throwing.
         usesIdentityKey = true;

@@ -5,6 +5,8 @@ const calls: Array<{ command: string; args: unknown }> = [];
 
 (globalThis as typeof globalThis & { __TAURI__: unknown }).__TAURI__ = {
   core: {
+    // 데모 앱 어댑터는 async 래핑을 표준 계약으로 시연한다(본문은 동기 반환).
+    // eslint-disable-next-line @typescript-eslint/require-await
     async invoke(command: string, args?: unknown) {
       calls.push({ command, args });
       if (command === 'rustra_contract_hash') return GENERATED_CONTRACT_HASH;

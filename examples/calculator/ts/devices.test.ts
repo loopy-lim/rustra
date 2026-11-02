@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { configure, getDeviceStatus, registerDeviceStatusProvider } from '@rustra/types';
 import { deviceDemo } from '../generated/commands.js';
-import { DEVICE_DEMO_DEVICES, type RustraDeviceCapability } from '../generated/devices.js';
+import { DEVICE_DEMO_DEVICES } from '../generated/devices.js';
 
-test('device declarations surface as generated constants', () => {
+void test('device declarations surface as generated constants', () => {
   assert.deepEqual([...DEVICE_DEMO_DEVICES], ['camera', 'bluetooth']);
 });
 
-test('declared capability status is queryable through the host provider', async () => {
+void test('declared capability status is queryable through the host provider', async () => {
   const seen: string[] = [];
   registerDeviceStatusProvider(async (capability) => {
     seen.push(capability);
@@ -17,15 +17,15 @@ test('declared capability status is queryable through the host provider', async 
       : { availability: 'unavailable', permission: 'unknown' };
   });
 
-  const status = await getDeviceStatus('camera' as RustraDeviceCapability);
+  const status = await getDeviceStatus('camera');
   assert.deepEqual(status, { availability: 'available', permission: 'granted' });
 
-  const unavailable = await getDeviceStatus('bluetooth' as RustraDeviceCapability);
+  const unavailable = await getDeviceStatus('bluetooth');
   assert.equal(unavailable.availability, 'unavailable');
   assert.deepEqual(seen, ['camera', 'bluetooth']);
 });
 
-test('a device-declared command still invokes without runtime gating', async () => {
+void test('a device-declared command still invokes without runtime gating', async () => {
   configure({
     async invoke<T>(): Promise<T> {
       return { os: 'darwin' } as T;

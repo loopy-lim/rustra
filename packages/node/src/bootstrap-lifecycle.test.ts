@@ -5,7 +5,7 @@ import { createNodeBootstrap, createNodeProcessTransport } from './index.js';
 
 const clean = () => configure({ invoke: async <T>() => 'replacement' as T });
 
-test('ready racing a reload never succeeds with the closed previous engine', async () => {
+void test('ready racing a reload never succeeds with the closed previous engine', async () => {
   clean();
   let version = 0;
   const b = createNodeBootstrap({ createTransport: () => transport(String(++version)) });
@@ -43,7 +43,7 @@ function transport(value = 'live') {
   };
 }
 
-test('disposal releases an unconsumed registration and protects replacements', async () => {
+void test('disposal releases an unconsumed registration and protects replacements', async () => {
   clean();
   const first = createNodeBootstrap({ createTransport: () => transport() });
   first.dispose();
@@ -55,7 +55,7 @@ test('disposal releases an unconsumed registration and protects replacements', a
   assert.equal(await invoke('ping'), 'replacement');
 });
 
-test('late transport is closed once and never installed after dispose', async () => {
+void test('late transport is closed once and never installed after dispose', async () => {
   clean();
   const gate = deferred<ReturnType<typeof transport>>();
   const started = deferred<void>();
@@ -79,7 +79,7 @@ test('late transport is closed once and never installed after dispose', async ()
 });
 
 for (const fail of [false, true])
-  test(`contract ${fail ? 'rejection' : 'success'} after disposal closes once without masking error`, async () => {
+  void test(`contract ${fail ? 'rejection' : 'success'} after disposal closes once without masking error`, async () => {
     clean();
     const gate = deferred<string>();
     const started = deferred<void>();
@@ -98,7 +98,7 @@ for (const fail of [false, true])
     assert.equal(t.closes, 1);
   });
 
-test('disposal wins every handshake-to-install microtask boundary', async () => {
+void test('disposal wins every handshake-to-install microtask boundary', async () => {
   for (let ticks = 0; ticks <= 8; ticks++) {
     clean();
     const gate = deferred<string>();
@@ -120,7 +120,7 @@ test('disposal wins every handshake-to-install microtask boundary', async () => 
   }
 });
 
-test('overlapping reloads share one resource and invalidate the old engine', async () => {
+void test('overlapping reloads share one resource and invalidate the old engine', async () => {
   clean();
   const initial = transport();
   const next = transport('next');
@@ -146,7 +146,7 @@ test('overlapping reloads share one resource and invalidate the old engine', asy
   assert.equal(next.closes, 1);
 });
 
-test('reload during initial readiness waits for the first owned resource', async () => {
+void test('reload during initial readiness waits for the first owned resource', async () => {
   clean();
   const gate = deferred<ReturnType<typeof transport>>();
   const started = deferred<void>();
@@ -172,7 +172,7 @@ test('reload during initial readiness waits for the first owned resource', async
   assert.equal(next.closes, 1);
 });
 
-test('a bootstrap never returns another registration engine from ready', async () => {
+void test('a bootstrap never returns another registration engine from ready', async () => {
   clean();
   const t = transport();
   const b = createNodeBootstrap({ createTransport: () => t });
@@ -182,7 +182,7 @@ test('a bootstrap never returns another registration engine from ready', async (
   assert.equal(await invoke('ping'), 'replacement');
 });
 
-test('disposed process transport rejects invocation and contract lookup without spawning', async () => {
+void test('disposed process transport rejects invocation and contract lookup without spawning', async () => {
   const t = createNodeProcessTransport({
     command: 'node',
     args: [
@@ -199,7 +199,7 @@ test('disposed process transport rejects invocation and contract lookup without 
   assert.equal(t.pid, null);
 });
 
-test('ownership loss at the install boundary closes the rejected ready resource', async () => {
+void test('ownership loss at the install boundary closes the rejected ready resource', async () => {
   for (let ticks = 0; ticks <= 5; ticks++) {
     clean();
     const t = transport();
@@ -223,7 +223,7 @@ test('ownership loss at the install boundary closes the rejected ready resource'
   }
 });
 
-test(
+void test(
   'process disposal rejects every concurrent child invocation',
   { skip: Boolean(process.versions.bun) },
   async () => {

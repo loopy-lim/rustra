@@ -36,7 +36,8 @@ export function invokeGeneratedBytes<T>(
       try {
         return Promise.resolve(route.invoke(args, value) as T);
       } catch (error) {
-        return Promise.reject(error);
+        // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
     }
     const syncInvoke = engine[invokeGeneratedBytesSync];
@@ -44,7 +45,7 @@ export function invokeGeneratedBytes<T>(
       try {
         return Promise.resolve(syncInvoke<T>(commandId, command, args, value));
       } catch (error) {
-        return Promise.reject(error);
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
     }
   }

@@ -30,6 +30,8 @@ export function useSuspenseCommand<I, O>(
     () => engine.invoke<O>(commandName, input, options),
     engine,
   );
+  // React suspense 프로토콜 — pending 프라미스를 throw 하는 것이 계약 자체다.
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (entry.status === 'pending') throw entry.promise;
   if (entry.status === 'rejected') throw entry.error;
   return entry.value as O;

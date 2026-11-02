@@ -2,6 +2,9 @@ import type { GeneratedBytesRoute, GeneratedFieldsRoute } from './global.js';
 import type { LiveSchemaDocument, LiveSchemaEntry, FrameSchemaNative } from './live-schema.js';
 import type { FrameCodec } from './public.js';
 
+// 구현체는 전부 arrow 함수(const refreshLiveSchema = () => {...})라 this 에 의존하지
+// 않는다. 계약에 this: void 를 명시해 구조 분리/콜백 전달 시에도 this 스코핑이
+// 어긋나지 않음을 타입으로 고정한다(unbound-method 게이트의 해법이기도 하다).
 export type FrameSchemaRuntime = {
   refreshLiveSchema(): Map<string, LiveSchemaEntry>;
   readLiveSchemaDocument(): LiveSchemaDocument;
@@ -24,10 +27,10 @@ export type FrameCapabilityRuntime = {
   hasBufferPath: boolean;
   hasBatchPath: boolean;
   hasBatchByIdPath: boolean;
-  ensureStaticIds(): Map<string, number> | null;
-  getStaticCommandName(commandId: number): string | undefined;
-  getStaticCommandCapabilities(commandId: number): number;
-  isVerifiedStaticId(commandId: number, command: string): boolean;
+  ensureStaticIds(this: void): Map<string, number> | null;
+  getStaticCommandName(this: void, commandId: number): string | undefined;
+  getStaticCommandCapabilities(this: void, commandId: number): number;
+  isVerifiedStaticId(this: void, commandId: number, command: string): boolean;
 };
 
 export type FrameEngineContext = {
@@ -39,11 +42,17 @@ export type FrameEngineContext = {
 };
 
 export type FrameDispatchRuntime = {
-  dispatch<T>(command: string, args?: unknown): T;
-  dispatchPromise<T>(command: string, args?: unknown): Promise<T>;
-  dispatchById<T>(commandId: number, command: string, args?: unknown): T;
-  dispatchPromiseById<T>(commandId: number, command: string, args?: unknown): Promise<T>;
+  dispatch<T>(this: void, command: string, args?: unknown): T;
+  dispatchPromise<T>(this: void, command: string, args?: unknown): Promise<T>;
+  dispatchById<T>(this: void, commandId: number, command: string, args?: unknown): T;
+  dispatchPromiseById<T>(
+    this: void,
+    commandId: number,
+    command: string,
+    args?: unknown,
+  ): Promise<T>;
   dispatchGeneratedFields<T>(
+    this: void,
     commandId: number,
     command: string,
     args: unknown,
@@ -56,9 +65,14 @@ export type FrameDispatchRuntime = {
 
 export type FrameRouteRuntime = {
   resolveGeneratedFieldsRoute(
+    this: void,
     commandId: number,
     command: string,
     fieldCount: 1 | 2 | 3,
   ): GeneratedFieldsRoute | undefined;
-  resolveGeneratedBytesRoute(commandId: number, command: string): GeneratedBytesRoute | undefined;
+  resolveGeneratedBytesRoute(
+    this: void,
+    commandId: number,
+    command: string,
+  ): GeneratedBytesRoute | undefined;
 };

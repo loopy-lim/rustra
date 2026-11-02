@@ -15,6 +15,8 @@ import type {
  * 항목별 폴백으로 동작한다(기존 계약 불변).
  */
 export type JsonWireBatchTransport = {
+  // T | unknown ≡ unknown 동치지만 api-surface 스냅샷 계약이라 원형을 유지한다.
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- 스냅샷 고정(재생성 태스크가 인수할 때 정리)
   invoke(command: string, args?: unknown): Promise<unknown> | unknown;
   /** 와이어 배치 — `rustra_dispatch_batch` 커맨드 한 번으로 N 개 명령 실행. */
   invokeBatch?(requests: BatchEntry[]): Promise<unknown[]> | unknown[];
@@ -78,6 +80,7 @@ function reportResponseShape(command: string, result: unknown): void {
 
 export function createJsonEngine(
   transport:
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- 스냅샷 고정(재생성 태스크가 인수할 때 정리)
     ((command: string, args?: unknown) => Promise<unknown> | unknown) | JsonWireBatchTransport,
   normalizeArgs: (args?: unknown) => unknown = (args) => args,
   supports?: EngineSupports,
@@ -98,7 +101,7 @@ export function createJsonEngine(
           .catch((error: unknown) => {
             debugRustra({ direction: 'error', transport: 'json', command, error: String(error) });
             throw normalizeRustraError(error);
-          }) as Promise<T>;
+          });
       } catch (error: unknown) {
         debugRustra({ direction: 'error', transport: 'json', command, error: String(error) });
         return Promise.reject(normalizeRustraError(error));

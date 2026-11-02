@@ -100,17 +100,18 @@ const GENERATED_FIELD_PATTERNS: Array<{
   {
     // createGeneratedFields2<TIn, TOut>(id, 'name', "f0", "f1", 'fnName')
     re: /createGeneratedFields2<[^>]*>\(\s*\d+\s*,\s*'([^']+)'\s*((?:,\s*(?:"[^"]*"|'[^']*'))*?)\s*,\s*'[^']*'\s*\)/g,
-    extract: (m) => ({ command: m[1], fields: parseStringLiterals(m[2]) }),
+    // 그룹 1/2 는 매치에 항상 참여한다(2 는 빈 문자열이라도) — 인덱스는 유효하다.
+    extract: (m) => ({ command: m[1]!, fields: parseStringLiterals(m[2]!) }),
   },
   {
     // invokeGeneratedFieldsN<T>(id, 'name', input, input["f0"], ..., options)
     re: /invokeGeneratedFields([13])<[^>]*>\(\s*\d+\s*,\s*'([^']+)'\s*,\s*input\b([^;]*?)options\s*\)/g,
-    extract: (m) => ({ command: m[2], fields: parseFieldAccessLiterals(m[3]) }),
+    extract: (m) => ({ command: m[2]!, fields: parseFieldAccessLiterals(m[3]!) }),
   },
   {
     // invokeGeneratedBytes<T>(id, 'name', input, input["data"], options)
     re: /invokeGeneratedBytes<[^>]*>\(\s*\d+\s*,\s*'([^']+)'\s*,\s*input\b([^;]*?)options\s*\)/g,
-    extract: (m) => ({ command: m[1], fields: parseFieldAccessLiterals(m[2]) }),
+    extract: (m) => ({ command: m[1]!, fields: parseFieldAccessLiterals(m[2]!) }),
   },
   {
     // 평문 invokeGenerated<T>(id, 'name', input|undefined, options) — 필드 계약이
@@ -126,7 +127,8 @@ function parseStringLiterals(list: string): string[] {
   const out: string[] = [];
   const re = /"([^"]*)"|'([^']*)'/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(list)) !== null) out.push(m[1] ?? m[2]);
+  // 교대식이라 매치마다 둘 중 하나는 반드시 참여한다.
+  while ((m = re.exec(list)) !== null) out.push((m[1] ?? m[2])!);
   return out;
 }
 
@@ -135,7 +137,8 @@ function parseFieldAccessLiterals(list: string): string[] {
   const out: string[] = [];
   const re = /input\[(?:"([^"]*)"|'([^']*)')\]/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(list)) !== null) out.push(m[1] ?? m[2]);
+  // 교대식이라 매치마다 둘 중 하나는 반드시 참여한다.
+  while ((m = re.exec(list)) !== null) out.push((m[1] ?? m[2])!);
   return out;
 }
 
@@ -165,7 +168,8 @@ export function assertContractFieldsCurrent(
       const parsed = extract(m);
       if (parsed) generated.set(parsed.command, parsed.fields);
       // null(평문 invokeGenerated 형태)은 등록만 되고 비교에서 스킵된다.
-      else generated.set(m[1], []);
+      // 이 정규식의 그룹 1 은 필수 참여다.
+      else generated.set(m[1]!, []);
     }
   }
   const sourceHasNoCodegenPattern = matchCount === 0;

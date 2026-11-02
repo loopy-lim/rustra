@@ -49,7 +49,7 @@ import { invokeByIdWithTimeout } from './cancel-by-id.js';
 import { invokeCallbackWithAbort } from './cancel.js';
 import { resetConfiguredRoutes, runtime } from './global-state.js';
 
-test('lazy configuration lets the first generated command initialize Rustra once', async () => {
+void test('lazy configuration lets the first generated command initialize Rustra once', async () => {
   let initializations = 0;
   let calls = 0;
   configureLazy(async () => {
@@ -82,7 +82,7 @@ test('lazy configuration lets the first generated command initialize Rustra once
   assert.equal(await ensureConfigured(), await ensureConfigured());
 });
 
-test('lazy configuration retries after install failure and explicit configure wins a late install', async () => {
+void test('lazy configuration retries after install failure and explicit configure wins a late install', async () => {
   let attempts = 0;
   configureLazy(async () => {
     attempts++;
@@ -107,7 +107,7 @@ test('lazy configuration retries after install failure and explicit configure wi
   assert.equal(await pending, 'explicit');
 });
 
-test('a newer lazy configuration wins an older initializer that finishes late', async () => {
+void test('a newer lazy configuration wins an older initializer that finishes late', async () => {
   let finishOld!: (engine: EngineClient) => void;
   const oldEngine: EngineClient = { invoke: async <T>() => 'old' as T };
   const newEngine: EngineClient = { invoke: async <T>() => 'new' as T };
@@ -122,7 +122,7 @@ test('a newer lazy configuration wins an older initializer that finishes late', 
   assert.equal(await ensureConfigured(), newEngine);
 });
 
-test('duplicate package copies share one runtime configuration without singleton splits', async () => {
+void test('duplicate package copies share one runtime configuration without singleton splits', async () => {
   // './index.js' 로 지정해야 소스 실행(bun 이 .js → .ts 형제로 해석)과
   // dist-ts 컴파일 산물(index.js 만 존재) 양쪽에서 해석된다 — './index.ts' 는
   // 컴파일 디렉터리에서 모듈을 찾지 못해 게이트(bun test packages/types/src 가
@@ -226,8 +226,7 @@ function makeNative(opts: NativeOpts): FrameSchemaNative {
     invokeFrame: (payload) => (opts.invokeImpl ? opts.invokeImpl(payload) : new ArrayBuffer(0)),
   };
   if (opts.contractHash !== undefined) {
-    native.getContractHash = () =>
-      new TextEncoder().encode(opts.contractHash!).buffer as ArrayBuffer;
+    native.getContractHash = () => new TextEncoder().encode(opts.contractHash).buffer;
   }
   if (opts.schemaGeneration !== undefined) {
     native.getSchemaGeneration = opts.schemaGeneration;
@@ -237,7 +236,7 @@ function makeNative(opts: NativeOpts): FrameSchemaNative {
 
 // ── getLiveSchema ──────────────────────────────────────────
 
-test('getLiveSchema parses commands into a name→entry map', () => {
+void test('getLiveSchema parses commands into a name→entry map', () => {
   const native = makeNative({
     schema: schemaBytes([
       { name: 'echo', commandId: 1 },
@@ -250,7 +249,7 @@ test('getLiveSchema parses commands into a name→entry map', () => {
   assert.equal(map.size, 2);
 });
 
-test('getLiveSchema throws schema.unavailable when getSchema missing', () => {
+void test('getLiveSchema throws schema.unavailable when getSchema missing', () => {
   // (의미론 마감) getSchema 미노출은 "빈 스키마"가 아니라 조회 불능 —
   // 조용한 빈 Map 대신 명시적 에러.
   const native = { invokeFrame: () => new ArrayBuffer(0) } as FrameSchemaNative;
@@ -268,7 +267,7 @@ test('getLiveSchema throws schema.unavailable when getSchema missing', () => {
 
 // ── createFrameEngine: 정적 codec fast-path ────────────────
 
-test('engine uses static codec when present (postcard fast-path)', async () => {
+void test('engine uses static codec when present (postcard fast-path)', async () => {
   let invoked = false;
   const native = makeNative({
     invokeImpl: () => {
@@ -290,7 +289,7 @@ test('engine uses static codec when present (postcard fast-path)', async () => {
 
 // ── createFrameEngine: 동적 Tier 3 fallback ────────────────
 
-test('engine falls back to Tier 3 for non-codegen dynamic commands', async () => {
+void test('engine falls back to Tier 3 for non-codegen dynamic commands', async () => {
   // holder 패턴 — closure 내 할당을 TS CFA 가 놓치지 않도록.
   const holder: { req: ArrayBuffer | null } = { req: null };
   const native = makeNative({
@@ -315,7 +314,7 @@ test('engine falls back to Tier 3 for non-codegen dynamic commands', async () =>
   assert.equal(json, JSON.stringify({ v: 7 }));
 });
 
-test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () => {
+void test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () => {
   // 현재 테스트 파일은 index.js를 이미 import했으므로 query가 붙은 별도 모듈
   // 인스턴스를 로드해 TextEncoder가 없는 Hermes 초기화 시점을 재현한다.
   const schema = schemaBytes([{ name: 'echoUnicode', commandId: 77 }]);
@@ -355,7 +354,7 @@ test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () 
   }
 });
 
-test('engine Tier 3 fallback decodes string/vec/nested result types', async () => {
+void test('engine Tier 3 fallback decodes string/vec/nested result types', async () => {
   const native = makeNative({
     schema: schemaBytes([
       { name: 'greet', commandId: 1 },
@@ -380,7 +379,7 @@ test('engine Tier 3 fallback decodes string/vec/nested result types', async () =
   assert.deepEqual(n.outer.tags, ['a', 'b']);
 });
 
-test('engine caches live schema on the dynamic hot path and supports explicit refresh', async () => {
+void test('engine caches live schema on the dynamic hot path and supports explicit refresh', async () => {
   let calls = 0;
   let schema = schemaBytes([{ name: 'dynamicEcho', commandId: 31 }]);
   const native: FrameSchemaNative = {
@@ -406,7 +405,7 @@ test('engine caches live schema on the dynamic hot path and supports explicit re
   assert.equal(calls, 2, 'refreshed entry must immediately use the cache');
 });
 
-test('engine Tier 3 fallback propagates typed error wire', async () => {
+void test('engine Tier 3 fallback propagates typed error wire', async () => {
   const native = makeNative({
     schema: schemaBytes([{ name: 'boom', commandId: 1 }]),
     invokeImpl: () => tier3Error('math.divide_by_zero', 'handler exploded'),
@@ -419,14 +418,14 @@ test('engine Tier 3 fallback propagates typed error wire', async () => {
     },
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
-      assert.equal((err as RustraCommandError).code, 'math.divide_by_zero');
+      assert.equal(err.code, 'math.divide_by_zero');
       assert.match((err as Error).message, /handler exploded/);
       return true;
     },
   );
 });
 
-test('engine throws RustraCommandError for command absent from registry AND live schema (F4)', async () => {
+void test('engine throws RustraCommandError for command absent from registry AND live schema (F4)', async () => {
   const native = makeNative({
     schema: schemaBytes([{ name: 'known', commandId: 1 }]),
     invokeImpl: () => tier3Success({}),
@@ -443,7 +442,7 @@ test('engine throws RustraCommandError for command absent from registry AND live
         'F4: unknown-command must be RustraCommandError',
       );
       assert.equal(
-        (err as RustraCommandError).code,
+        err.code,
         'command.not_found',
         'code distinguishes unknown-command from handler errors',
       );
@@ -452,7 +451,7 @@ test('engine throws RustraCommandError for command absent from registry AND live
   );
 });
 
-test('engine throws when native has no getSchema and command not in registry', async () => {
+void test('engine throws when native has no getSchema and command not in registry', async () => {
   const native = { invokeFrame: () => new ArrayBuffer(0) } as FrameSchemaNative;
   const engine = createFrameEngine(native, new Map());
   await assert.rejects(
@@ -512,7 +511,7 @@ function makeTypedNative(
   return typed;
 }
 
-test('engine uses C++ invokeTyped fast path when hasStaticCodec is true (B1)', async () => {
+void test('engine uses C++ invokeTyped fast path when hasStaticCodec is true (B1)', async () => {
   let typedCalled = false;
   let invokeFrameCalled = false;
   const native = makeTypedNative({
@@ -540,7 +539,7 @@ test('engine uses C++ invokeTyped fast path when hasStaticCodec is true (B1)', a
   assert.equal(invokeFrameCalled, false, 'invokeFrame/JS codec must be bypassed on B1 path');
 });
 
-test('engine falls through B1 path when hasStaticCodec returns false', async () => {
+void test('engine falls through B1 path when hasStaticCodec returns false', async () => {
   const native = makeTypedNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 5 }]),
     invokeImpl: () => tier3Success({ v: 9 }),
@@ -554,7 +553,7 @@ test('engine falls through B1 path when hasStaticCodec returns false', async () 
   assert.equal(out.v, 9);
 });
 
-test('engine propagates invokeTyped errors (B1, Rust handler failure)', async () => {
+void test('engine propagates invokeTyped errors (B1, Rust handler failure)', async () => {
   const native = makeTypedNative({
     hasStaticCodec: () => true,
     invokeTyped: () => {
@@ -572,7 +571,7 @@ test('engine propagates invokeTyped errors (B1, Rust handler failure)', async ()
 
 // ── createFrameEngine: byId 진입 + 정적 명령 집합 JS 캐시 (P0-#3) ──
 
-test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
+void test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     hasStaticCodec: (name) => {
@@ -617,7 +616,7 @@ test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
   );
 });
 
-test('generated dispatch uses its verified numeric id without name dispatch', async () => {
+void test('generated dispatch uses its verified numeric id without name dispatch', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     hasStaticCodec: () => true,
@@ -642,7 +641,7 @@ test('generated dispatch uses its verified numeric id without name dispatch', as
   assert.ok(!calls.some((call) => call.startsWith('typed:')));
 });
 
-test('generated dispatch safely re-resolves the registered id when id and name disagree', async () => {
+void test('generated dispatch safely re-resolves the registered id when id and name disagree', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     hasStaticCodec: () => true,
@@ -667,7 +666,7 @@ test('generated dispatch safely re-resolves the registered id when id and name d
   assert.ok(!calls.some((call) => call === 'byId:99'));
 });
 
-test('generated field dispatch selects raw before positional and preserves output shape', async () => {
+void test('generated field dispatch selects raw before positional and preserves output shape', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: (id) => {
@@ -703,7 +702,7 @@ test('generated field dispatch selects raw before positional and preserves outpu
   assert.deepEqual(calls, ['cap:1', 'raw:1:20,22']);
 });
 
-test('generated field dispatch falls from raw marker to positional', async () => {
+void test('generated field dispatch falls from raw marker to positional', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: () => 1 | 2 | 4,
@@ -731,7 +730,7 @@ test('generated field dispatch falls from raw marker to positional', async () =>
   assert.deepEqual(calls, ['raw', 'pos']);
 });
 
-test('generated field dispatch keeps old-native by-id fallback', async () => {
+void test('generated field dispatch keeps old-native by-id fallback', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     hasStaticCodec: () => true,
@@ -756,7 +755,7 @@ test('generated field dispatch keeps old-native by-id fallback', async () => {
   assert.deepEqual(calls, ['byId:1']);
 });
 
-test('generated field dispatch uses the established option path', async () => {
+void test('generated field dispatch uses the established option path', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: () => 1 | 2 | 4,
@@ -788,7 +787,7 @@ test('generated field dispatch uses the established option path', async () => {
   assert.deepEqual(calls, ['byId']);
 });
 
-test('generated two-field command caches the native route and preserves metadata', async () => {
+void test('generated two-field command caches the native route and preserves metadata', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: (id) => {
@@ -817,7 +816,7 @@ test('generated two-field command caches the native route and preserves metadata
   assert.deepEqual(calls, ['cap:1', 'raw:1', 'raw:1']);
 });
 
-test('generated two-field command invalidates its route after configure', async () => {
+void test('generated two-field command invalidates its route after configure', async () => {
   const addNumbers = createGeneratedFields2<{ a: number; b: number }, { value: number }>(
     1,
     'addNumbers',
@@ -842,7 +841,7 @@ test('generated two-field command invalidates its route after configure', async 
   assert.deepEqual(await addNumbers({ a: 20, b: 22 }), { value: 142 });
 });
 
-test('generated two-field command keeps options on the established path', async () => {
+void test('generated two-field command keeps options on the established path', async () => {
   const calls: string[] = [];
   const addNumbers = createGeneratedFields2<{ a: number; b: number }, { value: number }>(
     1,
@@ -871,7 +870,7 @@ test('generated two-field command keeps options on the established path', async 
   assert.deepEqual(calls, ['byId']);
 });
 
-test('generated one-field command caches the native route and preserves metadata', async () => {
+void test('generated one-field command caches the native route and preserves metadata', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: (id) => {
@@ -900,7 +899,7 @@ test('generated one-field command caches the native route and preserves metadata
   assert.deepEqual(calls, ['cap:1', 'raw:1', 'raw:1']);
 });
 
-test('generated one-field command invalidates its route after configure', async () => {
+void test('generated one-field command invalidates its route after configure', async () => {
   const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
     1,
     'parityIndexed',
@@ -924,7 +923,7 @@ test('generated one-field command invalidates its route after configure', async 
   assert.deepEqual(await parityIndexed({ id: 4 }), { even: true });
 });
 
-test('generated one-field command keeps options on the established path', async () => {
+void test('generated one-field command keeps options on the established path', async () => {
   const calls: string[] = [];
   const parityIndexed = createGeneratedFields1<{ id: number }, { even: boolean }>(
     1,
@@ -952,7 +951,7 @@ test('generated one-field command keeps options on the established path', async 
   assert.deepEqual(calls, ['byId']);
 });
 
-test('generated one-field command falls back to the name route without field symbols', async () => {
+void test('generated one-field command falls back to the name route without field symbols', async () => {
   const seen: Array<{ command: string; input: unknown }> = [];
   configure({
     invoke: async <T>(command: string, args?: unknown): Promise<T> => {
@@ -976,7 +975,7 @@ test('generated one-field command falls back to the name route without field sym
   ]);
 });
 
-test('lazy configuration lets the first one-field generated command initialize Rustra once', async () => {
+void test('lazy configuration lets the first one-field generated command initialize Rustra once', async () => {
   let initializations = 0;
   let calls = 0;
   configureLazy(async () => {
@@ -1004,13 +1003,13 @@ test('lazy configuration lets the first one-field generated command initialize R
   assert.equal(calls, 2);
 });
 
-test('unconfigured one-field generated command rejects with transport.unavailable', async () => {
+void test('unconfigured one-field generated command rejects with transport.unavailable', async () => {
   // sentinel이 호출되면 이전 테스트 오염을 즉시 드러낸다.
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     runtime.engine = null;
     runtime.engineInitializer = undefined;
@@ -1021,8 +1020,8 @@ test('unconfigured one-field generated command rejects with transport.unavailabl
     );
     await assert.rejects(parityIndexed({ id: 4 }), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
-      assert.equal((err as RustraCommandError).retryable, false);
+      assert.equal(err.code, 'transport.unavailable');
+      assert.equal(err.retryable, false);
       return true;
     });
   } finally {
@@ -1034,7 +1033,7 @@ test('unconfigured one-field generated command rejects with transport.unavailabl
   }
 });
 
-test('generated bytes dispatch selects the dedicated native path for ArrayBuffer views', async () => {
+void test('generated bytes dispatch selects the dedicated native path for ArrayBuffer views', async () => {
   const calls: string[] = [];
   const source = new Uint8Array([9, 1, 2, 3, 8]);
   const view = source.subarray(1, 4);
@@ -1067,7 +1066,7 @@ test('generated bytes dispatch selects the dedicated native path for ArrayBuffer
   assert.deepEqual(calls, ['buffer:1']);
 });
 
-test('generated bytes dispatch accepts ArrayBuffer including an empty buffer', async () => {
+void test('generated bytes dispatch accepts ArrayBuffer including an empty buffer', async () => {
   const seen: number[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: () => 1 | 8,
@@ -1084,7 +1083,7 @@ test('generated bytes dispatch accepts ArrayBuffer including an empty buffer', a
   assert.deepEqual(seen, [0]);
 });
 
-test('generated bytes keeps number arrays and missing buffer methods on compatible fallbacks', async () => {
+void test('generated bytes keeps number arrays and missing buffer methods on compatible fallbacks', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: () => 1 | 2 | 8,
@@ -1105,7 +1104,7 @@ test('generated bytes keeps number arrays and missing buffer methods on compatib
   assert.deepEqual(calls, ['pos:array', 'pos:buffer']);
 });
 
-test('generated bytes bypasses the new route for options and mismatched ids', async () => {
+void test('generated bytes bypasses the new route for options and mismatched ids', async () => {
   const calls: string[] = [];
   const native = makeTypedNative({
     getCodecCapabilities: () => 1 | 8,
@@ -1128,7 +1127,7 @@ test('generated bytes bypasses the new route for options and mismatched ids', as
   assert.deepEqual(calls, ['byId:1', 'byId:1']);
 });
 
-test('generated bytes converts native synchronous errors to rejected promises', async () => {
+void test('generated bytes converts native synchronous errors to rejected promises', async () => {
   const native = makeTypedNative({
     getCodecCapabilities: () => 1 | 8,
     invokeTypedById: () => ({ data: [] }),
@@ -1144,7 +1143,7 @@ test('generated bytes converts native synchronous errors to rejected promises', 
   );
 });
 
-test('typed dispatch falls back to name-based invokeTyped without invokeTypedById (P0-3)', async () => {
+void test('typed dispatch falls back to name-based invokeTyped without invokeTypedById (P0-3)', async () => {
   // 호환 계약: 구 네이티브는 invokeTypedById 미노출 — 기존 이름 기반 경로 유지.
   const calls: string[] = [];
   const native = makeTypedNative({
@@ -1176,7 +1175,7 @@ test('typed dispatch falls back to name-based invokeTyped without invokeTypedByI
   assert.equal(calls.filter((c) => c.startsWith('has:')).length, 1);
 });
 
-test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', async () => {
+void test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', async () => {
   // hasStaticCodec 이 false 인 이름(동적 명령)은 캐시 스윕에서 제외되고,
   // 이후 invoke 마다 재조사 없이 Tier 3 경로로 간다 — 캐시 미스가 안정적이어야
   // 매 호출 hasStaticCodec 을 되묻는 회귀가 없다.
@@ -1223,7 +1222,7 @@ test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', asy
 
 // ── createFrameEngine: P0-2 invokeBatch (단일 횡단 배치) ────
 
-test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2)', async () => {
+void test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2)', async () => {
   let batchCalls = 0;
   let singleCalls = 0;
   const native = makeTypedNative({
@@ -1253,7 +1252,7 @@ test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2
   );
 });
 
-test('invokeBatch turns a synchronous native batch throw into a rejected Promise', async () => {
+void test('invokeBatch turns a synchronous native batch throw into a rejected Promise', async () => {
   const native = makeTypedNative({
     hasStaticCodec: () => true,
     invokeTyped: () => ({ value: 0 }),
@@ -1273,7 +1272,7 @@ test('invokeBatch turns a synchronous native batch throw into a rejected Promise
   );
 });
 
-test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed', async () => {
+void test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed', async () => {
   let batchCalls = 0;
   const native = makeTypedNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 9 }]),
@@ -1299,7 +1298,7 @@ test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed
 
 // ── invokeBatch 항목별 취소 (T1 후속) ───────────────────────
 
-test('invokeBatch entry signal routes the whole batch off the single crossing (T1 follow-up)', async () => {
+void test('invokeBatch entry signal routes the whole batch off the single crossing (T1 follow-up)', async () => {
   // signal 있는 항목이 하나라도 섞이면 단일 횡단(invokeTypedBatch)을 타지
   // 않고 Promise.all 폴백으로 간다 — 각 항목은 자기 취소 정책을 따른다.
   let batchCalls = 0;
@@ -1322,13 +1321,13 @@ test('invokeBatch entry signal routes the whole batch off the single crossing (T
 
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError);
-    assert.equal((err as RustraCommandError).code, 'cancelled');
+    assert.equal(err.code, 'cancelled');
     return true;
   });
   assert.equal(batchCalls, 0, 'signal entry must force the fallback routing');
 });
 
-test('invokeBatch signal-less static entries still use the single crossing (T1 follow-up)', async () => {
+void test('invokeBatch signal-less static entries still use the single crossing (T1 follow-up)', async () => {
   // 옵션 필드가 있어도 signal 이 없으면 단일 횡단 유지 — 회귀 가드.
   let batchCalls = 0;
   const native = makeTypedNative({
@@ -1348,7 +1347,7 @@ test('invokeBatch signal-less static entries still use the single crossing (T1 f
   assert.deepEqual(out, [{ value: 1 }, { value: 1 }]);
 });
 
-test('invokeBatch entry cancel only rejects that entry independently (T1 follow-up)', async () => {
+void test('invokeBatch entry cancel only rejects that entry independently (T1 follow-up)', async () => {
   // 항목별 독립 취소 — signal 항목만 거부되고 다른 항목은 정상 완료… 는
   // Promise.all 전체 거부로 관찰된다. 각 항목 invoke 가 options 를 받았는지가
   // 이 테스트의 관심사다: pre-aborted signal 항목은 네이티브 호출 없이 거부.
@@ -1369,15 +1368,14 @@ test('invokeBatch entry cancel only rejects that entry independently (T1 follow-
       { command: 'a', args: {} },
       { command: 'b', args: {}, options: { signal: ac.signal } },
     ]),
-    (err: unknown) =>
-      err instanceof RustraCommandError && (err as RustraCommandError).code === 'cancelled',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'cancelled',
   );
   // Promise.all 폴백에서 'a' 가 먼저 dispatch 될 수 있으나, pre-aborted 'b' 는
   // dispatch 되지 않는다. 'a' 호출 여부는 스케줄 순서와 무관하게 허용.
   assert.ok(!typedCalls.includes('b'), "pre-aborted entry 'b' must never reach the native layer");
 });
 
-test('invokeBatch without typed-batch native falls back to per-entry', async () => {
+void test('invokeBatch without typed-batch native falls back to per-entry', async () => {
   // invokeTypedBatch 미제공 → hasBatchPath=false → 항목별 invoke.
   const native = makeTypedNative({
     hasStaticCodec: () => true,
@@ -1393,7 +1391,7 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
 
 // ── createFrameEngine: P0-2 byId 배치 (invokeTypedBatchById) ──
 
-test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0-2 byId)', async () => {
+void test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0-2 byId)', async () => {
   // byId 배치 진입: 모든 항목이 정적 캐시에 있으면 이름 배열 대신 cmd_id 배열로
   // 단일 횡단 — 문자열 마샬링 N 회 제거. 결과는 순서 보존.
   const batchByIdCalls: number[][] = [];
@@ -1427,7 +1425,7 @@ test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0
   assert.deepEqual(out, [{ value: 10 }, { value: 20 }, { value: 10 }], 'order preserved');
 });
 
-test('invokeBatch falls back to name-based invokeTypedBatch without invokeTypedBatchById (P0-2 byId)', async () => {
+void test('invokeBatch falls back to name-based invokeTypedBatch without invokeTypedBatchById (P0-2 byId)', async () => {
   // 호환 계약: 구 네이티브는 byId 배치 미노출 — 기존 이름 기반 경로 유지.
   let nameBatchCalls = 0;
   const native = makeTypedNative({
@@ -1447,7 +1445,7 @@ test('invokeBatch falls back to name-based invokeTypedBatch without invokeTypedB
   assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
 });
 
-test('invokeBatch skips invokeTypedBatchById when a cache-miss (dynamic) entry is mixed (P0-2 byId)', async () => {
+void test('invokeBatch skips invokeTypedBatchById when a cache-miss (dynamic) entry is mixed (P0-2 byId)', async () => {
   // 캐시 미스 항목(동적 명령)이 섞이면 byId 배열을 조립할 수 없다 —
   // 기존 폴백 경로(항목별 invoke)로 라우팅되고 byId/이름 배치 모두 미사용.
   const native = makeTypedNative({
@@ -1500,10 +1498,11 @@ function echoCodec(): FrameCodec<{ tag: number; msg: string }, EchoOut> {
       if (u[0] === 1) {
         return {
           ok: true,
-          result: { tag: u[8], msg: new TextDecoder().decode(u.slice(9)) },
+          result: { tag: u[8]!, msg: new TextDecoder().decode(u.slice(9)) },
         };
       }
-      const codeLen = u[8];
+      // fixture 프레임은 이 파일의 encode/fail 경로에서 [8] 에 tag/len 을 쓰므로 존재한다.
+      const codeLen = u[8]!;
       const code = new TextDecoder().decode(u.slice(9, 9 + codeLen));
       const message = new TextDecoder().decode(u.slice(9 + codeLen));
       return { ok: false, error: { code, message } };
@@ -1517,7 +1516,8 @@ function echoEngine(failTags: Set<number> = new Set()) {
   const native = makeNative({
     invokeImpl(payload) {
       const req = new Uint8Array(payload);
-      const tag = req[2];
+      // encode 프리앰블([0..1 cmd][2 tag])이 보증하는 위치다.
+      const tag = req[2]!;
       if (failTags.has(tag)) {
         const codeB = enc.encode(`echo.fail.${tag}`);
         const msgB = enc.encode('boom');
@@ -1534,13 +1534,11 @@ function echoEngine(failTags: Set<number> = new Set()) {
       return fr.buffer;
     },
   });
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', codec as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', codec]]);
   return createFrameEngine(native, registry);
 }
 
-test('concurrent invokes do not cross-correlate (Task 3.3)', async () => {
+void test('concurrent invokes do not cross-correlate (Task 3.3)', async () => {
   const engine = echoEngine();
   const N = 50;
   const entries = Array.from({ length: N }, (_, i) => ({ tag: i % 256, msg: `m${i}` }));
@@ -1548,12 +1546,13 @@ test('concurrent invokes do not cross-correlate (Task 3.3)', async () => {
   const results = await Promise.all(entries.map((e) => engine.invoke<EchoOut>('echo', e)));
   assert.equal(results.length, N);
   for (let i = 0; i < N; i++) {
-    assert.equal(results[i].tag, i % 256, `entry ${i} tag must match its own input`);
-    assert.equal(results[i].msg, `m${i}`, `entry ${i} msg must match its own input`);
+    // results.length === N 이 바로 위에서 검증됐다 — 인덱스는 항상 유효하다.
+    assert.equal(results[i]!.tag, i % 256, `entry ${i} tag must match its own input`);
+    assert.equal(results[i]!.msg, `m${i}`, `entry ${i} msg must match its own input`);
   }
 });
 
-test('invokeBatch fallback preserves entry order & distinctness (Task 3.3)', async () => {
+void test('invokeBatch fallback preserves entry order & distinctness (Task 3.3)', async () => {
   // invokeTypedBatch 미제공 → Promise.all(entries.map(invoke)) 폴백 경로.
   const engine = echoEngine();
   const entries: BatchEntry[] = Array.from({ length: 10 }, (_, i) => ({
@@ -1563,12 +1562,13 @@ test('invokeBatch fallback preserves entry order & distinctness (Task 3.3)', asy
   const out = await engine.invokeBatch<EchoOut>(entries);
   assert.equal(out.length, 10);
   for (let i = 0; i < 10; i++) {
-    assert.equal(out[i].tag, i, `batch item ${i} tag`);
-    assert.equal(out[i].msg, `b${i}`, `batch item ${i} msg`);
+    // out.length === 10 이 바로 위에서 검증됐다 — 인덱스는 항상 유효하다.
+    assert.equal(out[i]!.tag, i, `batch item ${i} tag`);
+    assert.equal(out[i]!.msg, `b${i}`, `batch item ${i} msg`);
   }
 });
 
-test('invokeBatch rejects with the failing entry error (Task 3.3)', async () => {
+void test('invokeBatch rejects with the failing entry error (Task 3.3)', async () => {
   // tag 3 이 에러 프레임을 반환 → Promise.all 이 해당 항목에서 reject.
   const engine = echoEngine(new Set([3]));
   const entries: BatchEntry[] = [
@@ -1579,33 +1579,27 @@ test('invokeBatch rejects with the failing entry error (Task 3.3)', async () => 
   await assert.rejects(
     engine.invokeBatch(entries),
     (err: unknown) =>
-      err instanceof RustraCommandError &&
-      (err as RustraCommandError).code === 'echo.fail.3' &&
-      /boom/.test((err as RustraCommandError).message),
+      err instanceof RustraCommandError && err.code === 'echo.fail.3' && /boom/.test(err.message),
   );
 });
 
 // ── Trust-test baseline (Phase 0) ───────────────────────────
 
-test('F5: contractHash mismatch throws at engine creation (opt-in enforcement)', () => {
+void test('F5: contractHash mismatch throws at engine creation (opt-in enforcement)', () => {
   // 옵션의 hash 와 네이티브 실시간 hash 가 다르면 엔진 생성 단계에서 즉시 실패한다.
   const native = makeNative({ contractHash: 'a'.repeat(64) });
   assert.throws(
     () => createFrameEngine(native, new Map(), { contractHash: 'b'.repeat(64) }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
-      assert.equal(
-        (err as RustraCommandError).code,
-        'contract.mismatch',
-        'code must indicate schema drift',
-      );
+      assert.equal(err.code, 'contract.mismatch', 'code must indicate schema drift');
       assert.match((err as Error).message, /mismatch/);
       return true;
     },
   );
 });
 
-test('F5: matching contractHash creates the engine successfully', () => {
+void test('F5: matching contractHash creates the engine successfully', () => {
   const hash = 'c'.repeat(64);
   const native = makeNative({ contractHash: hash });
   const engine = createFrameEngine(native, new Map(), { contractHash: hash });
@@ -1613,20 +1607,20 @@ test('F5: matching contractHash creates the engine successfully', () => {
   assert.equal(typeof engine.invoke, 'function');
 });
 
-test('F5: contractHash option without native getContractHash throws contract.unenforceable', () => {
+void test('F5: contractHash option without native getContractHash throws contract.unenforceable', () => {
   // 옵션은 설정했으나 네이티브가 getContractHash 를 노출하지 않으면 검증 불가 → 명시적 에러.
   const native = makeNative({}); // contractHash undefined → getContractHash 미노출
   assert.throws(
     () => createFrameEngine(native, new Map(), { contractHash: 'd'.repeat(64) }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'contract.unenforceable');
+      assert.equal(err.code, 'contract.unenforceable');
       return true;
     },
   );
 });
 
-test('F5: no contractHash option skips verification (backward compatible)', () => {
+void test('F5: no contractHash option skips verification (backward compatible)', () => {
   // 옵션 미설정 시 검증하지 않는다 (기본값, 하위 호환).
   const engine = createFrameEngine(makeNative({}), new Map());
   assert.ok(engine, 'engine created without any contract-hash argument');
@@ -1635,17 +1629,16 @@ test('F5: no contractHash option skips verification (backward compatible)', () =
 
 // ── T2 Task 9: onContractMismatch 옵트인 폴백 + schemaVersion stale 경고 ──
 
-test('T2: mismatch + no callback still throws contract.mismatch (regression pin)', () => {
+void test('T2: mismatch + no callback still throws contract.mismatch (regression pin)', () => {
   // onContractMismatch 미설정 시 기존 fail-fast 동작이 그대로 유지되어야 한다.
   const native = makeNative({ contractHash: 'a'.repeat(64) });
   assert.throws(
     () => createFrameEngine(native, new Map(), { contractHash: 'b'.repeat(64) }),
-    (err: unknown) =>
-      err instanceof RustraCommandError && (err as RustraCommandError).code === 'contract.mismatch',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'contract.mismatch',
   );
 });
 
-test('T2: mismatch + onContractMismatch creates degraded engine, callback sees both hashes', () => {
+void test('T2: mismatch + onContractMismatch creates degraded engine, callback sees both hashes', () => {
   const nativeHash = 'a'.repeat(64);
   const expectedHash = 'b'.repeat(64);
   const native = makeNative({ contractHash: nativeHash });
@@ -1661,7 +1654,7 @@ test('T2: mismatch + onContractMismatch creates degraded engine, callback sees b
   assert.equal(calls[0]?.expectedHash, expectedHash, 'callback must receive the expected hash');
 });
 
-test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', () => {
+void test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', () => {
   // getContractHash 미노출 → native hash 를 알 방법이 없어 degraded 모드가
   // 무의미하다. 콜백 설정과 무관하게 항상 throw.
   const native = makeNative({}); // contractHash undefined → getContractHash 미노출
@@ -1673,9 +1666,7 @@ test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', 
           throw new Error('callback must not be invoked for unenforceable');
         },
       }),
-    (err: unknown) =>
-      err instanceof RustraCommandError &&
-      (err as RustraCommandError).code === 'contract.unenforceable',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'contract.unenforceable',
   );
 });
 
@@ -1684,7 +1675,7 @@ test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', 
 // 없어 diagnosis 를 채우지 않는다(undefined). 진단은 빌드 시점 schema.json 을
 // 들고 있는 생산자(diffSchemas 등)가 채워 전달하는 구조적 계약이다.
 
-test('B4: engine callback info leaves diagnosis undefined (additive contract)', () => {
+void test('B4: engine callback info leaves diagnosis undefined (additive contract)', () => {
   const nativeHash = 'a'.repeat(64);
   const native = makeNative({ contractHash: nativeHash });
   const calls: Array<{ nativeHash: string; expectedHash: string; diagnosis?: unknown }> = [];
@@ -1700,7 +1691,7 @@ test('B4: engine callback info leaves diagnosis undefined (additive contract)', 
   );
 });
 
-test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
+void test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
   // 생산자가 diffSchemas 진단을 그대로 실어 보낼 수 있는지 (직렬화 가능 평이 객체).
   const diagnosis = {
     diagnoses: [
@@ -1713,9 +1704,9 @@ test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
       },
     ],
   };
-  const json = JSON.parse(JSON.stringify(diagnosis));
+  const json = JSON.parse(JSON.stringify(diagnosis)) as typeof diagnosis;
   assert.deepEqual(json, diagnosis);
-  assert.equal(json.diagnoses[0].detail.includes('command id changed'), true);
+  assert.equal(json.diagnoses[0]!.detail.includes('command id changed'), true);
 });
 
 // ── A2/A3: contractVerification 정책 — failure-injection 매트릭스 ──────────
@@ -1726,7 +1717,7 @@ test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
 // 자체를 생략한다(생성 엔트리의 탈출구). 에러 코드는 기존 두 개만 재사용한다
 // — 새 RustraError 코드 없음(A3 제약).
 
-test('contract verification injection: strict + wrong hash throws contract.mismatch with the actionable message', () => {
+void test('contract verification injection: strict + wrong hash throws contract.mismatch with the actionable message', () => {
   const native = makeNative({ contractHash: 'a'.repeat(64) });
   assert.throws(
     () =>
@@ -1736,7 +1727,7 @@ test('contract verification injection: strict + wrong hash throws contract.misma
       }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
-      assert.equal((err as RustraCommandError).code, 'contract.mismatch');
+      assert.equal(err.code, 'contract.mismatch');
       // 실행 가능한 메시지 — 상태(양쪽 해시)와 처방(재생성·재빌드)을 함께 쓴다.
       assert.match((err as Error).message, /native="a{16}…"/);
       assert.match((err as Error).message, /expected="b{16}…"/);
@@ -1747,7 +1738,7 @@ test('contract verification injection: strict + wrong hash throws contract.misma
   );
 });
 
-test('contract verification injection: warn + wrong hash creates the engine and warns instead of throwing', () => {
+void test('contract verification injection: warn + wrong hash creates the engine and warns instead of throwing', () => {
   // OTA degraded 배포 계약 — warn 정책은 절대 throw 하지 않는다.
   const nativeHash = 'a'.repeat(64);
   const expectedHash = 'b'.repeat(64);
@@ -1770,7 +1761,7 @@ test('contract verification injection: warn + wrong hash creates the engine and 
   }
 });
 
-test('contract verification injection: warn + missing native getContractHash warns without throwing', () => {
+void test('contract verification injection: warn + missing native getContractHash warns without throwing', () => {
   // 미노출(unenforceable)도 warn 정책 아래에서는 치명적이지 않다 — 검증 불가
   // 상태에서도 앱은 동작해야 한다(non-fatal 계약).
   const native = makeNative({}); // contractHash undefined → getContractHash 미노출
@@ -1791,7 +1782,7 @@ test('contract verification injection: warn + missing native getContractHash war
   }
 });
 
-test('contract verification injection: strict + missing native getContractHash throws contract.unenforceable', () => {
+void test('contract verification injection: strict + missing native getContractHash throws contract.unenforceable', () => {
   const native = makeNative({}); // contractHash undefined → getContractHash 미노출
   assert.throws(
     () =>
@@ -1801,17 +1792,18 @@ test('contract verification injection: strict + missing native getContractHash t
       }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'contract.unenforceable');
+      assert.equal(err.code, 'contract.unenforceable');
       return true;
     },
   );
 });
 
-test('contract verification injection: off skips verification entirely even with a wrong hash and the getter present', () => {
+void test('contract verification injection: off skips verification entirely even with a wrong hash and the getter present', () => {
   // 'off' 는 네이티브 해시를 읽지도 않는다 — getter 호출 0 회가 증거다.
   let getterCalls = 0;
   const native = makeNative({ contractHash: 'a'.repeat(64) });
-  const originalGetter = native.getContractHash!;
+  // bind 로 this 를 고정해 분리 참조를 차단한다.
+  const originalGetter = native.getContractHash!.bind(native);
   native.getContractHash = () => {
     getterCalls++;
     return originalGetter();
@@ -1830,7 +1822,7 @@ test('contract verification injection: off skips verification entirely even with
   }
 });
 
-test('contract verification injection: warn + onContractMismatch prefers the callback over console.warn', () => {
+void test('contract verification injection: warn + onContractMismatch prefers the callback over console.warn', () => {
   const nativeHash = 'a'.repeat(64);
   const expectedHash = 'b'.repeat(64);
   const native = makeNative({ contractHash: nativeHash });
@@ -1851,25 +1843,22 @@ test('contract verification injection: warn + onContractMismatch prefers the cal
   }
 });
 
-test('contract verification injection: undefined policy keeps the exact legacy fail-fast behavior (back-compat pin)', () => {
+void test('contract verification injection: undefined policy keeps the exact legacy fail-fast behavior (back-compat pin)', () => {
   // A2 이전 동작 고정 — 정책 미설정은 'strict' 와 동일하다. 이 테스트가 깨진다면
   // 기본 동작이 시프트한 것(A2 의 하위 호환 계약 위반).
   const mismatchNative = makeNative({ contractHash: 'a'.repeat(64) });
   assert.throws(
     () => createFrameEngine(mismatchNative, new Map(), { contractHash: 'b'.repeat(64) }),
-    (err: unknown) =>
-      err instanceof RustraCommandError && (err as RustraCommandError).code === 'contract.mismatch',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'contract.mismatch',
   );
   const unenforceableNative = makeNative({}); // getContractHash 미노출
   assert.throws(
     () => createFrameEngine(unenforceableNative, new Map(), { contractHash: 'd'.repeat(64) }),
-    (err: unknown) =>
-      err instanceof RustraCommandError &&
-      (err as RustraCommandError).code === 'contract.unenforceable',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'contract.unenforceable',
   );
 });
 
-test('T2: schemaVersion equal → no staleness warning', () => {
+void test('T2: schemaVersion equal → no staleness warning', () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 3) });
   const stale = mockSchemaStale();
   const engine = createFrameEngine(native, new Map(), {
@@ -1880,7 +1869,7 @@ test('T2: schemaVersion equal → no staleness warning', () => {
   assert.equal(stale.calls.length, 0, 'equal versions must not warn');
 });
 
-test('T2: schemaVersion JS < native → no warning (normal upgrade path)', () => {
+void test('T2: schemaVersion JS < native → no warning (normal upgrade path)', () => {
   // 구 JS + 신 네이티브 — 신 기능은 못 써도 기존 동작은 정상인 조합.
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 5) });
   const stale = mockSchemaStale();
@@ -1892,7 +1881,7 @@ test('T2: schemaVersion JS < native → no warning (normal upgrade path)', () =>
   assert.equal(stale.calls.length, 0, 'JS < native must not warn');
 });
 
-test('T2: schemaVersion JS > native → onSchemaStale receives both versions', () => {
+void test('T2: schemaVersion JS > native → onSchemaStale receives both versions', () => {
   // 신 JS + 구 네이티브 — OTA 롤백/지연 배포. fatal 아님: 경고만.
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 2) });
   const stale = mockSchemaStale();
@@ -1905,7 +1894,7 @@ test('T2: schemaVersion JS > native → onSchemaStale receives both versions', (
   assert.deepEqual(stale.calls[0], { nativeVersion: 2, jsVersion: 4 });
 });
 
-test('T2: schemaVersion JS > native without callback → console.warn fallback', () => {
+void test('T2: schemaVersion JS > native without callback → console.warn fallback', () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 1) });
   const warns = mockConsoleWarn();
   try {
@@ -1923,7 +1912,7 @@ test('T2: schemaVersion JS > native without callback → console.warn fallback',
   }
 });
 
-test('T2: native schema without schemaVersion field defaults to 1 (old-native pin)', () => {
+void test('T2: native schema without schemaVersion field defaults to 1 (old-native pin)', () => {
   // pre-Task-8 네이티브는 schemaVersion 필드가 없다 — CLI old-schema 관례대로
   // 1 로 취급. JS=1 이면 경고 없음, JS=2 면 경고.
   const oldNative = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }]) });
@@ -1937,7 +1926,7 @@ test('T2: native schema without schemaVersion field defaults to 1 (old-native pi
   assert.deepEqual(warned.calls[0], { nativeVersion: 1, jsVersion: 2 });
 });
 
-test('T2: schemaVersion option + native without getSchema → silent no-op', () => {
+void test('T2: schemaVersion option + native without getSchema → silent no-op', () => {
   // getSchema 미노출 구 네이티브 — 비교할 스키마가 없으므로 조용히 건너뛴다.
   const native = { invokeFrame: () => new ArrayBuffer(0) } as FrameSchemaNative;
   const stale = mockSchemaStale();
@@ -1949,7 +1938,7 @@ test('T2: schemaVersion option + native without getSchema → silent no-op', () 
   assert.equal(stale.calls.length, 0, 'nothing to compare → no warning');
 });
 
-test('T2: garbage getSchema bytes + schemaVersion set → engine created, no throw, no warn', () => {
+void test('T2: garbage getSchema bytes + schemaVersion set → engine created, no throw, no warn', () => {
   // Task 9 리뷰 Important: staleness 검사가 생성 시점에 스키마를 무방비하게
   // 파싱해 malformed JSON 이 createFrameEngine 밖으로 새어나갔다. "경고 기능은
   // 절대 치명적이지 않다" 계약의 위반 — 파싱 실패는 getSchema 미노출과 동일하게
@@ -1970,7 +1959,7 @@ test('T2: garbage getSchema bytes + schemaVersion set → engine created, no thr
   }
 });
 
-test('T2: schemaVersion as string in schema JSON → treated as absent, defaults to 1', () => {
+void test('T2: schemaVersion as string in schema JSON → treated as absent, defaults to 1', () => {
   // Task 9 리뷰 Minor 4: parseLiveSchemaDocument 는 유한 number 인 경우에만
   // schemaVersion 을 채운다. 문자열 "2" 는 absent 와 같다 — 기본 1 로 취급해
   // JS=1 이면 경고 없음, JS=2 면 nativeVersion=1 경고.
@@ -2016,7 +2005,7 @@ function mockConsoleWarn(): { calls: string[]; restore(): void } {
 
 // ── parseRustraErrorString (F4 — JSON fallback code/message 파싱) ──
 
-test('parseRustraErrorString splits "code: message" into RustraCommandError', () => {
+void test('parseRustraErrorString splits "code: message" into RustraCommandError', () => {
   const err = parseRustraErrorString('command.not_found: command not found: add');
   assert.ok(err instanceof RustraCommandError);
   assert.equal(err.code, 'command.not_found');
@@ -2024,13 +2013,13 @@ test('parseRustraErrorString splits "code: message" into RustraCommandError', ()
   assert.equal(err.message, 'command not found: add');
 });
 
-test('parseRustraErrorString handles dotless code (internal)', () => {
+void test('parseRustraErrorString handles dotless code (internal)', () => {
   const err = parseRustraErrorString('internal: serde explode');
   assert.equal(err.code, 'internal');
   assert.equal(err.message, 'serde explode');
 });
 
-test('parseRustraErrorString falls back to invoke.failed for non-code strings', () => {
+void test('parseRustraErrorString falls back to invoke.failed for non-code strings', () => {
   // FFI 수준 에러 — code 토큰이 아님(공백 포함 / 구분자 없음).
   const a = parseRustraErrorString('json decode failed: eof');
   assert.equal(a.code, 'invoke.failed');
@@ -2042,7 +2031,7 @@ test('parseRustraErrorString falls back to invoke.failed for non-code strings', 
   assert.equal(c.message, 'Rustra invoke failed');
 });
 
-test('parseRustraErrorString restores payload.too_large from unified Rust code (T3 follow-up)', () => {
+void test('parseRustraErrorString restores payload.too_large from unified Rust code (T3 follow-up)', () => {
   // Rust FFI 게이트가 이제 RustraError::payload_too_large Display 형태를
   // 반환한다 — JS 사전 검사와 동일 원인이 같은 코드로 복원되어야 한다
   // (예전 평문 "payload exceeds size limit" → invoke.failed 강등 회귀 방지).
@@ -2055,7 +2044,7 @@ test('parseRustraErrorString restores payload.too_large from unified Rust code (
   assert.equal(err.retryable, false, 'payload.too_large is deterministic, not retryable');
 });
 
-test('parseRustraErrorString parses JSON error objects and respects retryable', () => {
+void test('parseRustraErrorString parses JSON error objects and respects retryable', () => {
   const jsonErr = JSON.stringify({
     code: 'database.unavailable',
     message: 'Connection pool exhausted',
@@ -2068,7 +2057,7 @@ test('parseRustraErrorString parses JSON error objects and respects retryable', 
   assert.equal(err.retryable, true);
 });
 
-test('normalizeRustraError preserves retryable metadata from string rejections', () => {
+void test('normalizeRustraError preserves retryable metadata from string rejections', () => {
   const err = normalizeRustraError(
     '{"code":"transport.timeout","message":"request timed out","retryable":true}',
   );
@@ -2077,14 +2066,14 @@ test('normalizeRustraError preserves retryable metadata from string rejections',
   assert.equal(err.retryable, true);
 });
 
-test('normalizeRustraError preserves the original cause and stack', () => {
+void test('normalizeRustraError preserves the original cause and stack', () => {
   const original = new Error('native failure');
   const normalized = normalizeRustraError(original);
   assert.equal(normalized.cause, original);
   assert.equal(normalized.stack, original.stack);
 });
 
-test('timeout and cancel codes normalize into dedicated error subclasses', () => {
+void test('timeout and cancel codes normalize into dedicated error subclasses', () => {
   const timeout = normalizeRustraError({
     code: 'transport.timeout',
     message: 'request timed out',
@@ -2106,7 +2095,7 @@ test('timeout and cancel codes normalize into dedicated error subclasses', () =>
   assert.ok(ordinary instanceof RustraCommandError);
 });
 
-test('TimeoutError and CancelledError constructors keep code mapping and cause', () => {
+void test('TimeoutError and CancelledError constructors keep code mapping and cause', () => {
   const cause = new Error('slow backend');
   const timeout = new TimeoutError('took too long', cause);
   assert.equal(timeout.code, 'transport.timeout');
@@ -2120,7 +2109,7 @@ test('TimeoutError and CancelledError constructors keep code mapping and cause',
   assert.equal(cancelled.name, 'CancelledError');
 });
 
-test('Display-string rejections keep the flat RustraCommandError contract', () => {
+void test('Display-string rejections keep the flat RustraCommandError contract', () => {
   // 문자열 경로는 기존 평탄화 계약을 유지한다 — 서브클래스 승격은 구조화
   // {code, message} 경로에서만 일어난다(와이어 정합 영향 최소화).
   const parsed = normalizeRustraError('transport.timeout: request timed out');
@@ -2129,7 +2118,7 @@ test('Display-string rejections keep the flat RustraCommandError contract', () =
   assert.ok(!(parsed instanceof TimeoutError));
 });
 
-test('opt-in debug sink receives bounded wire previews', () => {
+void test('opt-in debug sink receives bounded wire previews', () => {
   const events: Array<{ bytes?: string; byteLength?: number }> = [];
   configureDebug((event) => events.push({ bytes: event.bytes, byteLength: event.byteLength }));
   try {
@@ -2142,7 +2131,7 @@ test('opt-in debug sink receives bounded wire previews', () => {
 
 // ── T1: AbortSignal 배선 ────────────────────────────────────
 
-test('invoke without signal never calls invokeCancel (T1)', async () => {
+void test('invoke without signal never calls invokeCancel (T1)', async () => {
   let cancels = 0;
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
@@ -2157,7 +2146,7 @@ test('invoke without signal never calls invokeCancel (T1)', async () => {
   assert.equal(cancels, 0);
 });
 
-test('pre-aborted signal rejects immediately without native call (T1)', async () => {
+void test('pre-aborted signal rejects immediately without native call (T1)', async () => {
   let calls = 0;
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
@@ -2171,14 +2160,14 @@ test('pre-aborted signal rejects immediately without native call (T1)', async ()
   ac.abort();
   await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {
     assert.ok(e instanceof RustraCommandError);
-    assert.equal((e as RustraCommandError).code, 'cancelled');
-    assert.equal((e as RustraCommandError).retryable, true);
+    assert.equal(e.code, 'cancelled');
+    assert.equal(e.retryable, true);
     return true;
   });
   assert.equal(calls, 0, 'native must not be called');
 });
 
-test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
+void test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
   // invokeAsync 미노출 → 얕은 취소. native 는 동기 호출로 즉시 응답하지만
   // abort 가 dispatch 후 프라미스 settle 전에 개입하면 reject 가 이긴다.
   let calls = 0;
@@ -2201,7 +2190,7 @@ test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
   assert.equal(calls, 1, 'shallow cancel must still have dispatched the native call');
 });
 
-test('typed-path command falls back to shallow cancel even with invokeAsync exposed (T1)', async () => {
+void test('typed-path command falls back to shallow cancel even with invokeAsync exposed (T1)', async () => {
   // tier 게이팅: invokeAsync/invokeCancel 이 노출돼 있어도 typed(tier 1)
   // 명령은 전파 대상이 아니다 — 얕은 취소, invokeCancel 미호출.
   let cancels = 0;
@@ -2223,9 +2212,7 @@ test('typed-path command falls back to shallow cancel even with invokeAsync expo
     return true;
   };
   // registry 에 코덱이 있어도 B1 typed path 가 우선한다.
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   const p = engine.invoke<{ value: number }>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
@@ -2239,7 +2226,7 @@ test('typed-path command falls back to shallow cancel even with invokeAsync expo
   assert.equal(cancels, 0, 'invokeCancel must not be called on shallow fallback');
 });
 
-test('tier3 dynamic command propagates cancel via invokeAsync (semantic closure)', async () => {
+void test('tier3 dynamic command propagates cancel via invokeAsync (semantic closure)', async () => {
   // (의미론 마감) 코덱 없는 동적(tier 3) 명령도 invokeAsync+invokeCancel 노출 시
   // live schema 의 commandId 로 Tier 3 프레임을 invokeAsync 에 실어 전파한다.
   let cancels = 0;
@@ -2269,12 +2256,13 @@ test('tier3 dynamic command propagates cancel via invokeAsync (semantic closure)
   assert.equal(asyncCalls, 1, 'invokeAsync must carry the tier3 request for dynamic commands');
   assert.ok(forwardedPayload !== undefined && forwardedPayload.byteLength >= 2, 'tier3 frame sent');
   // cmd_id = 3 (u16 LE) 프리앰블 검증
-  const u8 = new Uint8Array(forwardedPayload!);
-  assert.equal(u8[0] | (u8[1] << 8), 3, 'tier3 frame must carry live-schema commandId');
+  const u8 = new Uint8Array(forwardedPayload);
+  // byteLength >= 2 를 바로 위 assert.ok 로 검증했다 — 프리앰블 인덱스는 유효하다.
+  assert.equal(u8[0]! | (u8[1]! << 8), 3, 'tier3 frame must carry live-schema commandId');
   assert.equal(cancels, 1, 'invokeCancel must reach the Rust checkpoint');
 });
 
-test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', async () => {
+void test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', async () => {
   // JS 코덱 경로 + invokeAsync/invokeCancel 노출 → 전파.
   // invokeAsync 는 id 만 반환하고 콜백을 즉시 부르지 않는다 (abort 가 먼저).
   const native = makeNative({});
@@ -2288,24 +2276,22 @@ test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', asy
     cancelled = true;
     return true;
   };
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   const p = engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
   ac.abort();
   await assert.rejects(p, (e: unknown) => {
     assert.ok(e instanceof RustraCommandError);
-    assert.equal((e as RustraCommandError).code, 'cancelled');
-    assert.equal((e as RustraCommandError).retryable, true);
+    assert.equal(e.code, 'cancelled');
+    assert.equal(e.retryable, true);
     return true;
   });
   assert.equal(cancelled, true, 'invokeCancel must be called on the propagate path');
   assert.equal(forwardedId, 77, 'invokeCancel must receive the id invokeAsync returned');
 });
 
-test('late invokeAsync delivery after abort is ignored (T1)', async () => {
+void test('late invokeAsync delivery after abort is ignored (T1)', async () => {
   // 협력적 취소 계약: abort 로 정착된 뒤 도착하는 정상 응답 프레임은 무시된다.
   // decode 가 실행조차 되지 않음을 sentinel 로 증명 (settled 가드 검증).
   const native = makeNative({});
@@ -2323,7 +2309,8 @@ test('late invokeAsync delivery after abort is ignored (T1)', async () => {
   let decodeCalls = 0;
   const codec: FrameCodec<unknown, unknown> = {
     commandId: base.commandId,
-    encode: base.encode,
+    // 화살표 위임으로 this 분리를 차단한다.
+    encode: base.encode.bind(base),
     decode: (_frame: ArrayBuffer) => {
       decodeCalls++;
       throw new Error('decode must not run after abort'); // sentinel
@@ -2348,7 +2335,7 @@ test('late invokeAsync delivery after abort is ignored (T1)', async () => {
   assert.equal(decodeCalls, 0, 'late delivery must not run decode (settled guard)');
 });
 
-test('propagate path settles when codec.decode throws on a malformed frame (T1)', async () => {
+void test('propagate path settles when codec.decode throws on a malformed frame (T1)', async () => {
   // 잘못된 프레임으로 decode 가 throw 해도 예외가 네이티브 트램펄린으로
   // 새어나가 영원히 대기하는 일이 없어야 한다 — reject 로 정착한다.
   const native = makeNative({});
@@ -2360,7 +2347,8 @@ test('propagate path settles when codec.decode throws on a malformed frame (T1)'
   const base = echoCodec();
   const codec: FrameCodec<unknown, unknown> = {
     commandId: base.commandId,
-    encode: base.encode,
+    // 화살표 위임으로 this 분리를 차단한다.
+    encode: base.encode.bind(base),
     decode: () => {
       throw new Error('malformed frame');
     },
@@ -2375,20 +2363,20 @@ test('propagate path settles when codec.decode throws on a malformed frame (T1)'
       // 정규화된다 — code 가 있고 메시지는 명령명·오프셋·RUSTRA_DEBUG 힌트를
       // 싣는다. 원본 코덱 예외는 cause 로 보존된다.
       assert.ok(e instanceof RustraCommandError);
-      assert.equal((e as RustraCommandError).code, 'invoke.malformed');
+      assert.equal(e.code, 'invoke.malformed');
       assert.match(
         (e as Error).message,
         /^decode failed for 'echo' at offset 0: malformed frame \(0-byte frame\)/,
       );
       assert.ok((e as Error).message.includes('set RUSTRA_DEBUG=1'));
       assert.ok((e as { cause?: unknown }).cause instanceof Error);
-      assert.equal(((e as { cause: Error }).cause as Error).message, 'malformed frame');
+      assert.equal((e as { cause: Error }).cause.message, 'malformed frame');
       return true;
     },
   );
 });
 
-test('propagate executor cleans up abort listener on synchronous throw (T1)', async () => {
+void test('propagate executor cleans up abort listener on synchronous throw (T1)', async () => {
   // encode 가 동기 throw 하면 프라미스는 그 예외로 reject 되고, signal 의
   // abort 리스너는 제거되어야 한다 — 늦은 abort 가 invokeCancel 을 부르지 않는다.
   const native = makeNative({});
@@ -2404,7 +2392,7 @@ test('propagate executor cleans up abort listener on synchronous throw (T1)', as
     encode: () => {
       throw new Error('encode exploded');
     },
-    decode: base.decode,
+    decode: (frame) => base.decode(frame),
   };
   const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', codec]]);
   const engine = createFrameEngine(native, registry);
@@ -2412,7 +2400,7 @@ test('propagate executor cleans up abort listener on synchronous throw (T1)', as
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal }),
     (e: unknown) => {
-      assert.ok(e instanceof Error && (e as Error).message === 'encode exploded');
+      assert.ok(e instanceof Error && e.message === 'encode exploded');
       return true;
     },
   );
@@ -2421,7 +2409,7 @@ test('propagate executor cleans up abort listener on synchronous throw (T1)', as
   assert.equal(cancels, 0, 'leaked abort listener must not call invokeCancel');
 });
 
-test('propagate path resolves normally when invokeAsync completes first (T1)', async () => {
+void test('propagate path resolves normally when invokeAsync completes first (T1)', async () => {
   // abort 없이 invokeAsync 콜백이 도착하면 tier2 와 동일하게 resolve.
   const native = makeNative({});
   native.invokeAsync = (_payload: ArrayBuffer, cb: (resp: ArrayBuffer) => void) => {
@@ -2435,9 +2423,7 @@ test('propagate path resolves normally when invokeAsync completes first (T1)', a
     return 1;
   };
   native.invokeCancel = () => true; // 전파 경로 진입 조건 (호출되지 않음)
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry);
   const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
   const out = await engine.invoke<EchoOut>('echo', { tag: 5, msg: 'late' }, { signal: ac.signal });
@@ -2445,7 +2431,7 @@ test('propagate path resolves normally when invokeAsync completes first (T1)', a
   assert.equal(out.msg, 'late');
 });
 
-test('cancelled code is retryable via RustraCommandError default (T1)', () => {
+void test('cancelled code is retryable via RustraCommandError default (T1)', () => {
   const e = parseRustraErrorString('cancelled: invocation cancelled before dispatch');
   assert.equal(e.code, 'cancelled');
   assert.equal(e.retryable, true); // isRetryableCode 미러링 검증
@@ -2453,7 +2439,7 @@ test('cancelled code is retryable via RustraCommandError default (T1)', () => {
 
 // ── T1 Task 6: 글로벌 invoke 옵션 전달 ──────────────────────
 
-test('global invoke forwards options (signal) to engine invoke (T1)', async () => {
+void test('global invoke forwards options (signal) to engine invoke (T1)', async () => {
   // mock 엔진이 세 번째 인자(options)를 그대로 받는지 — signal 객체 동일성으로.
   const ac = new AbortController();
   const captured: { args?: unknown; options?: unknown } = {};
@@ -2470,8 +2456,8 @@ test('global invoke forwards options (signal) to engine invoke (T1)', async () =
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
-  configure(mockEngine as EngineClient);
+  };
+  configure(mockEngine);
   try {
     const out = await invoke<{ value: number }>('dyn', { a: 1 }, { signal: ac.signal });
     assert.equal(out.value, 1);
@@ -2484,7 +2470,7 @@ test('global invoke forwards options (signal) to engine invoke (T1)', async () =
   }
 });
 
-test('global invokeGenerated forwards the generated id to capable engines', async () => {
+void test('global invokeGenerated forwards the generated id to capable engines', async () => {
   const captured: { id?: number; command?: string; args?: unknown } = {};
   const mockEngine: EngineClient = {
     invoke(): Promise<never> {
@@ -2512,7 +2498,7 @@ test('global invokeGenerated forwards the generated id to capable engines', asyn
   }
 });
 
-test('global invokeGenerated uses one-Promise sync route for rustra engines', async () => {
+void test('global invokeGenerated uses one-Promise sync route for rustra engines', async () => {
   const native = makeTypedNative({
     hasStaticCodec: () => true,
     invokeTyped: () => {
@@ -2521,7 +2507,8 @@ test('global invokeGenerated uses one-Promise sync route for rustra engines', as
     invokeTypedById: (id) => ({ value: id }),
   });
   const engine = createFrameEngine(native, staticRegistry('benchAdd'));
-  const publicInvokeById = engine.invokeById;
+  // bind 로 this 를 고정해 분리 참조를 차단한다.
+  const publicInvokeById = engine.invokeById.bind(engine);
   engine.invokeById = () => {
     throw new Error('public Promise wrapper must be bypassed without options');
   };
@@ -2544,7 +2531,7 @@ test('global invokeGenerated uses one-Promise sync route for rustra engines', as
   }
 });
 
-test('global invokeGenerated falls back to invoke for legacy engines', async () => {
+void test('global invokeGenerated falls back to invoke for legacy engines', async () => {
   let called = '';
   const legacy: EngineClient = {
     invoke<T>(command: string): Promise<T> {
@@ -2572,7 +2559,7 @@ test('global invokeGenerated falls back to invoke for legacy engines', async () 
 // 전파(invokeAsync) 경로에 적용되고 typed(tier 1) 경로는 JS 측 인코딩이
 // 없어 건너뛴다 — 미설정 시 아무 검사도 하지 않는다 (네이티브가 최종 게이트).
 
-test('T3: over-limit tier-2 payload rejects payload.too_large without native call', async () => {
+void test('T3: over-limit tier-2 payload rejects payload.too_large without native call', async () => {
   let invokes = 0;
   const native = makeNative({
     invokeImpl: () => {
@@ -2580,24 +2567,22 @@ test('T3: over-limit tier-2 payload rejects payload.too_large without native cal
       return new ArrayBuffer(0);
     },
   });
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   // echoCodec 인코딩: 2(cmd) + 1(tag) + msg — 'way over the limit' → 21B > 8B.
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }),
     (e: unknown) => {
       assert.ok(e instanceof RustraCommandError, 'must be RustraCommandError');
-      assert.equal((e as RustraCommandError).code, 'payload.too_large');
-      assert.equal((e as RustraCommandError).retryable, false, 'deterministic client condition');
+      assert.equal(e.code, 'payload.too_large');
+      assert.equal(e.retryable, false, 'deterministic client condition');
       return true;
     },
   );
   assert.equal(invokes, 0, 'invokeFrame must NEVER be called for over-limit payloads');
 });
 
-test('T3: within-limit tier-2 payload dispatches normally (control)', async () => {
+void test('T3: within-limit tier-2 payload dispatches normally (control)', async () => {
   // echoEngine 패턴 재사용 — 한도 이내면 기존 dispatch 가 그대로 동작한다.
   const native = makeNative({
     invokeImpl: (payload) => {
@@ -2609,9 +2594,7 @@ test('T3: within-limit tier-2 payload dispatches normally (control)', async () =
       return fr.buffer;
     },
   });
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   // 'abc' → 2 + 1 + 3 = 6B ≤ 8B.
   const out = await engine.invoke<EchoOut>('echo', { tag: 2, msg: 'abc' });
@@ -2619,7 +2602,7 @@ test('T3: within-limit tier-2 payload dispatches normally (control)', async () =
   assert.equal(out.msg, 'abc');
 });
 
-test('T3: over-limit tier-3 dynamic payload rejects before native call', async () => {
+void test('T3: over-limit tier-3 dynamic payload rejects before native call', async () => {
   let invokes = 0;
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
@@ -2632,13 +2615,13 @@ test('T3: over-limit tier-3 dynamic payload rejects before native call', async (
   // tier3 요청: 2(cmd_id) + JSON 본체 — 이 인자면 훨씬 8B 를 넘는다.
   await assert.rejects(engine.invoke('dyn', { padding: '0123456789abcdef' }), (e: unknown) => {
     assert.ok(e instanceof RustraCommandError);
-    assert.equal((e as RustraCommandError).code, 'payload.too_large');
+    assert.equal(e.code, 'payload.too_large');
     return true;
   });
   assert.equal(invokes, 0, 'tier-3 must reject before invokeFrame');
 });
 
-test('T3: within-limit tier-3 dynamic payload dispatches normally (control)', async () => {
+void test('T3: within-limit tier-3 dynamic payload dispatches normally (control)', async () => {
   // tier-2 컨트롤의 미러 — 한도 이내의 동적 명령 페이로드는 기존 tier-3 dispatch
   // 가 그대로 동작한다 (검사가 정상 경로를 우연히 깨지 않았는지 고정).
   const native = makeNative({
@@ -2654,7 +2637,7 @@ test('T3: within-limit tier-3 dynamic payload dispatches normally (control)', as
   assert.equal(out.echoId, 7, 'tier-3 control must reach native and round-trip');
 });
 
-test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called', async () => {
+void test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called', async () => {
   // tier 1 은 raw args 를 C++ 가 받아 인코딩한다 — JS 측에 잴 바이트가 없어
   // 검사를 건너뛴다 (설계 문서화). invokeTyped 는 그대로 호출되어야 한다.
   let typedCalls = 0;
@@ -2671,7 +2654,7 @@ test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called',
   assert.equal(typedCalls, 1, 'typed path must NOT be gated by maxPayloadBytes');
 });
 
-test('T3: over-limit payload on propagate path rejects, invokeAsync never called', async () => {
+void test('T3: over-limit payload on propagate path rejects, invokeAsync never called', async () => {
   // 전파 경로(invokeAsync 배선)도 인코딩 직후 검사 — 네이티브 비동기 왕복 전에.
   const native = makeNative({});
   let asyncCalls = 0;
@@ -2680,9 +2663,7 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
     return 1;
   };
   native.invokeCancel = () => true;
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
   // catch 경로 정리를 스파이로 직접 증명 — 늦은 abort + invokeCancel 부재로는
@@ -2697,7 +2678,7 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }, { signal: ac.signal }),
     (e: unknown) => {
       assert.ok(e instanceof RustraCommandError);
-      assert.equal((e as RustraCommandError).code, 'payload.too_large');
+      assert.equal(e.code, 'payload.too_large');
       return true;
     },
   );
@@ -2705,11 +2686,9 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
   assert.equal(removes, 1, 'catch-path cleanup must call removeEventListener exactly once');
 });
 
-test('T3: payload.too_large message carries both actual and limit byte sizes', async () => {
+void test('T3: payload.too_large message carries both actual and limit byte sizes', async () => {
   const native = makeNative({});
-  const registry = new Map<string, FrameCodec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
-  ]);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', echoCodec()]]);
   const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }),
@@ -2725,7 +2704,7 @@ test('T3: payload.too_large message carries both actual and limit byte sizes', a
 
 // ── (의미론 마감) 3-tier × 취소 전파 매트릭스 ────────────────
 
-test('typed(tier 1) command propagates cancel via invokeAsync when codec is absent', async () => {
+void test('typed(tier 1) command propagates cancel via invokeAsync when codec is absent', async () => {
   // typed 캐시에 있는 명령이더라도 registry 코덱이 없으면(JS 코드젠 제외 등)
   // Tier 3 프레임 + invokeAsync 로 전파 — 과거 얕은 취소 폴백을 확장.
   let cancels = 0;
@@ -2756,11 +2735,12 @@ test('typed(tier 1) command propagates cancel via invokeAsync when codec is abse
   });
   assert.equal(asyncCalls, 1);
   const u8 = forwarded ? new Uint8Array(forwarded) : new Uint8Array(0);
-  assert.equal(u8[0] | (u8[1] << 8), 7, 'typed-cache commandId must ride the tier3 frame');
+  // forwarded 가 설정된 경로만 이 검증에 도달한다(프리앰블 2 바이트 보장).
+  assert.equal(u8[0]! | (u8[1]! << 8), 7, 'typed-cache commandId must ride the tier3 frame');
   assert.equal(cancels, 1);
 });
 
-test('dynamic command without live schema keeps shallow cancel (no commandId source)', async () => {
+void test('dynamic command without live schema keeps shallow cancel (no commandId source)', async () => {
   // getSchema 미노출 + 코덱 없음 → commandId 를 알 수 없어 전파 불가 — 얕은 취소 유지.
   let asyncCalls = 0;
   const native = makeNative({ invokeImpl: () => tier3Success({ v: 1 }) });
@@ -2785,20 +2765,20 @@ test('dynamic command without live schema keeps shallow cancel (no commandId sou
 // 네이티브가 응답하지 않는 hang(워커 패닉, FFI 데드락)의 JS 측 유일한 탈출구.
 // Rust RustraError::timeout(retryable)과 같은 코드/재시도 의미론.
 
-test('invoke with timeoutMs rejects transport.timeout when engine never settles', async () => {
+void test('invoke with timeoutMs rejects transport.timeout when engine never settles', async () => {
   const hanging: EngineClient = { invoke: () => new Promise(() => {}) };
   await assert.rejects(
     invokeWithTimeout(hanging, 'addNumbers', { a: 1 }, { timeoutMs: 50 }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.timeout');
-      assert.equal((err as RustraCommandError).retryable, true);
+      assert.equal(err.code, 'transport.timeout');
+      assert.equal(err.retryable, true);
       return true;
     },
   );
 });
 
-test('timeout race ignores late result without unhandled rejection', async () => {
+void test('timeout race ignores late result without unhandled rejection', async () => {
   let resolveLate!: (v: unknown) => void;
   const slow: EngineClient = {
     invoke: () =>
@@ -2814,7 +2794,7 @@ test('timeout race ignores late result without unhandled rejection', async () =>
   await new Promise((r) => setTimeout(r, 20)); // unhandled rejection 이 여기서 터지면 테스트 프로세스가 죽는다
 });
 
-test('Frame engine applies timeoutMs to an async native dispatch', async () => {
+void test('Frame engine applies timeoutMs to an async native dispatch', async () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'slow', commandId: 7 }]) });
   native.invokeAsync = () => 77; // callback intentionally never arrives
   native.invokeCancel = () => true;
@@ -2834,7 +2814,7 @@ test('Frame engine applies timeoutMs to an async native dispatch', async () => {
   );
 });
 
-test('invokeWithTimeout rejects a pending call when its signal aborts', async () => {
+void test('invokeWithTimeout rejects a pending call when its signal aborts', async () => {
   let resolveLate!: (value: number) => void;
   const pending: EngineClient = {
     invoke: <T>() =>
@@ -2855,7 +2835,7 @@ test('invokeWithTimeout rejects a pending call when its signal aborts', async ()
   await new Promise<void>((resolve) => queueMicrotask(resolve));
 });
 
-test('invokeWithTimeout without timeoutMs passes through directly', async () => {
+void test('invokeWithTimeout without timeoutMs passes through directly', async () => {
   const ok: EngineClient = {
     invoke<T>(_command: string, _args?: unknown, _options?: unknown): Promise<T> {
       return Promise.resolve(42 as unknown as T);
@@ -2865,7 +2845,7 @@ test('invokeWithTimeout without timeoutMs passes through directly', async () => 
   assert.equal(await invokeWithTimeout(ok, 'x', undefined, undefined), 42);
 });
 
-test('invokeWithTimeout without timeout preserves the engine Promise identity', async () => {
+void test('invokeWithTimeout without timeout preserves the engine Promise identity', async () => {
   const original = Promise.resolve(42);
   const ok: EngineClient = {
     invoke<T>(): Promise<T> {
@@ -2877,7 +2857,7 @@ test('invokeWithTimeout without timeout preserves the engine Promise identity', 
   assert.equal(await returned, 42);
 });
 
-test('invokeWithTimeout converts a synchronous engine throw into a rejected Promise', async () => {
+void test('invokeWithTimeout converts a synchronous engine throw into a rejected Promise', async () => {
   const broken: EngineClient = {
     invoke(): Promise<never> {
       throw new RustraCommandError('invoke.failed', 'sync failure');
@@ -2892,7 +2872,7 @@ test('invokeWithTimeout converts a synchronous engine throw into a rejected Prom
   });
 });
 
-test('global invoke applies timeoutMs from options', async () => {
+void test('global invoke applies timeoutMs from options', async () => {
   // 기존 글로벌 invoke 옵션 전달 테스트(T1)와 동일한 센티넬 패턴 — 이 테스트가
   // 실패로 끝나도 hanging 엔진이 글로벌에 남아 이후 테스트를 오염시키지 않게
   // finally 로 원복한다.
@@ -2901,7 +2881,7 @@ test('global invoke applies timeoutMs from options', async () => {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   configure(hanging);
   try {
     await assert.rejects(
@@ -2913,7 +2893,7 @@ test('global invoke applies timeoutMs from options', async () => {
   }
 });
 
-test('global invokeBatch applies batch timeout from min entry timeoutMs', async () => {
+void test('global invokeBatch applies batch timeout from min entry timeoutMs', async () => {
   // 항목 timeoutMs 의 최솟값(30ms)이 배치 전체의 타임아웃 레이스로 적용된다 —
   // hanging 배치 엔진도 transport.timeout 으로 탈출. 센티넬 패턴으로 글로벌 원복.
   const hanging = {
@@ -2924,7 +2904,7 @@ test('global invokeBatch applies batch timeout from min entry timeoutMs', async 
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   configure(hanging);
   try {
     await assert.rejects(
@@ -2944,7 +2924,7 @@ test('global invokeBatch applies batch timeout from min entry timeoutMs', async 
   }
 });
 
-test('global invokeBatch without timeoutMs passes through unchanged', async () => {
+void test('global invokeBatch without timeoutMs passes through unchanged', async () => {
   const ok = {
     invoke: () => new Promise(() => {}),
     invokeBatch: async (_entries: BatchEntry[]) => [1, 2],
@@ -2953,7 +2933,7 @@ test('global invokeBatch without timeoutMs passes through unchanged', async () =
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   configure(ok);
   try {
     const out = await invokeBatch<number[]>([{ command: 'a' }, { command: 'b' }]);
@@ -2963,7 +2943,7 @@ test('global invokeBatch without timeoutMs passes through unchanged', async () =
   }
 });
 
-test('global invokeBatch rejects unsupported engines as a Promise', async () => {
+void test('global invokeBatch rejects unsupported engines as a Promise', async () => {
   const engine: EngineClient = {
     invoke: async <T>() => undefined as T,
   };
@@ -2971,7 +2951,7 @@ test('global invokeBatch rejects unsupported engines as a Promise', async () => 
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   configure(engine);
   try {
     const returned = invokeBatch([{ command: 'unsupported' }]);
@@ -2984,7 +2964,7 @@ test('global invokeBatch rejects unsupported engines as a Promise', async () => 
 
 // ── T0-3: 치환 재동기화 — generation 게이트로 스테일 캐시 차단 ──
 
-test('dynamic route resyncs live schema when native generation advances (T0-3)', async () => {
+void test('dynamic route resyncs live schema when native generation advances (T0-3)', async () => {
   // register → invoke(id 7 기록) → replace 후 generation 상승 → 재 invoke 는
   // 재동기화된 새 commandId 로 Tier 3 요청을 보내야 한다.
   let generation = 1;
@@ -3017,7 +2997,7 @@ test('dynamic route resyncs live schema when native generation advances (T0-3)',
   assert.ok(schemaFetches >= 2, 'live schema must be refetched after generation change');
 });
 
-test('dynamic route skips generation polling when native does not expose it (T0-3)', async () => {
+void test('dynamic route skips generation polling when native does not expose it (T0-3)', async () => {
   // 구 네이티브 — getSchemaGeneration 미노출 → 현상 유지(1회 조회 후 캐시).
   let schemaFetches = 0;
   const native = makeTypedNative({
@@ -3034,7 +3014,7 @@ test('dynamic route skips generation polling when native does not expose it (T0-
   assert.equal(schemaFetches, 1, 'without generation exposure the cache must hold');
 });
 
-test('stale cached dynamic command is not found after resync shows removal (T0-3)', async () => {
+void test('stale cached dynamic command is not found after resync shows removal (T0-3)', async () => {
   // 치환으로 명령이 사라진 경우 — 재동기화 후 not_found 로 시끄럽게 실패.
   let generation = 1;
   let present = true;
@@ -3056,7 +3036,7 @@ test('stale cached dynamic command is not found after resync shows removal (T0-3
   );
 });
 
-test('async propagate path gates on generation resync before live schema lookup (T0-3)', async () => {
+void test('async propagate path gates on generation resync before live schema lookup (T0-3)', async () => {
   // 동기 dispatch 와 달리 async 전파 경로(invokeAsync+invokeCancel)는 별도의
   // resync 호출이 없었다 — lookupCachedLiveSchemaEntry 가 게이트를 흡수한 뒤로는
   // replace 후 재호출이 스테일 commandId 코덱/프레임을 쓰지 않음을 고정한다.
@@ -3091,7 +3071,7 @@ test('async propagate path gates on generation resync before live schema lookup 
   assert.deepEqual(seenIds, [7, 8], 'async path must resync before the live schema lookup');
 });
 
-test('dynamic codec cache prunes stale-generation codecs when the resync epoch advances', async () => {
+void test('dynamic codec cache prunes stale-generation codecs when the resync epoch advances', async () => {
   // 세대가 바뀌면(resync 에포크 상승) 이전 세대 entry 의 코덱은 회수 가능해야
   // 한다 — 강한 참조 맵이라 GC 에 맡기면 dev 치환 반복에서 구 코덱이 누적된다.
   const { createFrameSchemaRuntime } = await import('./frame-engine-schema.js');
@@ -3162,12 +3142,12 @@ function schemaCodec(
   inputSchema: Record<string, unknown>,
   outputSchema: Record<string, unknown>,
 ) {
-  const codec = createSchemaPostcardCodec(commandId, inputSchema as never, outputSchema as never);
+  const codec = createSchemaPostcardCodec(commandId, inputSchema, outputSchema);
   assert.ok(codec, 'supported schema must compile');
   return codec;
 }
 
-test('schema codec: i64 pair (addNumbers) — PINNED request/response wire', () => {
+void test('schema codec: i64 pair (addNumbers) — PINNED request/response wire', () => {
   const codec = schemaCodec(
     1,
     {
@@ -3190,7 +3170,7 @@ test('schema codec: i64 pair (addNumbers) — PINNED request/response wire', () 
   assert.equal(r.result && (r.result as { value: number }).value, 5);
 });
 
-test('schema codec: String (greet) — PINNED request/response wire', () => {
+void test('schema codec: String (greet) — PINNED request/response wire', () => {
   const codec = schemaCodec(
     5,
     {
@@ -3210,7 +3190,7 @@ test('schema codec: String (greet) — PINNED request/response wire', () => {
   assert.equal(r.result && (r.result as { message: string }).message, 'Hello, Lynx!');
 });
 
-test('schema codec: error frame (divide by zero) — PINNED wire → RustraError', () => {
+void test('schema codec: error frame (divide by zero) — PINNED wire → RustraError', () => {
   const codec = schemaCodec(
     10,
     {
@@ -3231,7 +3211,7 @@ test('schema codec: error frame (divide by zero) — PINNED wire → RustraError
   assert.equal(r.error?.message, 'cannot divide by zero');
 });
 
-test('schema codec: map count+(k,v)* (scoreTotal) — structure + response', () => {
+void test('schema codec: map count+(k,v)* (scoreTotal) — structure + response', () => {
   const codec = schemaCodec(
     15,
     {
@@ -3263,7 +3243,7 @@ test('schema codec: map count+(k,v)* (scoreTotal) — structure + response', () 
   assert.equal(out.count, 2);
 });
 
-test('schema codec: postcard tuple prefix-free (span) — PINNED wire', () => {
+void test('schema codec: postcard tuple prefix-free (span) — PINNED wire', () => {
   const codec = schemaCodec(
     16,
     {
@@ -3292,7 +3272,7 @@ test('schema codec: postcard tuple prefix-free (span) — PINNED wire', () => {
   assert.equal(out.second, -5);
 });
 
-test('schema codec: u64/u32 plain varint (gauge) — PINNED wire', () => {
+void test('schema codec: u64/u32 plain varint (gauge) — PINNED wire', () => {
   const codec = schemaCodec(
     17,
     {
@@ -3315,7 +3295,7 @@ test('schema codec: u64/u32 plain varint (gauge) — PINNED wire', () => {
   assert.equal(r.result && (r.result as { next: number }).next, 70300);
 });
 
-test('schema codec: bytes len+raw (sizeOf) — PINNED wire', () => {
+void test('schema codec: bytes len+raw (sizeOf) — PINNED wire', () => {
   const codec = schemaCodec(
     14,
     {
@@ -3340,7 +3320,7 @@ test('schema codec: bytes len+raw (sizeOf) — PINNED wire', () => {
   assert.equal(out.len, 4);
 });
 
-test('schema codec: Vec<u64> + Option<i64> (wideAgg) — 64-bit boundaries', () => {
+void test('schema codec: Vec<u64> + Option<i64> (wideAgg) — 64-bit boundaries', () => {
   const codec = schemaCodec(
     28,
     {
@@ -3376,7 +3356,7 @@ test('schema codec: Vec<u64> + Option<i64> (wideAgg) — 64-bit boundaries', () 
   assert.equal(out.adjusted, -9223372036854775803n, 'i64::MIN + 5 restored');
 });
 
-test('schema codec: uniqueItems Set (tagSet) — insertion order, Set restore', () => {
+void test('schema codec: uniqueItems Set (tagSet) — insertion order, Set restore', () => {
   const codec = schemaCodec(
     29,
     {
@@ -3403,7 +3383,7 @@ test('schema codec: uniqueItems Set (tagSet) — insertion order, Set restore', 
   assert.deepEqual([...tags], ['t-7', 't1000', 't15']);
 });
 
-test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed object)', () => {
+void test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed object)', () => {
   // payload enum(oneOf) — Rust 는 complex 라우트로 승격하므로 JS 인터프리터도
   // 만들지 않는다(엔진이 Tier 3 가 아니라 complex 로 우회하지만, 이 모듈의
   // 계약은 null 반환).
@@ -3414,7 +3394,7 @@ test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed ob
         type: 'object',
         required: ['status'],
         properties: { status: { oneOf: [{ type: 'string', enum: ['Idle'] }, { type: 'object' }] } },
-      } as never,
+      },
       { type: 'object', properties: {} },
     ),
     null,
@@ -3428,7 +3408,7 @@ test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed ob
         properties: {
           v: { anyOf: [{ type: 'integer' }, { type: 'string' }, { type: 'boolean' }] },
         },
-      } as never,
+      },
       { type: 'object', properties: {} },
     ),
     null,
@@ -3441,14 +3421,14 @@ test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed ob
         type: 'object',
         properties: { a: { type: 'integer' } },
         additionalProperties: { type: 'string' },
-      } as never,
+      },
       { type: 'object', properties: {} },
     ),
     null,
   );
 });
 
-test('schema codec: $ref resolution through definitions', () => {
+void test('schema codec: $ref resolution through definitions', () => {
   // 정의가 없으면 fail-closed(null) — Tier 3 로 안전하게 폴백.
   const missing = createSchemaPostcardCodec(
     2,
@@ -3456,12 +3436,12 @@ test('schema codec: $ref resolution through definitions', () => {
       type: 'object',
       required: ['item'],
       properties: { item: { $ref: '#/definitions/Item' } },
-    } as never,
+    },
     {
       type: 'object',
       required: ['count'],
       properties: { count: { type: 'integer', format: 'uint32' } },
-    } as never,
+    },
     { type: 'object', properties: {} } as never,
   );
   assert.equal(missing, null, 'missing definition fails closed');
@@ -3472,18 +3452,18 @@ test('schema codec: $ref resolution through definitions', () => {
       type: 'object',
       required: ['item'],
       properties: { item: { $ref: '#/definitions/Item' } },
-    } as never,
+    },
     {
       type: 'object',
       required: ['count'],
       properties: { count: { type: 'integer', format: 'uint32' } },
-    } as never,
+    },
     {
       Item: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
-    } as never,
+    },
   );
   assert.ok(withDefs, '$ref to a known definition compiles');
-  assert.equal(bytesToHex(withDefs!.encode({ item: { id: 3 } })), '020006');
+  assert.equal(bytesToHex(withDefs.encode({ item: { id: 3 } })), '020006');
 });
 
 // ── (T2-3) 동적 명령 postcard/complex 라우팅 ────────────────
@@ -3491,7 +3471,7 @@ test('schema codec: $ref resolution through definitions', () => {
 // 미러한다: postcard 지원 스키마는 인터프리터 binary, oneOf 는 complex binary
 // (Rust 가 t3align 계약으로 complex 로 승격), 둘 다 거부(anyOf 3항)만 Tier 3.
 
-test('engine routes postcard-supported dynamic commands through the schema interpreter (T2-3)', async () => {
+void test('engine routes postcard-supported dynamic commands through the schema interpreter (T2-3)', async () => {
   // Rust 계약: register("echo", echo) — EchoIn{v:i64} 는 postcard 지원 →
   // frame_tier3=false, 핸들러는 [ok][pad][postcard(EchoOut)] 로 응답한다.
   const holder: { req: ArrayBuffer | null } = { req: null };
@@ -3538,7 +3518,7 @@ test('engine routes postcard-supported dynamic commands through the schema inter
   assert.deepEqual(Array.from(u.slice(2)), [14], 'zigzag(7)=14 — postcard, not JSON text');
 });
 
-test('engine routes dynamic oneOf commands through a compiled complex codec (T2-3)', async () => {
+void test('engine routes dynamic oneOf commands through a compiled complex codec (T2-3)', async () => {
   // Rust 계약: oneOf payload enum 동적 등록 → complex binary 라우트
   // (dynamic_oneof_schema_gets_complex_binary_handler). JS 엔진도 Tier 3 로
   // 보내면 와이어가 어긋나므로 createComplexCodec 으로 응답해야 한다.
@@ -3581,7 +3561,7 @@ test('engine routes dynamic oneOf commands through a compiled complex codec (T2-
             'x-rustra-variant-order': ['Idle', 'Active'],
           },
         },
-      } as never,
+      },
     ]),
     invokeImpl: (payload) => {
       holder.req = payload;
@@ -3614,7 +3594,7 @@ test('engine routes dynamic oneOf commands through a compiled complex codec (T2-
   );
 });
 
-test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
+void test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
   // Rust 계약: 3-변형 untagged enum(anyOf 3항)은 postcard/complex 둘 다 거부 →
   // frame_tier3=true. JS 인터프리터도 null 이므로 기존 JSON 경로가 유지된다.
   const holder: { req: ArrayBuffer | null } = { req: null };
@@ -3635,7 +3615,7 @@ test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
           required: ['label'],
           properties: { label: { type: 'string' } },
         },
-      } as never,
+      },
     ]),
     invokeImpl: (payload) => {
       holder.req = payload;
@@ -3652,7 +3632,7 @@ test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
   assert.equal(new TextDecoder().decode(u.slice(2)), JSON.stringify({ v: 'hi' }));
 });
 
-test('schema interpreter recompiles after generation resync picks up a new codec (T2-3)', async () => {
+void test('schema interpreter recompiles after generation resync picks up a new codec (T2-3)', async () => {
   // 세대 게이트(T0-3)가 live schema 를 재조회하면 스키마도 새로 읽히고, 인터프리터
   // 캐시(compute-if-absent)는 entry 객체 식별로 무효화된다 — replace 로 postcard
   // 지원 형태가 된 명령이 JSON 이 아니라 postcard 로 가는지 고정.
@@ -3733,7 +3713,7 @@ function timeoutError(): TimeoutError {
   return new TimeoutError('timed out');
 }
 
-test('withRetry succeeds on the second attempt after one retryable failure', async () => {
+void test('withRetry succeeds on the second attempt after one retryable failure', async () => {
   const attempts: number[] = [];
   const out = await withRetry(
     (attempt) => {
@@ -3747,7 +3727,7 @@ test('withRetry succeeds on the second attempt after one retryable failure', asy
   assert.deepEqual(attempts, [0, 1]);
 });
 
-test('withRetry rethrows the last error unchanged after retries are exhausted', async () => {
+void test('withRetry rethrows the last error unchanged after retries are exhausted', async () => {
   const attempts: number[] = [];
   const lastError = timeoutError();
   let call = 0;
@@ -3768,7 +3748,7 @@ test('withRetry rethrows the last error unchanged after retries are exhausted', 
   assert.deepEqual(attempts, [0, 1, 2]);
 });
 
-test('withRetry rejects immediately without retrying non-retryable codes', async () => {
+void test('withRetry rejects immediately without retrying non-retryable codes', async () => {
   let calls = 0;
   const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
   let caught: unknown;
@@ -3787,7 +3767,7 @@ test('withRetry rejects immediately without retrying non-retryable codes', async
   assert.equal(calls, 1, 'non-retryable failure must not schedule a retry');
 });
 
-test('withRetry respects a custom retryIf in both directions', async () => {
+void test('withRetry respects a custom retryIf in both directions', async () => {
   // 방향 1: 기본 판정은 retryable 코드인데 retryIf 가 false → 즉시 거부.
   let callsA = 0;
   const retryable = timeoutError();
@@ -3820,7 +3800,7 @@ test('withRetry respects a custom retryIf in both directions', async () => {
   assert.equal(callsB, 2, 'retryIf=true must override the default predicate entirely');
 });
 
-test('withRetry rejects with the retryIf predicate error when the predicate itself throws', async () => {
+void test('withRetry rejects with the retryIf predicate error when the predicate itself throws', async () => {
   let calls = 0;
   const predicateBoom = new Error('predicate exploded');
   let caught: unknown;
@@ -3845,7 +3825,7 @@ test('withRetry rejects with the retryIf predicate error when the predicate itse
   assert.equal(calls, 1, 'predicate failure must not schedule a retry');
 });
 
-test('withRetry promotes a mid-flight signal abort to CancelledError', async () => {
+void test('withRetry promotes a mid-flight signal abort to CancelledError', async () => {
   const controller = new AbortController();
   const attempts: number[] = [];
   const pending = withRetry(
@@ -3863,7 +3843,7 @@ test('withRetry promotes a mid-flight signal abort to CancelledError', async () 
   assert.deepEqual(attempts, [0], 'abort during backoff sleep must cancel before the next attempt');
 });
 
-test('withRetry aborts a pending backoff sleep via the registered listener and preserves cause', async () => {
+void test('withRetry aborts a pending backoff sleep via the registered listener and preserves cause', async () => {
   // sleep Promise 생성자 블록(타이머 생성 + abort 리스너 등록 + abort 시
   // clearTimeout)을 실제로 타는 경로 — fn 안 동기 abort 는 항상 pre-aborted
   // fast path 로 새므로, 타이머 abort 를 쓴다(경쟁 없음: 5ms ≪ 10s 백오프).
@@ -3890,17 +3870,13 @@ test('withRetry aborts a pending backoff sleep via the registered listener and p
   }
   const elapsed = Date.now() - startedAt;
   assert.ok(caught instanceof CancelledError, 'timer abort must promote to CancelledError');
-  assert.equal((caught as CancelledError).code, RustraErrorCode.Cancelled);
-  assert.equal(
-    (caught as CancelledError).cause,
-    cause,
-    'abort promotion must preserve the failed error as cause',
-  );
+  assert.equal(caught.code, RustraErrorCode.Cancelled);
+  assert.equal(caught.cause, cause, 'abort promotion must preserve the failed error as cause');
   assert.equal(attempts.length, 1, 'aborted sleep must cancel before the next attempt');
   assert.ok(elapsed < 5000, `abort must cut the 10s sleep short immediately, took ${elapsed}ms`);
 });
 
-test('withRetry rejects with CancelledError immediately when the signal is already aborted', async () => {
+void test('withRetry rejects with CancelledError immediately when the signal is already aborted', async () => {
   const controller = new AbortController();
   controller.abort();
   let calls = 0;
@@ -3917,7 +3893,7 @@ test('withRetry rejects with CancelledError immediately when the signal is alrea
   assert.equal(calls, 0, 'pre-aborted signal must never invoke fn');
 });
 
-test('withRetry with retries 0 makes exactly one attempt and never sleeps', async () => {
+void test('withRetry with retries 0 makes exactly one attempt and never sleeps', async () => {
   const attempts: number[] = [];
   let caught: unknown;
   try {
@@ -3935,7 +3911,7 @@ test('withRetry with retries 0 makes exactly one attempt and never sleeps', asyn
   assert.deepEqual(attempts, [0], 'retries=0 must not retry even on retryable failures');
 });
 
-test('withRetry rejects invalid retries values with TypeError instead of looping forever', async () => {
+void test('withRetry rejects invalid retries values with TypeError instead of looping forever', async () => {
   // attempt >= NaN 은 항상 거짓 — 가드 없으면 조용한 무한 루프. async 함수라
   // TypeError 는 동기 throw 가 아니라 즉시 rejection 로 관찰된다.
   for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
@@ -3964,11 +3940,16 @@ test('withRetry rejects invalid retries values with TypeError instead of looping
   assert.deepEqual(attempts, [0, 1], 'retries=0.5 exhausts at attempt 1 (numeric boundary)');
 });
 
-test('withRetry preserves arbitrary rejection values unchanged', async () => {
+void test('withRetry preserves arbitrary rejection values unchanged', async () => {
   const bigintPayload = 9007199254740993n; // Number.MAX_SAFE_INTEGER 초과 bigint
   let caught: unknown;
   try {
-    await withRetry(() => Promise.reject(bigintPayload), { retries: 2, baseDelayMs: 1 });
+    // 비-Error 거절 값도 그대로 보존되는 것이 이 테스트의 대상 자체라 규칙을 해제한다.
+    await withRetry(
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- 비-Error 거절 보존이 검증 대상이다
+      () => Promise.reject(bigintPayload),
+      { retries: 2, baseDelayMs: 1 },
+    );
   } catch (error) {
     caught = error;
   }
@@ -3976,7 +3957,7 @@ test('withRetry preserves arbitrary rejection values unchanged', async () => {
   assert.equal(typeof caught, 'bigint');
 });
 
-test('withRetry passes 0-based attempt numbers to fn', async () => {
+void test('withRetry passes 0-based attempt numbers to fn', async () => {
   const attempts: number[] = [];
   await withRetry(
     (attempt) => {
@@ -4017,7 +3998,7 @@ function envelopeTransport(payload: unknown): { invoke: (command: string) => Pro
   return { invoke: () => Promise.resolve(payload) };
 }
 
-test('double envelope resolution emits response.shape and resolves unchanged in debug mode', async () => {
+void test('double envelope resolution emits response.shape and resolves unchanged in debug mode', async () => {
   const seen: ShapeDebugEvent[] = [];
   const sink = (event: unknown) => seen.push(event as ShapeDebugEvent);
   const payload = { ok: true, result: { value: 42 } };
@@ -4037,12 +4018,12 @@ test('double envelope resolution emits response.shape and resolves unchanged in 
   }
 });
 
-test('resolved ok:false without error emits response.shape and still resolves in debug mode', async () => {
+void test('resolved ok:false without error emits response.shape and still resolves in debug mode', async () => {
   const seen: ShapeDebugEvent[] = [];
   const engine = createJsonEngine(envelopeTransport({ ok: false }));
   const cleanup = enableShapeDebugHarness();
   try {
-    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    configureDebug((event) => seen.push(event));
     const result = await engine.invoke<{ ok: boolean }>('broken', {});
     assert.deepEqual(result, { ok: false }, 'warning only — the invoke still resolves');
     const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
@@ -4054,7 +4035,7 @@ test('resolved ok:false without error emits response.shape and still resolves in
   }
 });
 
-test('resolved error envelope ({ok:false,error}) emits response.shape but keeps the value', async () => {
+void test('resolved error envelope ({ok:false,error}) emits response.shape but keeps the value', async () => {
   // reject 경로의 정규화는 rejection 일 때만 동작한다 — transport 가 실패 엔벨로프를
   // 그대로 resolve 하면(스크 신호) 경고는 하되 기존 값 계약을 변형하지 않는다.
   const seen: ShapeDebugEvent[] = [];
@@ -4062,7 +4043,7 @@ test('resolved error envelope ({ok:false,error}) emits response.shape but keeps 
   const engine = createJsonEngine(envelopeTransport({ ok: false, error }));
   const cleanup = enableShapeDebugHarness();
   try {
-    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    configureDebug((event) => seen.push(event));
     const result = await engine.invoke<{ ok: boolean; error: unknown }>('divide', {});
     assert.deepEqual(result, { ok: false, error });
     const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
@@ -4073,12 +4054,12 @@ test('resolved error envelope ({ok:false,error}) emits response.shape but keeps 
   }
 });
 
-test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', async () => {
+void test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', async () => {
   const seen: ShapeDebugEvent[] = [];
   const engine = createJsonEngine(envelopeTransport({ ok: true }));
   const cleanup = enableShapeDebugHarness();
   try {
-    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    configureDebug((event) => seen.push(event));
     await engine.invoke('noPayload', {});
     const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
     assert.equal(event.reason, 'envelope_missing_payload');
@@ -4088,7 +4069,7 @@ test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', 
   }
 });
 
-test('debug disabled: no response.shape events (passthrough unchanged)', async () => {
+void test('debug disabled: no response.shape events (passthrough unchanged)', async () => {
   // 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해야 주변 RUSTRA_DEBUG=1 환경이
   // 이 테스트로 새지 않는다(스위치 판정은 캐시 무효화 후 env 만 본다).
   resetDebugEnvForTests();
@@ -4099,8 +4080,7 @@ test('debug disabled: no response.shape events (passthrough unchanged)', async (
     // 이지만, 셰이프 감지는 isRustraDebugEnabled 로만 게이트된다 — 감지 게이트는
     // 싱크 유무와 무관하게 debug 스위치만 본다. 여기선 스위치 없이 싱크만 설치.
     configureDebug((event) => {
-      if ((event as ShapeDebugEvent).kind === 'response.shape')
-        shapes.push(event as ShapeDebugEvent);
+      if ((event as ShapeDebugEvent).kind === 'response.shape') shapes.push(event);
     });
     const result = await engine.invoke('echo', {});
     assert.deepEqual(result, { ok: true, result: { value: 1 } }, 'passthrough unchanged');
@@ -4112,13 +4092,13 @@ test('debug disabled: no response.shape events (passthrough unchanged)', async (
   }
 });
 
-test('plain payload without ok and primitive responses emit no shape event', async () => {
+void test('plain payload without ok and primitive responses emit no shape event', async () => {
   for (const payload of [{ value: 42 }, { okay: true }, 'plain', 7, null, undefined]) {
     const seen: ShapeDebugEvent[] = [];
     const engine = createJsonEngine(envelopeTransport(payload));
     const cleanup = enableShapeDebugHarness();
     try {
-      configureDebug((event) => seen.push(event as ShapeDebugEvent));
+      configureDebug((event) => seen.push(event));
       const result = await engine.invoke('normal', {});
       assert.equal(result, payload, 'passthrough by identity');
       assert.equal(
@@ -4133,7 +4113,7 @@ test('plain payload without ok and primitive responses emit no shape event', asy
   }
 });
 
-test('detection never throws on exotic result objects (frozen, null-prototype)', async () => {
+void test('detection never throws on exotic result objects (frozen, null-prototype)', async () => {
   const exotic: unknown[] = [
     Object.freeze({ ok: true, result: { frozen: true } }),
     Object.create(null) as unknown, // 프로토타입 없음 — hasOwnProperty.call 로 안전
@@ -4158,16 +4138,16 @@ test('detection never throws on exotic result objects (frozen, null-prototype)',
 // 셰이프 감지는 resolve 경로 전용이다. rejection 이 왔을 때 감지가 조용하다는
 // 핀과, transport reject 값이 기존 정규화 계약으로 변환된다는 점을 함께 잠근다.
 
-test('json-engine rejection path normalizes errors and emits no shape event', async () => {
+void test('json-engine rejection path normalizes errors and emits no shape event', async () => {
   const shapes: ShapeDebugEvent[] = [];
   const cleanup = enableShapeDebugHarness();
   const rejectTransport = (reason: unknown) => ({
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- 임의 거절 값의 정규화 계약이 검증 대상이다
     invoke: () => Promise.reject(reason),
   });
   try {
     configureDebug((event) => {
-      if ((event as ShapeDebugEvent).kind === 'response.shape')
-        shapes.push(event as ShapeDebugEvent);
+      if ((event as ShapeDebugEvent).kind === 'response.shape') shapes.push(event);
     });
 
     // 실패 엔벨로프 reject — 최상위 code/message 가 아니므로 normalizeRustraError 는
@@ -4218,7 +4198,7 @@ test('json-engine rejection path normalizes errors and emits no shape event', as
 // instanceof 분기 지원: TimeoutError/CancelledError 서브클래스와
 // transport.unavailable 정규화. 와이어 코드·retryable·메시지는 불변.
 
-test('timeout race rejects with TimeoutError instance across all timeout paths', async () => {
+void test('timeout race rejects with TimeoutError instance across all timeout paths', async () => {
   const hanging: EngineClient = { invoke: () => new Promise(() => {}) };
   // ① invokeWithTimeout (cancel.ts)
   await assert.rejects(
@@ -4226,8 +4206,8 @@ test('timeout race rejects with TimeoutError instance across all timeout paths',
     (err: unknown) => {
       assert.ok(err instanceof TimeoutError, 'invokeWithTimeout must throw TimeoutError');
       assert.ok(err instanceof RustraCommandError, 'TimeoutError must remain a RustraCommandError');
-      assert.equal((err as TimeoutError).code, 'transport.timeout');
-      assert.equal((err as TimeoutError).retryable, true);
+      assert.equal(err.code, 'transport.timeout');
+      assert.equal(err.retryable, true);
       return true;
     },
   );
@@ -4237,7 +4217,7 @@ test('timeout race rejects with TimeoutError instance across all timeout paths',
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   configure({
     invokeBatch: () => new Promise(() => {}),
   } as unknown as EngineClient);
@@ -4246,8 +4226,8 @@ test('timeout race rejects with TimeoutError instance across all timeout paths',
       invokeBatch<{ v: number }>([{ command: 'a', options: { timeoutMs: 20 } }]),
       (err: unknown) => {
         assert.ok(err instanceof TimeoutError, 'invokeBatch must throw TimeoutError');
-        assert.equal((err as TimeoutError).code, 'transport.timeout');
-        assert.equal((err as TimeoutError).retryable, true);
+        assert.equal(err.code, 'transport.timeout');
+        assert.equal(err.retryable, true);
         return true;
       },
     );
@@ -4256,7 +4236,7 @@ test('timeout race rejects with TimeoutError instance across all timeout paths',
   }
 });
 
-test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instances', async () => {
+void test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instances', async () => {
   // timeout race (cancel-by-id.ts)
   const hanging: EngineClient = {
     invokeById: () => new Promise(() => {}),
@@ -4265,8 +4245,8 @@ test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instanc
     invokeByIdWithTimeout(hanging, 7, 'addNumbers', { a: 1 }, { timeoutMs: 20 }),
     (err: unknown) => {
       assert.ok(err instanceof TimeoutError, 'invokeByIdWithTimeout must throw TimeoutError');
-      assert.equal((err as TimeoutError).code, 'transport.timeout');
-      assert.equal((err as TimeoutError).retryable, true);
+      assert.equal(err.code, 'transport.timeout');
+      assert.equal(err.retryable, true);
       return true;
     },
   );
@@ -4286,8 +4266,8 @@ test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instanc
     ),
     (err: unknown) => {
       assert.ok(err instanceof CancelledError, 'pre-abort must throw CancelledError');
-      assert.equal((err as CancelledError).code, 'cancelled');
-      assert.equal((err as CancelledError).retryable, true);
+      assert.equal(err.code, 'cancelled');
+      assert.equal(err.retryable, true);
       return true;
     },
   );
@@ -4303,20 +4283,20 @@ test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instanc
   controller.abort();
   await assert.rejects(p, (err: unknown) => {
     assert.ok(err instanceof CancelledError, 'abort race must throw CancelledError');
-    assert.equal((err as CancelledError).code, 'cancelled');
+    assert.equal(err.code, 'cancelled');
     return true;
   });
 });
 
-test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances', async () => {
+void test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances', async () => {
   // raceAbort (cancel-abort.ts)
   const controller = new AbortController();
   const raced = raceAbort(new Promise(() => {}), controller.signal, 'cancel-me');
   controller.abort();
   await assert.rejects(raced, (err: unknown) => {
     assert.ok(err instanceof CancelledError, 'raceAbort must throw CancelledError');
-    assert.equal((err as CancelledError).code, 'cancelled');
-    assert.equal((err as CancelledError).retryable, true);
+    assert.equal(err.code, 'cancelled');
+    assert.equal(err.retryable, true);
     return true;
   });
 
@@ -4327,7 +4307,7 @@ test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances
     }),
     (err: unknown) => {
       assert.ok(err instanceof CancelledError, 'callback pre-abort must throw CancelledError');
-      assert.equal((err as CancelledError).code, 'cancelled');
+      assert.equal(err.code, 'cancelled');
       return true;
     },
   );
@@ -4340,12 +4320,12 @@ test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances
   mid.abort();
   await assert.rejects(pending, (err: unknown) => {
     assert.ok(err instanceof CancelledError, 'callback abort mid-flight must throw CancelledError');
-    assert.equal((err as CancelledError).code, 'cancelled');
+    assert.equal(err.code, 'cancelled');
     return true;
   });
 });
 
-test('engine-level pre-aborted invoke and invokeById reject with CancelledError', async () => {
+void test('engine-level pre-aborted invoke and invokeById reject with CancelledError', async () => {
   // frame-engine-surface.ts invokeById pre-abort + invokeRaw pre-abort paths.
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
@@ -4358,23 +4338,23 @@ test('engine-level pre-aborted invoke and invokeById reject with CancelledError'
   ac.abort();
   await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {
     assert.ok(e instanceof CancelledError, 'engine.invoke pre-abort must throw CancelledError');
-    assert.equal((e as CancelledError).code, 'cancelled');
+    assert.equal(e.code, 'cancelled');
     return true;
   });
   await assert.rejects(engine.invokeById(1, 'dyn', {}, { signal: ac.signal }), (e: unknown) => {
     assert.ok(e instanceof CancelledError, 'engine.invokeById pre-abort must throw CancelledError');
-    assert.equal((e as CancelledError).code, 'cancelled');
+    assert.equal(e.code, 'cancelled');
     return true;
   });
 });
 
-test('unconfigured invoke rejects with RustraCommandError transport.unavailable', async () => {
+void test('unconfigured invoke rejects with RustraCommandError transport.unavailable', async () => {
   // sentinel이 호출되면 이전 테스트 오염을 즉시 드러낸다.
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     // runtime.engine === null && runtime.engineInitializer === undefined 상태를
     // 만들기 위해 configureLazy의 initializer를 지운다 — public API로는
@@ -4385,8 +4365,8 @@ test('unconfigured invoke rejects with RustraCommandError transport.unavailable'
     assert.ok(returned instanceof Promise, 'unconfigured invoke must return a Promise');
     await assert.rejects(returned, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
-      assert.equal((err as RustraCommandError).retryable, false);
+      assert.equal(err.code, 'transport.unavailable');
+      assert.equal(err.retryable, false);
       assert.match((err as Error).message, /Rustra not configured/);
       return true;
     });
@@ -4399,12 +4379,12 @@ test('unconfigured invoke rejects with RustraCommandError transport.unavailable'
   }
 });
 
-test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of sync throw', async () => {
+void test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of sync throw', async () => {
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     runtime.engine = null;
     runtime.engineInitializer = undefined;
@@ -4416,8 +4396,8 @@ test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of s
     assert.ok(gen instanceof Promise, 'unconfigured invokeGenerated must return a Promise');
     await assert.rejects(gen, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
-      assert.equal((err as RustraCommandError).retryable, false);
+      assert.equal(err.code, 'transport.unavailable');
+      assert.equal(err.retryable, false);
       return true;
     });
 
@@ -4426,7 +4406,7 @@ test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of s
     assert.ok(fields instanceof Promise, 'unconfigured invokeFields must return a Promise');
     await assert.rejects(fields, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal(err.code, 'transport.unavailable');
       return true;
     });
 
@@ -4435,7 +4415,7 @@ test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of s
     assert.ok(bytes instanceof Promise, 'unconfigured invokeGeneratedBytes must return a Promise');
     await assert.rejects(bytes, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal(err.code, 'transport.unavailable');
       return true;
     });
   } finally {
@@ -4447,12 +4427,12 @@ test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of s
   }
 });
 
-test('unconfigured invokeBatch and ensureConfigured reject with transport.unavailable', async () => {
+void test('unconfigured invokeBatch and ensureConfigured reject with transport.unavailable', async () => {
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     runtime.engine = null;
     runtime.engineInitializer = undefined;
@@ -4464,7 +4444,7 @@ test('unconfigured invokeBatch and ensureConfigured reject with transport.unavai
     assert.ok(batch instanceof Promise, 'unconfigured invokeBatch must return a Promise');
     await assert.rejects(batch, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal(err.code, 'transport.unavailable');
       return true;
     });
 
@@ -4474,12 +4454,12 @@ test('unconfigured invokeBatch and ensureConfigured reject with transport.unavai
     assert.ok(settledP instanceof Promise, 'unconfigured invokeBatchSettled must return a Promise');
     await assert.rejects(settledP, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal(err.code, 'transport.unavailable');
       return true;
     });
     await assert.rejects(invokeBatchSettled([]), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal(err.code, 'transport.unavailable');
       return true;
     });
 
@@ -4487,7 +4467,7 @@ test('unconfigured invokeBatch and ensureConfigured reject with transport.unavai
     // Node/Bun/Tauri 사용자에게 "React Native entry" 를 지시하지 않는다.
     await assert.rejects(ensureConfigured(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal(err.code, 'transport.unavailable');
       assert.match((err as Error).message, /Rustra not configured/);
       assert.match(
         (err as Error).message,
@@ -4528,7 +4508,7 @@ function delayedWireBatchTransport(delayMs: number): {
   };
 }
 
-test('wire batch timeoutMs 0 takes the per-entry timeout path like the single invoke (R04-a)', async () => {
+void test('wire batch timeoutMs 0 takes the per-entry timeout path like the single invoke (R04-a)', async () => {
   const engine = createJsonEngine(delayedWireBatchTransport(50));
   // 단건 경로(cancel.ts): timeoutMs 0 은 "옵션 제공"으로 판정되어 즉시
   // transport.timeout reject. 와이어 배치 게이트도 동일 판정이어야 한다 —
@@ -4545,7 +4525,7 @@ test('wire batch timeoutMs 0 takes the per-entry timeout path like the single in
   );
 });
 
-test('wire batch options object without timeoutMs still rides the single crossing (R04-a nuance)', async () => {
+void test('wire batch options object without timeoutMs still rides the single crossing (R04-a nuance)', async () => {
   // 판정은 "timeoutMs !== undefined" — options 객체가 있어도 timeoutMs 가
   // undefined 면 항목별 타임아웃 경로로 보내지 않는다(단건 경로 계약 —
   // undefined timeout 은 레이스 없음). signal 도 없으니 와이어 단일 횡단 유지.
@@ -4563,13 +4543,15 @@ test('wire batch options object without timeoutMs still rides the single crossin
   assert.deepEqual(out, [{ ok: true, command: 'a' }]);
 });
 
-test('wire batch turns a synchronous transport throw into a rejected Promise (R04-b)', async () => {
+void test('wire batch turns a synchronous transport throw into a rejected Promise (R04-b)', async () => {
   // 단건 경로(json-engine invoke)는 transport 동기 throw 를 catch 해서
   // Promise.reject(normalizeRustraError(error)) 로 정규화한다. 배치 경로도
   // 동일해야 한다 — 동기 throw 는 호출자의 try/catch 를 건너뛰는 계약 위반이다.
   const engine = createJsonEngine({
     invoke: () => Promise.resolve('unused'),
     invokeBatch: () => {
+      // 동기 throw 도 rejected Promise + 정규화로 귀결되는 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw { code: 'transport.error', message: 'wire batch blew up', retryable: true };
     },
   });
@@ -4577,9 +4559,9 @@ test('wire batch turns a synchronous transport throw into a rejected Promise (R0
   assert.ok(returned instanceof Promise, 'sync throw must not escape invokeBatch');
   await assert.rejects(returned, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError, 'must pass through normalizeRustraError');
-    assert.equal((err as RustraCommandError).code, 'transport.error');
-    assert.equal((err as RustraCommandError).message, 'wire batch blew up');
-    assert.equal((err as RustraCommandError).retryable, true);
+    assert.equal(err.code, 'transport.error');
+    assert.equal(err.message, 'wire batch blew up');
+    assert.equal(err.retryable, true);
     return true;
   });
 
@@ -4596,7 +4578,7 @@ test('wire batch turns a synchronous transport throw into a rejected Promise (R0
   );
 });
 
-test('wire batch throwing custom normalizer converges to a rejection like the single path (R04-c)', async () => {
+void test('wire batch throwing custom normalizer converges to a rejection like the single path (R04-c)', async () => {
   // normalizeArgs 는 주입된 사용자 코드다 — 정규화 맵이 try 경계 밖에 있으면
   // normalizer 의 동기 throw 가 호출자 try/catch 를 건너뛴다. 단건 경로는 같은
   // 실패를 rejected Promise 로 정규화하므로 배치 경로도 동일해야 한다.
@@ -4613,13 +4595,13 @@ test('wire batch throwing custom normalizer converges to a rejection like the si
   assert.ok(returned instanceof Promise, 'normalizer sync throw must not escape invokeBatch');
   await assert.rejects(returned, (err: unknown) => {
     assert.ok(err instanceof RustraCommandError, 'must pass through normalizeRustraError');
-    assert.equal((err as RustraCommandError).code, 'invoke.failed');
+    assert.equal(err.code, 'invoke.failed');
     assert.match((err as Error).message, /normalizer exploded/);
     return true;
   });
 });
 
-test('wire batch entry with combined signal and timeoutMs 0 keeps per-entry fallback (R04-a table row)', async () => {
+void test('wire batch entry with combined signal and timeoutMs 0 keeps per-entry fallback (R04-a table row)', async () => {
   // signal + timeoutMs 0 조합 — 두 옵션이 모두 "제공됨"으로 판정되어 폴백 경로로
   // 간다. 폴백은 단건 경로(cancel.ts)와 같은 판정이므로 timeoutMs 0 이 즉시
   // transport.timeout 을 내고 signal abort 는 그 앞에서 cancelled 를 낼 수 있다.
@@ -4643,7 +4625,7 @@ test('wire batch entry with combined signal and timeoutMs 0 keeps per-entry fall
   assert.equal(batchCalls, 0, 'combined options must knock the batch off the wire crossing');
 });
 
-test('wire batch extra entry properties survive the normalized recreation (R04-c table row)', async () => {
+void test('wire batch extra entry properties survive the normalized recreation (R04-c table row)', async () => {
   // { ...entry, args } 재생성이 BatchEntry 계약 밖의 추가 프로퍼티를 보존하는지
   // 핀 — transport 가 커스텀 메타데이터에 의존해도 정규화가 이를 훼손하지 않는다.
   const seenRequests: Array<{ command: string; meta?: unknown }> = [];
@@ -4668,7 +4650,7 @@ test('wire batch extra entry properties survive the normalized recreation (R04-c
   ]);
 });
 
-test('wire batch applies normalizeArgs per entry without mutating the original entries (R04-c)', async () => {
+void test('wire batch applies normalizeArgs per entry without mutating the original entries (R04-c)', async () => {
   // tauri 어댑터 계약과 동일 — normalizeArgs: undefined → {}. 와이어 배치도
   // 항목별 args 를 정규화해서 transport 에 건네야 한다(단건 경로는 이미 적용).
   // 원본 entries 배열과 항목 객체는 절대 변형하지 않는다(global-batch 의
@@ -4705,7 +4687,7 @@ test('wire batch applies normalizeArgs per entry without mutating the original e
   assert.deepEqual(entries, [{ command: 'a' }, { command: 'b', args: undefined }]);
 });
 
-test('wire batch mixed-signal entries keep the per-entry fallback path (R04 regression guard)', async () => {
+void test('wire batch mixed-signal entries keep the per-entry fallback path (R04 regression guard)', async () => {
   // signal 항목이 섞이면 기존 폴백(항목별 invokeWithTimeout) — 단일 횡단 금지.
   let batchCalls = 0;
   let singleCalls = 0;
@@ -4732,7 +4714,7 @@ test('wire batch mixed-signal entries keep the per-entry fallback path (R04 regr
   ]);
 });
 
-test('wire batch empty entries resolves to an empty array on the single crossing (regression guard)', async () => {
+void test('wire batch empty entries resolves to an empty array on the single crossing (regression guard)', async () => {
   let batchCalls = 0;
   const engine = createJsonEngine({
     invoke: () => Promise.resolve('unused'),
@@ -4750,18 +4732,18 @@ test('wire batch empty entries resolves to an empty array on the single crossing
 // 와이어 배치 엔진을 configure 해서 글로벌 invokeBatch 로 같은 사례를 돌린다 —
 // 두 경로의 관찰 결과가 동일해야 한다(경로별 갈라짐이 재발하면 이 표가 잡는다).
 
-test('global invokeBatch matches the wire batch on timeout 0, sync throw, and normalization (R04)', async () => {
+void test('global invokeBatch matches the wire batch on timeout 0, sync throw, and normalization (R04)', async () => {
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     // ① timeoutMs 0 → 항목별 폴백 경로의 즉시 transport.timeout (단건 경로와
     // 동일 판정. 글로벌 최소 timeout 레이스 정책은 불변 — 이 사례는 timeout
     // 최솟값 계산과 무관하게 항목 options 를 존중하는 폴백으로 간다).
     const delayedEngine = createJsonEngine(delayedWireBatchTransport(50));
-    configure(delayedEngine as unknown as EngineClient);
+    configure(delayedEngine);
     await assert.rejects(
       invokeBatch([{ command: 'slow', args: {}, options: { timeoutMs: 0 } }]),
       (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
@@ -4772,17 +4754,19 @@ test('global invokeBatch matches the wire batch on timeout 0, sync throw, and no
     const throwingEngine = createJsonEngine({
       invoke: () => Promise.resolve('unused'),
       invokeBatch: () => {
+        // 동기 throw 정규화 계약이 검증 대상이다(전역 경로 ②).
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw { code: 'transport.error', message: 'wire batch blew up', retryable: true };
       },
     });
-    configure(throwingEngine as unknown as EngineClient);
+    configure(throwingEngine);
     const returned = invokeBatch([{ command: 'a' }]);
     assert.ok(returned instanceof Promise, 'global path: sync throw must not escape');
     await assert.rejects(returned, (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal((err as RustraCommandError).code, 'transport.error');
-      assert.equal((err as RustraCommandError).message, 'wire batch blew up');
-      assert.equal((err as RustraCommandError).retryable, true);
+      assert.equal(err.code, 'transport.error');
+      assert.equal(err.message, 'wire batch blew up');
+      assert.equal(err.retryable, true);
       return true;
     });
 
@@ -4801,7 +4785,7 @@ test('global invokeBatch matches the wire batch on timeout 0, sync throw, and no
       },
       (args) => args ?? { normalized: true },
     );
-    configure(normalizingEngine as unknown as EngineClient);
+    configure(normalizingEngine);
     const out = await invokeBatch([{ command: 'a' }, { command: 'b', args: undefined }]);
     assert.deepEqual(out, [{ ok: true }, { ok: true }]);
     assert.deepEqual(seenRequests, [
@@ -4813,7 +4797,7 @@ test('global invokeBatch matches the wire batch on timeout 0, sync throw, and no
   }
 });
 
-test('global invokeBatch empty entries resolves to an empty array (regression guard)', async () => {
+void test('global invokeBatch empty entries resolves to an empty array (regression guard)', async () => {
   const engine = createJsonEngine({
     invoke: () => Promise.resolve('unused'),
     invokeBatch: (requests) => requests.map(() => ({})),
@@ -4822,8 +4806,8 @@ test('global invokeBatch empty entries resolves to an empty array (regression gu
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
-  configure(engine as unknown as EngineClient);
+  };
+  configure(engine);
   try {
     assert.deepEqual(await invokeBatch([]), []);
   } finally {
@@ -4831,7 +4815,7 @@ test('global invokeBatch empty entries resolves to an empty array (regression gu
   }
 });
 
-test('global invokeBatch mixed-signal entries keep the per-entry fallback (regression guard)', async () => {
+void test('global invokeBatch mixed-signal entries keep the per-entry fallback (regression guard)', async () => {
   // signal 전용 항목(timeoutMs 없음)은 글로벌 최소 timeout 레이스를 만들지 않고
   // 엔진의 폴백 경로로 그대로 통과해야 한다 — 엔진 내부 판정과 파사드가 갈라지면
   // 이 표가 잡는다.
@@ -4852,8 +4836,8 @@ test('global invokeBatch mixed-signal entries keep the per-entry fallback (regre
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
-  configure(engine as unknown as EngineClient);
+  };
+  configure(engine);
   try {
     const out = await invokeBatch([
       { command: 'a' },
@@ -4891,7 +4875,7 @@ function resolvingCancelTransport(calls: { dispatches: number }): {
   };
 }
 
-test('R05 invokeWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
+void test('R05 invokeWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
   // 핵심 신규 사례: invoke 내부에서 abort → 정상 resolve. 리스너 등록이 dispatch
   // 뒤에 있으므로 이벤트는 이미 발화됐다 — 재검사 없으면 resolve 가 이긴다.
   const calls = { dispatches: 0 };
@@ -4912,7 +4896,7 @@ test('R05 invokeWithTimeout: dispatch 중 동기 abort 는 취소로 정착한�
   assert.equal(calls.dispatches, 1, 'dispatch must have happened exactly once');
 });
 
-test('R05 invokeByIdWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
+void test('R05 invokeByIdWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
   const calls = { dispatches: 0 };
   const ac = new AbortController();
   const transport = resolvingCancelTransport(calls);
@@ -4932,7 +4916,7 @@ test('R05 invokeByIdWithTimeout: dispatch 중 동기 abort 는 취소로 정착�
   assert.equal(calls.dispatches, 1, 'dispatch must have happened exactly once');
 });
 
-test('R05 회귀 가드: pre-abort 는 0 dispatch 로 즉시 거부한다', async () => {
+void test('R05 회귀 가드: pre-abort 는 0 dispatch 로 즉시 거부한다', async () => {
   // 기존 fast path — 재검사 추가가 이 경로를 흔들면 안 된다.
   let dispatches = 0;
   const ac = new AbortController();
@@ -4951,7 +4935,7 @@ test('R05 회귀 가드: pre-abort 는 0 dispatch 로 즉시 거부한다', asyn
   assert.equal(dispatches, 0, 'pre-abort must never dispatch');
 });
 
-test('R05 회귀 가드: in-flight 비동기 abort 는 기존대로 취소한다', async () => {
+void test('R05 회귀 가드: in-flight 비동기 abort 는 기존대로 취소한다', async () => {
   // dispatch 이후 promise settle 전에 abort — 기존 이벤트 경로.
   let resolveDispatch!: (v: string) => void;
   let dispatches = 0;
@@ -4977,7 +4961,7 @@ test('R05 회귀 가드: in-flight 비동기 abort 는 기존대로 취소한다
   await new Promise<void>((resolve) => queueMicrotask(resolve));
 });
 
-test('R05 회귀 가드: 정상 완료 후 abort 는 결과를 바꾸지 않는다', async () => {
+void test('R05 회귀 가드: 정상 완료 후 abort 는 결과를 바꾸지 않는다', async () => {
   const calls = { dispatches: 0 };
   const ac = new AbortController();
   const engine: EngineClient = {
@@ -4993,7 +4977,7 @@ test('R05 회귀 가드: 정상 완료 후 abort 는 결과를 바꾸지 않는�
   assert.equal(calls.dispatches, 1);
 });
 
-test('R05 정착 일변성: 동기 abort 재검사는 resolve 와의 경쟁에서 정확히 한 번 이긴다', async () => {
+void test('R05 정착 일변성: 동기 abort 재검사는 resolve 와의 경쟁에서 정확히 한 번 이긴다', async () => {
   // 재진입: dispatch 가 이중 abort 를 부르고 정상 resolve 까지 반환한다.
   // settle-once 의 관측 증거 — cancel 이 정착한 뒤 resolve 리스너가 절대
   // 실행되지 않는다. 이미 fulfill 된 promise 가 races[0] 로 먼저 연결되면
@@ -5028,7 +5012,7 @@ test('R05 정착 일변성: 동기 abort 재검사는 resolve 와의 경쟁에�
   assert.equal(calls.dispatches, 1);
 });
 
-test('R05 정리 경로: 정착 후 abort 리스너가 정확히 한 번 제거된다', async () => {
+void test('R05 정리 경로: 정착 후 abort 리스너가 정확히 한 번 제거된다', async () => {
   // 기존 cleanup path 보존 — in-flight abort 로 정착한 뒤 finally 정리가
   // 리스너를 제거해야 한다. removeEventListener 스파이로 직접 증명한다.
   // (동기 abort 재검사 경로는 애초에 리스너를 등록하지 않으므로 이 테스트의
@@ -5068,7 +5052,7 @@ test('R05 정리 경로: 정착 후 abort 리스너가 정확히 한 번 제거�
   );
 });
 
-test('R05 배치 폴백: 와이어 배치 항목의 동기 abort 도 취소로 정착한다', async () => {
+void test('R05 배치 폴백: 와이어 배치 항목의 동기 abort 도 취소로 정착한다', async () => {
   // 배치 폴백은 항목별 invokeWithTimeout 을 태운다(cancel.ts) — 케이스 2가
   // 폴백을 통해서도 관측되는지 암묵적 핀. signal 항목이 단일 횡단을 깨는 것은
   // 기존 R04 회귀 표가 담당한다.
@@ -5089,7 +5073,7 @@ test('R05 배치 폴백: 와이어 배치 항목의 동기 abort 도 취소로 �
   assert.equal(dispatches, 2, 'both entries must have dispatched (Promise.all semantics)');
 });
 
-test('R05 흡수 보장: 선정착 반환이 나중에 reject 하는 dispatch promise 를 흡수한다', async () => {
+void test('R05 흡수 보장: 선정착 반환이 나중에 reject 하는 dispatch promise 를 흡수한다', async () => {
   // 재검사 reject 로 선정착 반환할 때 dispatch promise 의 reject 흡수자가 이미
   // 붙어 있어야 한다 — transport 가 abort 중 reject 하면 지각 rejection 이
   // unhandled rejection 이 되어 프로세스가 죽는다(레이스 경로와 동일 보장).
@@ -5149,7 +5133,7 @@ function fakeAbortSignal(): {
   };
 }
 
-test('R06 핵심: native cancel 이 throw 해도 rejection 으로 정착하고 cause 에 보존된다', async () => {
+void test('R06 핵심: native cancel 이 throw 해도 rejection 으로 정착하고 cause 에 보존된다', async () => {
   // ① 실패 사례 — cancel 이 throw 하면 현재 코드는 예외가 finish() 밖으로
   // 새어나가 reject 전에 정착 플래그가 이미 뒤집혔다: Promise 는 pending 에
   // 영원히 남는다. 기대 계약은 rejection 정착 + cancel 예외의 cause 보존.
@@ -5196,7 +5180,7 @@ test('R06 핵심: native cancel 이 throw 해도 rejection 으로 정착하고 c
   assert.equal(cancelCalls, 1, 'cancel must have been invoked exactly once');
 });
 
-test('R06 회귀 가드: 정상 cancel 은 기존대로 rejection 으로 정착한다', async () => {
+void test('R06 회귀 가드: 정상 cancel 은 기존대로 rejection 으로 정착한다', async () => {
   // ② — cancel 성공 경로. try/catch 추가가 이 경로를 흔들면 안 된다.
   let cancelCalls = 0;
   const fake = fakeAbortSignal();
@@ -5223,7 +5207,7 @@ test('R06 회귀 가드: 정상 cancel 은 기존대로 rejection 으로 정착�
   assert.equal(cancelCalls, 1, 'cancel must have been invoked exactly once');
 });
 
-test('R06 회귀 가드: cancel 미지원·invocationId 수신 전에도 rejection 으로 정착한다', async () => {
+void test('R06 회귀 가드: cancel 미지원·invocationId 수신 전에도 rejection 으로 정착한다', async () => {
   // ③ — cancel 이 undefined 이거나 dispatch 가 아직 id 를 돌려주지 않은
   // (invocationId < 0) 상태. 둘 다 onAbort 의 기존 가드가 커버하며,
   // try/catch 추가는 가드 없는 reject 경로를 그대로 유지해야 한다.
@@ -5255,7 +5239,7 @@ test('R06 회귀 가드: cancel 미지원·invocationId 수신 전에도 rejecti
   );
 });
 
-test('R06 회귀 가드: completion 이 cancel 보다 늦게 도착해도 결과는 불변이다', async () => {
+void test('R06 회귀 가드: completion 이 cancel 보다 늦게 도착해도 결과는 불변이다', async () => {
   // ④ — abort 로 정착한 뒤 지각 completion(resolve) 이 와도 결과가 뒤집히지
   // 않는다. settled 이 cancel 예외로 새어나간 결함 상태에서는 fire() 가 예외를
   // 던져 이 테스트 자체가 여기서 죽는다 — red 증거의 부수 관측.
@@ -5290,7 +5274,7 @@ function watchedResult(p: Promise<number>): Promise<string> {
   );
 }
 
-test('R06 회귀 가드: completion 중복은 정확히 한 번만 정착한다', async () => {
+void test('R06 회귀 가드: completion 중복은 정확히 한 번만 정착한다', async () => {
   // ⑤ — 이중 completion. settle-once 일변성 보존.
   let resolveFirst: ((value: number) => void) | undefined;
   let resolveSecond: ((value: number) => void) | undefined;
@@ -5319,7 +5303,7 @@ test('R06 회귀 가드: completion 중복은 정확히 한 번만 정착한다'
   await new Promise<void>((resolve) => queueMicrotask(resolve));
 });
 
-test('R06 실제 신호: AbortController 로도 핵심 사례가 동일하게 정착한다', async () => {
+void test('R06 실제 신호: AbortController 로도 핵심 사례가 동일하게 정착한다', async () => {
   // ⑥ — 주입 double(①)이 실제 AbortSignal 경로와 같은 결과를 내는지의
   // 범위 대조. 실제 신호에서는 abort 리스너의 탈출 throw 가 bun test 에서
   // "활성 테스트의 실패"로 귀속되므로, 이 테스트는 탈출 관측이 red 증거가
@@ -5379,25 +5363,26 @@ test('R06 실제 신호: AbortController 로도 핵심 사례가 동일하게 �
 // pre-abort 승격을 착지시켰다. 이 절은 그 착지의 통합 문서(T09) 회귀 축만
 // 고정한다 — 승격 로직 자체는 errors.ts 기존 구현 그대로(회귀 고정).
 
-test('R07 도착: wire 구조화 transport.timeout rejection 을 전역 invoke 파사드가 TimeoutError 로 승격한다', async () => {
+void test('R07 도착: wire 구조화 transport.timeout rejection 을 전역 invoke 파사드가 TimeoutError 로 승격한다', async () => {
   // json-engine 의 .catch(normalizeRustraError) 배선 → errors.ts 승격 →
   // cancel.ts 레이스 경유. instanceof 분기가 파사드 경로 끝까지 살아있는지.
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     configure(
       createJsonEngine({
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- 객체 거절의 정규화 계약이 검증 대상이다
         invoke: () => Promise.reject({ code: 'transport.timeout', message: 'wire timed out' }),
       }),
     );
     await assert.rejects(invoke('slow', { a: 1 }), (err: unknown) => {
       assert.ok(err instanceof TimeoutError, 'wire timeout must surface as TimeoutError');
       assert.ok(err instanceof RustraCommandError, 'TimeoutError must stay a RustraCommandError');
-      assert.equal((err as TimeoutError).code, 'transport.timeout');
-      assert.equal((err as TimeoutError).retryable, true, 'wire retryable must be derived');
+      assert.equal(err.code, 'transport.timeout');
+      assert.equal(err.retryable, true, 'wire retryable must be derived');
       assert.match((err as Error).message, /wire timed out/);
       return true;
     });
@@ -5406,14 +5391,14 @@ test('R07 도착: wire 구조화 transport.timeout rejection 을 전역 invoke �
   }
 });
 
-test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한다', async () => {
+void test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한다', async () => {
   // global-batch.ts 의 최솟값 레이스 — 지각 배치 결과는 버려지고 레이스 승자는
   // TimeoutError 서브클래스여야 한다(dx ② 재확인: 최종 소비자 관점).
   const sentinel: EngineClient = {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
   try {
     let batchCrossings = 0;
     configure({
@@ -5427,8 +5412,8 @@ test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한
       invokeBatch<number>([{ command: 'a', options: { timeoutMs: 20 } }]),
       (err: unknown) => {
         assert.ok(err instanceof TimeoutError, 'batch race must settle with TimeoutError');
-        assert.equal((err as TimeoutError).code, 'transport.timeout');
-        assert.equal((err as TimeoutError).retryable, true);
+        assert.equal(err.code, 'transport.timeout');
+        assert.equal(err.retryable, true);
         assert.match((err as Error).message, /timed out/);
         return true;
       },
@@ -5441,7 +5426,7 @@ test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한
   }
 });
 
-test('R07 도착: 승격된 서브클래스도 cause 와 retryable 을 보존한다', async () => {
+void test('R07 도착: 승격된 서브클래스도 cause 와 retryable 을 보존한다', async () => {
   // errors.ts 승격 경로 — 원본 wire 객체가 cause 로 남고 retryable 유실이
   // 없어야 재시도·원인 추적 코드가 instanceof 경로에서도 동작한다.
   const wire = { code: 'transport.timeout', message: 'backend died', retryable: true };
@@ -5459,7 +5444,7 @@ test('R07 도착: 승격된 서브클래스도 cause 와 retryable 을 보존한
   assert.equal(cancelled.code, 'cancelled');
 });
 
-test('R07 회귀: 사용자 code 커스텀 RustraCommandError 는 normalize 를 통과해도 원본이 보존된다', async () => {
+void test('R07 회귀: 사용자 code 커스텀 RustraCommandError 는 normalize 를 통과해도 원본이 보존된다', async () => {
   // 정책 — normalizeRustraError 의 instanceof fast-path: 이미 RustraCommandError
   // (및 서브클래스)인 값은 절대 재생성하지 않는다. 사용자가 code 를 커스텀한
   // 인스턴스를 transport 가 그대로 reject 해도 객체 동일성·코드·retryable 이
@@ -5501,10 +5486,10 @@ function a04Sentinel(): EngineClient {
     invoke(): Promise<never> {
       throw new Error('sentinel engine: global engine leaked from a previous test');
     },
-  } as unknown as EngineClient;
+  };
 }
 
-test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 unexecuted, 순서 보존', async () => {
+void test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 unexecuted, 순서 보존', async () => {
   // ① 핵심 사례 — 실패 항목 뒤는 dispatch 자체가 없어야 한다. 순차 실행 증명을
   // 겸한다: 항목 2 의 dispatch 는 항목 1 이 정착한 뒤에만 시작된다.
   const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
@@ -5521,7 +5506,7 @@ test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 une
         return `ok:${command}` as T;
       });
     },
-  } as unknown as EngineClient);
+  });
   try {
     const settled = await invokeBatchSettled<string>([
       { command: 'a' },
@@ -5534,10 +5519,12 @@ test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 une
       'entries must be fulfilled / rejected / unexecuted in input order',
     );
     assert.deepEqual(settled[0], { status: 'fulfilled', value: 'ok:a' });
+    // 진입 3 개의 status 순서를 바로 위에서 검증했다 — [1] 은 항상 존재한다.
+    const rejected = settled[1]!;
     assert.ok(
-      settled[1].status === 'rejected' &&
-        settled[1].reason instanceof Error &&
-        (settled[1].reason as Error).message === 'explosion:boom',
+      rejected.status === 'rejected' &&
+        rejected.reason instanceof Error &&
+        rejected.reason.message === 'explosion:boom',
       'the rejection reason must be the normalized original error',
     );
     assert.deepEqual(
@@ -5550,14 +5537,14 @@ test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 une
   }
 });
 
-test('A04 빈 batch: resolve [] (invokeBatch 회귀와 동일 형태)', async () => {
+void test('A04 빈 batch: resolve [] (invokeBatch 회귀와 동일 형태)', async () => {
   const calls = { invokes: 0 };
   configure({
     invoke<T>(): Promise<T> {
       calls.invokes++;
       return Promise.resolve('unused' as T);
     },
-  } as unknown as EngineClient);
+  });
   try {
     const settled = await invokeBatchSettled([]);
     assert.deepEqual(settled, [], 'empty batch must resolve to an empty array');
@@ -5567,7 +5554,7 @@ test('A04 빈 batch: resolve [] (invokeBatch 회귀와 동일 형태)', async ()
   }
 });
 
-test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', async () => {
+void test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', async () => {
   // per-entry invokeWithTimeout 경로 — signal 옵션이 항목별로 존중되는지
   // (in-flight abort → rejected, reason 은 CancelledError). 3번 항목은 dispatch
   // 자체가 안 되므로 unexecuted 로 남는다. 순차 실행이므로 abort 시점 제어가
@@ -5583,7 +5570,7 @@ test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', as
         return `ok:${command}` as T;
       });
     },
-  } as unknown as EngineClient);
+  });
   try {
     const settledPromise = invokeBatchSettled<string>([
       { command: 'a' },
@@ -5608,8 +5595,10 @@ test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', as
       settled.map((entry) => entry.status),
       ['fulfilled', 'rejected', 'unexecuted'],
     );
+    // status 순서 검증이 바로 위에 있다 — [1] 은 항상 존재한다.
+    const rejected = settled[1]!;
     assert.ok(
-      settled[1].status === 'rejected' && settled[1].reason instanceof CancelledError,
+      rejected.status === 'rejected' && rejected.reason instanceof CancelledError,
       'abort rejection reason must be a CancelledError',
     );
   } finally {
@@ -5617,12 +5606,12 @@ test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', as
   }
 });
 
-test('A04 전부 성공: 전부 fulfilled, 순서 = entry 순서', async () => {
+void test('A04 전부 성공: 전부 fulfilled, 순서 = entry 순서', async () => {
   configure({
     invoke<T>(command: string): Promise<T> {
       return Promise.resolve(`ok:${command}` as T);
     },
-  } as unknown as EngineClient);
+  });
   try {
     const settled: Array<BatchSettledEntry<string>> = await invokeBatchSettled<string>([
       { command: 'x' },
@@ -5639,7 +5628,7 @@ test('A04 전부 성공: 전부 fulfilled, 순서 = entry 순서', async () => {
   }
 });
 
-test('A04 회귀 가드: 동일 입력의 invokeBatch 는 기존 reject 계약(Promise.all 동시성) 그대로다', async () => {
+void test('A04 회귀 가드: 동일 입력의 invokeBatch 는 기존 reject 계약(Promise.all 동시성) 그대로다', async () => {
   // ⑤ — invokeBatch 는 무변경이어야 한다: 중간 실패 시 전체 reject, 그리고
   // 폴백 경로는 동시 실행이므로 boom 이 reject 하는 시점에 뒤 항목의 dispatch가
   // 이미 시작됐다(정확히 invokeBatchSettled 의 순차 정책과 반대). 이 대조가
@@ -5666,7 +5655,7 @@ test('A04 회귀 가드: 동일 입력의 invokeBatch 는 기존 reject 계약(P
   );
 });
 
-test('A04 와이어 배치 무시: invokeBatch 를 지원해도 settled 은 항상 per-entry 로 실행한다', async () => {
+void test('A04 와이어 배치 무시: invokeBatch 를 지원해도 settled 은 항상 per-entry 로 실행한다', async () => {
   // 설계 명시 사항의 고정 — transport 가 단일 횡단 invokeBatch 를 제공해도
   // settled 표면은 per-entry 폴백만 탄다(부분 성공 관측이 목적). 와이어 배치가
   // 원자적 all-or-nothing 이므로 settled 로는 부분 성공을 관측할 수 없다.
@@ -5691,7 +5680,7 @@ test('A04 와이어 배치 무시: invokeBatch 를 지원해도 settled 은 항�
       return requests.map(() => 'wire');
     },
   });
-  configure(engine as unknown as EngineClient);
+  configure(engine);
   try {
     const settled = await invokeBatchSettled<string>([
       { command: 'a' },
@@ -5734,7 +5723,7 @@ function mockConsoleDebug(): { calls: string[]; restore(): void } {
   };
 }
 
-test('getDeviceStatus delegates to the registered provider (sync and async)', async () => {
+void test('getDeviceStatus delegates to the registered provider (sync and async)', async () => {
   try {
     // 동기 provider — 반환값을 그대로 전달한다.
     registerDeviceStatusProvider((capability) => {
@@ -5760,7 +5749,7 @@ test('getDeviceStatus delegates to the registered provider (sync and async)', as
   }
 });
 
-test('getDeviceStatus fails open when no provider is registered, warning once', async () => {
+void test('getDeviceStatus fails open when no provider is registered, warning once', async () => {
   resetDeviceStatusForTests();
   const debugs = mockConsoleDebug();
   try {
@@ -5777,7 +5766,7 @@ test('getDeviceStatus fails open when no provider is registered, warning once', 
   }
 });
 
-test('getDeviceStatus recovers from provider exceptions with fail-open status', async () => {
+void test('getDeviceStatus recovers from provider exceptions with fail-open status', async () => {
   const debugs = mockConsoleDebug();
   try {
     // 동기 throw — rejection 대신 unknown 상태로 회복.
@@ -5805,7 +5794,7 @@ test('getDeviceStatus recovers from provider exceptions with fail-open status', 
   }
 });
 
-test('re-registering a provider replaces the previous one (last wins)', async () => {
+void test('re-registering a provider replaces the previous one (last wins)', async () => {
   let oldCalls = 0;
   try {
     registerDeviceStatusProvider(() => {
@@ -5823,7 +5812,7 @@ test('re-registering a provider replaces the previous one (last wins)', async ()
   }
 });
 
-test('duplicate package copies share the registered provider', async () => {
+void test('duplicate package copies share the registered provider', async () => {
   try {
     // 위 duplicate 테스트와 같은 이유로 './index.js' — dist-ts 컴파일 산물 호환.
     const duplicateUrl = new URL(`./index.js?device-duplicate=${Date.now()}`, import.meta.url).href;
@@ -5841,7 +5830,7 @@ test('duplicate package copies share the registered provider', async () => {
   }
 });
 
-test('device error codes are registered and non-retryable (E절)', () => {
+void test('device error codes are registered and non-retryable (E절)', () => {
   assert.equal(RustraErrorCode.DeviceUnavailable, 'device.unavailable');
   assert.equal(RustraErrorCode.DevicePermissionDenied, 'device.permission_denied');
   assert.equal(isRustraErrorCode('device.unavailable'), true);

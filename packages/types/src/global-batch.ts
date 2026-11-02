@@ -26,7 +26,8 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
     try {
       return Promise.resolve(engine.invokeBatch<T>(entries));
     } catch (error) {
-      return Promise.reject(error);
+      // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
     }
   }
   const stripped = entries.map((entry) =>
@@ -38,7 +39,8 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
   try {
     promise = Promise.resolve(engine.invokeBatch<T>(stripped));
   } catch (error) {
-    return Promise.reject(error);
+    // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
   void promise.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;

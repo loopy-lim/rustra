@@ -9,7 +9,20 @@
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // nitro 파리티 정적 강화(T5). noUncheckedIndexedAccess 는 인덱스 접근을
+    // T | undefined 로 승격해 경계 검사를 타입 레벨로 끌어올리고, 나머지는
+    // 제어 흐름 누수(암묵 return/override 누락/switch fallthrough/대소문자
+    // 경로 불일치)를 컴파일 타임에 잡는다.
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true
+    // 의도적 제외: exactOptionalPropertyTypes(선택 프로퍼티에 undefined 허용
+    // 관례가 코드베이스 전반에 있어 전환 비용 > 이득, nitro 도 미사용),
+    // noUnusedLocals/noUnusedParameters(예제·데모 코드의 잡음 — 이 역할은
+    // eslint @typescript-eslint/no-unused-vars 가 대신한다).
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

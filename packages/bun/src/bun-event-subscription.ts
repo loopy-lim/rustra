@@ -156,7 +156,8 @@ export function createBunEventSubscription(
 
 /** 생성 계약의 동형 타입 — 이벤트 'x' 하나가 선언된 스키마에 상당. */
 type ContractPayloads = { x: number };
-type ContractName = keyof ContractPayloads & string;
+// keyof 가 단일 문자열 리터럴 키라 & string 은 타입상 no-op — 규칙 지적에 따라 제거한다.
+type ContractName = keyof ContractPayloads;
 type GeneratedSubscribeFn = <N extends ContractName>(
   name: N,
   callback: (payload: ContractPayloads[N]) => void,

@@ -25,6 +25,8 @@ import { BUN_ENGINE_SUPPORTS } from './bun-ffi.js';
 export { BUN_ENGINE_SUPPORTS, BUN_FRAME_ENGINE_SUPPORTS } from './bun-ffi.js';
 
 export type BunInvokeTransport = {
+  // T | unknown ≡ unknown 동치지만 api-surface 스냅샷 계약이라 원형을 유지한다.
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- 스냅샷 고정(재생성 태스크가 인수할 때 정리)
   invoke(command: string, args?: unknown): Promise<unknown> | unknown;
 };
 

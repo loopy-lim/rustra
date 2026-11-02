@@ -55,7 +55,7 @@ function scaffoldFromTemplate() {
   return { root, projectDir, files, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-test('gate runs the full maintenance cycle in order: init → … → codegen-check → mutate → regen → verify', async () => {
+void test('gate runs the full maintenance cycle in order: init → … → codegen-check → mutate → regen → verify', async () => {
   const events: string[] = [];
   const { root, cleanup } = scratchProject({
     typesTs: 'export type EchoInput = {\n  repeat: number;\n};',
@@ -63,7 +63,7 @@ test('gate runs the full maintenance cycle in order: init → … → codegen-ch
   try {
     const report = await runOnboardingSteps({
       root,
-      runner: async (step) => {
+      runner: async (step: string) => {
         events.push(step);
         return { ok: true, output: '' };
       },
@@ -82,7 +82,7 @@ test('gate runs the full maintenance cycle in order: init → … → codegen-ch
   }
 });
 
-test('gate fails when any step exits non-zero and names the failed step', async () => {
+void test('gate fails when any step exits non-zero and names the failed step', async () => {
   const report = await runOnboardingSteps({
     root: ROOT,
     mutate: () => {},
@@ -94,12 +94,12 @@ test('gate fails when any step exits non-zero and names the failed step', async 
   assert.match(report.error ?? '', /schema not found/);
 });
 
-test('gate aborts at the first failed step without running later steps', async () => {
+void test('gate aborts at the first failed step without running later steps', async () => {
   const ran: string[] = [];
   const report = await runOnboardingSteps({
     root: ROOT,
     mutate: () => ran.push('mutate'),
-    runner: async (step) => {
+    runner: async (step: string) => {
       ran.push(step);
       return step === 'doctor' ? { ok: false, output: 'rustc missing' } : { ok: true, output: '' };
     },
@@ -108,12 +108,12 @@ test('gate aborts at the first failed step without running later steps', async (
   assert.deepEqual(ran, ['init', 'doctor'], 'steps after a failure must not run');
 });
 
-test('gate converts a throwing runner into a named fail-closed report', async () => {
+void test('gate converts a throwing runner into a named fail-closed report', async () => {
   const ran: string[] = [];
   const report = await runOnboardingSteps({
     root: ROOT,
     mutate: () => ran.push('mutate'),
-    runner: async (step) => {
+    runner: async (step: string) => {
       ran.push(step);
       if (step === 'init') throw new Error('spawn rustra ENOENT');
       return { ok: true, output: '' };
@@ -125,14 +125,16 @@ test('gate converts a throwing runner into a named fail-closed report', async ()
   assert.deepEqual(ran, ['init']);
 });
 
-test('gate fails closed when the runner throws an empty Error or empty string', async () => {
+void test('gate fails closed when the runner throws an empty Error or empty string', async () => {
   for (const thrown of [new Error(), '']) {
     const ran: string[] = [];
     const report = await runOnboardingSteps({
       root: ROOT,
       mutate: () => ran.push('mutate'),
-      runner: async (step) => {
+      runner: async (step: string) => {
         ran.push(step);
+        // 문자열 투기까지 fail-close 보고로 귀결됨이 검증 대상이다.
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
         if (step === 'init') throw thrown;
         return { ok: true, output: '' };
       },
@@ -144,12 +146,12 @@ test('gate fails closed when the runner throws an empty Error or empty string', 
   }
 });
 
-test('gate treats a nonzero runner result with empty output as failure', async () => {
+void test('gate treats a nonzero runner result with empty output as failure', async () => {
   const ran: string[] = [];
   const report = await runOnboardingSteps({
     root: ROOT,
     mutate: () => ran.push('mutate'),
-    runner: async (step) => {
+    runner: async (step: string) => {
       ran.push(step);
       return step === 'init'
         ? { ok: false, output: '', status: 127, error: 'spawnSync rustra ENOENT' }
@@ -163,7 +165,7 @@ test('gate treats a nonzero runner result with empty output as failure', async (
   assert.deepEqual(ran, ['init']);
 });
 
-test('gate aborts when hidden workspace patch preparation fails on disk', async () => {
+void test('gate aborts when hidden workspace patch preparation fails on disk', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-patch-failure-'));
   const repoRoot = join(root, 'repo');
   const projectRoot = join(root, 'scratch');
@@ -178,7 +180,7 @@ test('gate aborts when hidden workspace patch preparation fails on disk', async 
       root: projectRoot,
       repoRoot,
       mutate: () => ran.push('mutate'),
-      runner: async (step) => {
+      runner: async (step: string) => {
         ran.push(step);
         return { ok: true, output: '' };
       },
@@ -197,7 +199,7 @@ test('gate aborts when hidden workspace patch preparation fails on disk', async 
   }
 });
 
-test('scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)', () => {
+void test('scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)', () => {
   // cli-codegen.ts check 모드는 RUSTRA_SCHEMA_OUT=<mkdtemp 디렉터리> 를 넘기고
   // resolve(checkRoot, 'schema.json') 이 존재하는지 요구한다. 스캐폴드의 generate bin
   // (src/bin/generate.rs)은 env 디렉터리 안에 schema.json 을 써야 codegen:check 가 녹색이다.
@@ -215,7 +217,7 @@ test('scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)', 
   assert.doesNotMatch(generateRs, /write(_schema)?_to_dir/);
 });
 
-test('cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR; unset stays env-free', async () => {
+void test('cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR; unset stays env-free', async () => {
   // 웜 캐시 옵트인 — 설정 시 cargo 스텝들이 공유 타깃을 상속한다. 상대 경로는 스텝 cwd 가
   // 제각각이므로 게이트 프로세스 cwd 기준 절대 경로로 정규화된다. build/rebuild 뿐 아니라
   // codegen/regen 도 함께 운반한다 — codegen 이 cargo metadata 로 생성 엔트리의 바이너리
@@ -228,7 +230,7 @@ test('cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR
         root,
         env,
         mutate: () => {},
-        runner: async (step, cmd) => {
+        runner: async (step: string, cmd: { cwd: string; env?: Record<string, string> }) => {
           commands.push({ step, env: cmd.env });
           return { ok: true, output: '' };
         },
@@ -257,13 +259,13 @@ test('cargo steps inherit RUSTRA_ONBOARDING_CARGO_TARGET_DIR as CARGO_TARGET_DIR
   }
 });
 
-test('every runner command runs inside the onboarding scratch project; verify reruns the demo', async () => {
+void test('every runner command runs inside the onboarding scratch project; verify reruns the demo', async () => {
   const commands: { cwd: string; argv: string[] }[] = [];
   const { root, cleanup } = scratchProject({ typesTs: '  repeat: number;' });
   try {
     await runOnboardingSteps({
       root,
-      runner: async (_step, cmd) => {
+      runner: async (_step: string, cmd: { cwd: string; argv: string[] }) => {
         commands.push(cmd);
         return { ok: true, output: '' };
       },
@@ -282,7 +284,7 @@ test('every runner command runs inside the onboarding scratch project; verify re
   }
 });
 
-test('codegen-check gate step mirrors codegen plus --check; regen reuses codegen', () => {
+void test('codegen-check gate step mirrors codegen plus --check; regen reuses codegen', () => {
   const codegen = commandFor('codegen', ROOT, ROOT);
   const check = commandFor('codegen-check', ROOT, ROOT);
   const regen = commandFor('regen', ROOT, ROOT);
@@ -292,11 +294,19 @@ test('codegen-check gate step mirrors codegen plus --check; regen reuses codegen
   for (const cmd of [codegen, check, regen]) assert.equal(cmd.cwd, PROJECT_DIR);
 });
 
-test('mutate adds repeat to EchoInput/EchoOutput of the real Task-1 scaffold template', () => {
+void test('mutate adds repeat to EchoInput/EchoOutput of the real Task-1 scaffold template', () => {
   // 템플릿이 echo 모양을 바꾸면 이 테스트가 빨객게 죽는다 — 게이트 변형과 템플릿은
   // 이 픽스처로 결합돼 함께 갱신된다(fail-closed).
-  const files = renderInitProjectFiles(templateVersions('0.7.0', '^0.7.0', '^0.5.0'));
-  const mutated = mutateScaffoldSources({ libRs: files.libRs, appTs: files.appTs });
+  // onboarding-gate.mjs 는 JSDoc 없는 JS 모듈 — 반환을 구조 타입으로 고정한다.
+  const files = renderInitProjectFiles(templateVersions('0.7.0', '^0.7.0', '^0.5.0')) as {
+    libRs: string;
+    appTs: string;
+  };
+  // 단언 대신 변수 타입 지정 — .mjs 추론 any 를 소비 형태로 고정한다.
+  const mutated: { libRs: string; appTs: string } = mutateScaffoldSources({
+    libRs: files.libRs,
+    appTs: files.appTs,
+  });
   assert.match(
     mutated.libRs,
     /pub struct EchoInput \{\s*pub message: String,\s*pub repeat: u32,\s*\}/,
@@ -313,16 +323,23 @@ test('mutate adds repeat to EchoInput/EchoOutput of the real Task-1 scaffold tem
   assert.match(mutated.appTs, /echo\(\{ message: 'hello from TypeScript', repeat: 3 \}\)/);
 });
 
-test('mutate refuses to re-apply over an already-mutated scaffold (anchor gone)', () => {
-  const files = renderInitProjectFiles(templateVersions('0.7.0', '^0.7.0', '^0.5.0'));
-  const once = mutateScaffoldSources({ libRs: files.libRs, appTs: files.appTs });
+void test('mutate refuses to re-apply over an already-mutated scaffold (anchor gone)', () => {
+  // renderInitProjectFiles 는 .mjs 추론이 any — 소비 형태로 고정한다.
+  const files = renderInitProjectFiles(templateVersions('0.7.0', '^0.7.0', '^0.5.0')) as {
+    libRs: string;
+    appTs: string;
+  };
+  const once: { libRs: string; appTs: string } = mutateScaffoldSources({
+    libRs: files.libRs,
+    appTs: files.appTs,
+  });
   assert.throws(
     () => mutateScaffoldSources({ libRs: once.libRs, appTs: once.appTs }),
     /anchor not found/,
   );
 });
 
-test('mutateScaffoldProject rewrites lib.rs and index.ts on disk', () => {
+void test('mutateScaffoldProject rewrites lib.rs and index.ts on disk', () => {
   const { projectDir, cleanup } = scaffoldFromTemplate();
   try {
     mutateScaffoldProject(projectDir);
@@ -335,7 +352,7 @@ test('mutateScaffoldProject rewrites lib.rs and index.ts on disk', () => {
   }
 });
 
-test('verify accepts generated types.ts declaring the mutated field and rejects drift', () => {
+void test('verify accepts generated types.ts declaring the mutated field and rejects drift', () => {
   // 통과 — regen 이 변형을 전파한 경우.
   const pass = scratchProject({
     typesTs: 'export type EchoInput = {\n  message: string;\n  repeat: number;\n};',
@@ -363,7 +380,7 @@ test('verify accepts generated types.ts declaring the mutated field and rejects 
   }
 });
 
-test('gate fails at verify when the mutation did not reach the generated surface', async () => {
+void test('gate fails at verify when the mutation did not reach the generated surface', async () => {
   // 적대적 시나리오 — regen 이 옛 스키마를 다시 쓴 세계: verify 가 게이트를 막는다.
   const drift = scratchProject({ typesTs: 'export type EchoInput = {\n  message: string;\n};' });
   try {
@@ -379,7 +396,7 @@ test('gate fails at verify when the mutation did not reach the generated surface
   }
 });
 
-test('full offline cycle: real mutate + simulated regen propagates the field to verify', async () => {
+void test('full offline cycle: real mutate + simulated regen propagates the field to verify', async () => {
   // cargo 없이 실제 fs 사이클을 검증한다 — mutate 는 진짜(fs), regen 만 runner 로
   // 시뮬레이션(진짜 codegen 이라면 변형된 lib.rs 에서 repeat 을 뽑아낸다).
   const { projectDir, cleanup } = scaffoldFromTemplate();
@@ -388,7 +405,7 @@ test('full offline cycle: real mutate + simulated regen propagates the field to 
     const report = await runOnboardingSteps({
       root: projectDir.replace(/\/onboarding-probe$/, ''),
       mutate: mutateScaffoldProject,
-      runner: async (step) => {
+      runner: async (step: string) => {
         runnerLog.push(step);
         if (step === 'regen') {
           mkdirSync(join(projectDir, 'src', 'generated'), { recursive: true });
@@ -410,7 +427,7 @@ test('full offline cycle: real mutate + simulated regen propagates the field to 
   }
 });
 
-test('report records per-step timing without threshold gating', async () => {
+void test('report records per-step timing without threshold gating', async () => {
   const { root, cleanup } = scratchProject({ typesTs: '  repeat: number;' });
   try {
     const report = await runOnboardingSteps({
@@ -433,7 +450,7 @@ test('report records per-step timing without threshold gating', async () => {
   }
 });
 
-test('failed report carries timings for every step that ran', async () => {
+void test('failed report carries timings for every step that ran', async () => {
   const report = await runOnboardingSteps({
     root: ROOT,
     mutate: () => {},
@@ -448,14 +465,14 @@ test('failed report carries timings for every step that ran', async () => {
   for (const step of report.steps) assert.ok(step.durationMs >= 0);
 });
 
-test('gate fails at mutate when the fs mutation throws (catch branch)', async () => {
+void test('gate fails at mutate when the fs mutation throws (catch branch)', async () => {
   const ran: string[] = [];
   const report = await runOnboardingSteps({
     root: ROOT,
     mutate: () => {
       throw new Error('anchor gone');
     },
-    runner: async (step) => {
+    runner: async (step: string) => {
       ran.push(step);
       return { ok: true, output: '' };
     },
@@ -470,7 +487,7 @@ test('gate fails at mutate when the fs mutation throws (catch branch)', async ()
   );
 });
 
-test('gate fails at verify when the demo re-invocation exits non-zero', async () => {
+void test('gate fails at verify when the demo re-invocation exits non-zero', async () => {
   // 재호출 실패 — verify 의 fs 단정은 통과했지만 demo 재실행이 죽은 세계.
   const pass = scratchProject({ typesTs: '  repeat: number;' });
   try {
@@ -490,7 +507,7 @@ test('gate fails at verify when the demo re-invocation exits non-zero', async ()
   }
 });
 
-test('timing receipts separate first call and contract iteration, including failed stages', async () => {
+void test('timing receipts separate first call and contract iteration, including failed stages', async () => {
   const project = scratchProject({ typesTs: 'repeat: number;' });
   try {
     let time = 0;
@@ -520,7 +537,7 @@ test('timing receipts separate first call and contract iteration, including fail
     assert.ok(!('watchDetectionToCallMs' in receipt.measurements));
     assert.equal(receipt.sourceStable, true);
     assert.equal(receipt.consumption, 'source-injected');
-    assert.equal(receipt.cache.cargoTarget, 'fresh-project-target');
+    assert.equal((receipt.cache as { cargoTarget: string }).cargoTarget, 'fresh-project-target');
     const failed = {
       ...report,
       ok: false,
@@ -542,7 +559,7 @@ test('timing receipts separate first call and contract iteration, including fail
   }
 });
 
-test('onboarding evidence classes and existing receipts cannot be silently replaced', () => {
+void test('onboarding evidence classes and existing receipts cannot be silently replaced', () => {
   assert.throws(
     () => onboardingReceipt({ consumption: 'release-ish' }),
     /unknown onboarding consumption/,
@@ -552,13 +569,13 @@ test('onboarding evidence classes and existing receipts cannot be silently repla
     const path = join(root, 'evidence.json');
     writeOnboardingReceipt(path, { ok: true, consumption: 'source-injected' });
     assert.throws(() => writeOnboardingReceipt(path, { ok: false }), /EEXIST/);
-    assert.equal(JSON.parse(readFileSync(path, 'utf8')).ok, true);
+    assert.equal((JSON.parse(readFileSync(path, 'utf8')) as { ok: boolean }).ok, true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('quick-start exposes actual pnpm/yarn flows and distinct target-cache measurement modes', () => {
+void test('quick-start exposes actual pnpm/yarn flows and distinct target-cache measurement modes', () => {
   for (const manager of ['pnpm', 'yarn']) {
     const options = parseQuickStartArgs([
       '--package-manager',
@@ -580,7 +597,7 @@ test('quick-start exposes actual pnpm/yarn flows and distinct target-cache measu
   assert.throws(() => parseQuickStartArgs(['--unknown']), /unknown/);
 });
 
-test('onboarding provenance hashes built package modules, not just the unchanged CLI entry', () => {
+void test('onboarding provenance hashes built package modules, not just the unchanged CLI entry', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-built-'));
   try {
     writeFileSync(join(root, 'package.json'), '{"name":"test-cli","version":"1.0.0"}');
@@ -599,7 +616,7 @@ test('onboarding provenance hashes built package modules, not just the unchanged
   }
 });
 
-test('onboarding provenance hashes Bun file-dependency symlinks to built modules', () => {
+void test('onboarding provenance hashes Bun file-dependency symlinks to built modules', () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-links-'));
   try {
     writeFileSync(join(root, 'package.json'), '{"name":"linked-cli","version":"1.0.0"}');

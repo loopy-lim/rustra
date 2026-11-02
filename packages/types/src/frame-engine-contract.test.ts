@@ -27,7 +27,7 @@ const fail = <T>(outcome: { ok: true; value: T } | { ok: false; error: Error }):
   return outcome.error;
 };
 
-test("plain Error from decode normalizes to RustraCommandError('invoke.malformed')", () => {
+void test("plain Error from decode normalizes to RustraCommandError('invoke.malformed')", () => {
   const frame = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
   const error = fail(
     tier2Outcome(codecWhoseDecodeThrows(new Error('varint out of bounds')), frame, 'addNumbers'),
@@ -43,11 +43,11 @@ test("plain Error from decode normalizes to RustraCommandError('invoke.malformed
   );
   // 원본 예외는 cause 로, 스택도 보존한다(normalizeRustraError 관례).
   assert.ok(error.cause instanceof Error);
-  assert.equal((error.cause as Error).message, 'varint out of bounds');
-  assert.equal(error.stack, (error.cause as Error).stack);
+  assert.equal(error.cause.message, 'varint out of bounds');
+  assert.equal(error.stack, error.cause.stack);
 });
 
-test('non-Error throws are normalized the same way (string throw)', () => {
+void test('non-Error throws are normalized the same way (string throw)', () => {
   const error = fail(
     tier2Outcome(codecWhoseDecodeThrows('varint too long'), new ArrayBuffer(2), 'greet'),
   );
@@ -57,7 +57,7 @@ test('non-Error throws are normalized the same way (string throw)', () => {
   assert.ok(error.message.includes('set RUSTRA_DEBUG=1'));
 });
 
-test("offset hint in the codec error message ('at byte 42') is honored over the frame length", () => {
+void test("offset hint in the codec error message ('at byte 42') is honored over the frame length", () => {
   const frame = new Uint8Array(100);
   const error = fail(
     tier2Outcome(
@@ -70,13 +70,13 @@ test("offset hint in the codec error message ('at byte 42') is honored over the 
   assert.match(error.message, /^decode failed for 'addNumbers' at offset 42: /);
 });
 
-test('already-structured RustraCommandError passes through unwrapped (code preserved)', () => {
+void test('already-structured RustraCommandError passes through unwrapped (code preserved)', () => {
   const thrown = new RustraCommandError('math.divide_by_zero', 'division by zero');
   const error = fail(tier2Outcome(codecWhoseDecodeThrows(thrown), new ArrayBuffer(4), 'divide'));
   assert.equal(error, thrown); // 이중 래핑 금지 — 기존 error.code 분기 보존
 });
 
-test('structured failure responses keep their code/retryable contract unchanged', () => {
+void test('structured failure responses keep their code/retryable contract unchanged', () => {
   const codec: FrameCodec<unknown, unknown> = {
     commandId: 1,
     encode: () => new ArrayBuffer(0),
@@ -88,7 +88,7 @@ test('structured failure responses keep their code/retryable contract unchanged'
   assert.equal(error.retryable, false);
 });
 
-test('success path is untouched', () => {
+void test('success path is untouched', () => {
   const codec: FrameCodec<unknown, unknown> = {
     commandId: 1,
     encode: () => new ArrayBuffer(0),
@@ -98,7 +98,7 @@ test('success path is untouched', () => {
   assert.deepEqual(outcome, { ok: true, value: 42 });
 });
 
-test('normalized error carries an independent copy of the response frame (M8 forensics)', () => {
+void test('normalized error carries an independent copy of the response frame (M8 forensics)', () => {
   // caller-buffer 스타일 뷰(byteOffset ≠ 0)로 전달해도 가시 바이트만 복사된다.
   const backing = new Uint8Array([0, 0, 0xde, 0xad, 0xbe, 0xef, 0xff]);
   const view = new Uint8Array(backing.buffer, 2, 4);
@@ -107,8 +107,8 @@ test('normalized error carries an independent copy of the response frame (M8 for
   );
   assert.ok(error instanceof RustraCommandError);
   assert.ok(error.frameBytes instanceof Uint8Array);
-  assert.deepEqual(Array.from(error.frameBytes!), [0xde, 0xad, 0xbe, 0xef]);
+  assert.deepEqual(Array.from(error.frameBytes), [0xde, 0xad, 0xbe, 0xef]);
   // 독립 복사본 — 원본 버퍼를 나중에 바꿔도 에러의 프레임은 변조되지 않는다.
   backing.fill(0);
-  assert.deepEqual(Array.from(error.frameBytes!), [0xde, 0xad, 0xbe, 0xef]);
+  assert.deepEqual(Array.from(error.frameBytes), [0xde, 0xad, 0xbe, 0xef]);
 });

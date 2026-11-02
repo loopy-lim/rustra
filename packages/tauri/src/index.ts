@@ -47,6 +47,7 @@ import {
   normalizeRustraError,
   RustraErrorCode,
   RustraCommandError,
+  type BatchEntry,
   type BootstrapState,
   type EngineClientWithBatch,
   type EngineSupports,
@@ -63,6 +64,8 @@ import { createTauriContractVerifier } from './tauri-contract.js';
  * const invoke: TauriInvoke = window.__TAURI__.core.invoke;
  * ```
  */
+// T | unknown ≡ unknown 동치지만 api-surface 스냅샷 계약이라 원형을 유지한다.
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- 스냅샷 고정(재생성 태스크가 인수할 때 정리)
 export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
 
 /**
@@ -157,14 +160,15 @@ function createTauriEngineDetails(options: TauriEngineOptions) {
       // 트랙 E2 — N 개 명령을 `rustra_dispatch_batch` 한 번의 IPC 횡단으로
       // 실행한다. Rust 측은 항목별 ok/error 로 응답하므로(fail-fast 아님)
       // 실패 항목만 RustraCommandError 로 재구성해 reject 한다.
-      invokeBatch: async (entries) => {
+      invokeBatch: async <T>(entries: BatchEntry[]): Promise<T[]> => {
         if (verifyBeforeInvoke) await ready();
-        const responses = await tauriInvoke('rustra_dispatch_batch', {
+        // IPC 응답은 unknown — 항목 봉투 형태로 좁힌 뒤 검증한다.
+        const responses = (await tauriInvoke('rustra_dispatch_batch', {
           requests: entries.map((entry) => ({
             command: entry.command,
             args: entry.args === undefined ? {} : entry.args,
           })),
-        });
+        })) as unknown[];
         if (!Array.isArray(responses)) {
           throw new RustraCommandError(
             RustraErrorCode.InvokeMalformed,
@@ -172,7 +176,12 @@ function createTauriEngineDetails(options: TauriEngineOptions) {
           );
         }
         return Promise.all(
-          responses.map(async (response, index) => {
+          responses.map((rawEnvelope, index) => {
+            const response = rawEnvelope as {
+              ok?: unknown;
+              result?: unknown;
+              error?: unknown;
+            };
             if (
               typeof response !== 'object' ||
               response === null ||
@@ -184,7 +193,7 @@ function createTauriEngineDetails(options: TauriEngineOptions) {
                 `Invalid Tauri batch response envelope at entry ${index}`,
               );
             }
-            if (response.ok) return response.result;
+            if (response.ok) return response.result as T;
             throw normalizeRustraError(
               response.error ?? {
                 code: 'invoke.failed',
@@ -260,7 +269,8 @@ export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBoo
       try {
         requireOwnership();
       } catch (error) {
-        return Promise.reject(error);
+        // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
       return (ensureConfigured() as Promise<EngineClientWithBatch>)
         .then((engine) => {

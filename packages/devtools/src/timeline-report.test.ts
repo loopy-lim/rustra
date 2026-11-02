@@ -117,18 +117,18 @@ td.kind { font-family: monospace; }
 </html>
 `;
 
-test('golden: fixture renders the pinned full document', () => {
+void test('golden: fixture renders the pinned full document', () => {
   assert.equal(renderTimelineReport(FIXTURE), EXPECTED_HTML);
 });
 
-test('aggregate header derives totals from the logs array itself', () => {
+void test('aggregate header derives totals from the logs array itself', () => {
   const html = renderTimelineReport(FIXTURE);
   assert.ok(html.includes('<li><span>entries</span><b>4</b></li>'));
   assert.ok(html.includes('<li><span>errors</span><b>1</b></li>'));
   assert.ok(html.includes('<li><span>total duration (ms)</span><b>7.25</b></li>'));
 });
 
-test('escapes hostile command, payload, and error strings', () => {
+void test('escapes hostile command, payload, and error strings', () => {
   const html = renderTimelineReport([
     {
       kind: 'invoke',
@@ -149,7 +149,7 @@ test('escapes hostile command, payload, and error strings', () => {
   assert.ok(html.includes('E&lt;X&gt;: &lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;'));
 });
 
-test('output is self-contained — zero external resources', () => {
+void test('output is self-contained — zero external resources', () => {
   const html = renderTimelineReport(FIXTURE);
   assert.ok(html.startsWith('<!DOCTYPE html>'));
   assert.ok(html.includes('<style>'));
@@ -160,7 +160,7 @@ test('output is self-contained — zero external resources', () => {
   assert.ok(!html.includes('url('));
 });
 
-test('empty log array renders a valid document with an empty marker', () => {
+void test('empty log array renders a valid document with an empty marker', () => {
   const html = renderTimelineReport([]);
   assert.ok(html.startsWith('<!DOCTYPE html>'));
   assert.ok(html.trimEnd().endsWith('</html>'));
@@ -168,11 +168,11 @@ test('empty log array renders a valid document with an empty marker', () => {
   assert.ok(html.includes('<b>0</b>'));
 });
 
-test('rendering is deterministic — same input, byte-identical output', () => {
+void test('rendering is deterministic — same input, byte-identical output', () => {
   assert.equal(renderTimelineReport(FIXTURE), renderTimelineReport(FIXTURE));
 });
 
-test('batch logs render as one flat row — the instrumented command name carries the count', () => {
+void test('batch logs render as one flat row — the instrumented command name carries the count', () => {
   // 계측기(instrumented-engine)가 batch 를 `batch(N)` 명령명의 단일 엔트리로
   // 기록하므로 리포트도 계층 없이 평면 행 하나로 렌더한다.
   const html = renderTimelineReport([
@@ -182,7 +182,7 @@ test('batch logs render as one flat row — the instrumented command name carrie
   assert.ok(html.includes('<td>batch(3)</td>'));
 });
 
-test('1000 entries render deterministically with one row per entry', () => {
+void test('1000 entries render deterministically with one row per entry', () => {
   const logs: DevtoolsLog[] = Array.from({ length: 1000 }, (_, index) => ({
     kind: 'invoke' as const,
     command: `tick.${index}`,
@@ -197,7 +197,7 @@ test('1000 entries render deterministically with one row per entry', () => {
   assert.ok(first.includes('<b>1000</b>'));
 });
 
-test('200-char cut never splits a surrogate pair', () => {
+void test('200-char cut never splits a surrogate pair', () => {
   // 직렬화 길이 204(따옴표 2 + x 198 + 😀 2쌍) — 경계(199번째 코드 유닛)가
   // 첫 😀 의 high surrogate 에 걸리므로 199 로 물러서 잘라야 한다.
   const html = renderTimelineReport([
@@ -215,7 +215,7 @@ test('200-char cut never splits a surrogate pair', () => {
   assert.ok(html.includes(`&quot;${'x'.repeat(198)}…</td>`));
 });
 
-test('circular payload falls back to String(value) without crashing, deterministically', () => {
+void test('circular payload falls back to String(value) without crashing, deterministically', () => {
   const circular: { self?: unknown } = {};
   circular.self = circular;
   const log: DevtoolsLog = {
@@ -231,7 +231,7 @@ test('circular payload falls back to String(value) without crashing, determinist
   assert.equal(first, renderTimelineReport([log]));
 });
 
-test('failure rows render the frame forensics line; others stay byte-identical (M8)', () => {
+void test('failure rows render the frame forensics line; others stay byte-identical (M8)', () => {
   const frameLog: DevtoolsLog = {
     kind: 'invoke',
     command: 'addNumbers',

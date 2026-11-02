@@ -67,7 +67,7 @@ const GOLDEN_HEX = loadGoldenHex();
 
 // ── 1. 교차 언어 링크: 실제 Rust 캡처의 디코드 ────────────────
 
-test('RUST golden fixture (real capture) decodes to the exact DumpedWire fields', () => {
+void test('RUST golden fixture (real capture) decodes to the exact DumpedWire fields', () => {
   const dumped = parseSnapshot(hexToBytes(GOLDEN_HEX));
   assert.deepEqual(dumped, {
     packageId: 'inspector.golden',
@@ -119,19 +119,19 @@ const DOC_HEX =
   '61706162696c6974696573223a5b2261646d696e225d2c2270656e64696e674576656e7473223a302c2264726f70' +
   '7065644576656e7473223a337d7d';
 
-test('serializeSnapshot reproduces the pinned canonical-JSON byte contract', () => {
+void test('serializeSnapshot reproduces the pinned canonical-JSON byte contract', () => {
   const roundTrip = serializeSnapshot(parseSnapshot(hexToBytes(DOC_HEX)));
   assert.equal(bytesToHex(roundTrip), DOC_HEX);
 });
 
-test('string input decodes identically to bytes', () => {
+void test('string input decodes identically to bytes', () => {
   const doc = parseSnapshot(hexToBytes(DOC_HEX));
   assert.deepEqual(doc, parseSnapshot(JSON.stringify(DOC)));
 });
 
 // ── 3. degenerate 스냅샷(미등록 패키지) ──────────────────────
 
-test('unregistered degenerate snapshot (null contract) is a valid DumpedWire', () => {
+void test('unregistered degenerate snapshot (null contract) is a valid DumpedWire', () => {
   const degenerate = {
     packageId: null,
     contractHash: null,
@@ -154,7 +154,7 @@ test('unregistered degenerate snapshot (null contract) is a valid DumpedWire', (
 
 // ── 4. loud 실패 계약 ───────────────────────────────────────
 
-test('truncated JSON fails loudly with position or engine message context', () => {
+void test('truncated JSON fails loudly with position or engine message context', () => {
   const full = hexToBytes(GOLDEN_HEX);
   const truncated = full.slice(0, full.length - 40);
   assert.throws(
@@ -170,7 +170,7 @@ test('truncated JSON fails loudly with position or engine message context', () =
   );
 });
 
-test('malformed JSON from a string fails loudly', () => {
+void test('malformed JSON from a string fails loudly', () => {
   assert.throws(
     () => parseSnapshot('{"packageId": "x", '),
     (error: unknown) => {
@@ -181,7 +181,7 @@ test('malformed JSON from a string fails loudly', () => {
   );
 });
 
-test('wrong top-level shape (array) fails with unexpected_shape', () => {
+void test('wrong top-level shape (array) fails with unexpected_shape', () => {
   assert.throws(
     () => parseSnapshot('[1,2,3]'),
     (error: unknown) => {
@@ -193,7 +193,7 @@ test('wrong top-level shape (array) fails with unexpected_shape', () => {
   );
 });
 
-test('missing commands field fails loudly', () => {
+void test('missing commands field fails loudly', () => {
   assert.throws(
     () => parseSnapshot('{"packageId": "x"}'),
     (error: unknown) => {
@@ -205,7 +205,7 @@ test('missing commands field fails loudly', () => {
   );
 });
 
-test('command entry with wrong types fails with a JSON-pointer path', () => {
+void test('command entry with wrong types fails with a JSON-pointer path', () => {
   assert.throws(
     () =>
       parseSnapshot(
@@ -220,7 +220,7 @@ test('command entry with wrong types fails with a JSON-pointer path', () => {
   );
 });
 
-test('command id out of u16 range fails', () => {
+void test('command id out of u16 range fails', () => {
   assert.throws(
     () =>
       parseSnapshot(
@@ -249,7 +249,7 @@ function expectCounterError(fn: () => unknown, expectedMessage: string): void {
 const COUNTER_BASE =
   '{"packageId":null,"contractHash":null,"schemaGeneration":0,"commands":[],"limits":{"maxPayloadBytes":1048576},"stats":{"registeredCommands":0,"grantedCapabilities":[],"pendingEvents":0,"droppedEvents":0}}';
 
-test('negative limit and fractional counters fail with field-path context', () => {
+void test('negative limit and fractional counters fail with field-path context', () => {
   expectCounterError(
     () => parseSnapshot(COUNTER_BASE.replace('"maxPayloadBytes":1048576', '"maxPayloadBytes":-1')),
     "snapshot 'limits.maxPayloadBytes' must be a non-negative safe integer, got -1",
@@ -260,7 +260,7 @@ test('negative limit and fractional counters fail with field-path context', () =
   );
 });
 
-test('negative generation, negative counters, and non-safe integers fail loudly', () => {
+void test('negative generation, negative counters, and non-safe integers fail loudly', () => {
   expectCounterError(
     () => parseSnapshot(COUNTER_BASE.replace('"schemaGeneration":0', '"schemaGeneration":-3')),
     "snapshot 'schemaGeneration' must be a non-negative safe integer, got -3",
@@ -278,7 +278,7 @@ test('negative generation, negative counters, and non-safe integers fail loudly'
   );
 });
 
-test('registeredCommands/commands.length divergence is rejected', () => {
+void test('registeredCommands/commands.length divergence is rejected', () => {
   assert.throws(
     () =>
       parseSnapshot(
@@ -296,7 +296,7 @@ test('registeredCommands/commands.length divergence is rejected', () => {
   );
 });
 
-test('non-string contractHash and non-number limits fail with field paths', () => {
+void test('non-string contractHash and non-number limits fail with field paths', () => {
   assert.throws(
     () =>
       parseSnapshot(

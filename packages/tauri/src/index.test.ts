@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createTauriBootstrap, createTauriEngine, subscribeTauriEvent } from './index.js';
 import { RustraCommandError, configureDebug, type RustraDebugEvent } from '@rustra/types';
 
-test('createTauriEngine routes invoke through rustra_dispatch', async () => {
+void test('createTauriEngine routes invoke through rustra_dispatch', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const engine = createTauriEngine({
     async invoke(command, args) {
@@ -19,7 +19,7 @@ test('createTauriEngine routes invoke through rustra_dispatch', async () => {
   ]);
 });
 
-test('createTauriEngine applies timeoutMs and shallow abort to pending transports', async () => {
+void test('createTauriEngine applies timeoutMs and shallow abort to pending transports', async () => {
   const engine = createTauriEngine({
     invoke: () => new Promise<never>(() => {}),
   });
@@ -38,7 +38,7 @@ test('createTauriEngine applies timeoutMs and shallow abort to pending transport
   );
 });
 
-test('createTauriEngine exposes Promise-based invokeBatch with stable order', async () => {
+void test('createTauriEngine exposes Promise-based invokeBatch with stable order', async () => {
   // 트랙 E2 — invokeBatch 는 이제 rustra_dispatch_batch 와이어 배치 한 번으로
   // 처리된다. mock 호스트는 Rust 계약(항목별 ok/result)을 그대로 흉내 낸다.
   const engine = createTauriEngine({
@@ -57,7 +57,7 @@ test('createTauriEngine exposes Promise-based invokeBatch with stable order', as
   assert.deepEqual(out, [1, 2]);
 });
 
-test('createTauriEngine normalizes undefined args to empty object', async () => {
+void test('createTauriEngine normalizes undefined args to empty object', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const engine = createTauriEngine({
     async invoke(command, args) {
@@ -70,7 +70,7 @@ test('createTauriEngine normalizes undefined args to empty object', async () => 
   assert.deepEqual(calls, [{ command: 'rustra_dispatch', args: { command: 'noArgs', args: {} } }]);
 });
 
-test('Tauri verifies an expected contract before commands and shares the startup handshake', async () => {
+void test('Tauri verifies an expected contract before commands and shares the startup handshake', async () => {
   const calls: string[] = [];
   const engine = createTauriEngine({
     contractHash: 'expected',
@@ -88,7 +88,7 @@ test('Tauri verifies an expected contract before commands and shares the startup
   assert.deepEqual(calls, ['rustra_contract_hash', 'rustra_dispatch', 'rustra_dispatch_batch']);
 });
 
-test('Tauri strict contract mismatch rejects before executing a command', async () => {
+void test('Tauri strict contract mismatch rejects before executing a command', async () => {
   const calls: string[] = [];
   const engine = createTauriEngine({
     contractHash: 'expected',
@@ -104,12 +104,13 @@ test('Tauri strict contract mismatch rejects before executing a command', async 
   assert.deepEqual(calls, ['rustra_contract_hash']);
 });
 
-test('Tauri preserves a native IPC contract mismatch error and sends the expected hash', async () => {
+void test('Tauri preserves a native IPC contract mismatch error and sends the expected hash', async () => {
   const engine = createTauriEngine({
     contractHash: 'expected',
     async invoke(command, args) {
       assert.equal(command, 'rustra_contract_hash');
       assert.deepEqual(args, { expectedHash: 'expected' });
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- 비-Error throw 의 정규화 계약이 검증 대상이다
       throw { code: 'contract.mismatch', message: 'native rejected stale client' };
     },
   });
@@ -122,7 +123,7 @@ test('Tauri preserves a native IPC contract mismatch error and sends the expecte
   );
 });
 
-test('Tauri strict contract verification rejects old or malformed native handshakes', async () => {
+void test('Tauri strict contract verification rejects old or malformed native handshakes', async () => {
   for (const response of [undefined, 123, {}]) {
     const engine = createTauriEngine({ contractHash: 'expected', invoke: () => response });
     await assert.rejects(
@@ -134,6 +135,8 @@ test('Tauri strict contract verification rejects old or malformed native handsha
   const old = createTauriEngine({
     contractHash: 'expected',
     invoke: async () => {
+      // 문자열 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'Command rustra_contract_hash not found';
     },
   });
@@ -144,10 +147,12 @@ test('Tauri strict contract verification rejects old or malformed native handsha
   );
 });
 
-test('Tauri missing native registration explains the handler replacement and repair', async () => {
+void test('Tauri missing native registration explains the handler replacement and repair', async () => {
   const cause = 'Command rustra_contract_hash not found';
   const bootstrap = createTauriBootstrap({
     contractHash: 'expected',
+    // 임의 거절 값(String)이 정규화/레이블링되는 계약이 검증 대상이다.
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
     invoke: () => Promise.reject(cause),
   });
   try {
@@ -166,10 +171,12 @@ test('Tauri missing native registration explains the handler replacement and rep
   }
 });
 
-test('Tauri custom transport failures are not mislabeled as missing native registration', async () => {
+void test('Tauri custom transport failures are not mislabeled as missing native registration', async () => {
   for (const cause of [new Error('transport disconnected'), 'Command custom_rpc not found']) {
     const engine = createTauriEngine({
       contractHash: 'expected',
+      // 임의 거절 값(String)이 정규화/레이블링되는 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
       invoke: () => Promise.reject(cause),
     });
     await assert.rejects(engine.invoke('first'), (error: unknown) => {
@@ -182,7 +189,7 @@ test('Tauri custom transport failures are not mislabeled as missing native regis
   }
 });
 
-test('Tauri warn permits old transports with one warning and off skips the handshake', async () => {
+void test('Tauri warn permits old transports with one warning and off skips the handshake', async () => {
   const warnings: unknown[] = [];
   const warn = console.warn;
   console.warn = (...args) => {
@@ -195,6 +202,8 @@ test('Tauri warn permits old transports with one warning and off skips the hands
       contractVerification: 'warn',
       invoke(command) {
         calls.push(command);
+        // 문자열 throw 의 정규화 계약이 검증 대상이다.
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
         if (command === 'rustra_contract_hash') throw 'Command rustra_contract_hash not found';
         return 42;
       },
@@ -217,7 +226,7 @@ test('Tauri warn permits old transports with one warning and off skips the hands
   }
 });
 
-test('Tauri bootstrap ready waits for strict native contract verification', async () => {
+void test('Tauri bootstrap ready waits for strict native contract verification', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -241,7 +250,7 @@ test('Tauri bootstrap ready waits for strict native contract verification', asyn
   }
 });
 
-test('disposing Tauri during its native handshake cannot publish or return the stale engine', async () => {
+void test('disposing Tauri during its native handshake cannot publish or return the stale engine', async () => {
   const { configure, invoke } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let started!: () => void;
@@ -276,7 +285,7 @@ test('disposing Tauri during its native handshake cannot publish or return the s
   }
 });
 
-test('Tauri batch rejects malformed response envelopes instead of resolving lost values', async () => {
+void test('Tauri batch rejects malformed response envelopes instead of resolving lost values', async () => {
   for (const response of [null, {}, [{ ok: 'true', result: 1 }], [{ ok: true }], [{ ok: false }]]) {
     const engine = createTauriEngine({ invoke: async () => response });
     await assert.rejects(engine.invokeBatch([{ command: 'one' }]), (error: unknown) => {
@@ -288,7 +297,7 @@ test('Tauri batch rejects malformed response envelopes instead of resolving lost
   }
 });
 
-test('Tauri batch rejects a response with fewer entries than requested', async () => {
+void test('Tauri batch rejects a response with fewer entries than requested', async () => {
   const engine = createTauriEngine({ invoke: async () => [{ ok: true, result: 1 }] });
   await assert.rejects(
     engine.invokeBatch([{ command: 'one' }, { command: 'two' }]),
@@ -297,7 +306,7 @@ test('Tauri batch rejects a response with fewer entries than requested', async (
   );
 });
 
-test('createTauriEngine discovers the Tauri global without manual transport wiring', async () => {
+void test('createTauriEngine discovers the Tauri global without manual transport wiring', async () => {
   const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
   const previous = root.__TAURI__;
   const calls: Array<{ command: string; args: unknown }> = [];
@@ -321,7 +330,7 @@ test('createTauriEngine discovers the Tauri global without manual transport wiri
   }
 });
 
-test('createTauriBootstrap delays global discovery until the first command', async () => {
+void test('createTauriBootstrap delays global discovery until the first command', async () => {
   const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
   const previous = root.__TAURI__;
   delete root.__TAURI__;
@@ -337,9 +346,11 @@ test('createTauriBootstrap delays global discovery until the first command', asy
   }
 });
 
-test('createTauriEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
+void test('createTauriEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
   const engine = createTauriEngine({
     async invoke() {
+      // 객체 throw 의 RustraCommandError 래핑 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw { code: 'transport.timeout', message: 'request timed out', retryable: true };
     },
   });
@@ -356,10 +367,12 @@ test('createTauriEngine wraps RustraError-shaped rejects into RustraCommandError
   );
 });
 
-test('createTauriEngine wraps non-Error throws as unknown, Error messages via parser', async () => {
+void test('createTauriEngine wraps non-Error throws as unknown, Error messages via parser', async () => {
   // 문자열 throw 는 그대로 unknown 래핑 — Error 가 아니면 파서를 타지 않는다.
   const engine = createTauriEngine({
     async invoke() {
+      // 문자열 throw 의 unknown 래핑 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'transport died';
     },
   });
@@ -376,7 +389,7 @@ test('createTauriEngine wraps non-Error throws as unknown, Error messages via pa
 
 // ── Rust 와이어 에러 — Error.message 의 RustraError JSON/Display 복원 ──
 
-test('createTauriEngine parses RustraError JSON message from wire Error', async () => {
+void test('createTauriEngine parses RustraError JSON message from wire Error', async () => {
   // Rust 가 RustraError 를 JSON 직렬화해 Error 로 던지는 경우 code/retryable 을
   // 보존한다(unknown 래핑 금지 — @rustra/node 와 동일 파이프라인).
   const engine = createTauriEngine({
@@ -396,7 +409,7 @@ test('createTauriEngine parses RustraError JSON message from wire Error', async 
   );
 });
 
-test('createTauriEngine parses Display-style "code: message" Error message', async () => {
+void test('createTauriEngine parses Display-style "code: message" Error message', async () => {
   const engine = createTauriEngine({
     async invoke() {
       throw new Error('command.not_found: nope');
@@ -446,7 +459,7 @@ const GOLDEN_CASES: ReadonlyArray<readonly [string, string]> = [
   ['ypogegrammeni:\u{0345}', 'rustra://ypogegrammeni:\u{0345}'],
 ];
 
-test('rustraEventChannel matches the shared Unicode golden table (Rust event_channel twin)', async () => {
+void test('rustraEventChannel matches the shared Unicode golden table (Rust event_channel twin)', async () => {
   const { rustraEventChannel } = await import('./index.js');
   for (const [input, expected] of GOLDEN_CASES) {
     assert.equal(
@@ -457,7 +470,7 @@ test('rustraEventChannel matches the shared Unicode golden table (Rust event_cha
   }
 });
 
-test('subscribeEvent parses JSON payloads and falls back to raw string', async () => {
+void test('subscribeEvent parses JSON payloads and falls back to raw string', async () => {
   const { subscribeEvent } = await import('./index.js');
   let captured: { channel: string } | null = null;
   let fire: ((payload: string) => void) | null = null;
@@ -480,7 +493,7 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   assert.equal(seen[1], 'not-json');
 });
 
-test('Tauri event strings preserve JSON-looking text delivered by the real WebView', async () => {
+void test('Tauri event strings preserve JSON-looking text delivered by the real WebView', async () => {
   const { subscribeEvent } = await import('./index.js');
   const values = ['{"a":1}', '[1,2]', '"quoted"', '123', 'true', 'null'];
   for (const expected of values) {
@@ -501,7 +514,7 @@ test('Tauri event strings preserve JSON-looking text delivered by the real WebVi
   }
 });
 
-test('Tauri serialized-json compatibility is explicit and decodes every JSON value exactly once', async () => {
+void test('Tauri serialized-json compatibility is explicit and decodes every JSON value exactly once', async () => {
   const { subscribeEvent } = await import('./index.js');
   for (const expected of [{ a: 1 }, [1, 2], '{"a":1}', '"quoted"', 123, true, null]) {
     let actual: unknown;
@@ -548,7 +561,7 @@ function mockListen(): {
   };
 }
 
-test('subscribeEvent keeps a throwing callback inside the listener boundary (called once, error observed)', async () => {
+void test('subscribeEvent keeps a throwing callback inside the listener boundary (called once, error observed)', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const events: RustraDebugEvent[] = [];
@@ -578,7 +591,7 @@ test('subscribeEvent keeps a throwing callback inside the listener boundary (cal
   }
 });
 
-test('subscribeEvent absorbs diagnostics failures — a throwing sink never escapes', async () => {
+void test('subscribeEvent absorbs diagnostics failures — a throwing sink never escapes', async () => {
   // 진단 싱크 자체가 throw 해도 전달 경로로 탈출하지 않는다(json-engine 의
   // "감지 자체는 절대 invoke 를 실패로 만들지 않는다" 계약과 동일 톤).
   const { subscribeEvent } = await import('./index.js');
@@ -605,7 +618,7 @@ test('subscribeEvent absorbs diagnostics failures — a throwing sink never esca
   }
 });
 
-test('subscribeEvent delivers decoded payloads once for a normal callback', async () => {
+void test('subscribeEvent delivers decoded payloads once for a normal callback', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const seen: unknown[] = [];
@@ -614,7 +627,7 @@ test('subscribeEvent delivers decoded payloads once for a normal callback', asyn
   assert.deepEqual(seen, [{ value: 42 }]);
 });
 
-test('subscribeEvent delivers invalid JSON as the original string exactly once', async () => {
+void test('subscribeEvent delivers invalid JSON as the original string exactly once', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const seen: unknown[] = [];
@@ -623,7 +636,7 @@ test('subscribeEvent delivers invalid JSON as the original string exactly once',
   assert.deepEqual(seen, ['not-json'], 'single-pass fallback delivery of the raw string');
 });
 
-test('subscribeEvent protects sibling listeners from a throwing listener', async () => {
+void test('subscribeEvent protects sibling listeners from a throwing listener', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const events: RustraDebugEvent[] = [];
@@ -652,7 +665,7 @@ test('subscribeEvent protects sibling listeners from a throwing listener', async
   }
 });
 
-test('subscribeEvent keeps the raw-string fallback inside the callback boundary too', async () => {
+void test('subscribeEvent keeps the raw-string fallback inside the callback boundary too', async () => {
   // 폴백 전달(원본 문자열)도 콜백 호출 경로다 — 여기서 throw 하면 파서 catch 에서
   // 탈출해 무음 이스케이프(형제 중단 + 진단 0건)가 됐다. R01 계약: 모든 콜백
   // 호출 경로가 경계 안에 있다.
@@ -684,7 +697,7 @@ test('subscribeEvent keeps the raw-string fallback inside the callback boundary 
   }
 });
 
-test('subscribeTauriEvent discovers the global listen API', async () => {
+void test('subscribeTauriEvent discovers the global listen API', async () => {
   const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
   const previous = root.__TAURI__;
   let channel = '';
@@ -716,7 +729,7 @@ test('subscribeTauriEvent discovers the global listen API', async () => {
 // 파서의 전부다 — 각 행은 typeof/null 이중 assert 로 고정한다(동치 혼동 방지:
 // 123 ≠ '123', true ≠ 'true', null 은 typeof 'object').
 
-test('subscribeEvent payload contract table — decoded values pass through unchanged', async () => {
+void test('subscribeEvent payload contract table — decoded values pass through unchanged', async () => {
   const { subscribeEvent } = await import('./index.js');
   const { listen, fire } = mockListen();
   const seen: Array<{ typeofIn: string; value: unknown }> = [];
@@ -770,7 +783,7 @@ test('subscribeEvent payload contract table — decoded values pass through unch
   assert.equal(seen[0]!.value, identity, 'decoded object keeps its identity — no clone via parse');
 });
 
-test('decoded and explicit serialized-json transports deliver the same event values', async () => {
+void test('decoded and explicit serialized-json transports deliver the same event values', async () => {
   const { subscribeEvent } = await import('./index.js');
   for (const expected of [{ n: 42 }, '{"n":42}', 42, null]) {
     const seen: unknown[] = [];
@@ -797,7 +810,7 @@ test('decoded and explicit serialized-json transports deliver the same event val
 
 // ── 와이어 배치 — rustra_dispatch_batch 단일 횡단 (트랙 E2) ──
 
-test('createTauriEngine routes invokeBatch through rustra_dispatch_batch', async () => {
+void test('createTauriEngine routes invokeBatch through rustra_dispatch_batch', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   let dispatchCalls = 0;
   const engine = createTauriEngine({
@@ -837,7 +850,7 @@ test('createTauriEngine routes invokeBatch through rustra_dispatch_batch', async
   assert.deepEqual(out, [{ value: 42 }, { v: 1 }, { value: 42 }]);
 });
 
-test('createTauriEngine batch rejects with the failing entry error without failing siblings', async () => {
+void test('createTauriEngine batch rejects with the failing entry error without failing siblings', async () => {
   // Rust 계약: 항목별 ok/error (fail-fast 아님). TS 는 실패 항목의 에러를
   // 그대로 전파한다 — Promise.all 이므로 형제 항목 성공은 관찰되지 않지만
   // 에러 객체는 실패한 항목 것임이 보장되어야 한다.
@@ -871,7 +884,7 @@ test('createTauriEngine batch rejects with the failing entry error without faili
   );
 });
 
-test('createTauriEngine batch normalizes undefined args to empty objects', async () => {
+void test('createTauriEngine batch normalizes undefined args to empty objects', async () => {
   const engine = createTauriEngine({
     async invoke(command, args) {
       if (command === 'rustra_dispatch_batch') {
@@ -891,7 +904,7 @@ test('createTauriEngine batch normalizes undefined args to empty objects', async
 // per-entry 폴백 계열이므로 매트릭스 셀을 따른다) / 이벤트 ✅ Rust app.emit 푸시
 // → 'push' / 채널 ❌ Tauri 채널 어댑터 없음 → false / timeoutMs ✅ 레이스 → true.
 
-test('A02: createTauriEngine exposes supports matching the compatibility matrix', async () => {
+void test('A02: createTauriEngine exposes supports matching the compatibility matrix', async () => {
   const engine = createTauriEngine({
     invoke: () => ({}),
   });
@@ -912,7 +925,7 @@ const A05_SLOT_ENGINE = {
   invoke: async <T>() => 'slot' as T,
 } as unknown as import('@rustra/types').EngineClientWithBatch;
 
-test('A05: createTauriBootstrap exposes the lifecycle state surface', async () => {
+void test('A05: createTauriBootstrap exposes the lifecycle state surface', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -927,7 +940,7 @@ test('A05: createTauriBootstrap exposes the lifecycle state surface', async () =
   }
 });
 
-test('A05: ready after dispose rejects loudly (tauri)', async () => {
+void test('A05: ready after dispose rejects loudly (tauri)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -935,7 +948,7 @@ test('A05: ready after dispose rejects loudly (tauri)', async () => {
     bootstrap.dispose();
     await assert.rejects(bootstrap.ready(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.match((err as RustraCommandError).message, /disposed/);
+      assert.match(err.message, /disposed/);
       return true;
     });
   } finally {
@@ -943,7 +956,7 @@ test('A05: ready after dispose rejects loudly (tauri)', async () => {
   }
 });
 
-test('A05: dispose is idempotent — second dispose is a no-op (tauri)', async () => {
+void test('A05: dispose is idempotent — second dispose is a no-op (tauri)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -958,7 +971,7 @@ test('A05: dispose is idempotent — second dispose is a no-op (tauri)', async (
   }
 });
 
-test('A05: concurrent ready calls share one initialization promise (tauri)', async () => {
+void test('A05: concurrent ready calls share one initialization promise (tauri)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -971,7 +984,7 @@ test('A05: concurrent ready calls share one initialization promise (tauri)', asy
   }
 });
 
-test('disposing an uninitialized Tauri bootstrap releases its generated command registration', async () => {
+void test('disposing an uninitialized Tauri bootstrap releases its generated command registration', async () => {
   const { configure, invoke } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let calls = 0;
@@ -992,7 +1005,7 @@ test('disposing an uninitialized Tauri bootstrap releases its generated command 
   }
 });
 
-test('disposing a ready Tauri bootstrap releases its generated command registration', async () => {
+void test('disposing a ready Tauri bootstrap releases its generated command registration', async () => {
   const { configure, invoke } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -1009,7 +1022,7 @@ test('disposing a ready Tauri bootstrap releases its generated command registrat
   }
 });
 
-test('a captured Tauri bootstrap engine rejects new calls after disposal', async () => {
+void test('a captured Tauri bootstrap engine rejects new calls after disposal', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   let calls = 0;
@@ -1025,7 +1038,7 @@ test('a captured Tauri bootstrap engine rejects new calls after disposal', async
   }
 });
 
-test('Tauri bootstrap ready rejects when another registration takes ownership', async () => {
+void test('Tauri bootstrap ready rejects when another registration takes ownership', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -1041,7 +1054,7 @@ test('Tauri bootstrap ready rejects when another registration takes ownership', 
   }
 });
 
-test('disposing an older Tauri bootstrap preserves a newer engine registration', async () => {
+void test('disposing an older Tauri bootstrap preserves a newer engine registration', async () => {
   const { configure, invoke } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
@@ -1097,13 +1110,13 @@ function fakeIpcChannel() {
 for (const binary of [false, true]) {
   const name = binary ? 'createChannelBytes' : 'createChannel';
   const command = binary ? 'rustra_channel_create_bytes' : 'rustra_channel_create';
-  test(`${name} binds IPC before allocation and closes once without any event listener`, async () => {
+  void test(`${name} binds IPC before allocation and closes once without any event listener`, async () => {
     const api = await import('./index.js');
     const received: unknown[] = [];
     const wire = fakeIpcChannel();
     const calls: Array<{ command: string; args: unknown }> = [];
     const channel = await api[name]((payload: unknown) => received.push(payload), {
-      createIpcChannel: wire.createIpcChannel,
+      createIpcChannel: (...args) => wire.createIpcChannel(...args),
       listen: async () => {
         throw new Error('event transport must not be used');
       },
@@ -1129,7 +1142,7 @@ for (const binary of [false, true]) {
     assert.equal(calls.length, 2);
   });
 
-  test(`${name} releases callbacks on IPC rejection and invalid handles`, async () => {
+  void test(`${name} releases callbacks on IPC rejection and invalid handles`, async () => {
     const api = await import('./index.js');
     for (const invalid of [0, -1, 1.5, 2 ** 32, '7', undefined, 'reject']) {
       const wire = fakeIpcChannel();
@@ -1140,7 +1153,7 @@ for (const binary of [false, true]) {
             received += 1;
           },
           {
-            createIpcChannel: wire.createIpcChannel,
+            createIpcChannel: (...args) => wire.createIpcChannel(...args),
             invoke: async () => {
               if (invalid === 'reject') throw new Error('ipc dead');
               return { handle: invalid, transport: 'ipc-channel-chunks-v1' };
@@ -1155,13 +1168,13 @@ for (const binary of [false, true]) {
     }
   });
 
-  test(`${name} rejects an old broadcast host and drops its handle`, async () => {
+  void test(`${name} rejects an old broadcast host and drops its handle`, async () => {
     const api = await import('./index.js');
     const wire = fakeIpcChannel();
     const dropped: unknown[] = [];
     await assert.rejects(
       api[name](() => {}, {
-        createIpcChannel: wire.createIpcChannel,
+        createIpcChannel: (...args) => wire.createIpcChannel(...args),
         invoke: async (cmd, args) => {
           if (cmd === command) return { handle: 12 };
           dropped.push(args);
@@ -1174,11 +1187,11 @@ for (const binary of [false, true]) {
     assert.equal(wire.disposed(), 1);
   });
 
-  test(`${name} releases callback even if native close rejects`, async () => {
+  void test(`${name} releases callback even if native close rejects`, async () => {
     const api = await import('./index.js');
     const wire = fakeIpcChannel();
     const channel = await api[name](() => {}, {
-      createIpcChannel: wire.createIpcChannel,
+      createIpcChannel: (...args) => wire.createIpcChannel(...args),
       invoke: async (cmd) => {
         if (cmd === command) return { handle: 3, transport: 'ipc-channel-chunks-v1' };
         throw new Error('drop failed');
@@ -1189,7 +1202,7 @@ for (const binary of [false, true]) {
     assert.equal(wire.disposed(), 1);
   });
 
-  test(`${name} requires IPC support before allocating a native handle`, async () => {
+  void test(`${name} requires IPC support before allocating a native handle`, async () => {
     const api = await import('./index.js');
     const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
     const previous = root.__TAURI__;
@@ -1214,12 +1227,12 @@ for (const binary of [false, true]) {
   });
 }
 
-test('JSON IPC preserves string values without parsing them a second time', async () => {
+void test('JSON IPC preserves string values without parsing them a second time', async () => {
   const { createChannel } = await import('./index.js');
   const wire = fakeIpcChannel();
   const received: unknown[] = [];
   const channel = await createChannel((value) => received.push(value), {
-    createIpcChannel: wire.createIpcChannel,
+    createIpcChannel: (...args) => wire.createIpcChannel(...args),
     invoke: async () => ({ handle: 3, transport: 'ipc-channel-chunks-v1' }),
   });
   wire.fire('42');
@@ -1229,7 +1242,7 @@ test('JSON IPC preserves string values without parsing them a second time', asyn
   await channel.close();
 });
 
-test('bytes IPC rejects invalid arrays and reports diagnostics', async () => {
+void test('bytes IPC rejects invalid arrays and reports diagnostics', async () => {
   const { createChannelBytes } = await import('./index.js');
   const wire = fakeIpcChannel();
   const events: RustraDebugEvent[] = [];
@@ -1237,7 +1250,7 @@ test('bytes IPC rejects invalid arrays and reports diagnostics', async () => {
   configureDebug((event) => events.push(event));
   try {
     const channel = await createChannelBytes((value) => received.push(value), {
-      createIpcChannel: wire.createIpcChannel,
+      createIpcChannel: (...args) => wire.createIpcChannel(...args),
       invoke: async () => ({ handle: 4, transport: 'ipc-channel-chunks-v1' }),
     });
     for (const invalid of ['garbage', [256], [-1], [1.5], ['1']]) wire.raw(invalid);
@@ -1251,7 +1264,7 @@ test('bytes IPC rejects invalid arrays and reports diagnostics', async () => {
   }
 });
 
-test('global IPC Channel callback is unregistered on failure and close', async () => {
+void test('global IPC Channel callback is unregistered on failure and close', async () => {
   const { createChannel } = await import('./index.js');
   const root = globalThis as typeof globalThis & {
     __TAURI__?: unknown;
@@ -1311,7 +1324,7 @@ function installChannelGlobals(Channel: unknown) {
   };
 }
 
-test('IPC Channel arity guard: a 2.5-style constructor (length 1) receives the callback and delivers', async () => {
+void test('IPC Channel arity guard: a 2.5-style constructor (length 1) receives the callback and delivers', async () => {
   const { requireTauriIpcChannel } = await import('./tauri-globals.js');
   const received: unknown[] = [];
   const onMessage = (payload: unknown) => received.push(payload);
@@ -1338,7 +1351,7 @@ test('IPC Channel arity guard: a 2.5-style constructor (length 1) receives the c
   }
 });
 
-test('IPC Channel arity guard: callback-style use on a pre-2.5 constructor (length 0) fails loudly with the upgrade command', async () => {
+void test('IPC Channel arity guard: callback-style use on a pre-2.5 constructor (length 0) fails loudly with the upgrade command', async () => {
   const { requireTauriIpcChannel } = await import('./tauri-globals.js');
   let constructed = 0;
   class Channel {
@@ -1369,7 +1382,7 @@ test('IPC Channel arity guard: callback-style use on a pre-2.5 constructor (leng
   }
 });
 
-test('IPC Channel arity guard: callback-less construction on a length-0 constructor keeps existing behavior', async () => {
+void test('IPC Channel arity guard: callback-less construction on a length-0 constructor keeps existing behavior', async () => {
   // 콜백을 넘기지 않는(구식 onmessage 후행 할당 스타일) 호출은 가드 대상이
   // 아니다 — 생성은 예전처럼 진행되고 dispose 배선도 동일하다.
   const { requireTauriIpcChannel } = await import('./tauri-globals.js');
@@ -1397,7 +1410,7 @@ test('IPC Channel arity guard: callback-less construction on a length-0 construc
 // 스왑 보고 채널의 래퍼 계약. 예약 세그먼트 이름('hot-core/swapped')은 치환
 // 대상 문자가 없으므로 rustraEventChannel 유도와 정확히 일치해야 한다.
 
-test('subscribeHotSwap listens on the reserved swap channel and delivers both payload shapes', async () => {
+void test('subscribeHotSwap listens on the reserved swap channel and delivers both payload shapes', async () => {
   const { subscribeHotSwap, rustraEventChannel } = await import('./index.js');
   let captured: { channel: string } | null = null;
   let fire: ((payload: unknown) => void) | null = null;
@@ -1429,7 +1442,7 @@ test('subscribeHotSwap listens on the reserved swap channel and delivers both pa
   ]);
 });
 
-test('subscribeHotSwap rejects loudly when the Tauri global listen API is missing', async () => {
+void test('subscribeHotSwap rejects loudly when the Tauri global listen API is missing', async () => {
   const { subscribeHotSwap } = await import('./index.js');
   const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
   const previous = root.__TAURI__;
@@ -1444,7 +1457,7 @@ test('subscribeHotSwap rejects loudly when the Tauri global listen API is missin
   }
 });
 
-test('IPC frame decoder bounds allocation, rejects gaps, and resets on disposal', async () => {
+void test('IPC frame decoder bounds allocation, rejects gaps, and resets on disposal', async () => {
   const { createChannelFrameDecoder, MAX_CHANNEL_FRAME_BYTES } =
     await import('./tauri-channel-frames.js');
   const frames: Uint8Array[] = [];
@@ -1468,7 +1481,7 @@ test('IPC frame decoder bounds allocation, rejects gaps, and resets on disposal'
   assert.deepEqual(frames, [new Uint8Array([1, 2, 3, 4])]);
 });
 
-test('large JSON and binary frames reassemble across private IPC packets', async () => {
+void test('large JSON and binary frames reassemble across private IPC packets', async () => {
   const { createChannel, createChannelBytes } = await import('./index.js');
   for (const binary of [false, true]) {
     const wire = fakeIpcChannel();
@@ -1476,7 +1489,7 @@ test('large JSON and binary frames reassemble across private IPC packets', async
     const value = binary ? new Uint8Array(16_000).fill(255) : { text: '가'.repeat(10_000) };
     const create = binary ? createChannelBytes : createChannel;
     const channel = await create((payload) => received.push(payload), {
-      createIpcChannel: wire.createIpcChannel,
+      createIpcChannel: (...args) => wire.createIpcChannel(...args),
       invoke: async () => ({ handle: 8, transport: 'ipc-channel-chunks-v1' }),
     });
     wire.fire(value);
@@ -1485,7 +1498,7 @@ test('large JSON and binary frames reassemble across private IPC packets', async
   }
 });
 
-test('JSON adapter preserves explicit null while legacy omitted input remains an object', async () => {
+void test('JSON adapter preserves explicit null while legacy omitted input remains an object', async () => {
   const engine = createTauriEngine({
     async invoke(command, args) {
       const value = args as { args?: unknown; requests?: { args: unknown }[] };

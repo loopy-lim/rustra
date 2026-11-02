@@ -93,7 +93,7 @@ export function useCommand<I, O>(
       setLoading(false);
       return;
     }
-    execute();
+    void execute();
 
     return () => {
       // 세대 무효화 — unmount/re-run 시 진행 중 실행의 setState 를 막는다.

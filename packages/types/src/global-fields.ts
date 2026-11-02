@@ -18,7 +18,8 @@ function invokeRoute<T>(route: GeneratedFieldsRoute, args: unknown, fields: unkn
   try {
     return Promise.resolve(route(args, fields[0], fields[1], fields[2]) as T);
   } catch (error) {
-    return Promise.reject(error);
+    // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -59,7 +60,7 @@ function invokeFields<T>(
           syncInvoke<T>(commandId, command, args, count, fields[0], fields[1], fields[2]),
         );
       } catch (error) {
-        return Promise.reject(error);
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
     }
   }

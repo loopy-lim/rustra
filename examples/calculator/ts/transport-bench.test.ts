@@ -85,7 +85,7 @@ function createNapiInvoke() {
 
 // ── Tests ───────────────────────────────────────────────
 
-describe('transport performance', { concurrency: 1 }, () => {
+void describe('transport performance', { concurrency: 1 }, () => {
   const binPath = join(ROOT, 'target/debug/rustra-calculator-example');
   const napiPath = join(
     ROOT,
@@ -102,18 +102,18 @@ describe('transport performance', { concurrency: 1 }, () => {
   const runningUnderBunTest = bunGlobal !== undefined && typeof bunGlobal.spawnSync === 'function';
 
   if (runningUnderBunTest) {
-    it.skip('subprocess/napi: bun test 러너의 spawnSync 호환 버그로 스킵 (bun run bench 사용)', () => {});
+    void it.skip('subprocess/napi: bun test 러너의 spawnSync 호환 버그로 스킵 (bun run bench 사용)', () => {});
   } else if (!existsSync(binPath)) {
-    it.skip("subprocess: binary not found, run 'cargo build -p rustra-calculator-example'", () => {});
-    it.skip('subprocess: latency (no binary)', () => {});
+    void it.skip("subprocess: binary not found, run 'cargo build -p rustra-calculator-example'", () => {});
+    void it.skip('subprocess: latency (no binary)', () => {});
   } else {
-    it('subprocess: addNumbers returns correct result', () => {
+    void it('subprocess: addNumbers returns correct result', () => {
       const invoke = createSubprocessInvoke();
       const result = invoke('addNumbers', { a: 20, b: 22 }) as { value: number };
       assert.equal(result.value, 42);
     });
 
-    it('subprocess: latency within threshold (p50)', () => {
+    void it('subprocess: latency within threshold (p50)', () => {
       const invoke = createSubprocessInvoke();
       const r = bench(
         'subprocess',
@@ -132,15 +132,15 @@ describe('transport performance', { concurrency: 1 }, () => {
 
   if (runningUnderBunTest) {
     // 위에서 이미 스킵 안내 — napi 블록도 동일 사유로 스킵 처리.
-    it.skip('napi-rs: bun test 러너 호환성 (createRequire .node 로드) — 스킵', () => {});
+    void it.skip('napi-rs: bun test 러너 호환성 (createRequire .node 로드) — 스킵', () => {});
   } else if (existsSync(napiPath)) {
-    it('napi-rs: addNumbers returns correct result', () => {
+    void it('napi-rs: addNumbers returns correct result', () => {
       const invoke = createNapiInvoke();
       const result = invoke('addNumbers', { a: 20, b: 22 }) as { value: number };
       assert.equal(result.value, 42);
     });
 
-    it('napi-rs: latency within threshold (p50)', () => {
+    void it('napi-rs: latency within threshold (p50)', () => {
       const invoke = createNapiInvoke();
       const r = bench('napi-rs', () => invoke('addNumbers', { a: 42, b: 58 }));
       console.log(
@@ -152,7 +152,7 @@ describe('transport performance', { concurrency: 1 }, () => {
       );
     });
 
-    it('napi-rs is faster than subprocess', () => {
+    void it('napi-rs is faster than subprocess', () => {
       if (!existsSync(binPath)) return;
       const subprocessInvoke = createSubprocessInvoke();
       const napiInvoke = createNapiInvoke();
@@ -176,6 +176,6 @@ describe('transport performance', { concurrency: 1 }, () => {
       }
     });
   } else {
-    it.skip('napi-rs: .node file not found, skipping', () => {});
+    void it.skip('napi-rs: .node file not found, skipping', () => {});
   }
 });

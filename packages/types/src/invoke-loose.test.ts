@@ -5,7 +5,7 @@ import test from 'node:test';
 import { invokeLoose } from './invoke-loose.js';
 import type { EngineClient } from './public.js';
 
-test('invokeLoose delegates to the engine by command name', async () => {
+void test('invokeLoose delegates to the engine by command name', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const client: EngineClient = {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
@@ -18,7 +18,7 @@ test('invokeLoose delegates to the engine by command name', async () => {
   assert.deepEqual(calls, [{ command: 'platformNativeInfo', args: undefined }]);
 });
 
-test('invokeLoose forwards args and options untouched', async () => {
+void test('invokeLoose forwards args and options untouched', async () => {
   const controller = new AbortController();
   const seen: { args?: unknown; signal?: AbortSignal }[] = [];
   const client: EngineClient = {
@@ -44,7 +44,7 @@ test('invokeLoose forwards args and options untouched', async () => {
   assert.equal(seen[0]?.signal, controller.signal);
 });
 
-test('invokeLoose defaults the result type to unknown', async () => {
+void test('invokeLoose defaults the result type to unknown', async () => {
   const client: EngineClient = {
     async invoke<T>(_command: string): Promise<T> {
       return { anything: true } as T;

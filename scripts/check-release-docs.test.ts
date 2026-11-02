@@ -25,7 +25,7 @@ function fixture() {
   return root;
 }
 
-test('wrong Rust installation version fails then manifest-aligned docs pass', () => {
+void test('wrong Rust installation version fails then manifest-aligned docs pass', () => {
   const root = fixture();
   try {
     const before = verifyReleaseDocs(root, { docs: ['README.md'], tables: [] });
@@ -39,7 +39,7 @@ test('wrong Rust installation version fails then manifest-aligned docs pass', ()
   }
 });
 
-test('unversioned npm install and wrong independent adapter version fail', () => {
+void test('unversioned npm install and wrong independent adapter version fail', () => {
   const root = fixture();
   try {
     writeFileSync(join(root, 'README.md'), 'bun add @rustra/types @rustra/tauri@0.9.0\n');
@@ -51,7 +51,7 @@ test('unversioned npm install and wrong independent adapter version fail', () =>
   }
 });
 
-test('compatibility table is derived from manifests and cannot disappear or drift', () => {
+void test('compatibility table is derived from manifests and cannot disappear or drift', () => {
   const root = fixture();
   try {
     const doc = join(root, 'matrix.md');

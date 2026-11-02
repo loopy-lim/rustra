@@ -3,12 +3,16 @@ import test from 'node:test';
 import { createJsonEngine } from './json-engine.js';
 import { RustraCommandError } from './errors.js';
 
-test('JSON wire batch normalizes asynchronous transport rejection like a single invoke', async () => {
+void test('JSON wire batch normalizes asynchronous transport rejection like a single invoke', async () => {
   const engine = createJsonEngine({
     invoke: async () => {
+      // 객체 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw { code: 'transport.error', message: 'IPC disconnected', retryable: true };
     },
     invokeBatch: async () => {
+      // 객체 throw 의 정규화 계약이 검증 대상이다.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw { code: 'transport.error', message: 'IPC disconnected', retryable: true };
     },
   });
@@ -23,7 +27,7 @@ test('JSON wire batch normalizes asynchronous transport rejection like a single 
   }
 });
 
-test('JSON wire batch rejects missing, extra, and non-array response entries', async () => {
+void test('JSON wire batch rejects missing, extra, and non-array response entries', async () => {
   for (const response of [undefined, {}, [1], [1, 2, 3]]) {
     const engine = createJsonEngine({
       invoke: () => undefined,
@@ -37,7 +41,7 @@ test('JSON wire batch rejects missing, extra, and non-array response entries', a
   }
 });
 
-test('JSON wire batch preserves void results and an empty batch keeps its single crossing', async () => {
+void test('JSON wire batch preserves void results and an empty batch keeps its single crossing', async () => {
   let crossings = 0;
   const engine = createJsonEngine({
     invoke: () => undefined,

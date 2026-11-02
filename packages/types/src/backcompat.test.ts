@@ -73,7 +73,7 @@ const legacyRecordSchema = {
   required: ['id', 'label', 'ratio', 'born_on'],
 };
 
-test('backcompat struct: uint32 varint + string + f64 + optional presence + ISO date', () => {
+void test('backcompat struct: uint32 varint + string + f64 + optional presence + ISO date', () => {
   const codec = createComplexCodec({
     commandId: 21,
     inputSchema: legacyRecordSchema,
@@ -123,7 +123,7 @@ const nestedSchema = {
   required: ['outer', 'inner'],
 };
 
-test('backcompat nested struct: zigzag inner + optional presence', () => {
+void test('backcompat nested struct: zigzag inner + optional presence', () => {
   const codec = createComplexCodec({
     commandId: 22,
     inputSchema: nestedSchema,
@@ -147,7 +147,7 @@ const optionSchema = {
   required: ['maybe', 'label'],
 };
 
-test('backcompat option: Some/None presence tags for anyOf and type-array notation', () => {
+void test('backcompat option: Some/None presence tags for anyOf and type-array notation', () => {
   const codec = createComplexCodec({
     commandId: 23,
     inputSchema: optionSchema,
@@ -181,7 +181,7 @@ const nestedOptionSchema = {
   required: ['maybe'],
 };
 
-test('backcompat nested option: Some(Some(300)) round-trips, Some(None) decodes only', () => {
+void test('backcompat nested option: Some(Some(300)) round-trips, Some(None) decodes only', () => {
   const codec = createComplexCodec({
     commandId: 30,
     inputSchema: nestedOptionSchema,
@@ -235,7 +235,7 @@ const shapeSchema = {
   ],
 };
 
-test('backcompat data enum: sorted variant indexes, unit and payload variants', () => {
+void test('backcompat data enum: sorted variant indexes, unit and payload variants', () => {
   const codec = createComplexCodec({
     commandId: 24,
     inputSchema: shapeSchema,
@@ -264,7 +264,7 @@ const mapSchema = {
   required: ['counts'],
 };
 
-test('backcompat primitive map: count-prefixed, encoder sorts keys by UTF-8', () => {
+void test('backcompat primitive map: count-prefixed, encoder sorts keys by UTF-8', () => {
   const codec = createComplexCodec({
     commandId: 25,
     inputSchema: mapSchema,
@@ -298,7 +298,7 @@ test('backcompat primitive map: count-prefixed, encoder sorts keys by UTF-8', ()
   );
 });
 
-test('backcompat primitive map: unsorted old-wire entry order decodes (decode-only)', () => {
+void test('backcompat primitive map: unsorted old-wire entry order decodes (decode-only)', () => {
   // 구 Rust HashMap 프로듀서는 해시 순서로 엔트리를 쓸 수 있다 — 정렬되지 않은
   // 순서(b 먼저)의 와이어도 디코드돼야 한다. TS 인코더는 정렬 순서를 내므로 이
   // 케이스는 encode 단언을 의도적으로 생략한 decode-only 골든이다.
@@ -333,7 +333,7 @@ const metricSchema = {
   required: ['unit', 'value'],
 };
 
-test('backcompat struct-valued map: $ref values decode and re-encode byte-identical', () => {
+void test('backcompat struct-valued map: $ref values decode and re-encode byte-identical', () => {
   const codec = createComplexCodec({
     commandId: 31,
     inputSchema: metricMapSchema,
@@ -369,7 +369,7 @@ const tupleSchema = {
   required: ['pair'],
 };
 
-test('backcompat tuple: count-prefixed complex wire for (String, i64)', () => {
+void test('backcompat tuple: count-prefixed complex wire for (String, i64)', () => {
   const codec = createComplexCodec({
     commandId: 26,
     inputSchema: tupleSchema,
@@ -391,7 +391,7 @@ const bytesSchema = {
   required: ['data'],
 };
 
-test('backcompat Vec<u8>: count + per-element plain varint', () => {
+void test('backcompat Vec<u8>: count + per-element plain varint', () => {
   const codec = createComplexCodec({
     commandId: 27,
     inputSchema: bytesSchema,
@@ -411,7 +411,7 @@ const setSchema = {
   required: ['tags'],
 };
 
-test('backcompat Set: insertion-order wire, decode restores a real Set', () => {
+void test('backcompat Set: insertion-order wire, decode restores a real Set', () => {
   const codec = createComplexCodec({
     commandId: 33,
     inputSchema: setSchema,

@@ -15,7 +15,8 @@ export function raceAbort<T>(
       },
       (error) => {
         signal.removeEventListener('abort', onAbort);
-        reject(error);
+        // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+        reject(error instanceof Error ? error : new Error(String(error)));
       },
     );
   });

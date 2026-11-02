@@ -34,7 +34,7 @@ function seedStaleReleaseFixture(prefix: string): { root: string; stale: string;
   return { root, stale, fresh };
 }
 
-test('bunLibraryCandidates orders existing candidates newest-build-first', () => {
+void test('bunLibraryCandidates orders existing candidates newest-build-first', () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-bun-candidates-');
   const previous = process.env.RUSTRA_BUN_LIBRARY;
   delete process.env.RUSTRA_BUN_LIBRARY;
@@ -58,7 +58,7 @@ test('bunLibraryCandidates orders existing candidates newest-build-first', () =>
   }
 });
 
-test('selectVerifiedLibrary falls back past a contract-mismatched candidate', async () => {
+void test('selectVerifiedLibrary falls back past a contract-mismatched candidate', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-bun-select-');
   try {
     const attempts: string[] = [];
@@ -77,7 +77,7 @@ test('selectVerifiedLibrary falls back past a contract-mismatched candidate', as
   }
 });
 
-test('selectVerifiedLibrary records probe failures and keeps scanning', async () => {
+void test('selectVerifiedLibrary records probe failures and keeps scanning', async () => {
   // dlopen/rustra_mobile_init 실패(plain Error)는 후보 기각 — 기존 ABI probe
   // 건너뛰기와 동일하게 다음 후보로 진행한다.
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-bun-probe-');
@@ -95,7 +95,7 @@ test('selectVerifiedLibrary records probe failures and keeps scanning', async ()
   }
 });
 
-test('selectVerifiedLibrary rethrows non-contract engine failures without fallback', async () => {
+void test('selectVerifiedLibrary rethrows non-contract engine failures without fallback', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-bun-fatal-');
   try {
     const attempts: string[] = [];
@@ -116,7 +116,7 @@ test('selectVerifiedLibrary rethrows non-contract engine failures without fallba
   }
 });
 
-test('selectVerifiedLibrary reports all candidate paths with mtime when every library is stale', async () => {
+void test('selectVerifiedLibrary reports all candidate paths with mtime when every library is stale', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-bun-allstale-');
   try {
     await assert.rejects(
@@ -138,7 +138,7 @@ test('selectVerifiedLibrary reports all candidate paths with mtime when every li
   }
 });
 
-test('selectVerifiedLibrary surfaces probe-only failures for the TransportUnavailable path', async () => {
+void test('selectVerifiedLibrary surfaces probe-only failures for the TransportUnavailable path', async () => {
   const { root, stale, fresh } = seedStaleReleaseFixture('rustra-bun-probeonly-');
   try {
     const selection = await selectVerifiedLibrary([stale, fresh], async (candidate) => {
@@ -146,7 +146,7 @@ test('selectVerifiedLibrary surfaces probe-only failures for the TransportUnavai
     });
     assert.ok(!('runtime' in selection));
     assert.deepEqual(
-      (selection as { probeFailures: string[] }).probeFailures.map((entry) => entry.split(': ')[0]),
+      selection.probeFailures.map((entry) => entry.split(': ')[0]),
       [stale, fresh],
     );
   } finally {
@@ -156,7 +156,7 @@ test('selectVerifiedLibrary surfaces probe-only failures for the TransportUnavai
 
 // ── 실 dylib 종단 — 최종 실패 보고가 실제 경로·mtime 을 나열한다 ────────────
 
-test('createBunFfiEngine reports all attempted cdylib paths when the contract matches none', async () => {
+void test('createBunFfiEngine reports all attempted cdylib paths when the contract matches none', async () => {
   const release = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
   const debug = resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`);
   if (!existsSync(release) || !existsSync(debug)) return; // 빌드되지 않은 트리 — 스킵

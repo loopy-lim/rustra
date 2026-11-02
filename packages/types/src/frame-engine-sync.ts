@@ -48,11 +48,12 @@ export function createSyncBindingResolver(
     if (route && keys) {
       // Choose one closure at bind time. Snapshot keys and read each getter once;
       // nested calls share no argument storage.
+      // route 는 keys.length(1..3 검증됨)와 동일히 바인드됐다 — 인덱스 유효성은 그 검증이 보증한다.
       const [a, b, c] = keys;
       if (route === 1)
         return (input) => {
           try {
-            return bound(input, (input as Record<string, unknown>)[a]);
+            return bound(input, (input as Record<string, unknown>)[a!]);
           } catch (error) {
             return normalize(error);
           }
@@ -61,7 +62,7 @@ export function createSyncBindingResolver(
         return (input) => {
           try {
             const object = input as Record<string, unknown>;
-            return bound(input, object[a], object[b]);
+            return bound(input, object[a!], object[b!]);
           } catch (error) {
             return normalize(error);
           }
@@ -69,7 +70,7 @@ export function createSyncBindingResolver(
       return (input) => {
         try {
           const object = input as Record<string, unknown>;
-          return bound(input, object[a], object[b], object[c]);
+          return bound(input, object[a!], object[b!], object[c!]);
         } catch (error) {
           return normalize(error);
         }

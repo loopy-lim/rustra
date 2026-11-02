@@ -19,7 +19,8 @@ export class Reader {
 
   byte(): number {
     this.need(1);
-    return this.bytes[this.offset++];
+    // need(1) 이 remaining >= 1 을 보장하므로 인덱스는 항상 유효하다.
+    return this.bytes[this.offset++]!;
   }
 
   need(length: number): void {

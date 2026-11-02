@@ -11,7 +11,11 @@ import { createBunFfiEngine as candidateEngine } from './bun-ffi.js';
 
 // Allows the same behavioral assertions to demonstrate RED against a saved adapter.
 const createEngine: typeof candidateEngine = process.env.RUSTRA_BUN_OWNED_TEST_ADAPTER
-  ? (await import(pathToFileURL(process.env.RUSTRA_BUN_OWNED_TEST_ADAPTER).href)).createBunFfiEngine
+  ? (
+      (await import(pathToFileURL(process.env.RUSTRA_BUN_OWNED_TEST_ADAPTER).href)) as {
+        createBunFfiEngine: typeof candidateEngine;
+      }
+    ).createBunFfiEngine
   : candidateEngine;
 
 type Input = { size: number; mode?: number; failDecode?: boolean };
@@ -30,11 +34,11 @@ function registry(failDecode = false): Map<string, FrameCodec<unknown, unknown>>
       return { ok: true, result: bytes.slice(8, 8 + length) };
     },
   };
-  return new Map([['echo', codec as FrameCodec<unknown, unknown>]]);
+  return new Map([['echo', codec]]);
 }
 
 for (const variant of ['owned', 'legacy', 'missing-free'] as const) {
-  test(
+  void test(
     `Bun ${variant}: one dispatch, correct allocator, 512-byte boundary and retained results`,
     { skip: process.platform === 'win32' },
     async () => {

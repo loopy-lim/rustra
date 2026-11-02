@@ -124,7 +124,8 @@ export function resolveSuspenseEntry<O>(
   try {
     invocation = start();
   } catch (error) {
-    invocation = Promise.reject(error);
+    // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+    invocation = Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
   const promise = Promise.race([invocation, deadline]);
   const entry: SuspenseEntry<O> = { commandName, promise, status: 'pending' };

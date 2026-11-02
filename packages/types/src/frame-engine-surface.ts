@@ -30,7 +30,8 @@ export function createFrameEngineSurface(
   const invokeEngine: EngineClient = { invoke: invokeRaw };
 
   return {
-    refreshLiveSchema: schema.refreshLiveSchema,
+    // 분리 참조 대신 화살표 위임으로 this 를 고정한다.
+    refreshLiveSchema: () => schema.refreshLiveSchema(),
 
     [invokeByIdSync]<T>(commandId: number, command: string, args?: unknown): T {
       return dispatchById<T>(commandId, command, args);
@@ -154,7 +155,8 @@ export function createFrameEngineSurface(
           const results = native.invokeTypedBatch!(names, args) as T[];
           return Promise.resolve(results);
         } catch (error) {
-          return Promise.reject(error);
+          // 거절 사유는 항상 Error 계열로 고정한다(non-Error 투기 방지).
+          return Promise.reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
       // 동적 명령/시그널 항목이 섞였거나 배치 미지원 → 항목별 라우팅.
@@ -162,5 +164,5 @@ export function createFrameEngineSurface(
       // 취소 정책(전파/얕은)을 따르게 한다 (T1 후속).
       return Promise.all(entries.map((e) => this.invoke<T>(e.command, e.args, e.options)));
     },
-  } as FrameEngine & InternalEngineClient;
+  };
 }

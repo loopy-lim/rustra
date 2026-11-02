@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { invokeLoose } from '@rustra/types';
 
-test('invokeLoose prototypes a command by name without a generated client', async () => {
+void test('invokeLoose prototypes a command by name without a generated client', async () => {
   const calls: string[] = [];
   const client = {
     async invoke<T>(command: string): Promise<T> {

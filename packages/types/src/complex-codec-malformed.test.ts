@@ -79,7 +79,7 @@ const decodeFailure = (
   return decoded.error;
 };
 
-test('complex codec reports invoke.too_short for empty and truncated headers', () => {
+void test('complex codec reports invoke.too_short for empty and truncated headers', () => {
   const codec = decodeWith(pointSchema);
   const expected = {
     ok: false,
@@ -91,7 +91,7 @@ test('complex codec reports invoke.too_short for empty and truncated headers', (
   }
 });
 
-test('complex codec classifies every non-success frame tag as an error frame', () => {
+void test('complex codec classifies every non-success frame tag as an error frame', () => {
   const codec = decodeWith(pointSchema);
   assert.deepEqual(codec.decode(new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).buffer), {
     ok: false,
@@ -107,7 +107,7 @@ test('complex codec classifies every non-success frame tag as an error frame', (
   );
 });
 
-test('complex codec parses well-formed error frames into typed errors', () => {
+void test('complex codec parses well-formed error frames into typed errors', () => {
   const codec = decodeWith(pointSchema);
   const code = [4, 98, 111, 111, 109];
   const message = [3, 98, 97, 100];
@@ -123,7 +123,7 @@ test('complex codec parses well-formed error frames into typed errors', () => {
   });
 });
 
-test('complex codec rejects declared lengths that exceed the remaining bytes', () => {
+void test('complex codec rejects declared lengths that exceed the remaining bytes', () => {
   const cases: [ComplexSchema, number[]][] = [
     [profileSchema, [0xc8, 0x01]],
     [pointSchema, []],
@@ -144,7 +144,7 @@ test('complex codec rejects declared lengths that exceed the remaining bytes', (
   }
 });
 
-test('complex codec rejects collection lengths beyond the configured limit', () => {
+void test('complex codec rejects collection lengths beyond the configured limit', () => {
   const codec = decodeWith(
     {
       type: 'object',
@@ -158,7 +158,7 @@ test('complex codec rejects collection lengths beyond the configured limit', () 
   assert.match(error.message, /collection length exceeds 2/);
 });
 
-test('complex codec rejects payloads truncated mid-field', () => {
+void test('complex codec rejects payloads truncated mid-field', () => {
   const cases: [ComplexSchema, number[]][] = [
     [pointSchema, [18]],
     [profileSchema, [3, 98, 111]],
@@ -170,7 +170,7 @@ test('complex codec rejects payloads truncated mid-field', () => {
   }
 });
 
-test('complex codec rejects trailing bytes after a complete frame', () => {
+void test('complex codec rejects trailing bytes after a complete frame', () => {
   const codec = decodeWith(pointSchema);
   assert.deepEqual(codec.decode(frame([2, 6])), { ok: true, result: { x: 1, y: 3 } });
   for (const payload of [
@@ -183,7 +183,7 @@ test('complex codec rejects trailing bytes after a complete frame', () => {
   }
 });
 
-test('complex codec rejects corrupted enum variant indexes', () => {
+void test('complex codec rejects corrupted enum variant indexes', () => {
   const codec = decodeWith(statusSchema);
   assert.deepEqual(codec.decode(frame([1])), { ok: true, result: 'Idle' });
   for (const payload of [[2], [0xff, 0xff, 0xff, 0xff, 0x0f]]) {
@@ -193,7 +193,7 @@ test('complex codec rejects corrupted enum variant indexes', () => {
   }
 });
 
-test('complex codec rejects invalid presence tags and boolean bytes', () => {
+void test('complex codec rejects invalid presence tags and boolean bytes', () => {
   const presenceError = decodeFailure(decodeWith(optionalSchema), frame([2]));
   assert.equal(presenceError.code, 'invoke.malformed');
   assert.match(presenceError.message, /invalid optional field value presence tag/);
@@ -202,7 +202,7 @@ test('complex codec rejects invalid presence tags and boolean bytes', () => {
   assert.match(booleanError.message, /invalid boolean value/);
 });
 
-test('complex codec rejects duplicate and oversized map keys', () => {
+void test('complex codec rejects duplicate and oversized map keys', () => {
   const codec = decodeWith(mapSchema);
   assert.deepEqual(codec.decode(frame([1, 1, 97, 2])), { ok: true, result: { counts: { a: 1 } } });
   const duplicate = decodeFailure(codec, frame([2, 1, 97, 2, 1, 97, 2]));
@@ -210,13 +210,13 @@ test('complex codec rejects duplicate and oversized map keys', () => {
   assert.match(duplicate.message, /duplicate map key a/);
 });
 
-test('complex codec rejects invalid UTF-8 inside string fields', () => {
+void test('complex codec rejects invalid UTF-8 inside string fields', () => {
   const codec = decodeWith(profileSchema);
   const error = decodeFailure(codec, frame([1, 0xff]));
   assert.equal(error.code, 'invoke.malformed');
 });
 
-test('complex codec survives a full bit-flip sweep with typed outcomes only', () => {
+void test('complex codec survives a full bit-flip sweep with typed outcomes only', () => {
   const codec = createComplexCodec({
     commandId: 1,
     inputSchema: sweepSchema,
@@ -236,7 +236,8 @@ test('complex codec survives a full bit-flip sweep with typed outcomes only', ()
   for (let index = 0; index < source.length; index += 1) {
     for (let bit = 0; bit < 8; bit += 1) {
       const mutated = Uint8Array.from(source);
-      mutated[index] ^= 1 << bit;
+      // index 는 source.length 루프 한계 안에 있다 — mutated 도 같은 길이라 인덱스가 유효하다.
+      mutated[index]! ^= 1 << bit;
       const decoded = codec.decode(mutated.buffer);
       if (decoded.ok) {
         okCount += 1;

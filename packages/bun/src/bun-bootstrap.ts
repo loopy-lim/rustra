@@ -111,7 +111,11 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
     ready,
     subscribeEvent(name, callback) {
       assertActive();
-      if (eventFailure) throw eventFailure;
+      // 캡처된 구독 실패를 Error 계열로 고정해 throw 한다(non-Error 투기 방지).
+      if (eventFailure)
+        throw eventFailure instanceof Error
+          ? eventFailure
+          : new Error(JSON.stringify(eventFailure) ?? '[unserializable rejection]');
       const entry = { name, callback, unsubscribe: undefined as (() => void) | undefined };
       subscriptions.add(entry);
       if (runtime && state === 'ready') attachEvents(runtime);

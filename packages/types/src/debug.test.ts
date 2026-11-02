@@ -36,10 +36,10 @@ describe('dumpWire', () => {
     process.env.RUSTRA_DEBUG = '1';
     const chunks: string[] = [];
     const originalWrite = process.stderr.write.bind(process.stderr);
-    process.stderr.write = ((chunk: string | Uint8Array) => {
+    process.stderr.write = (chunk: string | Uint8Array) => {
       chunks.push(String(chunk));
       return true;
-    }) as typeof process.stderr.write;
+    };
     try {
       dumpWire('request', new Uint8Array([0x00, 0x01, 0xff]).buffer);
     } finally {
@@ -55,10 +55,10 @@ describe('dumpWire', () => {
     delete process.env.RUSTRA_DEBUG;
     const chunks: string[] = [];
     const originalWrite = process.stderr.write.bind(process.stderr);
-    process.stderr.write = ((chunk: string | Uint8Array) => {
+    process.stderr.write = (chunk: string | Uint8Array) => {
       chunks.push(String(chunk));
       return true;
-    }) as typeof process.stderr.write;
+    };
     try {
       dumpWire('response', new Uint8Array([1]).buffer);
     } finally {

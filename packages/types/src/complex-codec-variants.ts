@@ -8,7 +8,8 @@ export function variantKey(schema: ComplexSchema): string | null {
     const discriminator = Object.entries(properties).find(([, value]) => value.const !== undefined);
     if (discriminator) return String(discriminator[1].const);
     const keys = Object.keys(properties);
-    if (keys.length === 1) return keys[0];
+    // length === 1 검증 직후이므로 [0] 은 항상 존재한다.
+    if (keys.length === 1) return keys[0]!;
   }
   return typeof schema.title === 'string' ? schema.title : null;
 }

@@ -64,7 +64,8 @@ export function optionInner(schema: ComplexSchema): ComplexSchema | null {
   }
   if (schema.anyOf?.length === 2) {
     const nonNull = schema.anyOf.filter((item) => item.type !== 'null');
-    if (nonNull.length === 1) return nonNull[0];
+    // length === 1 검증 직후이므로 [0] 은 항상 존재한다.
+    if (nonNull.length === 1) return nonNull[0]!;
   }
   return null;
 }
