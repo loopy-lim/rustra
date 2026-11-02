@@ -37,11 +37,25 @@ fn fuzz_package() -> Package {
         .clone()
 }
 
+/// catch_unwind 가드(invoke_dispatch.rs)가 디스패치 경로의 모든 패닉을
+/// internal("panic in handler: …") 로 정규화한다 — fast-path 디코더(frame_decode
+/// ·frame_fields)는 신뢰 경계이므로 무작위 바이트가 패닉을 유발하면 그 자체가
+/// 디코더 버그다. Err 로 조용히 삼켜지지 않게 libfuzzer 크래시로 승격한다.
+/// (invoke_complex_value/invoke_complex_serde 타깃의 동명 가드와 동일한 계약.)
+fn deny_panic_guard<T>(result: rustra::Result<T>) {
+    if let Err(error) = result {
+        assert!(
+            !error.message().starts_with("panic in handler"),
+            "frame fast-path decoder panicked: {error}"
+        );
+    }
+}
+
 fuzz_target!(|data: &[u8]| {
     let pkg = fuzz_package();
     // Err 인코딩/정상 응답 모두 "패닉 없이 반환" 이 성공 조건.
-    let _ = pkg.invoke_frame(data);
+    deny_panic_guard(pkg.invoke_frame(data));
     // 초과 길이는 상한 컷으로 디코더 집중.
     let clipped = &data[..data.len().min(1024)];
-    let _ = pkg.invoke_frame(clipped);
+    deny_panic_guard(pkg.invoke_frame(clipped));
 });
