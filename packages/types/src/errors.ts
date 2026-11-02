@@ -232,6 +232,18 @@ export const RustraErrorCode = {
    * 파서 측 전용 코드 — Rust error.rs 에 대응 값이 없다(위와 동일 사유).
    */
   InspectorUnexpectedShape: 'inspector.unexpected_shape',
+  /**
+   * RN 어댑터 부트스트랩(install/네이티브 엔진 구성) 실패 — JS 어댑터 측 전용
+   * 코드. Rust error.rs 에 대응 값이 없다. invoke 경로가 아니라 설정 경계의
+   * 실패로, `cause` 에 근본 오류를 담는다.
+   */
+  BootstrapFailed: 'bootstrap.failed',
+  /**
+   * JSI 네이티브 모듈이 JS realm 에 설치되지 않음 (installRustraJSI 미호출,
+   * Expo Go, 네이티브 재빌드 누락) — JS 어댑터 측 전용 코드. Rust error.rs 에
+   * 대응 값이 없다. JS reload 로 복구되지 않는다.
+   */
+  NativeNotInstalled: 'native.not_installed',
   /** 분류 불가 오류. */
   Unknown: 'unknown',
 } as const;

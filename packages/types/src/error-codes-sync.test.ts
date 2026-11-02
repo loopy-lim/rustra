@@ -55,7 +55,8 @@ const CODE_TOKEN = /^[a-z][a-z0-9_.]*$/;
  * 섞이지 않는다.
  */
 function extractRustFactoryCodes(source: string): string[] {
-  const literals = [...source.matchAll(/\bcode:\s*"((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]);
+  // 캡처 그룹 1 은 항상 매치에 참여한다(빈 문자열도 가능) — match[1] 은 항상 존재한다.
+  const literals = [...source.matchAll(/\bcode:\s*"((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]!);
   return [...new Set(literals.filter((literal) => CODE_TOKEN.test(literal)))];
 }
 
@@ -97,6 +98,10 @@ const OUTSIDE_ERROR_RS: Record<string, string> = {
   'contract.unenforceable': 'JS 계약 게이트 전용(frame-engine-contract) — Rust 대응 값 없음',
   'inspector.invalid_snapshot': 'TS 인스펙터 디코더 전용(experimental) — Rust 대응 값 없음',
   'inspector.unexpected_shape': 'TS 인스펙터 디코더 전용(experimental) — Rust 대응 값 없음',
+  'bootstrap.failed':
+    'RN 부트스트랩(install/네이티브 엔진 구성) 전용 — 설정 경계, invoke 경로 아님',
+  'native.not_installed':
+    'RN JSI 미설치 전용(installRustraJSI 미호출/Expo Go) — 네이티브 재빌드 필요',
 };
 
 test('error.rs 팩토리 코드는 모두 TS RustraErrorCode 에 있다 (Rust → TS)', () => {
