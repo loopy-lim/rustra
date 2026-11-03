@@ -88,16 +88,18 @@ for (let cycle = 0; cycle < cycles; cycle += 1) {
 eventsActive = false;
 
 const onAsync: (handle: number, payload: Uint8Array) => void = (_handle, payload) => {
-  // 취소 시나리오 응답 봉투 { ok, result | error } — 구조 타입으로 고정한다.
-  const envelope = JSON.parse(decoder.decode(payload)) as {
-    ok: boolean;
-    result?: number;
-    error?: unknown;
-  };
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- 네이티브 신뢰 봉투라 검증 없이 사용한다
+  const envelope = JSON.parse(decoder.decode(payload));
+  // 주의: 봉투에 타입 애노테이션을 붙이면 scriptc 0.2.1 이 그것을 런타임 검증기로
+  // 바꿔, ok:false 봉투의 명시적 result:null 을 number|undefined 위반으로
+  // 거부한다(2026-11-03 실측). 애노테이션·as 단언 모두 이 콜백 안에서 금지.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- 봉투 애노테이션 금지 사유는 위 블록 주석 참고
   if (envelope.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- 봉투 애노테이션 금지 사유는 위 블록 주석 참고
     if (envelope.result !== 100 && envelope.result !== 101)
       throw new Error('cancelled handler ran');
   } else {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- 봉투 애노테이션 금지 사유는 위 블록 주석 참고
     if (!String(envelope.error).startsWith('cancelled:')) throw new Error('unexpected async error');
     cancellationCalls += 1;
   }
