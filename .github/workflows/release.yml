@@ -183,7 +183,7 @@ jobs:
         run: |
           VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustra-naming") | .version')"
           echo "waiting for rustra-naming@${VERSION} on crates.io index"
-          for attempt in {1..12}; do
+          for _attempt in {1..12}; do
             cargo info "rustra-naming@${VERSION}" --registry crates-io >/dev/null 2>&1 && exit 0
             sleep 10
           done
@@ -198,7 +198,7 @@ jobs:
           # 루프가 옛 버전을 확인해 즉시 탈출(대기 no-op)하고 dry-run이 깨진다.
           VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustra-macros") | .version')"
           echo "waiting for rustra-macros@${VERSION} on crates.io index"
-          for attempt in {1..12}; do
+          for _attempt in {1..12}; do
             cargo info "rustra-macros@${VERSION}" --registry crates-io >/dev/null 2>&1 && exit 0
             sleep 10
           done
