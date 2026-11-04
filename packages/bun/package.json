@@ -1,6 +1,6 @@
 {
   "name": "@rustra/bun",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Type-safe Bun client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
@@ -27,7 +27,7 @@
     "test:compile": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@rustra/types": "^0.12.1"
+    "@rustra/types": "^0.13.0"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

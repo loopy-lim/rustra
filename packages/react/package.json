@@ -1,6 +1,6 @@
 {
   "name": "@rustra/react",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Type-safe React hooks for rustra clients — one Rust core generates bindings for Node, Bun, Tauri, and React Native over a compact binary wire.",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,7 @@
     "react": ">=18.0.0"
   },
   "dependencies": {
-    "@rustra/types": "^0.12.0"
+    "@rustra/types": "^0.13.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

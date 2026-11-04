@@ -1,5 +1,12 @@
 # @rustra/devtools
 
+## 0.7.3
+
+### Patch Changes
+
+- Updated dependencies [9d9e501]
+  - @rustra/types@0.13.0
+
 ## 0.7.2
 
 ### Patch Changes
