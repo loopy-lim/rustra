@@ -38,7 +38,7 @@ function validObservation(overrides = {}) {
 
 test('versions.json admits the tauri host pin and stays a valid manifest', () => {
   const manifest = validateVersionManifest(JSON.parse(readFileSync(VERSIONS_PATH, 'utf8')));
-  assert.equal(manifest.hosts['@rustra/tauri'], '0.9.3');
+  assert.equal(manifest.hosts['@rustra/tauri'], '0.10.0');
 });
 
 test('validateVersionManifest rejects unknown host keys', () => {
