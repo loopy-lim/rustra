@@ -100,8 +100,8 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 Rust와 Bun 1.4 이상이 설치되어 있으면 다음 명령으로 프로젝트 생성부터 첫 호출까지 실행한다:
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 init my-project --setup
-# Bun FFI를 쓰려면: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+bunx --bun @rustra/cli@0.13.0 init my-project --setup
+# Bun FFI를 쓰려면: bunx --bun @rustra/cli@0.13.0 init my-bun-project --host bun --setup
 ```
 
 `--setup`은 클라이언트 생성, 의존성 설치, Rust 빌드, 스캐폴드의 `echo` 데모 실행을
@@ -134,9 +134,9 @@ setup은 연동을 준비하고 남은 네이티브 앱 작업을 안내한다. 
 ```
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json   # 모든 표면 렌더링
-bunx --bun @rustra/cli@0.12.0 dev --config rustra.json       # Rust 감시 + 재생성
-bunx --bun @rustra/cli@0.12.0 generate --config rustra.json --check   # CI 동기화 게이트
+bunx --bun @rustra/cli@0.13.0 codegen --config rustra.json   # 모든 표면 렌더링
+bunx --bun @rustra/cli@0.13.0 dev --config rustra.json       # Rust 감시 + 재생성
+bunx --bun @rustra/cli@0.13.0 generate --config rustra.json --check   # CI 동기화 게이트
 ```
 
 → 전체 워크스루: [시작하기 가이드](docs/getting-started.ko.md)
@@ -155,12 +155,12 @@ schemars = { version = "0.8", features = ["derive"] }
 manifest 기반 [호환 표](docs/compatibility-matrix.ko.md)를 설치 기준으로 삼는다.
 
 ```bash
-bun add @rustra/node@0.11.0          # Node.js
-bun add @rustra/bun@0.11.0           # Bun
-bun add @rustra/tauri@0.10.0         # Tauri
-bun add @rustra/react-native@0.10.0  # React Native
-bun add @rustra/testing@0.7.2        # Mock 엔진 (테스트)
-bun add @rustra/devtools@0.7.2       # 호출 관측성 (개발)
+bun add @rustra/node@0.11.1          # Node.js
+bun add @rustra/bun@0.11.1           # Bun
+bun add @rustra/tauri@0.10.1         # Tauri
+bun add @rustra/react-native@0.11.0  # React Native
+bun add @rustra/testing@0.7.3        # Mock 엔진 (테스트)
+bun add @rustra/devtools@0.7.3       # 호출 관측성 (개발)
 ```
 
 네이티브 라이브러리·JS 어댑터·생성물은 함께 갱신한다 —

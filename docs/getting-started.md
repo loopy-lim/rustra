@@ -18,7 +18,7 @@ This guide aims to get a developer new to rustra building their first package an
 ## 10-Minute Summary
 
 1. Install Rust and Bun, then scaffold and run a project:
-   `bunx --bun @rustra/cli@0.12.0 init my-project --setup`.
+   `bunx --bun @rustra/cli@0.13.0 init my-project --setup`.
 2. Add Rust commands in `src/lib.rs`; expose them through the package builder.
 3. Run `bun run start` to generate the TypeScript client, build Rust, and call the demo.
 4. For platform integration, continue with [Tauri](extending/tauri-setup.md) or [React Native](extending/react-native-setup.md).
@@ -50,8 +50,8 @@ This is the fast path; the detailed sections below remain the complete reference
 With Rust and Bun 1.4+ installed, run:
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 init my-project --setup
-# Bun FFI instead: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+bunx --bun @rustra/cli@0.13.0 init my-project --setup
+# Bun FFI instead: bunx --bun @rustra/cli@0.13.0 init my-bun-project --host bun --setup
 ```
 
 This creates the project, generates its client, installs dependencies, builds
@@ -115,10 +115,10 @@ Installation versions follow the current Rust and npm manifests. Adapters have i
 For the TypeScript adapters, install only the environment you use:
 
 ```bash
-bun add @rustra/node@0.11.0      # Node.js
-bun add @rustra/bun@0.11.0       # Bun
-bun add @rustra/tauri@0.10.0     # Tauri
-bun add @rustra/react-native@0.10.0  # React Native
+bun add @rustra/node@0.11.1      # Node.js
+bun add @rustra/bun@0.11.1       # Bun
+bun add @rustra/tauri@0.10.1     # Tauri
+bun add @rustra/react-native@0.11.0  # React Native
 ```
 
 ### Using in a Monorepo / Workspace
@@ -1011,8 +1011,8 @@ commands whose input has 0–3 fields are published as field-positional helpers
 outside that shape keep the object-input `commands.ts` path.
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.13.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.13.0 codegen --config rustra.json
 ```
 
 **TypeScript-side usage:**

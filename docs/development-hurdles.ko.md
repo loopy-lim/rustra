@@ -6,7 +6,7 @@ Rustra는 Rust 명령을 네이티브 코드로 연결하므로 모든 환경 �
 없습니다. 대신 설치 전에 필요한 도구를 확인하고, Rust schema 생성과 TypeScript/C++
 생성을 한 명령으로 묶으며, 생성물의 동기화를 CI에서 자동으로 검사할 수 있습니다.
 
-이 문서는 Rust 0.13.0과 CLI 0.12.0의 개발 흐름을 설명합니다. JS 패키지는 독립적인
+이 문서는 Rust 0.13.0과 CLI 0.13.0의 개발 흐름을 설명합니다. JS 패키지는 독립적인
 버전 범위를 가지므로 [호환성 표](compatibility-matrix.ko.md), 프로젝트 lockfile과 생성된
 manifest를 함께 확인해야 합니다. setup 완료와 registry 발행·실기기 검증은 별도입니다.
 

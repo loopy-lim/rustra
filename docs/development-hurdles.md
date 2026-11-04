@@ -4,7 +4,7 @@ English | [한국어](./development-hurdles.ko.md)
 
 Rustra connects Rust commands to native code, so it cannot remove every environment dependency. Instead, it can check the required tools before installation, bundle Rust schema generation and TypeScript/C++ generation into one command, and automatically verify generated output sync in CI.
 
-This guide describes the Rust 0.13.0 and CLI 0.12.0 workflow. JS packages have independent version ranges; check the [compatibility table](compatibility-matrix.md), project lockfile and generated manifest together. Setup success, registry publication, and physical-device acceptance are separate checks.
+This guide describes the Rust 0.13.0 and CLI 0.13.0 workflow. JS packages have independent version ranges; check the [compatibility table](compatibility-matrix.md), project lockfile and generated manifest together. Setup success, registry publication, and physical-device acceptance are separate checks.
 
 ## Running the CLI — three standard forms
 
