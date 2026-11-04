@@ -187,8 +187,12 @@ bun run dev
 
 config 모드의 `dev`는 CLI 설치 위치를 추측하거나 별도 CLI 프로세스를 만들지 않고 같은
 프로세스의 `codegen` 오케스트레이터를 호출합니다. Rust `src`, `Cargo.toml`,
-`Cargo.lock`, schema를 감시하며, 생성된 schema와 같은 내용의 Linux write 이벤트는
-다시 codegen을 예약하지 않습니다. 두 감시 모드는 공통 상태 머신을 사용하므로 실행 중
+`Cargo.lock`, schema 외에 설정된 호스트 크레이트까지 감시하며, 생성된 schema와 같은
+내용의 Linux write 이벤트는 다시 codegen을 예약하지 않습니다. reload 성공은 설정된
+Node·Bun 런타임 프로듀서 재빌드가 끝난 뒤에만 보고되고, 런타임 빌드가 실패하면 reload 가
+억제돼 구현 전용 편집이 옛 바이너리를 조용히 실행하는 일을 막습니다. 재생성 전에 성공 입력
+캐시를 무효화하므로, 빌드 실패나 패리티 거절 뒤에 이전 소스를 되돌리면 부분 갱신된
+생성물도 치유됩니다. 두 감시 모드는 공통 상태 머신을 사용하므로 실행 중
 추가 변경은 하나의 대기 실행으로 합쳐지고 오래 걸리는 Cargo 빌드가 겹치지 않습니다.
 기존의 `--backend`/`--app` 감시 모드도 호환성을 위해 유지됩니다.
 
@@ -266,7 +270,9 @@ Rustra가 제공하는 범용 runtime prebuilt가 아닙니다.
 ### Expo Go
 
 Rustra의 RN adapter는 C++ JSI와 Rust FFI를 포함하므로 Expo Go에 사후 로드할 수
-없습니다. Expo 앱은 development build를 한 번 만든 뒤 실행합니다.
+없습니다. Expo 앱은 development build를 한 번 만든 뒤 실행합니다. Expo Go 안에서
+rustra를 호출하면 불투명한 브릿지 실패가 아니라 분류된 `native.not_installed` 오류로
+실패합니다 — JavaScript reload로는 복구되지 않습니다.
 
 ```bash
 bunx --bun expo prebuild

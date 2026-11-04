@@ -67,12 +67,12 @@ manual mirror exists.
 
 ## Gate profiles
 
-| Stage    | What runs                                        | Command                                   |
-| -------- | ------------------------------------------------ | ----------------------------------------- |
-| Dev loop | cargo check + calculator tsc + cli units         | `bun run test:fast`                       |
-| Commit   | eslint/prettier/rustfmt (staged only)            | lefthook pre-commit, automatic            |
-| PR/CI    | full 10-job battery + docs·codegen checks        | `scripts/ci-gate.sh`                      |
-| Release  | release-coherence·package verification·changeset | [release procedure](release-procedure.md) |
+| Stage    | What runs                                                           | Command                                   |
+| -------- | ------------------------------------------------------------------- | ----------------------------------------- |
+| Dev loop | cargo check + calculator tsc + cli units                            | `bun run test:fast`                       |
+| Commit   | eslint/prettier/rustfmt (staged only)                               | lefthook pre-commit, automatic            |
+| PR/CI    | full 17-job battery incl. miri/sanitizer/fuzz + docs·codegen checks | `scripts/ci-gate.sh`                      |
+| Release  | release-coherence·package verification·changeset                    | [release procedure](release-procedure.md) |
 
 For Rust behavior during development, run `cargo test -p rustra <filter>` ad hoc
 as needed. Drift (codegen checks, docs regions) is caught by the full battery —

@@ -758,7 +758,8 @@ export type WideAggOutput = {
 import type { AddNumbersInput, AddNumbersOutput } from './types.js';
 import { createGeneratedFields2 } from '@rustra/types';
 
-// Commands with two fields are generated as a const form that passes the required fields directly on each call.
+// Commands with one or two fields are generated as a const form that passes the required fields directly on each call
+// (one-field commands use `createGeneratedFields1`; the (input, options) call surface is unchanged).
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
   1,
   'addNumbers',
@@ -1031,6 +1032,11 @@ and shared C++ bridge into an app-specific `@rustra/generated-react-native` pack
 Both Expo development builds and bare RN use standard autolinking, leaving no
 install/configure boilerplate in app code. Expo Go is not supported.
 
+When setup still fails, failures are classified: a bootstrap configuration error throws
+`bootstrap.failed` (root cause preserved as `cause`), and a JSI module missing from the
+JS realm throws `native.not_installed` — both branchable via `error.code`. See the
+[React Native setup guide](extending/react-native-setup.md) troubleshooting section.
+
 2026-08-24 Release performance on the same public object operations is a 3-run median
 against Nitro of add 1.0297x, string 1.0229x, bytes 0.9219x, pair 1.0656x. The latest
 runner includes Nitro/Rustra/FFI rotation measurement, paired 95% CI, and diagnostics of
@@ -1197,8 +1203,14 @@ If the generated files live outside the project, map them with `paths`:
 
 The `dev` script uses `rustra dev --config rustra.json` — the same scaffold `rustra init`
 creates — and watches Rust source changes too, handling schema regeneration + TS
-regeneration in one pass. If you only want to keep re-running the type check, add
-`tsc --watch` as a separate script.
+regeneration in one pass. It watches the configured host crates in addition to the schema
+crate, and a reload is reported as successful only after the configured Node and Bun
+runtime producers are rebuilt — when the runtime build fails, the reload is suppressed so
+an implementation-only edit cannot silently keep invoking an older binary. The
+successful-input cache is invalidated before regenerating, so restoring earlier source
+after a failed build or parity rejection also repairs partially updated generated
+artifacts. If you only want to keep re-running the type check, add `tsc --watch` as a
+separate script.
 
 While prototyping on a debug build you can call a Rust handler that is not in the
 generated client yet with `invokeLoose(engine, 'commandName', args?)` from
@@ -1217,6 +1229,20 @@ release-time gates are described in [dev-tier.md](dev-tier.md).
   }
 }
 ```
+
+An optional `scriptc` section turns on the scriptc Native FFI codegen stage — like
+`uniffi`, its presence is the feature switch. The stage renders three artifacts of the
+static-link contract: `scriptc/ffi.json` (an ffi_format 7 manifest listing the staticlib
+archive as a library), `scriptc/scriptc-ffi.d.ts` (signature-only declarations) and
+`scriptc/scriptc-ffi.ts` (an importable source entry — retained-callback signatures are
+not expressible in the `.d.ts` mapping).
+`output` is required; `profile` (default `release`) picks the staticlib build profile and
+`archive` overrides the archive path. Write mode fails closed with a
+`cargo build --release` hint when the archive is missing, and `codegen --check`
+byte-compares the artifacts against the committed ones. See the calculator example's
+[scriptc section](../examples/calculator/README.md#scriptc-native-ffi-statically-linked)
+and the scriptc host row of the [compatibility matrix](compatibility-matrix.md) for the
+full picture.
 
 Only when an existing project must keep its own subcommand, write `main.rs` to handle a
 `generate` subcommand under `cargo run`:

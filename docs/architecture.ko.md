@@ -321,6 +321,30 @@ pub fn calculator_package() -> Package {
 | `commands.ts` | command helper 함수들          | 앱 코드에서 import하여 사용 |
 | `contract.ts` | `GENERATED_CONTRACT_HASH` 상수 | 런타임 계약 무결성 검증     |
 
+### scriptc native FFI 스테이지 (정적 링크, 실험적)
+
+`rustra.json`에 `scriptc` 섹션을 추가하면 별도 코드젠 스테이지가 켜진다 — 섹션의
+존재가 기능 스위치이며 `uniffi`와 같은 방식이다. 스테이지는 설정된 `output`
+디렉터리에 정적 링크 FFI 표면을 렌더링한다:
+
+| 파일               | 내용                                                               | 용도                                                             |
+| ------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `scriptc/ffi.json` | rustra staticlib 아카이브를 library로 싣는 ffi_format 7 매니페스트 | `scriptc build`가 컴파일 시점에 링크 (런타임 symbol lookup 없음) |
+| `scriptc-ffi.d.ts` | 시그니처-only 선언                                                 | 동기 소비자용 legacy ambient 선언                                |
+| `scriptc-ffi.ts`   | 콜백 시그니처를 담은 소스 엔트리                                   | `.d.ts` 매핑으로 표현할 수 없는 retained 콜백 시그니처           |
+
+out 포인터에 쓰거나 함수 포인터 콜백을 받는 심볼은 사유가 기록된 채
+(`scriptcExcludedSymbols`) 매니페스트 표면에서 제외되고, 길이를 out 포인터 대신
+반환하는 `rustra_ffi_invoke_json_into_len`이 caller-buffer envelope 진입 역할을
+한다. retained 콜백도 표면의 일부다 — 비동기 JSON completion
+(`rustra_ffi_invoke_json_async_channel`), 이벤트
+(`rustra_ffi_event_sink_register_scriptc`/`rustra_ffi_event_sink_release_scriptc`),
+bytes 채널 (`rustra_ffi_channel_create_bytes`/`rustra_ffi_channel_send_bytes` +
+identity 기반 `rustra_ffi_channel_release_scriptc`). `codegen --check`는 커밋된
+아티팩트와 신선한 스키마를 바이트 비교하고, 쓰기 모드는 아카이브가 없으면
+`cargo build --release` 힌트와 함께 fail-closed 한다. 실제 동작 예제는
+[`examples/calculator/scriptc/`](../examples/calculator/scriptc/)에 있다.
+
 ---
 
 ## 런타임 디스패치
@@ -567,6 +591,8 @@ Tauri에서 `rustra_dispatch`는 `RustraError`를 JSON 값(`{ code, message }`)�
    package.generate_typescript()?.write_schema_to_dir("./generated")?;
    # 이어서 schema.json 에서 표면 렌더링:
    #   rustra codegen --config rustra.json
+   # rustra.json 에 `scriptc` 섹션이 있으면 정적 링크 FFI 표면도 함께
+   # 렌더링한다 (scriptc/ffi.json + scriptc-ffi.d.ts + scriptc-ffi.ts)
 
 4. TypeScript 측에서 생성된 코드 사용
    import { addNumbers } from './generated/node.js';   # commands.js 가 아닌 호스트 엔트리

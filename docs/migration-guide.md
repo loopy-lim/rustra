@@ -9,6 +9,7 @@ When the contract (schema) shared by the Rust backend and TypeScript clients cha
 - **From 0.3.x** — follow [migrating from 0.3 to 0.4](migrations/0.3-to-0.4.md) first, then use this guide.
 - **From 0.5.x** — follow [migrating from 0.5 to 0.6](migrations/0.5-to-0.6.md) first. Old schemas may also fail CLI validation with a "generic type name" error (see the [Rust API guide — user-defined generics](rust-api-guide.md#user-defined-generic-types)); rebuild `schema.json` with the current rustra before running `rustra diff`.
 - **From 0.6–0.9** — include the [Frame/API migration](migrations/post-0.9-frame-and-audit.md) when crossing the Rust 0.10 release boundary, then use the recipes below.
+- **From 0.11.x** — follow [migrating from 0.11 to 0.12](migrations/0.11-to-0.12.md) first, then use this guide.
 - **The rkyv V2 → Frame rename (0.10.0 release)** — see [the rename table](#frame-rename-rkyv-v2--frame) below; a pure rename, the wire format is unchanged.
 
 <a id="09-rename-rkyv-v2--frame"></a>
@@ -51,9 +52,9 @@ The RN JSI host method follows the same rename (`invokeRkyvV2` → `invokeFrame`
 and codegen output files land under the new names (`frame-codecs.ts`,
 `frame-registry.ts`) — re-run `rustra codegen` and update imports.
 
-The next CLI patch in the current source removes obsolete generated files only
-when their bytes match ownership hashes in the previous `.rustra-generated.json`.
-Published CLI 0.11.3 does not include this fix: also check for leftover
+Published CLI 0.12.0 removes obsolete generated files only when their bytes match
+ownership hashes in the previous `.rustra-generated.json`. CLI 0.11.3 and earlier
+do not include this fix: also check for leftover
 `rkyv-codecs.ts`/`rkyv-registry.ts` when running the type checker. If an earlier
 CLI already replaced the manifest, restore the pre-upgrade generated files and
 manifest together before regenerating with the fixed CLI, or review and move the

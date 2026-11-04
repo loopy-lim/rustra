@@ -737,7 +737,8 @@ export type WideAggOutput = {
 import type { AddNumbersInput, AddNumbersOutput } from './types.js';
 import { createGeneratedFields2 } from '@rustra/types';
 
-// 필드 2개 명령은 호출당 힘(required fields)을 직접 전달하는 const 형태로 생성된다.
+// 필드 1~2개 명령은 호출당 힘(required fields)을 직접 전달하는 const 형태로 생성된다
+// (1-필드 명령은 `createGeneratedFields1` 을 쓰며 (input, options) 호출 표면은 같다).
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
   1,
   'addNumbers',
@@ -1006,6 +1007,11 @@ const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 bridge를 만든다. Expo development build와 bare RN 모두 표준 autolinking을 쓰며,
 앱 코드에는 install/configure 보일러플레이트가 남지 않는다. Expo Go는 지원하지 않는다.
 
+그래도 설정이 실패하면 오류가 분류돼 발급된다: 부트스트랩 설정 실패는
+`bootstrap.failed`(근본 오류는 `cause` 에 보존), JS realm 에 JSI 모듈이 없으면
+`native.not_installed` 로 발급되며, 둘 다 `error.code` 로 분기할 수 있다. 자세한 복구
+절차는 [RN 설정 가이드](extending/react-native-setup.ko.md) 문제 해결 섹션에 있다.
+
 2026-08-24 Release 성능은 동일 공개 객체 연산의 Nitro 대비 3회 중앙값
 add 1.0297x, string 1.0229x, bytes 0.9219x, pair 1.0656x다. 최신 러너는
 Nitro/Rustra/FFI 순환 측정, paired 95% CI, 생성 helper/native 경로 진단을
@@ -1170,7 +1176,11 @@ my-app/
 
 `dev` 스크립트는 `rustra dev --config rustra.json`을 쓴다 — `rustra init`이 만드는
 스캐폴드와 동일하며, Rust 소스 변경까지 감시해 schema 재생성 + TS 재생성을 한 번에
-처리한다. 타입 검사만 반복하고 싶다면 `tsc --watch`를 별도 스크립트로 추가한다.
+처리한다. 스키마 크레이트 외에 설정된 호스트 크레이트도 감시하고, reload 성공은 설정된
+Node·Bun 런타임 프로듀서 재빌드가 끝난 뒤에만 보고된다 — 런타임 빌드가 실패하면 reload 를
+억제해 구현 전용 편집이 옛 바이너리를 조용히 실행하는 일을 막는다. 재생성 전에 성공 입력
+캐시를 무효화하므로, 빌드 실패나 패리티 거절 뒤에 이전 소스를 되돌리면 부분 갱신된 생성물도
+치유된다. 타입 검사만 반복하고 싶다면 `tsc --watch`를 별도 스크립트로 추가한다.
 
 debug 빌드에서 프로토타이핑하는 동안에는 생성 클라이언트에 아직 없는 Rust 핸들러를
 `@rustra/types`의 `invokeLoose(engine, 'commandName', args?)`로 호출할 수 있다 — 동적
@@ -1189,6 +1199,18 @@ debug 빌드에서 프로토타이핑하는 동안에는 생성 클라이언트�
   }
 }
 ```
+
+선택적인 `scriptc` 섹션은 scriptc Native FFI 코드젠 스테이지를 켠다 — `uniffi` 와 같이
+존재 자체가 기능 스위치다. 스테이지는 정적 링크 계약의 아티팩트 세 벌을 렌더한다:
+`scriptc/ffi.json`(staticlib 아카이브를 libraries로 싣는 ffi_format 7 매니페스트),
+`scriptc/scriptc-ffi.d.ts`(시그니처-only 선언), `scriptc/scriptc-ffi.ts`(import 가능한
+소스 엔트리 — retained 콜백 시그니처는 `.d.ts` 매핑으로 표현할 수 없다). `output` 은 필수이고, `profile`(기본
+`release`)은 staticlib 빌드 프로필을, `archive` 는 아카이브 경로 재정의를 받는다. 쓰기
+모드는 아카이브가 없으면 `cargo build --release` 힌트와 함께 fail-closed 하고,
+`codegen --check` 는 커밋된 아티팩트와 바이트 비교로 드리프트를 잡는다. 전체 그림은
+calculator 예제의
+[scriptc 섹션](../examples/calculator/README.md#scriptc-native-ffi-statically-linked)과
+[호환성 매트릭스](compatibility-matrix.ko.md)의 scriptc 실험 호스트 행을 참고한다.
 
 기존 프로젝트에서 자체 subcommand를 유지해야 할 때만 `cargo run`에서 `generate`
 서브커맨드를 처리하도록 `main.rs`를 작성하면 된다:

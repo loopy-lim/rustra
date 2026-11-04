@@ -36,6 +36,15 @@ The default limits are depth 32, payload 1 MiB, and collection/string length 100
 Truncated frames, duplicate map keys, invalid variants, and trailing bytes are
 handled as `command.invalid_args`/`invoke.malformed`, not as success results.
 
+Generated postcard codecs report decode failures in a fixed
+`rustra: <cause> (offset N)` format, where the offset is the byte position of the
+failure boundary (for example `rustra: varint out of bounds (offset 9)`). The
+tier 2 `invoke.malformed` normalization consumes that offset as-is —
+`decode failed for '<command>' at offset N: <detail> (<byte length>-byte frame)` —
+and falls back to the full frame length when a codec error carries no offset.
+This message format is a contract maintained jointly by the generated codecs and
+the tier 2 normalization: changing it requires changing both sides together.
+
 The CLI's shared Codec IR is what the TS/C++ generators use to make recursive ref,
 struct field, map, option, tuple, and enum decisions. The RN C++ side statically
 advertises primitive-element `Set`s and `int64/uint64` as part of the native-safe

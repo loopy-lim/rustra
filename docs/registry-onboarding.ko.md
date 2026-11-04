@@ -24,17 +24,17 @@ bun run verify:consumer:registry --output /tmp/rustra-registry/receipt.json
 
 이전 영수증을 보존하도록 실행마다 새 출력 디렉터리를 사용한다. 첫 실패에서 중단하고 진단을 남긴다. 설치한 패키지의 버전과 출처를 검사하며, 로컬 체크아웃·Cargo patch·Git 의존성·패키지 override·symlink 대체는 실패해야 한다. 프로세스 종료 성공 외에도 실제 반환값과 변경한 필드를 검증한다.
 
-기본 조합은 Rust `0.10.2 → 0.11.0 → 0.10.2` 업그레이드·롤백이며 npm 은 `@rustra/cli` `0.11.3`, `types` `0.12.0`, `node`/`bun` `0.10.2` — 현재 발행 라인이고, 형제 여정은 `@rustra/tauri` `0.9.3`·`@rustra/react-native` `0.9.2` 를 추가로 핀한다(`scripts/registry-consumer/versions.json`). Rust 업그레이드·롤백 1회 검증이며 연속 두 번의 제품 업그레이드를 뜻하지 않는다. 가변 `latest`가 검사 대상을 바꾸지 못하도록 버전을 고정했다. 다음 릴리스를 준비할 때 검증 버전도 검토한다.
+기본 조합은 Rust `0.11.0 → 0.12.0 → 0.11.0` 업그레이드·롤백이며 npm 은 `@rustra/cli` `0.12.0`, `types` `0.12.1`, `node`/`bun` `0.11.0` — 현재 발행 라인이고, 형제 여정은 `@rustra/tauri` `0.10.0`·`@rustra/react-native` `0.10.0` 을 추가로 핀한다(`scripts/registry-consumer/versions.json`). Rust 업그레이드·롤백 1회 검증이며 연속 두 번의 제품 업그레이드를 뜻하지 않는다. 가변 `latest`가 검사 대상을 바꾸지 못하도록 버전을 고정했다. 다음 릴리스를 준비할 때 검증 버전도 검토한다.
 
-발행 CLI는 자체 manifest에 캐럿 범위(`types ^0.12.0`, `node/bun ^0.10.0`, `tauri ^0.9.0`)를 선언한다. 최신 패치(예: `0.10.2`)가 범위 기저(`^0.10.0`)와 다른 지금, 패치에서 쓴 manifest 캐럿은 CLI 자체의 릴리스 라인 가드에 걸린다 — 그래서 게이트는 소비자 manifest에 **정확한 핀**을 쓰고, npm lock 을 `--save-exact` 로 준비하며, `npm ci` 로 설치하고 매 단계 lock 과 설치 버전을 대조한다. CLI 범위 안의 정확 핀은 CLI 가드와 오염 검사를 모두 만족한다. 더 새 해석은 여전히 실패한다. Cargo 의존성은 `=0.10.x`/`=0.11.0` 정확 핀을 유지한다. 공개 CLI를 로컬 패키지로 바꾸는 방식이 아니다.
+발행 CLI는 자체 manifest에 캐럿 범위(`types ^0.12.1`, `node/bun ^0.11.0`, `tauri ^0.10.0`)를 선언한다. 캐럿 범위는 발행 라인 안의 새 패치를 조용히 흡수하므로, 검증 대상이 실행 사이에 바뀌지 않게 게이트는 소비자 manifest에 **정확한 핀**을 쓰고, npm lock 을 `--save-exact` 로 준비하며, `npm ci` 로 설치하고 매 단계 lock 과 설치 버전을 대조한다. CLI 범위 안의 정확 핀은 CLI 가드와 오염 검사를 모두 만족한다. 더 새 해석은 여전히 실패한다. Cargo 의존성은 `=0.11.0`/`=0.12.0` 정확 핀을 유지한다. 공개 CLI를 로컬 패키지로 바꾸는 방식이 아니다.
 
 수동 **Registry consumer** 워크플로는 macOS에서 실행하고 실패해도 영수증·로그를 업로드한다. 기존 소스 CI·발행 워크플로와 별도 증거이며 패키지를 발행하지 않는다. 로컬 성공만으로 원격 워크플로 실행 성공을 주장하지 않는다.
 
 ## 알려진 발행 CLI 결함 (2026-09-21)
 
-형제 여정이 발행 CLI `0.11.3` 에서 발견한 도입 결함 두 가지 — 둘 다 이 저장소에서는 수정됐고 다음 CLI 발행을 기다린다:
+형제 여정이 발행 CLI `0.11.3` 에서 발견한 도입 결함 두 가지 — 둘 다 이 저장소와 발행 CLI `0.12.0` 에서 수정됐다:
 
-1. 생성된 `@rustra/generated-react-native` 모듈 manifest가 `"type": "module"`을 선언했는데 `react-native.config.js`는 CommonJS다. Node 기반 오톨링킹(Gradle 설정 생성)이 이 모듈을 **조용히** 건너뛰어 `RustraBridge`가 링크되지 않았다 — Bun의 `require`가 ESM을 읽으므로 `bunx --bun react-native config` 검증으로는 보이지 않았다. 렌더러는 이제 `type`을 생략한다. 수정 CLI가 발행될 때까지 RN 여정은 코드젠 뒤 같은 수정을 적용하며 `workaround-published-cli-esm-module-manifest` 단계로 기록한다.
+1. 생성된 `@rustra/generated-react-native` 모듈 manifest가 `"type": "module"`을 선언했는데 `react-native.config.js`는 CommonJS다. Node 기반 오톨링킹(Gradle 설정 생성)이 이 모듈을 **조용히** 건너뛰어 `RustraBridge`가 링크되지 않았다 — Bun의 `require`가 ESM을 읽으므로 `bunx --bun react-native config` 검증으로는 보이지 않았다. 렌더러는 이제 `type`을 생략한다(CLI `0.12.0` 에 발행). CLI `0.11.3` 이하에서는 RN 여정이 코드젠 뒤 같은 수정을 적용하며 `workaround-published-cli-esm-module-manifest` 단계로 기록한다.
 2. RN CLI 오톨링킹이 `node_modules` 워크스페이스 심링크 경로로 모듈을 등록하므로 Gradle `file()` 기준에서 렌더링된 어댑터 상대경로가 `node_modules/node_modules/...`로 풀렸다. 앱 소유 `react-native.config.js`에서 의존성 root 를 고정하면 회피된다(여정이 렌더링해 심는다). 렌더러 측 강화는 후보로 남긴다.
 
 ## 증거 해석

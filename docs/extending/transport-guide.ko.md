@@ -39,12 +39,13 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 기준선이고, 이 가이드의 나머지는 **수동 조립** — 커스텀 호스트, 커스텀
 transport, 기본 경로 교체 — 용이다.
 
-| Host             | 기본 (생성 엔트리)                                                       | Rust 진입점                                                  | 수동 조립 대안                                                                       |
-| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| **Node**         | one-shot Cargo binary + stdio, `__rustra_contract` 계약 검사             | `main.rs` → `run_invoke_stdio()`                             | 직접 `spawnSync` stdio, `createNodeLoopTransport`(서버), napi-rs 네이티브 모듈, WASM |
-| **Bun**          | cdylib + stable C ABI + Frame (`rustra_ffi_invoke_frame`)                | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` 직접 C FFI 호출 (§4, JSON 경로)                                            |
-| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장)                           | `tauri_support::register[_with_events]()` (feature: `tauri`) | 커스텀 invoke 함수를 받는 `createTauriEngine({ invoke })`                            |
-| **React Native** | autolinked JSI + Frame (`invokeFrame`), `@rustra/generated-react-native` | `rustra::native_entry!` (`rustra_mobile_init` export)        | 커스텀 JSON transport(`createReactNativeEngine`), TurboModule, Nitro Modules         |
+| Host                 | 기본 (생성 엔트리)                                                                                                                                                                     | Rust 진입점                                                                                                                                                                                   | 수동 조립 대안                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Node**             | one-shot Cargo binary + stdio, `__rustra_contract` 계약 검사                                                                                                                           | `main.rs` → `run_invoke_stdio()`                                                                                                                                                              | 직접 `spawnSync` stdio, `createNodeLoopTransport`(서버), napi-rs 네이티브 모듈, WASM |
+| **Bun**              | cdylib + stable C ABI + Frame (`rustra_ffi_invoke_frame`)                                                                                                                              | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`                                                                                                                                      | `bun:ffi` 직접 C FFI 호출 (§4, JSON 경로)                                            |
+| **Tauri**            | `rustra_dispatch` 멀티플렉스 (프레임워크 내장)                                                                                                                                         | `tauri_support::register[_with_events]()` (feature: `tauri`)                                                                                                                                  | 커스텀 invoke 함수를 받는 `createTauriEngine({ invoke })`                            |
+| **React Native**     | autolinked JSI + Frame (`invokeFrame`), `@rustra/generated-react-native`                                                                                                               | `rustra::native_entry!` (`rustra_mobile_init` export)                                                                                                                                         | 커스텀 JSON transport(`createReactNativeEngine`), TurboModule, Nitro Modules         |
+| **scriptc** (실험적) | 정적 링크 네이티브 실행 파일 — `rustra.json`에 `scriptc` 섹션이 있을 때 `rustra codegen`이 `scriptc/ffi.json` (ffi_format 7 매니페스트) + `scriptc-ffi.d.ts`/`scriptc-ffi.ts`를 렌더링 | `rustra_ffi_invoke_json_into_len` caller-buffer envelope; retained 콜백 (`rustra_ffi_invoke_json_async_channel`, `rustra_ffi_event_sink_register_scriptc`, `rustra_ffi_channel_create_bytes`) | napi 애드온·`dlopen` 미지원; 동작 게이트: `examples/calculator/scriptc/run.sh`       |
 
 ### Node — 수동 subprocess stdio
 
@@ -264,6 +265,11 @@ bun run test:runtime:bun
 Bun은 `bun:ffi`로 `.dylib` / `.so`를 직접 로드할 수 있다. **기본 생성 `bun.ts`
 엔트리**가 Frame 심볼로 이미 이 일을 한다. 아래 JSON 경로는 커스텀 호스트용
 수동 조립 변형으로, 같은 코어 C ABI(`rustra_ffi_invoke_json`)를 쓴다.
+
+큰 Frame 응답에는 생성 엔트리가 선택 심볼 쌍
+`rustra_ffi_invoke_frame_owned`/`rustra_ffi_free_owned_bytes`를 활용한다 —
+호스트가 owned 바이트를 free 전에 복사해 디코딩된 값의 수명을 보존하고, 작은
+응답은 재사용 caller 버퍼를 유지하며, 심볼이 없으면 legacy 경로로 폴백한다.
 
 ### Rust 준비
 

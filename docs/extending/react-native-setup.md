@@ -125,6 +125,9 @@ const result = await addNumbers({ a: 1, b: 2 });
 The first call performs native install, contract verification, and fast engine
 configuration exactly once. After a reload it reinstalls into the new
 JavaScript runtime, and concurrent first calls share a single bootstrap.
+A JavaScript reload reinstalls the engine but cannot repair native drift: if the
+native side changed (static archive, JSI symbols, generated codecs), rebuild the
+native app, then dispose and remount before calling again.
 
 ## 5. bare React Native
 
@@ -237,6 +240,13 @@ Adjacent interop surfaces:
 If you see `RustraBridge was not linked`, check in this order: `bun run
 codegen`, `bun install`, `bunx --bun react-native config`; on iOS, reinstall
 Pods and rebuild the native app.
+
+Bootstrap failures are classified errors, not raw bridge text. A setup failure
+(install or native engine configuration) throws `bootstrap.failed` with the
+underlying error preserved as `cause`; a JSI module missing from the JS realm
+(`installRustraJSI()` not called, Expo Go, or a missed native rebuild) throws
+`native.not_installed`. Branch on `error.code` and remediate by rebuilding the
+native app — a JavaScript reload does not repair native drift.
 
 An ambiguous Cargo package error is resolved by narrowing `codegen.rustManifest`
 and `codegen.rustPackage` to the app crate. If the generator binary is

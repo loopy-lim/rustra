@@ -163,7 +163,7 @@ To keep generating while editing Rust, use the following.
 bun run dev
 ```
 
-In config mode `dev` calls the `codegen` orchestrator in the same process instead of guessing where the CLI is installed or spawning a separate CLI process. It watches Rust `src`, `Cargo.toml`, `Cargo.lock`, and the schema, and a Linux write event whose content equals the generated schema does not schedule codegen again. Because both watch modes share one state machine, further changes during a run coalesce into a single pending run and long Cargo builds never overlap. The legacy `--backend`/`--app` watch modes are also kept for compatibility.
+In config mode `dev` calls the `codegen` orchestrator in the same process instead of guessing where the CLI is installed or spawning a separate CLI process. It watches Rust `src`, `Cargo.toml`, `Cargo.lock`, the schema, and the configured host crates, and a Linux write event whose content equals the generated schema does not schedule codegen again. A reload is reported as successful only after the configured Node and Bun runtime producers are rebuilt; when the runtime build fails the reload is suppressed, so an implementation-only edit cannot silently keep invoking an older binary. The successful-input cache is invalidated before regenerating, so restoring earlier source after a failed build or parity rejection also repairs partially updated generated artifacts. Because both watch modes share one state machine, further changes during a run coalesce into a single pending run and long Cargo builds never overlap. The legacy `--backend`/`--app` watch modes are also kept for compatibility.
 
 ## Generated output drift gate
 
@@ -202,7 +202,7 @@ Teams should avoid making every developer rebuild the native archive every time;
 
 ### Expo Go
 
-Rustra's RN adapter embeds C++ JSI and Rust FFI, so it cannot be loaded into Expo Go after the fact. An Expo app creates a development build once and then runs it.
+Rustra's RN adapter embeds C++ JSI and Rust FFI, so it cannot be loaded into Expo Go after the fact. An Expo app creates a development build once and then runs it. Calling rustra inside Expo Go fails as the classified `native.not_installed` error — a JavaScript reload cannot repair it — rather than an opaque missing-bridge failure.
 
 ```bash
 bunx --bun expo prebuild

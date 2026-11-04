@@ -115,7 +115,9 @@ const result = await addNumbers({ a: 1, b: 2 });
 
 첫 호출이 native install, contract 검증, fast engine configure를 한 번만 수행합니다.
 reload 후에도 새 JavaScript runtime에 다시 설치되며, 동시 첫 호출은 하나의 bootstrap을
-공유합니다.
+공유합니다. JavaScript reload는 엔진을 다시 설치할 뿐 native drift는 고치지 못합니다.
+native 쪽이 바뀌었다면(static archive, JSI 심볼, 생성 코덱) native app을 재빌드한 뒤
+dispose 후 재마운트하고 다시 호출합니다.
 
 ## 5. bare React Native
 
@@ -225,6 +227,12 @@ switch (result.status) {
 `RustraBridge was not linked`가 나오면 `bun run codegen`, `bun install`,
 `bunx --bun react-native config` 순서로 확인하고 iOS는 Pods를 다시 설치한 뒤 native
 app을 재빌드합니다.
+
+부트스트랩 실패도 분류된 오류로 발급됩니다. 설정 실패(install 또는 native engine
+구성)는 `bootstrap.failed` 로 발급되고 근본 오류가 `cause` 에 보존되며, JS realm 에
+JSI 모듈이 없으면(`installRustraJSI()` 미호출, Expo Go, 네이티브 재빌드 누락)
+`native.not_installed` 로 발급됩니다. `error.code` 로 분기하고 native app 재빌드로
+복구합니다 — JavaScript reload는 native drift를 복구하지 못합니다.
 
 Cargo package가 모호하다는 오류는 `codegen.rustManifest`와
 `codegen.rustPackage`를 app crate로 좁혀 해결합니다. generator binary가 모호하면

@@ -41,12 +41,13 @@ Ordinary apps do not assemble transports at all — the generated host entry poi
 baseline you start from; everything after it in this guide is for **manual
 assembly** — custom hosts, custom transports, or replacing the default.
 
-| Host             | Default (generated entry)                                                   | Rust entry point                                             | Manual-assembly alternatives                                                                 |
-| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| **Node**         | one-shot Cargo binary + stdio, contract check via `__rustra_contract`       | `main.rs` → `run_invoke_stdio()`                             | your own `spawnSync` stdio, `createNodeLoopTransport` (servers), napi-rs native module, WASM |
-| **Bun**          | cdylib + stable C ABI + Frame (`rustra_ffi_invoke_frame`)                   | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` direct C FFI call (§4, JSON path)                                                  |
-| **Tauri**        | `rustra_dispatch` multiplexing (framework built-in)                         | `tauri_support::register[_with_events]()` (feature: `tauri`) | `createTauriEngine({ invoke })` with a custom invoke function                                |
-| **React Native** | autolinked JSI + Frame (`invokeFrame`) via `@rustra/generated-react-native` | `rustra::native_entry!` (exports `rustra_mobile_init`)       | custom JSON transport (`createReactNativeEngine`), TurboModule, Nitro Modules                |
+| Host                       | Default (generated entry)                                                                                                                                                                       | Rust entry point                                                                                                                                                                                   | Manual-assembly alternatives                                                                 |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Node**                   | one-shot Cargo binary + stdio, contract check via `__rustra_contract`                                                                                                                           | `main.rs` → `run_invoke_stdio()`                                                                                                                                                                   | your own `spawnSync` stdio, `createNodeLoopTransport` (servers), napi-rs native module, WASM |
+| **Bun**                    | cdylib + stable C ABI + Frame (`rustra_ffi_invoke_frame`)                                                                                                                                       | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`                                                                                                                                           | `bun:ffi` direct C FFI call (§4, JSON path)                                                  |
+| **Tauri**                  | `rustra_dispatch` multiplexing (framework built-in)                                                                                                                                             | `tauri_support::register[_with_events]()` (feature: `tauri`)                                                                                                                                       | `createTauriEngine({ invoke })` with a custom invoke function                                |
+| **React Native**           | autolinked JSI + Frame (`invokeFrame`) via `@rustra/generated-react-native`                                                                                                                     | `rustra::native_entry!` (exports `rustra_mobile_init`)                                                                                                                                             | custom JSON transport (`createReactNativeEngine`), TurboModule, Nitro Modules                |
+| **scriptc** (experimental) | statically linked native executable — `scriptc/ffi.json` (ffi_format 7 manifest) + `scriptc-ffi.d.ts`/`scriptc-ffi.ts`, rendered by `rustra codegen` when `rustra.json` has a `scriptc` section | `rustra_ffi_invoke_json_into_len` caller-buffer envelope; retained callbacks (`rustra_ffi_invoke_json_async_channel`, `rustra_ffi_event_sink_register_scriptc`, `rustra_ffi_channel_create_bytes`) | no napi add-ons or `dlopen`; working gate: `examples/calculator/scriptc/run.sh`              |
 
 ### Node — manual subprocess stdio
 
@@ -268,6 +269,12 @@ Bun can load `.dylib` / `.so` files directly via `bun:ffi`. The **default genera
 `bun.ts` entry** already does this over the Frame symbols; the JSON path below is
 the manual-assembly variant for custom hosts, using the same core C ABI
 (`rustra_ffi_invoke_json`).
+
+For large Frame responses the generated entry also probes the optional
+owned-response pair `rustra_ffi_invoke_frame_owned`/`rustra_ffi_free_owned_bytes`
+— the host copies the owned bytes before freeing them so decoded values retain
+their lifetime, small responses keep the reusable caller buffer, and missing
+symbols fall back to the legacy path.
 
 ### Rust preparation
 

@@ -62,12 +62,12 @@ const info = await invokeLoose<{ os: string }>(engine, 'platformNativeInfo');
 
 ## 게이트 프로파일
 
-| 시점      | 무엇을 돌리나                           | 커맨드                            |
-| --------- | --------------------------------------- | --------------------------------- |
-| 개발 루프 | cargo check + calculator tsc + cli 유닛 | `bun run test:fast`               |
-| 커밋      | eslint/prettier/rustfmt (staged만)      | lefthook pre-commit 자동          |
-| PR/CI     | 풀 배터리 10잡 + docs·codegen 체크      | `scripts/ci-gate.sh`              |
-| 발행      | release-coherence·패키지 검증·changeset | [발행 절차](release-procedure.md) |
+| 시점      | 무엇을 돌리나                                                | 커맨드                            |
+| --------- | ------------------------------------------------------------ | --------------------------------- |
+| 개발 루프 | cargo check + calculator tsc + cli 유닛                      | `bun run test:fast`               |
+| 커밋      | eslint/prettier/rustfmt (staged만)                           | lefthook pre-commit 자동          |
+| PR/CI     | 풀 배터리 17잡(miri/sanitizer/fuzz 포함) + docs·codegen 체크 | `scripts/ci-gate.sh`              |
+| 발행      | release-coherence·패키지 검증·changeset                      | [발행 절차](release-procedure.md) |
 
 Rust 동작 검증은 개발 중 `cargo test -p rustra <필터>`로 필요한 만큼만 ad-hoc로
 돌린다. 드리프트(코드젠 체크·docs 리전)는 풀 배터리가 잡는다 — 개발 루프에서

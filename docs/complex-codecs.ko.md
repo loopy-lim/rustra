@@ -34,6 +34,14 @@ TypeScript 사이에서 달라도 wire index가 바뀌지 않는다.
 잘린 frame, 중복 map key, 잘못된 variant, trailing byte는 성공 결과가 아니라
 `command.invalid_args`/`invoke.malformed`로 처리된다.
 
+생성 postcard 코덱은 디코드 실패를 `rustra: <원인> (offset N)` 고정 형식으로
+보고한다 — 오프셋은 실패 경계의 바이트 위치다(예:
+`rustra: varint out of bounds (offset 9)`). tier 2 `invoke.malformed` 정규화는
+이 오프셋을 그대로 소비해 `decode failed for '<명령>' at offset N: <상세>
+(<바이트 길이>-byte frame)` 메시지를 만들고, 코덱 오류에 오프셋이 없으면 프레임
+전체 길이로 대체한다. 이 메시지 형식은 생성 코덱과 tier 2 정규화가 함께 유지하는
+계약이므로 바꾸려면 양쪽을 함께 바꿔야 한다.
+
 CLI의 공용 Codec IR이 TS/C++ 생성기의 recursive ref, struct field, map, option,
 tuple, enum 판정을 공유한다. RN C++는 원시 요소 `Set`과 `int64/uint64`를
 native-safe complex subset으로 정적 광고한다. 객체/배열 요소 Set처럼 native-safe

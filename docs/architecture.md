@@ -322,6 +322,31 @@ Files in the `generated/` directory — `write_schema_to_dir()` writes only `sch
 | `commands.ts` | Command helper functions                        | Imported and used by app code           |
 | `contract.ts` | The `GENERATED_CONTRACT_HASH` constant          | Runtime contract integrity verification |
 
+### scriptc native FFI stage (static link, experimental)
+
+A `scriptc` section in `rustra.json` enables an additional codegen stage —
+presence is the feature switch, exactly like `uniffi`. It renders the
+static-link FFI surface into the configured `output` directory:
+
+| File               | Content                                                                   | Purpose                                                               |
+| ------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `scriptc/ffi.json` | ffi_format 7 manifest listing the rustra staticlib archive as its library | What `scriptc build` links at compile time (no runtime symbol lookup) |
+| `scriptc-ffi.d.ts` | Signature-only declarations                                               | Legacy ambient declarations for synchronous consumers                 |
+| `scriptc-ffi.ts`   | Source entry with the callback signatures                                 | Retained-callback signatures a `.d.ts` mapping cannot express         |
+
+Symbols that write through out pointers or take function-pointer callbacks are
+excluded from the manifest surface, each with a recorded rationale
+(`scriptcExcludedSymbols`); `rustra_ffi_invoke_json_into_len` (returning the
+length instead of an out pointer) serves as the caller-buffer envelope entry.
+Retained foreign callbacks are part of the surface: async JSON completion
+(`rustra_ffi_invoke_json_async_channel`), events
+(`rustra_ffi_event_sink_register_scriptc`/`rustra_ffi_event_sink_release_scriptc`)
+and bytes channels (`rustra_ffi_channel_create_bytes`/`rustra_ffi_channel_send_bytes`
+with identity-based `rustra_ffi_channel_release_scriptc`). `codegen --check`
+byte-compares committed artifacts against the fresh schema; the write mode fails
+closed with a `cargo build --release` hint when the archive is missing. A
+working example lives in [`examples/calculator/scriptc/`](../examples/calculator/scriptc/).
+
 ---
 
 ## Runtime Dispatch
@@ -568,6 +593,8 @@ The typical development workflow:
    package.generate_typescript()?.write_schema_to_dir("./generated")?;
    # then render the surfaces from schema.json:
    #   rustra codegen --config rustra.json
+   # a `scriptc` section in rustra.json additionally renders the static-link
+   # FFI surface (scriptc/ffi.json + scriptc-ffi.d.ts + scriptc-ffi.ts)
 
 4. Use the generated code on the TypeScript side
    import { addNumbers } from './generated/node.js';   // host entry, not commands.js

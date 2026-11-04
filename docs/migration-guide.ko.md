@@ -10,6 +10,7 @@ Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 �
 - **0.3.x에서 올라오는 경우** — 먼저 [0.3에서 0.4로 마이그레이션](migrations/0.3-to-0.4.ko.md)을 따른 뒤 이 가이드를 쓴다.
 - **0.5.x에서 올라오는 경우** — 먼저 [0.5에서 0.6으로 마이그레이션](migrations/0.5-to-0.6.ko.md)을 따른다. 오래된 스키마는 CLI 검증에서 "generic type name" 오류로 실패할 수도 있다([Rust API 가이드 — 사용자 정의 제네릭](rust-api-guide.ko.md#사용자-정의-제네릭-타입)) — `rustra diff` 전에 현재 rustra로 `schema.json`을 재생성한다.
 - **0.6~0.9에서 올라오는 경우** — Rust 0.10 경계를 넘을 때 [Frame/API 마이그레이션](migrations/post-0.9-frame-and-audit.ko.md)을 함께 적용한 뒤 아래 레시피를 쓴다.
+- **0.11.x에서 올라오는 경우** — 먼저 [0.11에서 0.12로 마이그레이션](migrations/0.11-to-0.12.ko.md)을 따른 뒤 이 가이드를 쓴다.
 - **rkyv V2 → Frame 리네임(0.10.0 릴리스)** — 아래 [리네임 표](#frame-리네임-rkyv-v2--frame) 참고. 순수 이름 변경이며 와이어 포맷은 불변이다.
 
 <a id="09-리네임-rkyv-v2--frame"></a>
@@ -50,9 +51,9 @@ RN JSI 호스트 메서드도 같은 리네임을 따른다(`invokeRkyvV2` → `
 그리고 codegen 산출 파일도 새 이름(`frame-codecs.ts`, `frame-registry.ts`)으로
 떨어진다 — `rustra codegen`을 다시 실행하고 import를 갱신한다.
 
-현재 소스의 다음 CLI 패치에서는 이전 `.rustra-generated.json`에 기록된 hash가
-일치하는 구형 생성물을 정리한다. 아직 공개된 CLI 0.11.3에는 이 수정이 없으므로
-타입 검사에서 남은 `rkyv-codecs.ts`/`rkyv-registry.ts`도 확인해야 한다.
+공개된 CLI 0.12.0에서는 이전 `.rustra-generated.json`에 기록된 hash가 일치하는
+구형 생성물을 정리한다. CLI 0.11.3 이하에는 이 수정이 없으므로 타입 검사에서
+남은 `rkyv-codecs.ts`/`rkyv-registry.ts`도 확인해야 한다.
 이전 CLI 실행으로 manifest가 이미 덮어써졌다면, 업그레이드 전 생성물과
 manifest 묶음을 복원한 뒤 수정된 CLI로 다시 생성하거나 남은 파일의 내용을
 직접 검토해 옮긴다. 사용자 수정·symlink·소유 기록 없는 파일은 자동 삭제하지 않는다.
