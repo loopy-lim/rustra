@@ -184,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "rustra"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "hex",
  "postcard",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-macros"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-naming"
-version = "0.12.0"
+version = "0.13.0"
 
 [[package]]
 name = "schemars"
