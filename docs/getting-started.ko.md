@@ -4,7 +4,7 @@
 
 여러 인자와 일반 반환값을 사용하는 API는 [일반 함수 등록](./function-registration.ko.md)을 참고하세요.
 
-> **릴리스 버전:** 이 문서는 Rust crate 0.12.0과 아래에 명시한 독립 npm 패키지 버전을
+> **릴리스 버전:** 이 문서는 Rust crate 0.13.0과 아래에 명시한 독립 npm 패키지 버전을
 > 대상으로 한다. 네이티브 라이브러리·JS 패키지·생성물을 함께 갱신한다.
 > [DX 마이그레이션 안내](migrations/0.11-to-0.12.ko.md)를 참고한다.
 
@@ -89,7 +89,7 @@ bun run try:node
 
 ```toml
 [dependencies]
-rustra = "0.12.0"
+rustra = "0.13.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```

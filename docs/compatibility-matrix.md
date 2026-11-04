@@ -68,7 +68,7 @@ Every host exposes the same `{ handle, close() }` contract; only the issuer (tra
 
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
-| Rust workspace crates  | 0.12.0           |
+| Rust workspace crates  | 0.13.0           |
 | `@rustra/bun`          | 0.11.0           |
 | `@rustra/cli`          | 0.12.0           |
 | `@rustra/devtools`     | 0.7.2            |

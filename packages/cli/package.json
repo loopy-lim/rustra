@@ -9,7 +9,7 @@
   },
   "sideEffects": false,
   "rustraTemplate": {
-    "cargoRange": "^0.12.0",
+    "cargoRange": "^0.13.0",
     "reactNativeRange": "^0.10.0",
     "nodeRange": "^0.11.0",
     "bunRange": "^0.11.0",

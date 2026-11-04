@@ -4,7 +4,7 @@ English | [한국어](./getting-started.ko.md)
 
 For ordinary functions with multiple arguments and plain returns, see [function registration](./function-registration.md).
 
-> **Release versions:** this guide targets Rust crates 0.12.0 and the independent
+> **Release versions:** this guide targets Rust crates 0.13.0 and the independent
 > npm package versions pinned below. Upgrade native libraries, JS packages and
 > generated output together; see the [DX migration guide](migrations/0.11-to-0.12.md).
 
@@ -105,7 +105,7 @@ registry publication.
 
 ```toml
 [dependencies]
-rustra = "0.12.0"
+rustra = "0.13.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```

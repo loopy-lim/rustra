@@ -146,7 +146,7 @@ bunx --bun @rustra/cli@0.12.0 generate --config rustra.json --check   # CI ë™ê¸
 
 ```toml
 [dependencies]
-rustra = "0.12.0"
+rustra = "0.13.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```

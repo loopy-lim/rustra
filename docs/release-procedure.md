@@ -2,7 +2,7 @@ English | [한국어](./release-procedure.ko.md)
 
 # Release procedure (canary → stable → rollback)
 
-The current DX release targets Rust crates 0.12.0 and independent npm package
+The current DX release targets Rust crates 0.13.0 and independent npm package
 versions. See the [0.11 to 0.12 migration guide](migrations/0.11-to-0.12.md) for
 targets, consumer upgrades and rollback. Version files do not establish registry publication.
 
