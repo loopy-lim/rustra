@@ -38,8 +38,8 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 Rust와 Bun 1.4 이상이 설치되어 있으면 다음 명령을 실행한다.
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 init my-project --setup
-# Bun FFI를 쓰려면: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+bunx --bun @rustra/cli@0.13.0 init my-project --setup
+# Bun FFI를 쓰려면: bunx --bun @rustra/cli@0.13.0 init my-bun-project --host bun --setup
 ```
 
 프로젝트 생성 → 클라이언트 생성 → 의존성 설치 → Rust 빌드 → `echo` 데모 호출까지
@@ -99,10 +99,10 @@ schemars = { version = "0.8", features = ["derive"] }
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
 ```bash
-bun add @rustra/node@0.11.0      # Node.js
-bun add @rustra/bun@0.11.0       # Bun
-bun add @rustra/tauri@0.10.0     # Tauri
-bun add @rustra/react-native@0.10.0  # React Native
+bun add @rustra/node@0.11.1      # Node.js
+bun add @rustra/bun@0.11.1       # Bun
+bun add @rustra/tauri@0.10.1     # Tauri
+bun add @rustra/react-native@0.11.0  # React Native
 ```
 
 ### 모노레포 / workspace에서 사용
@@ -987,8 +987,8 @@ RN JSI `invokeTyped` 진입을 직접 호출한다. 해당 형태 밖의 명령�
 `commands.ts` 경로를 유지한다.
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.13.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.13.0 codegen --config rustra.json
 ```
 
 **TypeScript 측 사용:**

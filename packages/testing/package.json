@@ -1,6 +1,6 @@
 {
   "name": "@rustra/testing",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Testing utilities for rustra — mock engines and contract gates for type-safe Rust-to-TypeScript clients.",
   "license": "MIT",
   "type": "module",
@@ -28,7 +28,7 @@
     "test:compile": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@rustra/types": "^0.12.0"
+    "@rustra/types": "^0.13.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0"

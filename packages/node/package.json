@@ -1,6 +1,6 @@
 {
   "name": "@rustra/node",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Type-safe Node.js client for rustra — one Rust core over a compact binary wire, with CI contracts that block breaking schema changes.",
   "license": "MIT",
   "type": "module",
@@ -31,7 +31,7 @@
     "test:node-runtime": "tsc -p tsconfig.test.json && node --test dist-test/node-binary-accumulator.test.js dist-test/index.test.js dist-test/bootstrap-lifecycle.test.js dist-test/transport-lifecycle.test.js dist-test/event-bootstrap.test.js dist-test/runtime-resolution.test.js"
   },
   "dependencies": {
-    "@rustra/types": "^0.12.1"
+    "@rustra/types": "^0.13.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0"

@@ -105,8 +105,8 @@ hosts, not that the others have no codegen.
 With Rust and Bun 1.4+ installed, create a project and run its first call:
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 init my-project --setup
-# Bun FFI instead: bunx --bun @rustra/cli@0.12.0 init my-bun-project --host bun --setup
+bunx --bun @rustra/cli@0.13.0 init my-project --setup
+# Bun FFI instead: bunx --bun @rustra/cli@0.13.0 init my-bun-project --host bun --setup
 ```
 
 `--setup` generates the clients, installs dependencies, builds Rust, and runs the
@@ -139,9 +139,9 @@ at the project root:
 ```
 
 ```bash
-bunx --bun @rustra/cli@0.12.0 codegen --config rustra.json   # render all surfaces
-bunx --bun @rustra/cli@0.12.0 dev --config rustra.json       # watch Rust + regen
-bunx --bun @rustra/cli@0.12.0 generate --config rustra.json --check   # CI sync gate
+bunx --bun @rustra/cli@0.13.0 codegen --config rustra.json   # render all surfaces
+bunx --bun @rustra/cli@0.13.0 dev --config rustra.json       # watch Rust + regen
+bunx --bun @rustra/cli@0.13.0 generate --config rustra.json --check   # CI sync gate
 ```
 
 → Full walkthrough: the [getting-started guide](docs/getting-started.md)
@@ -161,12 +161,12 @@ independent versions; use the manifest-derived
 [compatibility table](docs/compatibility-matrix.md) for installation.
 
 ```bash
-bun add @rustra/node@0.11.0          # Node.js
-bun add @rustra/bun@0.11.0           # Bun
-bun add @rustra/tauri@0.10.0         # Tauri
-bun add @rustra/react-native@0.10.0  # React Native
-bun add @rustra/testing@0.7.2        # Mock engine (tests)
-bun add @rustra/devtools@0.7.2       # Invocation observability (dev)
+bun add @rustra/node@0.11.1          # Node.js
+bun add @rustra/bun@0.11.1           # Bun
+bun add @rustra/tauri@0.10.1         # Tauri
+bun add @rustra/react-native@0.11.0  # React Native
+bun add @rustra/testing@0.7.3        # Mock engine (tests)
+bun add @rustra/devtools@0.7.3       # Invocation observability (dev)
 ```
 
 Upgrade native libraries, JS adapters, and generated output together — see the
